@@ -7,7 +7,7 @@ if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET) {
   passport.use(new DiscordStrategy({
     clientID: process.env.DISCORD_CLIENT_ID,
     clientSecret: process.env.DISCORD_CLIENT_SECRET,
-    callbackURL: process.env.DISCORD_CALLBACK_URL || `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/auth/discord/callback`,
+    callbackURL: process.env.DISCORD_CALLBACK_URL || `${process.env.API_BASE_URL || 'http://localhost:3000'}/api/auth/discord/callback`,
     scope: ['identify', 'email']
   }, async (accessToken, refreshToken, profile, done) => {
   try {
@@ -53,18 +53,16 @@ if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET) {
     if (!user) {
       console.log('[DISCORD AUTH] Creating new user with avatar:', avatarUrl);
       
-      // Create new user with 5 million starting coins
+      // Create new user
       user = await prisma.user.create({
         data: {
           discordId: profile.id,
           username: currentNickname,
-          avatarUrl: avatarUrl,
-          coins: 5000000, // Gift 5 million coins to new users
-          createdAt: new Date()
+          avatarUrl: avatarUrl
         }
       });
       
-      console.log('[DISCORD AUTH] New user created with 5M coins:', user.id);
+      console.log('[DISCORD AUTH] New user created:', user.id);
     } else {
       console.log('[DISCORD AUTH] Existing user found:', user.id);
       

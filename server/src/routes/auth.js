@@ -42,8 +42,7 @@ router.get("/profile", authenticateToken, async (req, res, next) => {
         username: true,
         email: true,
         avatarUrl: true,
-        discordId: true,
-        coins: true
+        discordId: true
       }
     });
 

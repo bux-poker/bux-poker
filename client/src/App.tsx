@@ -114,38 +114,49 @@ function App() {
             path="/"
             element={
               <div className="flex min-h-[calc(100vh-4rem)] flex-col justify-center py-4 lg:min-h-[calc(100vh-5rem)] lg:py-8">
-                <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
-                  {/* Hero Section */}
-                  <div className="relative flex flex-col justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-900/20 via-slate-900/50 to-teal-900/20 p-6 sm:p-8 lg:p-10">
-                    <div className="relative z-10">
-                      <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-300 sm:px-4 sm:py-2 sm:text-sm">
-                        <span>🃏</span>
-                        <span>Professional Poker Platform</span>
+                <div className="flex flex-col gap-6 lg:gap-8">
+                  {/* Hero Section - Full Width */}
+                  <div className="relative flex overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-900/20 via-slate-900/50 to-teal-900/20">
+                    <div className="flex w-full flex-row items-center">
+                      {/* Text Content */}
+                      <div className="relative z-10 flex-1 p-4 sm:p-6 md:p-8 lg:p-10">
+                        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] text-emerald-300 sm:px-3 sm:py-1.5 sm:text-xs md:px-4 md:py-2 md:text-sm">
+                          <span>🃏</span>
+                          <span className="whitespace-nowrap">Community Poker Platform</span>
+                        </div>
+                        <h1 className="mb-2 text-2xl font-bold tracking-tight text-white sm:text-3xl md:text-4xl lg:text-5xl">
+                          Welcome to{" "}
+                          <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
+                            BUX Poker
+                          </span>
+                        </h1>
+                        <p className="mb-4 text-sm text-slate-300 sm:text-base md:text-lg">
+                          Experience the thrill of Texas Hold'em tournaments with
+                          Discord integration, real-time gameplay, and competitive
+                          league systems.
+                        </p>
+                        <div className="flex flex-wrap gap-2 sm:gap-3">
+                          <Link
+                            to="/tournaments"
+                            className="rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:scale-105 hover:shadow-emerald-500/40 sm:px-5 sm:py-2.5 sm:text-sm md:px-6 md:py-3 md:text-base"
+                          >
+                            Browse Tournaments
+                          </Link>
+                          <Link
+                            to="/leagues"
+                            className="rounded-lg border-2 border-slate-700 bg-slate-800/50 px-4 py-2 text-xs font-semibold text-white backdrop-blur-sm transition-all hover:border-emerald-500/50 hover:bg-slate-800 sm:px-5 sm:py-2.5 sm:text-sm md:px-6 md:py-3 md:text-base"
+                          >
+                            View Leagues
+                          </Link>
+                        </div>
                       </div>
-                      <h1 className="mb-3 text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-5xl">
-                        Welcome to{" "}
-                        <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
-                          BUX Poker
-                        </span>
-                      </h1>
-                      <p className="mb-6 text-base text-slate-300 sm:text-lg">
-                        Experience the thrill of Texas Hold'em tournaments with
-                        Discord integration, real-time gameplay, and competitive
-                        league systems.
-                      </p>
-                      <div className="flex flex-wrap gap-3">
-                        <Link
-                          to="/tournaments"
-                          className="rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:scale-105 hover:shadow-emerald-500/40 sm:px-6 sm:py-3 sm:text-base"
-                        >
-                          Browse Tournaments
-                        </Link>
-                        <Link
-                          to="/leagues"
-                          className="rounded-lg border-2 border-slate-700 bg-slate-800/50 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:border-emerald-500/50 hover:bg-slate-800 sm:px-6 sm:py-3 sm:text-base"
-                        >
-                          View Leagues
-                        </Link>
+                      {/* Aces Image */}
+                      <div className="relative flex h-full min-h-[200px] w-1/3 flex-shrink-0 items-center justify-center sm:min-h-[250px] md:w-2/5 lg:w-1/2">
+                        <img
+                          src="/images/aces.png"
+                          alt="Aces"
+                          className="h-full w-full object-contain object-center"
+                        />
                       </div>
                     </div>
                     {/* Decorative elements */}

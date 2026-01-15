@@ -2,7 +2,8 @@ import { useAuth } from '@shared/features/auth/AuthContext';
 
 export function LoginButton() {
   const { user, logout } = useAuth();
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+  // Use relative URL for local dev (goes through Vite proxy) or env var for production
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
 
   const handleDiscordLogin = () => {
     // Redirect to Discord OAuth

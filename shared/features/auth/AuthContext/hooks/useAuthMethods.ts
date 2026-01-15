@@ -6,7 +6,6 @@ interface User {
   username: string;
   email: string;
   avatar: string | null;
-  coins: number;
   isAuthenticated?: boolean;
   stats?: {
     gamesPlayed: number;
