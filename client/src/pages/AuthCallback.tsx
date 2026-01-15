@@ -14,7 +14,8 @@ export function AuthCallback() {
       localStorage.setItem('sessionToken', token);
 
       // Fetch user profile
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+      // Use environment variable or fallback to Render backend
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://bux-poker-server.onrender.com';
       fetch(`${apiBaseUrl}/api/auth/profile`, {
         headers: {
           Authorization: `Bearer ${token}`,
