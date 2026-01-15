@@ -2,6 +2,9 @@ import { Route, Routes, Link } from "react-router-dom";
 import { TournamentList } from "./components/tournament/TournamentList";
 import { TournamentDetail } from "./components/tournament/TournamentDetail";
 import { PokerGameView } from "./features/game/PokerGameView";
+import { LoginButton } from "./components/auth/LoginButton";
+import { CreateTournament } from "./components/admin/CreateTournament";
+import { AuthCallback } from "./pages/AuthCallback";
 
 function App() {
   return (
@@ -29,6 +32,13 @@ function App() {
             >
               Leagues
             </Link>
+            <Link
+              to="/admin"
+              className="text-sm text-slate-400 transition-colors hover:text-slate-200"
+            >
+              Admin
+            </Link>
+            <LoginButton />
           </nav>
         </div>
       </header>
@@ -78,6 +88,8 @@ function App() {
           <Route path="/tournaments" element={<TournamentList />} />
           <Route path="/tournaments/:id" element={<TournamentDetail />} />
           <Route path="/game/:id" element={<PokerGameView />} />
+          <Route path="/admin" element={<CreateTournament />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
           <Route
             path="/leagues"
             element={

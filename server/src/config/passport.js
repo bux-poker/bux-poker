@@ -1,6 +1,5 @@
 import passport from 'passport';
 import { Strategy as DiscordStrategy } from 'passport-discord';
-import { Strategy as FacebookStrategy } from 'passport-facebook';
 import { prisma } from './database.js';
 
 // Only initialize Discord strategy if credentials are provided
@@ -8,7 +7,7 @@ if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET) {
   passport.use(new DiscordStrategy({
     clientID: process.env.DISCORD_CLIENT_ID,
     clientSecret: process.env.DISCORD_CLIENT_SECRET,
-    callbackURL: process.env.DISCORD_CALLBACK_URL || 'https://bux-spades-server.fly.dev/auth/discord/callback',
+    callbackURL: process.env.DISCORD_CALLBACK_URL || `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/auth/discord/callback`,
     scope: ['identify', 'email']
   }, async (accessToken, refreshToken, profile, done) => {
   try {
@@ -89,67 +88,6 @@ if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET) {
   console.log('[PASSPORT] Discord OAuth not configured - skipping DiscordStrategy');
 }
 
-// Only initialize Facebook strategy if credentials are provided
-if (process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET) {
-  passport.use(new FacebookStrategy({
-    clientID: process.env.FACEBOOK_APP_ID,
-    clientSecret: process.env.FACEBOOK_APP_SECRET,
-    callbackURL: process.env.FACEBOOK_CALLBACK_URL || 'https://bux-spades-server.fly.dev/auth/facebook/callback',
-  profileFields: ['id', 'displayName', 'email', 'picture.type(large)']
-}, async (accessToken, refreshToken, profile, done) => {
-  try {
-    console.log('[FACEBOOK AUTH] Profile data:', {
-      id: profile.id,
-      displayName: profile.displayName,
-      email: profile.emails?.[0]?.value,
-      picture: profile.photos?.[0]?.value
-    });
-
-    const avatarUrl = profile.photos?.[0]?.value || '/default-pfp.jpg';
-    const username = profile.displayName || profile.emails?.[0]?.value || `Facebook User ${profile.id}`;
-
-    // Check if user already exists by facebookId
-    let user = await prisma.user.findUnique({
-      where: { facebookId: profile.id }
-    });
-
-    if (!user) {
-      console.log('[FACEBOOK AUTH] Creating new user with avatar:', avatarUrl);
-      
-      // Create new user with 5 million starting coins
-      user = await prisma.user.create({
-        data: {
-          facebookId: profile.id,
-          username: username,
-          avatarUrl: avatarUrl,
-          coins: 5000000, // Gift 5 million coins to new users
-          createdAt: new Date()
-        }
-      });
-      
-      console.log('[FACEBOOK AUTH] New user created with 5M coins:', user.id);
-    } else {
-      console.log('[FACEBOOK AUTH] Existing user found:', user.id);
-      
-      // Update user data (username, avatar might have changed)
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          username: username,
-          avatarUrl: avatarUrl
-        }
-      });
-    }
-
-    return done(null, user);
-  } catch (error) {
-    console.error('[FACEBOOK AUTH] Error:', error);
-    return done(error, null);
-  }
-  }));
-} else {
-  console.log('[PASSPORT] Facebook OAuth not configured - skipping FacebookStrategy');
-}
 
 // Serialize user for session
 passport.serializeUser((user, done) => {
