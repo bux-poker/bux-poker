@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getSocket } from "../../services/socket";
 import { PokerTable } from "../../components/poker/PokerTable";
-import type { Card } from "../../../shared/types/poker";
+import type { Card } from "@shared/types/poker";
 import { BettingControls } from "../../components/poker/BettingControls";
 import { useAuth } from "@shared/features/auth/AuthContext";
 
@@ -47,11 +47,7 @@ export function PokerGameView() {
     if (!id) return;
 
     const socket = getSocket();
-    const ns = socket.io.uri?.endsWith("/poker")
-      ? socket
-      : socket.io.engine.transport.name; // placeholder, actual namespace is handled in backend
-
-    // For now, we just use the default namespace and event names as defined in pokerHandler.
+    // Use default namespace - backend handles routing
     socket.emit("join-table", { gameId: id });
 
     socket.on("game-state", (payload: GameStatePayload) => {

@@ -14,7 +14,7 @@ export function TournamentDetail() {
     setRegisterError(null);
     const result = await register();
     setRegistering(false);
-    if (!result.success) {
+    if (result && !result.success) {
       setRegisterError(result.error || 'Registration failed');
     }
   };

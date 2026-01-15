@@ -1,4 +1,4 @@
-import { Card } from '../../../shared/types/poker';
+import { Card } from '@shared/types/poker';
 
 interface PokerTableProps {
   gameId: string;
