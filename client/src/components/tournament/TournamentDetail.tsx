@@ -39,7 +39,11 @@ export function TournamentDetail() {
   const registeredCount = tournament.registeredCount || 0;
   const spotsLeft = tournament.maxPlayers - registeredCount;
   const canRegister =
-    tournament.status === 'REGISTRATION' && spotsLeft > 0;
+    (tournament.status === 'REGISTRATION' ||
+      tournament.status === 'REGISTERING' ||
+      tournament.status === 'SCHEDULED') &&
+    spotsLeft > 0;
+  const servers = tournament.servers || [];
 
   return (
     <div className="space-y-6">
@@ -64,9 +68,10 @@ export function TournamentDetail() {
           </div>
           <span
             className={`rounded-full px-4 py-2 text-sm font-medium ${
-              tournament.status === 'ACTIVE'
+              tournament.status === 'ACTIVE' || tournament.status === 'RUNNING'
                 ? 'bg-emerald-500/20 text-emerald-200'
-                : tournament.status === 'REGISTRATION'
+                : tournament.status === 'REGISTRATION' ||
+                  tournament.status === 'REGISTERING'
                 ? 'bg-blue-500/20 text-blue-200'
                 : tournament.status === 'COMPLETED'
                 ? 'bg-slate-500/20 text-slate-300'
@@ -119,7 +124,51 @@ export function TournamentDetail() {
           </div>
         )}
 
-        {tournament.status === 'ACTIVE' && (
+        {servers.length > 0 && (
+          <div className="mt-6 border-t border-slate-800 pt-6">
+            <h3 className="mb-4 text-lg font-semibold text-slate-100">
+              Host Servers
+            </h3>
+            <div className="space-y-3">
+              {servers.map((server) => (
+                <div
+                  key={server.id}
+                  className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/30 p-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-700">
+                      <span className="text-lg">📱</span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-slate-200">
+                        {server.serverName}
+                      </p>
+                      <p className="text-sm text-slate-400">
+                        Join to register via Discord
+                      </p>
+                    </div>
+                  </div>
+                  {server.inviteLink ? (
+                    <a
+                      href={server.inviteLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
+                    >
+                      Join Server
+                    </a>
+                  ) : (
+                    <span className="text-sm text-slate-500">
+                      No invite link
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {tournament.status === 'ACTIVE' || tournament.status === 'RUNNING' ? (
           <div className="mt-6">
             <button
               onClick={() => navigate(`/game/${tournament.id}`)}
@@ -128,7 +177,7 @@ export function TournamentDetail() {
               Join Game
             </button>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

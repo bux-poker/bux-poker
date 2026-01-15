@@ -1,19 +1,27 @@
 import { useState, useEffect } from 'react';
 import { api } from '../services/api';
 
+export interface TournamentServer {
+  id: string;
+  serverId: string;
+  serverName: string;
+  inviteLink: string | null;
+}
+
 export interface Tournament {
   id: string;
   name: string;
   startTime: Date | string;
-  status: 'UPCOMING' | 'REGISTRATION' | 'ACTIVE' | 'COMPLETED';
+  status: 'UPCOMING' | 'REGISTRATION' | 'ACTIVE' | 'COMPLETED' | 'SCHEDULED';
   maxPlayers: number;
   seatsPerTable: number;
   startingChips: number;
   blindLevels: any; // JSON structure
   prizePlaces: number;
   registeredCount?: number;
-  createdBy: string;
+  createdBy: string | any;
   createdAt: Date | string;
+  servers?: TournamentServer[];
 }
 
 export function useTournaments() {

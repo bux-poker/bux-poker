@@ -5,6 +5,7 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
   const startTime = new Date(tournament.startTime);
   const registeredCount = tournament.registeredCount || 0;
   const spotsLeft = tournament.maxPlayers - registeredCount;
+  const servers = tournament.servers || [];
 
   return (
     <Link
@@ -22,9 +23,9 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
         </div>
         <span
           className={`rounded-full px-3 py-1 text-xs font-medium ${
-            tournament.status === 'ACTIVE'
+            tournament.status === 'ACTIVE' || tournament.status === 'RUNNING'
               ? 'bg-emerald-500/20 text-emerald-200'
-              : tournament.status === 'REGISTRATION'
+              : tournament.status === 'REGISTERING' || tournament.status === 'REGISTRATION'
               ? 'bg-blue-500/20 text-blue-200'
               : tournament.status === 'COMPLETED'
               ? 'bg-slate-500/20 text-slate-300'
@@ -50,7 +51,45 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
         </div>
       </div>
 
-      {spotsLeft > 0 && tournament.status === 'REGISTRATION' && (
+      {servers.length > 0 && (
+        <div className="mt-4 border-t border-slate-800 pt-4">
+          <div className="mb-2 text-xs font-medium text-slate-400">Host Servers:</div>
+          <div className="flex flex-wrap gap-2">
+            {servers.map((server) => (
+              <div
+                key={server.id}
+                className="flex items-center gap-1.5 rounded bg-slate-800/50 px-2 py-1 text-xs"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (server.inviteLink) {
+                    window.open(server.inviteLink, '_blank', 'noopener,noreferrer');
+                  }
+                }}
+              >
+                <span className="text-slate-300">{server.serverName}</span>
+                {server.inviteLink && (
+                  <svg
+                    className="h-3 w-3 text-emerald-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                    />
+                  </svg>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {spotsLeft > 0 && (tournament.status === 'REGISTERING' || tournament.status === 'REGISTRATION' || tournament.status === 'SCHEDULED') && (
         <div className="mt-4 text-xs text-emerald-400">
           {spotsLeft} spot{spotsLeft !== 1 ? 's' : ''} remaining
         </div>
@@ -86,9 +125,15 @@ export function TournamentList() {
     );
   }
 
-  const activeTournaments = tournaments.filter((t) => t.status === 'ACTIVE');
+  const activeTournaments = tournaments.filter(
+    (t) => t.status === 'ACTIVE' || t.status === 'RUNNING'
+  );
   const upcomingTournaments = tournaments.filter(
-    (t) => t.status === 'REGISTRATION' || t.status === 'UPCOMING'
+    (t) =>
+      t.status === 'REGISTRATION' ||
+      t.status === 'REGISTERING' ||
+      t.status === 'UPCOMING' ||
+      t.status === 'SCHEDULED'
   );
   const completedTournaments = tournaments.filter(
     (t) => t.status === 'COMPLETED'
