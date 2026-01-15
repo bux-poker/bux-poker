@@ -41,9 +41,33 @@ if (process.env.CLIENT_URL_ALT) {
   allowedOrigins.push(process.env.CLIENT_URL_ALT);
 }
 
+// Log allowed origins for debugging
+console.log('[CORS] Allowed origins:', allowedOrigins);
+console.log('[CORS] CLIENT_URL env var:', process.env.CLIENT_URL || 'NOT SET');
+
 const corsOptions = {
-  origin: allowedOrigins,
-  credentials: true
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      console.log('[CORS] Request with no origin - allowing');
+      return callback(null, true);
+    }
+    
+    console.log('[CORS] Checking origin:', origin);
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      console.log('[CORS] Origin allowed:', origin);
+      callback(null, true);
+    } else {
+      console.log('[CORS] Origin NOT allowed:', origin);
+      console.log('[CORS] Allowed origins are:', allowedOrigins);
+      callback(new Error(`Not allowed by CORS. Origin: ${origin}`));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 };
 
 app.use(cors(corsOptions));
