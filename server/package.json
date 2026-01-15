@@ -11,7 +11,7 @@
     "prisma:generate": "prisma generate --schema=../prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy --schema=../prisma/schema.prisma",
-    "postinstall": "cd .. && npx prisma migrate deploy --schema=./prisma/schema.prisma && npx prisma generate --schema=./prisma/schema.prisma || (cd server && echo 'Prisma setup completed')"
+    "postinstall": "echo 'Starting Prisma setup...' && pwd && ls -la ../prisma/schema.prisma && npx prisma migrate deploy --schema=../prisma/schema.prisma && echo 'Migration completed' && npx prisma generate --schema=../prisma/schema.prisma && echo 'Prisma client generated successfully' || echo 'Prisma setup failed but continuing...'"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
