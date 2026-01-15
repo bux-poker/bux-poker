@@ -8,19 +8,80 @@ import { postTournamentEmbed, getDiscordClient } from "../discord/bot.js";
 const router = Router();
 const engine = new TournamentEngine();
 
-// All admin routes require JWT auth AND admin role
-router.use(authenticateToken);
-router.use(requireAdminRole);
-
-// Check if current user is an admin
-router.get("/check", async (req, res, next) => {
+// Check if current user is an admin (accessible without admin role to check status)
+router.get("/check", authenticateToken, async (req, res, next) => {
   try {
-    // If we got here, user passed requireAdminRole middleware
-    res.json({ isAdmin: true });
+    const userId = req.userId;
+    if (!userId) {
+      return res.json({ isAdmin: false });
+    }
+
+    // Get user with Discord ID
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, discordId: true },
+    });
+
+    if (!user || !user.discordId) {
+      return res.json({ isAdmin: false });
+    }
+
+    // Get all configured Discord servers with admin roles
+    const servers = await prisma.discordServer.findMany({
+      where: {
+        enabled: true,
+        setupCompleted: true,
+        adminRoleId: { not: null },
+      },
+      select: {
+        serverId: true,
+        adminRoleId: true,
+        serverName: true,
+      },
+    });
+
+    if (servers.length === 0) {
+      // No servers configured yet - allow access for initial setup
+      return res.json({ isAdmin: true });
+    }
+
+    // Check if user has admin role in any server
+    const discordClient = getDiscordClient();
+    if (!discordClient) {
+      // Bot not available - deny for security
+      return res.json({ isAdmin: false });
+    }
+
+    // Check each server
+    for (const server of servers) {
+      try {
+        const guild = await discordClient.guilds.fetch(server.serverId).catch(() => null);
+        if (!guild) continue;
+
+        const member = await guild.members.fetch(user.discordId).catch(() => null);
+        if (!member) continue;
+
+        if (member.roles.cache.has(server.adminRoleId)) {
+          // User has admin role in this server
+          return res.json({ isAdmin: true });
+        }
+      } catch (error) {
+        // Continue checking other servers
+        continue;
+      }
+    }
+
+    // User doesn't have admin role in any server
+    res.json({ isAdmin: false });
   } catch (err) {
-    next(err);
+    console.error("[ADMIN CHECK] Error:", err);
+    res.json({ isAdmin: false });
   }
 });
+
+// All other admin routes require JWT auth AND admin role
+router.use(authenticateToken);
+router.use(requireAdminRole);
 
 // Get all configured Discord servers
 router.get("/servers", async (req, res, next) => {

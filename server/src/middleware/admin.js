@@ -51,18 +51,27 @@ export const requireAdminRole = async (req, res, next) => {
     // Check each server
     for (const server of servers) {
       try {
-        const guild = await discordClient.guilds.fetch(server.serverId);
-        const member = await guild.members.fetch(user.discordId).catch(() => null);
+        const guild = await discordClient.guilds.fetch(server.serverId).catch(() => null);
+        if (!guild) {
+          console.warn(`[ADMIN MIDDLEWARE] Bot not in server ${server.serverName} (${server.serverId})`);
+          continue;
+        }
 
-        if (member && member.roles.cache.has(server.adminRoleId)) {
+        const member = await guild.members.fetch(user.discordId).catch(() => null);
+        if (!member) {
+          // User not in this server - continue checking other servers
+          continue;
+        }
+
+        if (member.roles.cache.has(server.adminRoleId)) {
           // User has admin role in this server
           req.adminServerId = server.serverId;
           req.adminServerName = server.serverName;
           return next();
         }
       } catch (error) {
-        // User not in server or bot doesn't have permissions - continue checking other servers
-        console.warn(`[ADMIN MIDDLEWARE] Error checking server ${server.serverName}:`, error.message);
+        // Error checking server - continue checking other servers
+        console.warn(`[ADMIN MIDDLEWARE] Error checking server ${server.serverName}:`, error.message || error);
         continue;
       }
     }
@@ -71,6 +80,8 @@ export const requireAdminRole = async (req, res, next) => {
     return res.status(403).json({ error: "Access denied. Admin role required." });
   } catch (error) {
     console.error("[ADMIN MIDDLEWARE] Error:", error);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("[ADMIN MIDDLEWARE] Error stack:", error.stack);
+    // Return 403 instead of 500 for security - don't leak internal errors
+    return res.status(403).json({ error: "Access denied. Admin role required." });
   }
 };

@@ -37,15 +37,15 @@ export class TournamentService {
     // Transform to include registeredCount and server info
     return tournaments.map((tournament) => ({
       ...tournament,
-      registeredCount: tournament.registrations.filter(
+      registeredCount: tournament.registrations?.filter(
         (r) => r.status === "CONFIRMED" || r.status === "PENDING"
-      ).length,
-      servers: tournament.posts.map((post) => ({
-        id: post.server.id,
-        serverId: post.server.serverId,
-        serverName: post.server.serverName,
-        inviteLink: post.server.inviteLink,
-      })),
+      ).length || 0,
+      servers: tournament.posts?.map((post) => ({
+        id: post.server?.id || post.serverId,
+        serverId: post.server?.serverId || post.serverId,
+        serverName: post.server?.serverName || 'Unknown Server',
+        inviteLink: post.server?.inviteLink || null,
+      })).filter(server => server !== null) || [],
     }));
   }
 
@@ -93,15 +93,15 @@ export class TournamentService {
     // Add registeredCount and server info
     return {
       ...tournament,
-      registeredCount: tournament.registrations.filter(
+      registeredCount: tournament.registrations?.filter(
         (r) => r.status === "CONFIRMED" || r.status === "PENDING"
-      ).length,
-      servers: tournament.posts.map((post) => ({
-        id: post.server.id,
-        serverId: post.server.serverId,
-        serverName: post.server.serverName,
-        inviteLink: post.server.inviteLink,
-      })),
+      ).length || 0,
+      servers: tournament.posts?.map((post) => ({
+        id: post.server?.id || post.serverId,
+        serverId: post.server?.serverId || post.serverId,
+        serverName: post.server?.serverName || 'Unknown Server',
+        inviteLink: post.server?.inviteLink || null,
+      })).filter(server => server !== null) || [],
     };
   }
 
