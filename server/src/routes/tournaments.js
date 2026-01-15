@@ -9,7 +9,12 @@ router.get("/", async (req, res, next) => {
     const tournaments = await service.listTournaments();
     res.json(tournaments);
   } catch (err) {
-    next(err);
+    console.error("[TOURNAMENTS ROUTE] Error listing tournaments:", err);
+    console.error("[TOURNAMENTS ROUTE] Error stack:", err.stack);
+    res.status(500).json({ 
+      error: "Failed to fetch tournaments",
+      message: err.message 
+    });
   }
 });
 
