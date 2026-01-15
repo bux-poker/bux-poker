@@ -20,6 +20,7 @@ model User {
   registrations  TournamentRegistration[]
   players        Player[]
   leagueStanding LeagueStanding[]
+  tournaments    Tournament[]
 }
 
 model Tournament {
@@ -97,7 +98,9 @@ model Player {
   game Game @relation(fields: [gameId], references: [id])
   user User @relation(fields: [userId], references: [id])
 
-  hands Hand[]
+  hands Hand[] @relation("PlayerHands")
+  wonHands Hand[] @relation("HandWinner")
+  handActions HandAction[]
 
   @@unique([gameId, seatNumber])
 }
@@ -119,6 +122,7 @@ model Hand {
 
   game   Game   @relation(fields: [gameId], references: [id])
   winner Player? @relation("HandWinner", fields: [winnerPlayerId], references: [id])
+  players Player[] @relation("PlayerHands")
 
   actions HandAction[]
 

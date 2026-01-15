@@ -2,7 +2,7 @@
 // Wires Socket.IO events to PokerGameService, BettingRound and Prisma.
 
 import { prisma } from "../../config/database.js";
-import { PokerGameService } from "../services/PokerGameService.js";
+import { PokerGameService } from "../../services/PokerGameService.js";
 import { TexasHoldem } from "../poker/TexasHoldem.js";
 import { BettingRound } from "../poker/BettingRound.js";
 

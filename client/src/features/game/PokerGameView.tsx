@@ -4,7 +4,7 @@ import { getSocket } from "../../services/socket";
 import { PokerTable } from "../../components/poker/PokerTable";
 import type { Card } from "../../../shared/types/poker";
 import { BettingControls } from "../../components/poker/BettingControls";
-import { useAuth } from "../../../shared/features/auth/AuthContext";
+import { useAuth } from "@shared/features/auth/AuthContext";
 
 interface PlayerViewModel {
   id: string;
