@@ -1,0 +1,248 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  discordId String?  @unique
+  username  String
+  email     String?  @unique
+  avatarUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  registrations  TournamentRegistration[]
+  players        Player[]
+  leagueStanding LeagueStanding[]
+}
+
+model Tournament {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  startTime     DateTime
+  status        TournamentStatus @default(SCHEDULED)
+  maxPlayers    Int
+  seatsPerTable Int
+  startingChips Int
+
+  blindLevelsJson String   // JSON config for blinds structure
+  prizePlaces     Int
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  registrations TournamentRegistration[]
+  games         Game[]
+  leagueGames   LeagueGame[]
+}
+
+model TournamentRegistration {
+  id           String              @id @default(cuid())
+  tournamentId String
+  userId       String
+  status       RegistrationStatus  @default(PENDING)
+
+  registeredAt DateTime            @default(now())
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id])
+  user       User       @relation(fields: [userId], references: [id])
+
+  @@unique([tournamentId, userId])
+}
+
+model Game {
+  id           String          @id @default(cuid())
+  tournamentId String?
+  tableNumber  Int?
+
+  status           GameStatus   @default(PENDING)
+  currentBlindLevel Int?
+
+  pot             Int           @default(0)
+  communityCards  String        @default("") // encoded representation
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tournament Tournament? @relation(fields: [tournamentId], references: [id])
+  players    Player[]
+  hands      Hand[]
+}
+
+model Player {
+  id      String @id @default(cuid())
+  gameId  String
+  userId  String
+
+  seatNumber Int
+  chips      Int
+
+  holeCards String  @default("") // encoded two-card hand
+  status    PlayerStatus @default(ACTIVE)
+  position  String?      // e.g. "BTN", "SB", "BB"
+
+  lastAction     String? // last betting action
+  lastActionAt   DateTime?
+
+  game Game @relation(fields: [gameId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  hands Hand[]
+
+  @@unique([gameId, seatNumber])
+}
+
+model Hand {
+  id      String @id @default(cuid())
+  gameId  String
+
+  handNumber Int
+  pot        Int   @default(0)
+
+  communityCards String  @default("")
+
+  winnerPlayerId String?
+
+  handHistoryJson String // full hand history for replay
+
+  createdAt DateTime @default(now())
+
+  game   Game   @relation(fields: [gameId], references: [id])
+  winner Player? @relation("HandWinner", fields: [winnerPlayerId], references: [id])
+
+  actions HandAction[]
+
+  @@unique([gameId, handNumber])
+}
+
+model HandAction {
+  id     String @id @default(cuid())
+  handId String
+  playerId String
+
+  action   BettingAction
+  amount   Int      @default(0)
+  street   Street
+  position String?  // e.g. BTN, SB, BB, UTG
+
+  createdAt DateTime @default(now())
+
+  hand   Hand   @relation(fields: [handId], references: [id])
+  player Player @relation(fields: [playerId], references: [id])
+}
+
+model League {
+  id        String @id @default(cuid())
+  name      String
+  month     Int
+  year      Int
+  status    LeagueStatus @default(PLANNED)
+  totalGames Int
+
+  createdAt DateTime @default(now())
+
+  games      LeagueGame[]
+  standings  LeagueStanding[]
+}
+
+model LeagueGame {
+  id          String @id @default(cuid())
+  leagueId    String
+  tournamentId String
+  gameNumber  Int
+
+  completedAt DateTime?
+
+  league     League     @relation(fields: [leagueId], references: [id])
+  tournament Tournament @relation(fields: [tournamentId], references: [id])
+
+  @@unique([leagueId, gameNumber])
+}
+
+model LeagueStanding {
+  id        String @id @default(cuid())
+  leagueId  String
+  userId    String
+
+  points      Int   @default(0)
+  gamesPlayed Int   @default(0)
+  bestFinish  Int?  // 1 = first, etc
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  league League @relation(fields: [leagueId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([leagueId, userId])
+}
+
+model DiscordServer {
+  id                   String @id @default(cuid())
+  serverId             String @unique
+  serverName           String
+  announcementChannelId String?
+  enabled              Boolean @default(true)
+
+  createdAt DateTime @default(now())
+}
+
+enum TournamentStatus {
+  SCHEDULED
+  REGISTERING
+  RUNNING
+  COMPLETED
+  CANCELLED
+}
+
+enum RegistrationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum GameStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+}
+
+enum PlayerStatus {
+  ACTIVE
+  FOLDED
+  ALL_IN
+  ELIMINATED
+}
+
+enum BettingAction {
+  FOLD
+  CHECK
+  CALL
+  BET
+  RAISE
+  ALL_IN
+}
+
+enum Street {
+  PREFLOP
+  FLOP
+  TURN
+  RIVER
+}
+
+enum LeagueStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+}
+
