@@ -78,7 +78,13 @@ if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET) {
 
     return done(null, user);
   } catch (error) {
-    console.error('[DISCORD AUTH] Error:', error);
+    console.error('[DISCORD AUTH] Error in passport strategy:', error);
+    console.error('[DISCORD AUTH] Error stack:', error.stack);
+    console.error('[DISCORD AUTH] Error details:', {
+      message: error.message,
+      name: error.name,
+      code: error.code
+    });
     return done(error, null);
   }
   }));
