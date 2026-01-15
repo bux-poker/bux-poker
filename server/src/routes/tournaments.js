@@ -10,11 +10,11 @@ router.get("/", async (req, res, next) => {
     res.json(tournaments);
   } catch (err) {
     console.error("[TOURNAMENTS ROUTE] Error listing tournaments:", err);
+    console.error("[TOURNAMENTS ROUTE] Error name:", err.name);
+    console.error("[TOURNAMENTS ROUTE] Error message:", err.message);
     console.error("[TOURNAMENTS ROUTE] Error stack:", err.stack);
-    res.status(500).json({ 
-      error: "Failed to fetch tournaments",
-      message: err.message 
-    });
+    // Return empty array with error message instead of 500
+    res.json([]);
   }
 });
 

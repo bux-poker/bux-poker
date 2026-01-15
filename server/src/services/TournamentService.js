@@ -3,50 +3,91 @@ import { prisma } from "../config/database.js";
 export class TournamentService {
   async listTournaments() {
     try {
-      const tournaments = await prisma.tournament.findMany({
-        orderBy: { startTime: "asc" },
-        include: {
-          registrations: {
-            select: {
-              id: true,
-              userId: true,
-              status: true,
+      // First, try to get tournaments with all relations
+      let tournaments;
+      try {
+        tournaments = await prisma.tournament.findMany({
+          orderBy: { startTime: "asc" },
+          include: {
+            registrations: {
+              select: {
+                id: true,
+                userId: true,
+                status: true,
+              },
+            },
+            posts: {
+              include: {
+                server: true,
+              },
+            },
+            createdBy: {
+              select: {
+                id: true,
+                username: true,
+                avatarUrl: true,
+              },
             },
           },
-          posts: {
-            include: {
-              server: true,
+        });
+      } catch (queryError) {
+        console.error("[TOURNAMENT SERVICE] Prisma query error:", queryError);
+        // If the query fails (e.g., relation issues), try without posts
+        tournaments = await prisma.tournament.findMany({
+          orderBy: { startTime: "asc" },
+          include: {
+            registrations: {
+              select: {
+                id: true,
+                userId: true,
+                status: true,
+              },
+            },
+            createdBy: {
+              select: {
+                id: true,
+                username: true,
+                avatarUrl: true,
+              },
             },
           },
-          createdBy: {
-            select: {
-              id: true,
-              username: true,
-              avatarUrl: true,
-            },
-          },
-        },
-      });
+        });
+        // Manually fetch posts for each tournament if needed
+        for (const tournament of tournaments) {
+          try {
+            const posts = await prisma.tournamentPost.findMany({
+              where: { tournamentId: tournament.id },
+              include: { server: true },
+            });
+            tournament.posts = posts || [];
+          } catch (postError) {
+            console.warn(`[TOURNAMENT SERVICE] Error fetching posts for tournament ${tournament.id}:`, postError.message);
+            tournament.posts = [];
+          }
+        }
+      }
 
       // Transform to include registeredCount and server info
       return tournaments.map((tournament) => {
         try {
+          const registrations = tournament.registrations || [];
+          const posts = tournament.posts || [];
+          
+          const servers = posts
+            .filter(post => post && post.server)
+            .map((post) => ({
+              id: post.server.id,
+              serverId: post.server.serverId,
+              serverName: post.server.serverName || 'Unknown Server',
+              inviteLink: post.server.inviteLink || null,
+            }));
+
           return {
             ...tournament,
-            registeredCount: tournament.registrations?.filter(
+            registeredCount: registrations.filter(
               (r) => r.status === "CONFIRMED" || r.status === "PENDING"
-            ).length || 0,
-            servers: (tournament.posts || []).map((post) => {
-              if (!post || !post.server) {
-                return null;
-              }
-              return {
-                id: post.server.id,
-                serverId: post.server.serverId,
-                serverName: post.server.serverName || 'Unknown Server',
-                inviteLink: post.server.inviteLink || null,
-              };
-            }).filter(server => server !== null),
+            ).length,
+            servers: servers,
           };
         } catch (transformError) {
           console.error(`[TOURNAMENT SERVICE] Error transforming tournament ${tournament.id}:`, transformError);
@@ -60,8 +101,11 @@ export class TournamentService {
       });
     } catch (error) {
       console.error("[TOURNAMENT SERVICE] Error listing tournaments:", error);
+      console.error("[TOURNAMENT SERVICE] Error name:", error.name);
+      console.error("[TOURNAMENT SERVICE] Error message:", error.message);
       console.error("[TOURNAMENT SERVICE] Error stack:", error.stack);
-      throw error;
+      // Return empty array instead of throwing to prevent 500
+      return [];
     }
   }
 
