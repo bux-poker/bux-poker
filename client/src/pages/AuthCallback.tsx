@@ -14,7 +14,7 @@ export function AuthCallback() {
       localStorage.setItem('sessionToken', token);
 
       // Fetch user profile
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
       fetch(`${apiBaseUrl}/api/auth/profile`, {
         headers: {
           Authorization: `Bearer ${token}`,
