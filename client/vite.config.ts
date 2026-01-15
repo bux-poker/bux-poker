@@ -7,7 +7,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src"),
-      "@shared": path.resolve(__dirname, "../shared")
+      "@shared": path.resolve(__dirname, "../shared"),
+      react: path.resolve(__dirname, "node_modules/react"),
+      "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
+      axios: path.resolve(__dirname, "node_modules/axios")
     }
   },
   server: {
