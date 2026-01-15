@@ -2,12 +2,48 @@ import { Router } from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import { TournamentEngine } from "../services/TournamentEngine.js";
 import { prisma } from "../config/database.js";
+import { postTournamentEmbed, getDiscordClient } from "../discord/bot.js";
 
 const router = Router();
 const engine = new TournamentEngine();
 
 // All admin routes require JWT auth for now.
 router.use(authenticateToken);
+
+// Get all configured Discord servers
+router.get("/servers", async (req, res, next) => {
+  try {
+    const discordClient = getDiscordClient();
+    const servers = await prisma.discordServer.findMany({
+      where: { enabled: true },
+      orderBy: { serverName: "asc" },
+    });
+
+    // Enrich with current bot membership status
+    const enrichedServers = await Promise.all(
+      servers.map(async (server) => {
+        let isBotMember = false;
+        if (discordClient) {
+          try {
+            const guild = await discordClient.guilds.fetch(server.serverId);
+            isBotMember = !!guild;
+          } catch (error) {
+            // Bot is not a member of this server
+            isBotMember = false;
+          }
+        }
+        return {
+          ...server,
+          isBotMember,
+        };
+      })
+    );
+
+    res.json(enrichedServers);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // Create a new tournament
 router.post("/tournaments", async (req, res, next) => {
@@ -21,6 +57,7 @@ router.post("/tournaments", async (req, res, next) => {
       startingChips = 10000,
       blindLevelsJson,
       prizePlaces = 3,
+      serverIds = [], // Array of Discord server IDs to post to
     } = req.body;
 
     if (!name || !startTime) {
@@ -64,6 +101,16 @@ router.post("/tournaments", async (req, res, next) => {
         },
       },
     });
+
+    // Post tournament embed to selected Discord servers
+    if (serverIds && serverIds.length > 0) {
+      try {
+        await postTournamentEmbed(tournament, serverIds);
+      } catch (error) {
+        console.error("[ADMIN] Error posting tournament embed:", error);
+        // Don't fail the tournament creation if embed posting fails
+      }
+    }
 
     res.status(201).json(tournament);
   } catch (err) {

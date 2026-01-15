@@ -1,5 +1,6 @@
-import { Client, GatewayIntentBits, REST, Routes } from 'discord.js';
+import { Client, GatewayIntentBits, REST, Routes, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import dotenv from 'dotenv';
+import { prisma } from '../config/database.js';
 
 dotenv.config();
 
@@ -59,6 +60,30 @@ const commands = [
       },
     ],
   },
+  {
+    name: 'setup',
+    description: 'Configure the bot for this server',
+    options: [
+      {
+        name: 'channel',
+        type: 7, // CHANNEL
+        description: 'Channel where tournament embeds will be posted',
+        required: true,
+      },
+      {
+        name: 'invite-link',
+        type: 3, // STRING
+        description: 'Invite link for people to join this server',
+        required: true,
+      },
+      {
+        name: 'admin-role',
+        type: 8, // ROLE
+        description: 'Role ID that grants admin access',
+        required: true,
+      },
+    ],
+  },
 ];
 
 let discordClient = null;
@@ -73,6 +98,7 @@ export async function initializeDiscordBot() {
     const client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
       ],
     });
 
@@ -97,26 +123,36 @@ export async function initializeDiscordBot() {
       console.log(`[DISCORD BOT] Registered ${commands.length} global commands`);
     }
 
-    // Handle interactions (slash commands)
+    // Handle interactions (slash commands and buttons)
     client.on('interactionCreate', async (interaction) => {
-      if (!interaction.isChatInputCommand()) return;
-
-      const { commandName } = interaction;
-
       try {
-        if (commandName === 'tournament') {
-          await handleTournamentCommand(interaction);
-        } else if (commandName === 'list-tournaments') {
-          await handleListTournamentsCommand(interaction);
-        } else if (commandName === 'register') {
-          await handleRegisterCommand(interaction);
+        if (interaction.isChatInputCommand()) {
+          const { commandName } = interaction;
+
+          if (commandName === 'tournament') {
+            await handleTournamentCommand(interaction);
+          } else if (commandName === 'list-tournaments') {
+            await handleListTournamentsCommand(interaction);
+          } else if (commandName === 'register') {
+            await handleRegisterCommand(interaction);
+          } else if (commandName === 'setup') {
+            await handleSetupCommand(interaction);
+          }
+        } else if (interaction.isButton()) {
+          // Handle button interactions for tournament registration
+          if (interaction.customId.startsWith('register_')) {
+            const tournamentId = interaction.customId.replace('register_', '');
+            await handleRegisterButton(interaction, tournamentId);
+          }
         }
       } catch (error) {
-        console.error(`[DISCORD BOT] Error handling command ${commandName}:`, error);
-        await interaction.reply({
-          content: `❌ Error: ${error.message}`,
-          ephemeral: true,
-        });
+        console.error(`[DISCORD BOT] Error handling interaction:`, error);
+        const replyContent = { content: `❌ Error: ${error.message}`, ephemeral: true };
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp(replyContent);
+        } else {
+          await interaction.reply(replyContent);
+        }
       }
     });
 
@@ -246,6 +282,197 @@ async function handleRegisterCommand(interaction) {
     content: `✅ Registered for tournament!`,
     ephemeral: true,
   });
+}
+
+async function handleSetupCommand(interaction) {
+  // Check if user has admin permissions
+  if (!interaction.memberPermissions?.has('Administrator')) {
+    await interaction.reply({
+      content: '❌ You need Administrator permissions to configure the bot.',
+      ephemeral: true,
+    });
+    return;
+  }
+
+  const channel = interaction.options.getChannel('channel');
+  const inviteLink = interaction.options.getString('invite-link');
+  const adminRole = interaction.options.getRole('admin-role');
+
+  if (!channel || !inviteLink || !adminRole) {
+    await interaction.reply({
+      content: '❌ All fields are required.',
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // Validate invite link format
+  if (!inviteLink.startsWith('https://discord.gg/') && !inviteLink.startsWith('https://discord.com/invite/')) {
+    await interaction.reply({
+      content: '❌ Invalid invite link format. Please provide a valid Discord invite link.',
+      ephemeral: true,
+    });
+    return;
+  }
+
+  try {
+    const guild = interaction.guild;
+    
+    // Upsert server configuration
+    await prisma.discordServer.upsert({
+      where: { serverId: guild.id },
+      update: {
+        serverName: guild.name,
+        announcementChannelId: channel.id,
+        inviteLink: inviteLink,
+        adminRoleId: adminRole.id,
+        setupCompleted: true,
+        enabled: true,
+      },
+      create: {
+        serverId: guild.id,
+        serverName: guild.name,
+        announcementChannelId: channel.id,
+        inviteLink: inviteLink,
+        adminRoleId: adminRole.id,
+        setupCompleted: true,
+        enabled: true,
+      },
+    });
+
+    await interaction.reply({
+      content: `✅ Bot configured successfully!\n\n**Channel:** ${channel}\n**Invite Link:** ${inviteLink}\n**Admin Role:** ${adminRole}\n\nThe bot will now post tournament embeds in ${channel}.`,
+      ephemeral: true,
+    });
+  } catch (error) {
+    console.error('[DISCORD BOT] Error in setup command:', error);
+    throw error;
+  }
+}
+
+async function handleRegisterButton(interaction, tournamentId) {
+  const discordUserId = interaction.user.id;
+
+  try {
+    // Find user by Discord ID
+    const user = await prisma.user.findUnique({
+      where: { discordId: discordUserId },
+    });
+
+    if (!user) {
+      await interaction.reply({
+        content: '❌ You must be logged in on the website first. Please visit https://bux-poker.pro and log in with Discord.',
+        ephemeral: true,
+      });
+      return;
+    }
+
+    // Check if already registered
+    const existingRegistration = await prisma.tournamentRegistration.findUnique({
+      where: {
+        tournamentId_userId: {
+          tournamentId: tournamentId,
+          userId: user.id,
+        },
+      },
+    });
+
+    if (existingRegistration) {
+      await interaction.reply({
+        content: '✅ You are already registered for this tournament!',
+        ephemeral: true,
+      });
+      return;
+    }
+
+    // Register user
+    await prisma.tournamentRegistration.create({
+      data: {
+        tournamentId: tournamentId,
+        userId: user.id,
+        status: 'CONFIRMED',
+      },
+    });
+
+    await interaction.reply({
+      content: '✅ Successfully registered for the tournament!',
+      ephemeral: true,
+    });
+  } catch (error) {
+    console.error('[DISCORD BOT] Error registering user:', error);
+    throw error;
+  }
+}
+
+export async function postTournamentEmbed(tournament, serverIds) {
+  if (!discordClient) {
+    console.warn('[DISCORD BOT] Cannot post embed - bot not initialized');
+    return;
+  }
+
+  const servers = await prisma.discordServer.findMany({
+    where: {
+      serverId: { in: serverIds },
+      enabled: true,
+      setupCompleted: true,
+      announcementChannelId: { not: null },
+    },
+  });
+
+  const startTime = new Date(tournament.startTime);
+  const embed = new EmbedBuilder()
+    .setTitle(`🃏 ${tournament.name}`)
+    .setDescription(tournament.description || 'Join the tournament and compete for prizes!')
+    .addFields(
+      { name: 'Start Time', value: `<t:${Math.floor(startTime.getTime() / 1000)}:F>`, inline: true },
+      { name: 'Max Players', value: tournament.maxPlayers.toString(), inline: true },
+      { name: 'Starting Chips', value: tournament.startingChips.toLocaleString(), inline: true },
+      { name: 'Prize Places', value: tournament.prizePlaces.toString(), inline: true },
+    )
+    .setColor(0x00AE86)
+    .setTimestamp();
+
+  const button = new ButtonBuilder()
+    .setCustomId(`register_${tournament.id}`)
+    .setLabel('Register for Tournament')
+    .setStyle(ButtonStyle.Primary);
+
+  const row = new ActionRowBuilder().addComponents(button);
+
+  const posts = [];
+
+  for (const server of servers) {
+    try {
+      const guild = await discordClient.guilds.fetch(server.serverId);
+      const channel = await guild.channels.fetch(server.announcementChannelId);
+
+      if (!channel || !channel.isTextBased()) {
+        console.warn(`[DISCORD BOT] Invalid channel for server ${server.serverName}`);
+        continue;
+      }
+
+      const message = await channel.send({
+        embeds: [embed],
+        components: [row],
+      });
+
+      // Save tournament post to database
+      await prisma.tournamentPost.create({
+        data: {
+          tournamentId: tournament.id,
+          serverId: server.id,
+          messageId: message.id,
+          postedAt: new Date(),
+        },
+      });
+
+      posts.push({ serverId: server.serverId, messageId: message.id });
+    } catch (error) {
+      console.error(`[DISCORD BOT] Error posting to server ${server.serverName}:`, error);
+    }
+  }
+
+  return posts;
 }
 
 export function getDiscordClient() {

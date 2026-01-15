@@ -45,6 +45,7 @@ model Tournament {
   registrations TournamentRegistration[]
   games         Game[]
   leagueGames   LeagueGame[]
+  posts         TournamentPost[]
 }
 
 model TournamentRegistration {
@@ -196,9 +197,28 @@ model DiscordServer {
   serverId             String @unique
   serverName           String
   announcementChannelId String?
+  inviteLink           String?
+  adminRoleId          String?
   enabled              Boolean @default(true)
+  setupCompleted       Boolean @default(false)
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tournamentPosts TournamentPost[]
+}
+
+model TournamentPost {
+  id           String @id @default(cuid())
+  tournamentId String
+  serverId     String
+  messageId    String? // Discord message ID after posting
+  postedAt     DateTime?
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  server     DiscordServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([tournamentId, serverId])
 }
 
 enum TournamentStatus {

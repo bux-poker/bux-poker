@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@shared/features/auth/AuthContext';
 import api from '../../services/api';
 
@@ -9,11 +9,23 @@ interface BlindLevel {
   duration: number;
 }
 
+interface DiscordServer {
+  id: string;
+  serverId: string;
+  serverName: string;
+  inviteLink: string | null;
+  setupCompleted: boolean;
+  isBotMember: boolean;
+}
+
 export function CreateTournament() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [servers, setServers] = useState<DiscordServer[]>([]);
+  const [selectedServerIds, setSelectedServerIds] = useState<string[]>([]);
+  const [loadingServers, setLoadingServers] = useState(true);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -32,6 +44,37 @@ export function CreateTournament() {
     { level: 4, smallBlind: 200, bigBlind: 400, duration: 15 },
     { level: 5, smallBlind: 400, bigBlind: 800, duration: 15 },
   ]);
+
+  useEffect(() => {
+    // Fetch available Discord servers
+    const fetchServers = async () => {
+      try {
+        const token = localStorage.getItem('sessionToken');
+        if (!token) return;
+
+        const response = await api.get('/api/admin/servers', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setServers(response.data || []);
+      } catch (err) {
+        console.error('Failed to fetch servers:', err);
+      } finally {
+        setLoadingServers(false);
+      }
+    };
+
+    if (user) {
+      fetchServers();
+    }
+  }, [user]);
+
+  const toggleServerSelection = (serverId: string) => {
+    setSelectedServerIds((prev) =>
+      prev.includes(serverId)
+        ? prev.filter((id) => id !== serverId)
+        : [...prev, serverId]
+    );
+  };
 
   if (!user) {
     return (
@@ -58,6 +101,7 @@ export function CreateTournament() {
         {
           ...formData,
           blindLevelsJson: JSON.stringify(blindLevels),
+          serverIds: selectedServerIds, // Include selected Discord servers
         },
         {
           headers: {
@@ -304,6 +348,55 @@ export function CreateTournament() {
           </div>
         </div>
 
+        {/* Discord Server Selection */}
+        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
+          <h2 className="mb-4 text-lg font-semibold">Discord Servers</h2>
+          <p className="mb-4 text-sm text-slate-400">
+            Select which Discord servers to post this tournament to. Servers must be set up with /setup command first.
+          </p>
+          {loadingServers ? (
+            <p className="text-slate-400">Loading servers...</p>
+          ) : servers.length === 0 ? (
+            <p className="text-slate-400">
+              No Discord servers configured. Use /setup command in your Discord server to configure it first.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {servers.map((server) => (
+                <label
+                  key={server.id}
+                  className={`flex cursor-pointer items-center gap-3 rounded border p-3 transition-colors ${
+                    !server.isBotMember || !server.setupCompleted
+                      ? 'border-slate-700 bg-slate-800/30 opacity-50'
+                      : selectedServerIds.includes(server.serverId)
+                      ? 'border-emerald-500 bg-emerald-500/10'
+                      : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedServerIds.includes(server.serverId)}
+                    onChange={() => toggleServerSelection(server.serverId)}
+                    disabled={!server.isBotMember || !server.setupCompleted}
+                    className="h-4 w-4 rounded border-slate-600 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{server.serverName}</span>
+                      {!server.isBotMember && (
+                        <span className="text-xs text-amber-400">(Bot not in server)</span>
+                      )}
+                      {!server.setupCompleted && (
+                        <span className="text-xs text-amber-400">(Setup incomplete)</span>
+                      )}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Error/Success Messages */}
         {error && (
           <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-4 text-red-200">
@@ -314,6 +407,11 @@ export function CreateTournament() {
         {success && (
           <div className="rounded-lg border border-emerald-500/50 bg-emerald-500/10 p-4 text-emerald-200">
             Tournament created successfully!
+            {selectedServerIds.length > 0 && (
+              <span className="block mt-2 text-sm">
+                Tournament embed posted to {selectedServerIds.length} Discord server(s).
+              </span>
+            )}
           </div>
         )}
 
