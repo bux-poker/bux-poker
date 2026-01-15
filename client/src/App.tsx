@@ -1,14 +1,17 @@
 import { useState } from "react";
-import { Route, Routes, Link } from "react-router-dom";
+import { Route, Routes, Link, Navigate } from "react-router-dom";
 import { TournamentList } from "./components/tournament/TournamentList";
 import { TournamentDetail } from "./components/tournament/TournamentDetail";
 import { PokerGameView } from "./features/game/PokerGameView";
 import { LoginButton } from "./components/auth/LoginButton";
 import { CreateTournament } from "./components/admin/CreateTournament";
+import { AdminRoute } from "./components/admin/AdminRoute";
 import { AuthCallback } from "./pages/AuthCallback";
+import { useAdmin } from "./hooks/useAdmin";
 
 function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { isAdmin, loading: adminLoading } = useAdmin();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50">
@@ -41,12 +44,14 @@ function App() {
               >
                 Leagues
               </Link>
-              <Link
-                to="/admin"
-                className="text-sm font-medium text-slate-300 transition-colors hover:text-emerald-400"
-              >
-                Admin
-              </Link>
+              {!adminLoading && isAdmin && (
+                <Link
+                  to="/admin"
+                  className="text-sm font-medium text-slate-300 transition-colors hover:text-emerald-400"
+                >
+                  Admin
+                </Link>
+              )}
               <LoginButton />
             </nav>
 
@@ -92,13 +97,15 @@ function App() {
                 >
                   Leagues
                 </Link>
-                <Link
-                  to="/admin"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-emerald-400"
-                >
-                  Admin
-                </Link>
+                {!adminLoading && isAdmin && (
+                  <Link
+                    to="/admin"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-emerald-400"
+                  >
+                    Admin
+                  </Link>
+                )}
                 <div className="px-4">
                   <LoginButton />
                 </div>
@@ -296,7 +303,14 @@ function App() {
           <Route path="/tournaments" element={<TournamentList />} />
           <Route path="/tournaments/:id" element={<TournamentDetail />} />
           <Route path="/game/:id" element={<PokerGameView />} />
-          <Route path="/admin" element={<CreateTournament />} />
+          <Route
+            path="/admin"
+            element={
+              <AdminRoute>
+                <CreateTournament />
+              </AdminRoute>
+            }
+          />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route
             path="/leagues"

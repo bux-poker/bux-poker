@@ -22,7 +22,7 @@ export function AuthCallback() {
         },
       })
         .then((res) => res.json())
-        .then((data) => {
+        .then(async (data) => {
           if (data.user) {
             const userData = {
               ...data.user,
@@ -30,7 +30,26 @@ export function AuthCallback() {
             };
             setUser(userData);
             localStorage.setItem('userData', JSON.stringify(userData));
-            navigate('/admin');
+            
+            // Check if user is admin before redirecting
+            try {
+              const adminCheckResponse = await fetch(`${apiBaseUrl}/api/admin/check`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (adminCheckResponse.ok) {
+                const adminData = await adminCheckResponse.json();
+                if (adminData.isAdmin) {
+                  navigate('/admin');
+                } else {
+                  navigate('/tournaments');
+                }
+              } else {
+                navigate('/tournaments');
+              }
+            } catch {
+              // If admin check fails, redirect to tournaments
+              navigate('/tournaments');
+            }
           } else {
             navigate('/login?error=profile_fetch_failed');
           }

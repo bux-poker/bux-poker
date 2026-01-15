@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticateToken } from "../middleware/auth.js";
+import { requireAdminRole } from "../middleware/admin.js";
 import { TournamentEngine } from "../services/TournamentEngine.js";
 import { prisma } from "../config/database.js";
 import { postTournamentEmbed, getDiscordClient } from "../discord/bot.js";
@@ -7,8 +8,19 @@ import { postTournamentEmbed, getDiscordClient } from "../discord/bot.js";
 const router = Router();
 const engine = new TournamentEngine();
 
-// All admin routes require JWT auth for now.
+// All admin routes require JWT auth AND admin role
 router.use(authenticateToken);
+router.use(requireAdminRole);
+
+// Check if current user is an admin
+router.get("/check", async (req, res, next) => {
+  try {
+    // If we got here, user passed requireAdminRole middleware
+    res.json({ isAdmin: true });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // Get all configured Discord servers
 router.get("/servers", async (req, res, next) => {
