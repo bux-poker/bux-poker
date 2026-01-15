@@ -15,14 +15,7 @@ export class TournamentService {
           },
           posts: {
             include: {
-              server: {
-                select: {
-                  id: true,
-                  serverId: true,
-                  serverName: true,
-                  inviteLink: true,
-                },
-              },
+              server: true,
             },
           },
           createdBy: {
@@ -92,14 +85,7 @@ export class TournamentService {
           games: true,
           posts: {
             include: {
-              server: {
-                select: {
-                  id: true,
-                  serverId: true,
-                  serverName: true,
-                  inviteLink: true,
-                },
-              },
+              server: true,
             },
           },
           createdBy: {
