@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Route, Routes, Link } from "react-router-dom";
 import { TournamentList } from "./components/tournament/TournamentList";
 import { TournamentDetail } from "./components/tournament/TournamentDetail";
@@ -7,80 +8,276 @@ import { CreateTournament } from "./components/admin/CreateTournament";
 import { AuthCallback } from "./pages/AuthCallback";
 
 function App() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
-      <header className="border-b border-slate-800 px-4 py-3">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <span className="text-lg font-semibold tracking-tight">
-              BUX Poker
-            </span>
-            <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-200">
-              Tournament Platform
-            </span>
-          </Link>
-          <nav className="flex items-center gap-4">
-            <Link
-              to="/tournaments"
-              className="text-sm text-slate-400 transition-colors hover:text-slate-200"
-            >
-              Tournaments
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50">
+      <header className="sticky top-0 z-50 border-b border-slate-800/50 bg-slate-950/80 backdrop-blur-sm">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex h-16 items-center justify-between">
+            <Link to="/" className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600">
+                <span className="text-xl">🃏</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-lg font-bold tracking-tight text-white">
+                  BUX Poker
+                </span>
+                <span className="text-[10px] text-emerald-400">Tournament Platform</span>
+              </div>
             </Link>
-            <Link
-              to="/leagues"
-              className="text-sm text-slate-400 transition-colors hover:text-slate-200"
+
+            {/* Desktop Navigation */}
+            <nav className="hidden items-center gap-6 md:flex">
+              <Link
+                to="/tournaments"
+                className="text-sm font-medium text-slate-300 transition-colors hover:text-emerald-400"
+              >
+                Tournaments
+              </Link>
+              <Link
+                to="/leagues"
+                className="text-sm font-medium text-slate-300 transition-colors hover:text-emerald-400"
+              >
+                Leagues
+              </Link>
+              <Link
+                to="/admin"
+                className="text-sm font-medium text-slate-300 transition-colors hover:text-emerald-400"
+              >
+                Admin
+              </Link>
+              <LoginButton />
+            </nav>
+
+            {/* Mobile menu button */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white md:hidden"
+              aria-label="Toggle menu"
             >
-              Leagues
-            </Link>
-            <Link
-              to="/admin"
-              className="text-sm text-slate-400 transition-colors hover:text-slate-200"
-            >
-              Admin
-            </Link>
-            <LoginButton />
-          </nav>
+              <svg
+                className="h-6 w-6"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                {mobileMenuOpen ? (
+                  <path d="M6 18L18 6M6 6l12 12" />
+                ) : (
+                  <path d="M4 6h16M4 12h16M4 18h16" />
+                )}
+              </svg>
+            </button>
+          </div>
+
+          {/* Mobile Navigation */}
+          {mobileMenuOpen && (
+            <div className="border-t border-slate-800 py-4 md:hidden">
+              <nav className="flex flex-col gap-4">
+                <Link
+                  to="/tournaments"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-emerald-400"
+                >
+                  Tournaments
+                </Link>
+                <Link
+                  to="/leagues"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-emerald-400"
+                >
+                  Leagues
+                </Link>
+                <Link
+                  to="/admin"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-emerald-400"
+                >
+                  Admin
+                </Link>
+                <div className="px-4">
+                  <LoginButton />
+                </div>
+              </nav>
+            </div>
+          )}
         </div>
       </header>
 
-      <main className="mx-auto flex max-w-6xl flex-1 flex-col gap-6 px-4 py-6">
+      <main className="mx-auto max-w-7xl flex-1 px-4 sm:px-6 lg:px-8">
         <Routes>
           <Route
             path="/"
             element={
-              <div className="space-y-6">
-                <div>
-                  <h1 className="text-3xl font-bold tracking-tight">
-                    Welcome to BUX Poker
-                  </h1>
-                  <p className="mt-2 max-w-2xl text-slate-300">
-                    Texas Hold'em tournament platform with Discord integration
-                    and league system.
-                  </p>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Link
-                    to="/tournaments"
-                    className="rounded-lg border border-slate-800 bg-slate-900/50 p-6 transition-all hover:border-emerald-500/50"
-                  >
-                    <h2 className="text-xl font-semibold text-slate-100">
-                      Tournaments
-                    </h2>
-                    <p className="mt-2 text-sm text-slate-400">
-                      Join multi-table Texas Hold'em tournaments
-                    </p>
-                  </Link>
-                  <Link
-                    to="/leagues"
-                    className="rounded-lg border border-slate-800 bg-slate-900/50 p-6 transition-all hover:border-emerald-500/50"
-                  >
-                    <h2 className="text-xl font-semibold text-slate-100">
-                      Leagues
-                    </h2>
-                    <p className="mt-2 text-sm text-slate-400">
-                      Compete in monthly leagues and climb the leaderboard
-                    </p>
-                  </Link>
+              <div className="flex min-h-[calc(100vh-4rem)] flex-col justify-center py-4 lg:min-h-[calc(100vh-5rem)] lg:py-8">
+                <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
+                  {/* Hero Section */}
+                  <div className="relative flex flex-col justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-900/20 via-slate-900/50 to-teal-900/20 p-6 sm:p-8 lg:p-10">
+                    <div className="relative z-10">
+                      <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-300 sm:px-4 sm:py-2 sm:text-sm">
+                        <span>🃏</span>
+                        <span>Professional Poker Platform</span>
+                      </div>
+                      <h1 className="mb-3 text-3xl font-bold tracking-tight text-white sm:text-4xl lg:text-5xl">
+                        Welcome to{" "}
+                        <span className="bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
+                          BUX Poker
+                        </span>
+                      </h1>
+                      <p className="mb-6 text-base text-slate-300 sm:text-lg">
+                        Experience the thrill of Texas Hold'em tournaments with
+                        Discord integration, real-time gameplay, and competitive
+                        league systems.
+                      </p>
+                      <div className="flex flex-wrap gap-3">
+                        <Link
+                          to="/tournaments"
+                          className="rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:scale-105 hover:shadow-emerald-500/40 sm:px-6 sm:py-3 sm:text-base"
+                        >
+                          Browse Tournaments
+                        </Link>
+                        <Link
+                          to="/leagues"
+                          className="rounded-lg border-2 border-slate-700 bg-slate-800/50 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur-sm transition-all hover:border-emerald-500/50 hover:bg-slate-800 sm:px-6 sm:py-3 sm:text-base"
+                        >
+                          View Leagues
+                        </Link>
+                      </div>
+                    </div>
+                    {/* Decorative elements */}
+                    <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-emerald-500/10 blur-3xl lg:-right-20 lg:-top-20 lg:h-64 lg:w-64"></div>
+                    <div className="absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-teal-500/10 blur-3xl lg:-bottom-20 lg:-left-20 lg:h-64 lg:w-64"></div>
+                  </div>
+
+                  {/* Features Grid */}
+                  <div className="flex flex-col gap-4">
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
+                      <Link
+                        to="/tournaments"
+                        className="group relative overflow-hidden rounded-xl border border-slate-800 bg-gradient-to-br from-slate-900/50 to-slate-800/30 p-5 transition-all hover:border-emerald-500/50 hover:shadow-lg hover:shadow-emerald-500/10"
+                      >
+                        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 sm:h-12 sm:w-12">
+                          <svg
+                            className="h-5 w-5 text-emerald-400 sm:h-6 sm:w-6"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
+                            />
+                          </svg>
+                        </div>
+                        <h2 className="mb-1.5 text-lg font-bold text-white sm:text-xl">
+                          Tournaments
+                        </h2>
+                        <p className="mb-3 text-xs text-slate-400 sm:text-sm">
+                          Join multi-table Texas Hold'em tournaments with real-time
+                          gameplay, blind structures, and prize pools.
+                        </p>
+                        <div className="flex items-center text-xs font-medium text-emerald-400 group-hover:gap-2 sm:text-sm">
+                          <span>Explore</span>
+                          <svg
+                            className="h-3 w-3 transition-transform group-hover:translate-x-1 sm:h-4 sm:w-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 5l7 7-7 7"
+                            />
+                          </svg>
+                        </div>
+                      </Link>
+
+                      <Link
+                        to="/leagues"
+                        className="group relative overflow-hidden rounded-xl border border-slate-800 bg-gradient-to-br from-slate-900/50 to-slate-800/30 p-5 transition-all hover:border-emerald-500/50 hover:shadow-lg hover:shadow-emerald-500/10"
+                      >
+                        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500/20 to-teal-600/20 sm:h-12 sm:w-12">
+                          <svg
+                            className="h-5 w-5 text-teal-400 sm:h-6 sm:w-6"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
+                            />
+                          </svg>
+                        </div>
+                        <h2 className="mb-1.5 text-lg font-bold text-white sm:text-xl">
+                          Leagues
+                        </h2>
+                        <p className="mb-3 text-xs text-slate-400 sm:text-sm">
+                          Compete in monthly leagues, climb the leaderboard, and
+                          earn your place among the elite players.
+                        </p>
+                        <div className="flex items-center text-xs font-medium text-teal-400 group-hover:gap-2 sm:text-sm">
+                          <span>View Rankings</span>
+                          <svg
+                            className="h-3 w-3 transition-transform group-hover:translate-x-1 sm:h-4 sm:w-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 5l7 7-7 7"
+                            />
+                          </svg>
+                        </div>
+                      </Link>
+                    </div>
+
+                    <div className="group relative w-full overflow-hidden rounded-xl border border-slate-800 bg-gradient-to-br from-slate-900/50 to-slate-800/30 p-5 transition-all hover:border-emerald-500/50 hover:shadow-lg hover:shadow-emerald-500/10 sm:p-6">
+                      <div className="flex items-start gap-4 sm:items-center">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500/20 to-purple-600/20 sm:h-12 sm:w-12">
+                          <svg
+                            className="h-5 w-5 text-purple-400 sm:h-6 sm:w-6"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                            />
+                          </svg>
+                        </div>
+                        <div className="flex-1">
+                          <h2 className="mb-1.5 text-lg font-bold text-white sm:text-xl">
+                            Discord Integration
+                          </h2>
+                          <p className="mb-3 text-xs text-slate-400 sm:text-sm">
+                            Seamlessly connect with Discord for authentication, bot
+                            commands, and community features.
+                          </p>
+                          <div className="flex items-center gap-2 text-xs font-medium text-purple-400 sm:text-sm">
+                            <span>Connected</span>
+                            <div className="h-2 w-2 rounded-full bg-emerald-500"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             }
