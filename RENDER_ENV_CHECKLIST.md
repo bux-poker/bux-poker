@@ -24,11 +24,13 @@ JWT_SECRET=your-random-secret-key-here
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-### 4. Client URL (REQUIRED)
+### 4. Client URL (REQUIRED - CRITICAL FOR CORS)
 ```bash
-CLIENT_URL=https://bux-poker-puce.vercel.app
+CLIENT_URL=https://bux-poker.pro
 ```
-**Or your Vercel URL if different**
+**⚠️ IMPORTANT:** This must be set to your custom domain (`https://bux-poker.pro`) for CORS to work correctly. The server will automatically allow both `https://bux-poker.pro` and `https://www.bux-poker.pro` if this is set.
+
+**Without this, you'll get CORS errors when trying to authenticate!**
 
 ### 5. Server Configuration
 ```bash
@@ -104,9 +106,9 @@ If you see database errors, verify:
 **Symptom**: "Invalid OAuth2 redirect_uri" error
 **Fix**: Make sure `DISCORD_CALLBACK_URL` matches exactly what's in Discord Developer Portal
 
-### Issue 4: Missing CLIENT_URL
-**Symptom**: Redirects to wrong URL or localhost
-**Fix**: Add `CLIENT_URL` with your Vercel URL
+### Issue 4: Missing CLIENT_URL (CORS ERRORS)
+**Symptom**: "CORS header 'Access-Control-Allow-Origin' missing" errors in browser console
+**Fix**: Add `CLIENT_URL=https://bux-poker.pro` to Render environment variables and redeploy
 
 ---
 
