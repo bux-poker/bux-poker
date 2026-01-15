@@ -3,12 +3,14 @@ import { Strategy as DiscordStrategy } from 'passport-discord';
 import { Strategy as FacebookStrategy } from 'passport-facebook';
 import { prisma } from './database.js';
 
-passport.use(new DiscordStrategy({
-  clientID: process.env.DISCORD_CLIENT_ID || '',
-  clientSecret: process.env.DISCORD_CLIENT_SECRET || '',
-  callbackURL: process.env.DISCORD_CALLBACK_URL || 'https://bux-spades-server.fly.dev/auth/discord/callback',
-  scope: ['identify', 'email']
-}, async (accessToken, refreshToken, profile, done) => {
+// Only initialize Discord strategy if credentials are provided
+if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET) {
+  passport.use(new DiscordStrategy({
+    clientID: process.env.DISCORD_CLIENT_ID,
+    clientSecret: process.env.DISCORD_CLIENT_SECRET,
+    callbackURL: process.env.DISCORD_CALLBACK_URL || 'https://bux-spades-server.fly.dev/auth/discord/callback',
+    scope: ['identify', 'email']
+  }, async (accessToken, refreshToken, profile, done) => {
   try {
     console.log('[DISCORD AUTH] Profile data:', {
       id: profile.id,
@@ -82,12 +84,17 @@ passport.use(new DiscordStrategy({
     console.error('[DISCORD AUTH] Error:', error);
     return done(error, null);
   }
-}));
+  }));
+} else {
+  console.log('[PASSPORT] Discord OAuth not configured - skipping DiscordStrategy');
+}
 
-passport.use(new FacebookStrategy({
-  clientID: process.env.FACEBOOK_APP_ID || '',
-  clientSecret: process.env.FACEBOOK_APP_SECRET || '',
-  callbackURL: process.env.FACEBOOK_CALLBACK_URL || 'https://bux-spades-server.fly.dev/auth/facebook/callback',
+// Only initialize Facebook strategy if credentials are provided
+if (process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET) {
+  passport.use(new FacebookStrategy({
+    clientID: process.env.FACEBOOK_APP_ID,
+    clientSecret: process.env.FACEBOOK_APP_SECRET,
+    callbackURL: process.env.FACEBOOK_CALLBACK_URL || 'https://bux-spades-server.fly.dev/auth/facebook/callback',
   profileFields: ['id', 'displayName', 'email', 'picture.type(large)']
 }, async (accessToken, refreshToken, profile, done) => {
   try {
@@ -139,7 +146,10 @@ passport.use(new FacebookStrategy({
     console.error('[FACEBOOK AUTH] Error:', error);
     return done(error, null);
   }
-}));
+  }));
+} else {
+  console.log('[PASSPORT] Facebook OAuth not configured - skipping FacebookStrategy');
+}
 
 // Serialize user for session
 passport.serializeUser((user, done) => {
