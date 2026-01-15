@@ -1,9 +1,9 @@
 import axios from 'axios';
 
 // Configure axios defaults
-axios.defaults.baseURL = import.meta.env.PROD
-  ? import.meta.env.VITE_PROD_API_URL
-  : import.meta.env.VITE_API_URL;
+// Use VITE_API_BASE_URL or fallback to Render backend URL
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://bux-poker-server.onrender.com';
+axios.defaults.baseURL = apiBaseUrl;
 axios.defaults.withCredentials = true;
 
 // Add request/response interceptors for debugging

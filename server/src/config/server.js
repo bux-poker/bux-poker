@@ -31,6 +31,10 @@ const allowedOrigins = [
 
 if (process.env.CLIENT_URL) {
   allowedOrigins.push(process.env.CLIENT_URL);
+  // Also add www version if main domain is provided
+  if (process.env.CLIENT_URL.startsWith('https://') && !process.env.CLIENT_URL.includes('www.')) {
+    allowedOrigins.push(process.env.CLIENT_URL.replace('https://', 'https://www.'));
+  }
 }
 
 if (process.env.CLIENT_URL_ALT) {
@@ -38,9 +42,7 @@ if (process.env.CLIENT_URL_ALT) {
 }
 
 const corsOptions = {
-  origin: [
-    ...allowedOrigins
-  ],
+  origin: allowedOrigins,
   credentials: true
 };
 
