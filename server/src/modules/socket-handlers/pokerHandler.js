@@ -25,9 +25,9 @@ function buildClientGameState(game, state) {
     minimumRaise: state?.bettingRound?.minimumRaise || (state?.bettingRound?.bigBlind || 20),
     smallBlind: state?.bettingRound?.smallBlind || 10,
     bigBlind: state?.bettingRound?.bigBlind || 20,
-    dealerSeat: game.dealerSeat,
-    smallBlindSeat: game.smallBlindSeat,
-    bigBlindSeat: game.bigBlindSeat,
+    dealerSeat: state?.dealerSeat ?? game.dealerSeat,
+    smallBlindSeat: state?.smallBlindSeat ?? game.smallBlindSeat,
+    bigBlindSeat: state?.bigBlindSeat ?? game.bigBlindSeat,
     currentTurnUserId: state?.currentTurnUserId,
     players: (state?.players ?? game.players).map((p) => ({
       id: p.id,
@@ -249,6 +249,8 @@ export function registerPokerHandlers(io) {
             });
 
             // Set up blinds (SB and BB)
+            // Dealer is the last player (position before SB, wrapping around)
+            const dealerPlayer = game.players[game.players.length - 1];
             const sbPlayer = game.players[0];
             const bbPlayer = game.players[1] || game.players[0];
             
@@ -275,6 +277,9 @@ export function registerPokerHandlers(io) {
               communityCards: [],
               bettingRound,
               pot: bettingRound.getTotalPot(),
+              dealerSeat: dealerPlayer.seatNumber,
+              smallBlindSeat: sbPlayer.seatNumber,
+              bigBlindSeat: bbPlayer.seatNumber,
               players: await Promise.all(
                 game.players.map(async (p) => {
                   const updated = await prisma.player.findUnique({ where: { id: p.id } });
