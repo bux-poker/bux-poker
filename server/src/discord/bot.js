@@ -460,17 +460,21 @@ async function buildTournamentEmbed(tournament, discordUserId = null) {
   const canRegister = (tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING') && !isFull;
 
   // Build buttons
+  // Note: We don't disable based on isRegistered because Discord embeds are shared
+  // The button handler will check registration status and show appropriate messages
   const registerButton = new ButtonBuilder()
     .setCustomId(`register_${tournament.id}`)
     .setLabel(isFull ? 'Full' : 'Register')
     .setStyle(ButtonStyle.Primary)
-    .setDisabled(!canRegister || isRegistered);
+    .setDisabled(!canRegister); // Only disable if tournament is full or not accepting registrations
 
+  // Unregister button: Only disable if tournament has started/completed
+  // Don't check isRegistered - the handler will check individual registration status
   const unregisterButton = new ButtonBuilder()
     .setCustomId(`unregister_${tournament.id}`)
     .setLabel('Unregister')
     .setStyle(ButtonStyle.Secondary)
-    .setDisabled(!isRegistered || tournament.status === 'RUNNING' || tournament.status === 'ACTIVE' || tournament.status === 'COMPLETED');
+    .setDisabled(tournament.status === 'RUNNING' || tournament.status === 'ACTIVE' || tournament.status === 'COMPLETED');
 
   const viewLobbyButton = new ButtonBuilder()
     .setLabel('View Tournament Lobby')
