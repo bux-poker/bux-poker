@@ -45,8 +45,10 @@ export class TournamentEngine {
 
   /**
    * Start a tournament: mark RUNNING (players should already be seated).
+   * @param {string} tournamentId - Tournament ID
+   * @param {object} io - Socket.IO server instance (optional, for starting hands)
    */
-  async startTournament(tournamentId) {
+  async startTournament(tournamentId, io = null) {
     const tournament = await prisma.tournament.findUnique({
       where: { id: tournamentId },
       include: {
@@ -80,7 +82,45 @@ export class TournamentEngine {
       }
     });
 
-    return { tournamentId, games: tournament.games || [] };
+    // Start a hand for each game
+    const { startHandForGame, getIO } = await import("../modules/socket-handlers/pokerHandler.js");
+    const io = getIO();
+    
+    if (io) {
+      const games = await prisma.game.findMany({
+        where: { tournamentId },
+        include: {
+          players: {
+            include: { user: true }
+          },
+          tournament: true
+        }
+      });
+
+      for (const game of games) {
+        if (game.status === "ACTIVE" && game.players.length >= 2) {
+          try {
+            await startHandForGame(game.id, io);
+          } catch (err) {
+            console.error(`[TOURNAMENT] Error starting hand for game ${game.id}:`, err);
+          }
+        }
+      }
+    }
+
+    // Refresh games after starting hands
+    const updatedTournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      include: {
+        games: {
+          include: {
+            players: true
+          }
+        }
+      }
+    });
+
+    return { tournamentId, games: updatedTournament?.games || [] };
   }
 
   /**
