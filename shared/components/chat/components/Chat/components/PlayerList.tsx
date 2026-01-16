@@ -2,8 +2,8 @@
 // Extracted from Chat.tsx
 
 import React from 'react';
-import type { Player } from '../../../../../../types/game';
-import { abbreviateBotName } from '../../../../../../utils/botUtils';
+import type { Player } from '../../../../../types/game';
+import { abbreviateBotName } from '../../../../../utils/botUtils';
 
 interface PlayerListProps {
   players: Player[];
