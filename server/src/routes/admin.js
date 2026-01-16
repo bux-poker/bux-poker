@@ -175,17 +175,75 @@ router.post("/tournaments", async (req, res, next) => {
       },
     });
 
-    // Post tournament embed to selected Discord servers
+    // Create TournamentPost entries immediately for selected servers (even if posting fails)
     if (serverIds && serverIds.length > 0) {
+      try {
+        // Find Discord servers by serverId
+        const discordServers = await prisma.discordServer.findMany({
+          where: {
+            serverId: { in: serverIds },
+            enabled: true,
+            setupCompleted: true,
+          },
+        });
+
+        // Create post entries for each server (messageId will be null until post succeeds)
+        await Promise.all(
+          discordServers.map((server) =>
+            prisma.tournamentPost.upsert({
+              where: {
+                tournamentId_serverId: {
+                  tournamentId: tournament.id,
+                  serverId: server.id,
+                },
+              },
+              update: {}, // No update needed if exists
+              create: {
+                tournamentId: tournament.id,
+                serverId: server.id,
+                messageId: null, // Will be set when embed is successfully posted
+                postedAt: null,
+              },
+            })
+          )
+        );
+
+        console.log(`[ADMIN] Created TournamentPost entries for ${discordServers.length} server(s)`);
+      } catch (error) {
+        console.error("[ADMIN] Error creating tournament post entries:", error);
+        // Continue even if post creation fails
+      }
+
+      // Now attempt to post tournament embed to Discord
       try {
         await postTournamentEmbed(tournament, serverIds);
       } catch (error) {
         console.error("[ADMIN] Error posting tournament embed:", error);
         // Don't fail the tournament creation if embed posting fails
+        // Posts are already created, so servers will still show
       }
     }
 
-    res.status(201).json(tournament);
+    // Fetch tournament with posts to include in response
+    const tournamentWithPosts = await prisma.tournament.findUnique({
+      where: { id: tournament.id },
+      include: {
+        posts: {
+          include: {
+            server: true,
+          },
+        },
+        createdBy: {
+          select: {
+            id: true,
+            username: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    res.status(201).json(tournamentWithPosts);
   } catch (err) {
     next(err);
   }

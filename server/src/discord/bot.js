@@ -427,9 +427,19 @@ export async function postTournamentEmbed(tournament, serverIds) {
 
       console.log(`[DISCORD BOT] Successfully posted embed to ${server.serverName}, message ID: ${message.id}`);
 
-      // Save tournament post to database
-      await prisma.tournamentPost.create({
-        data: {
+      // Update tournament post with message ID (post should already exist)
+      await prisma.tournamentPost.upsert({
+        where: {
+          tournamentId_serverId: {
+            tournamentId: tournament.id,
+            serverId: server.id,
+          },
+        },
+        update: {
+          messageId: message.id,
+          postedAt: new Date(),
+        },
+        create: {
           tournamentId: tournament.id,
           serverId: server.id,
           messageId: message.id,
