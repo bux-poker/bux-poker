@@ -293,9 +293,13 @@ export async function startHandForGame(gameId, io) {
     bbPlayer.chips -= bigBlind;
   }
 
-  // Calculate UTG (first to act after BB)
-  const utgIndex = (bbIndex + 1) % game.players.length;
-  const utgPlayer = game.players[utgIndex];
+  // Calculate UTG (first to act after BB) - continue clockwise (decreasing seat numbers)
+  const utgSeat = bbSeat - 1 <= 0 ? maxSeat : bbSeat - 1;
+  const utgPlayer = game.players.find(p => p.seatNumber === utgSeat);
+  
+  if (!utgPlayer) {
+    throw new Error(`Could not find UTG player. BB seat: ${bbSeat}, UTG seat: ${utgSeat}`);
+  }
 
   // Create hand state
   const state = {
