@@ -447,9 +447,21 @@ async function buildTournamentEmbed(tournament, discordUserId = null) {
     }
   }
   
+  // Build description based on tournament status
+  let description = tournament.description || 'Join the tournament and compete for prizes!';
+  if (tournament.status === 'SEATED') {
+    description = '🔒 **Registration Closed** - Tournament starting soon!';
+  } else if (tournament.status === 'RUNNING' || tournament.status === 'ACTIVE') {
+    description = '▶️ **Tournament In Progress**';
+  } else if (tournament.status === 'COMPLETED') {
+    description = '✅ **Tournament Completed**';
+  } else if (tournament.status === 'CANCELLED') {
+    description = '❌ **Tournament Cancelled**';
+  }
+
   const embed = new EmbedBuilder()
     .setTitle(`🃏 ${tournament.name}`)
-    .setDescription(tournament.description || 'Join the tournament and compete for prizes!')
+    .setDescription(description)
     .setThumbnail(logoUrl)
     .addFields(
       { name: 'Start Time', value: `<t:${Math.floor(startTime.getTime() / 1000)}:F>`, inline: true },
@@ -457,11 +469,12 @@ async function buildTournamentEmbed(tournament, discordUserId = null) {
       { name: 'Starting Chips', value: tournament.startingChips.toLocaleString(), inline: true },
       { name: 'Prize Places', value: tournament.prizePlaces.toString(), inline: true },
     )
-    .setColor(0x00AE86)
+    .setColor(tournament.status === 'SEATED' ? 0xFFD700 : (tournament.status === 'RUNNING' || tournament.status === 'ACTIVE' ? 0x00FF00 : 0x00AE86))
     .setTimestamp();
 
   const isFull = registrationCount >= tournament.maxPlayers;
-  const canRegister = (tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING') && !isFull;
+  // Can register only if SCHEDULED or REGISTERING and not full and not SEATED
+  const canRegister = (tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING') && !isFull && tournament.status !== 'SEATED';
 
   // Build buttons
   // Note: We don't disable based on isRegistered because Discord embeds are shared

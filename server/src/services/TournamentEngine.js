@@ -33,12 +33,21 @@ export class TournamentEngine {
     const games = await this.seatPlayers(tournamentId);
 
     // Update status to SEATED
-    await prisma.tournament.update({
+    const updatedTournament = await prisma.tournament.update({
       where: { id: tournamentId },
       data: {
         status: "SEATED"
       }
     });
+
+    // Update Discord embeds to show registration closed message
+    try {
+      const { updateTournamentEmbeds } = await import("../discord/bot.js");
+      await updateTournamentEmbeds(tournamentId);
+    } catch (error) {
+      console.error("[TOURNAMENT ENGINE] Error updating Discord embeds:", error);
+      // Don't fail the whole operation if Discord update fails
+    }
 
     return { tournamentId, games };
   }
