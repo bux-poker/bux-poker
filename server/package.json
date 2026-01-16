@@ -6,13 +6,13 @@
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "prestart": "cd .. && npx prisma migrate deploy && npx prisma generate && cd server || echo 'Prisma setup failed, continuing...'",
+    "prestart": "rm -rf ../node_modules/.prisma ../node_modules/@prisma/client && cd .. && npx prisma migrate deploy && npx prisma generate && cd server || echo 'Prisma setup failed, continuing...'",
     "start": "node src/index.js",
     "build": "tsc",
     "prisma:generate": "cd .. && npx prisma generate",
     "prisma:migrate": "cd .. && npx prisma migrate dev",
     "prisma:migrate:deploy": "cd .. && npx prisma migrate deploy",
-    "postinstall": "cd .. && npx prisma migrate deploy && npx prisma generate && cd server || echo 'Prisma setup failed in postinstall'"
+    "postinstall": "rm -rf ../node_modules/.prisma ../node_modules/@prisma/client && cd .. && npx prisma migrate deploy && npx prisma generate && cd server || echo 'Prisma setup failed in postinstall'"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
