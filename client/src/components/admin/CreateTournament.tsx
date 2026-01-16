@@ -63,11 +63,25 @@ export function CreateTournament() {
       }
     }
     return [
-      { level: 1, smallBlind: 25, bigBlind: 50, duration: 15 },
-      { level: 2, smallBlind: 50, bigBlind: 100, duration: 15 },
-      { level: 3, smallBlind: 100, bigBlind: 200, duration: 15 },
-      { level: 4, smallBlind: 200, bigBlind: 400, duration: 15 },
-      { level: 5, smallBlind: 400, bigBlind: 800, duration: null }, // Final round is infinite
+      { level: 1, smallBlind: 25, bigBlind: 50, duration: 10 },
+      { level: 2, smallBlind: 50, bigBlind: 100, duration: 10 },
+      { level: 3, smallBlind: 100, bigBlind: 200, duration: 10 },
+      { level: 4, smallBlind: 150, bigBlind: 300, duration: 10 },
+      { level: 5, smallBlind: 200, bigBlind: 400, duration: 10 },
+      { level: 6, smallBlind: 250, bigBlind: 500, duration: 10, breakAfter: 5 },
+      { level: 7, smallBlind: 300, bigBlind: 600, duration: 10 },
+      { level: 8, smallBlind: 400, bigBlind: 800, duration: 10 },
+      { level: 9, smallBlind: 500, bigBlind: 1000, duration: 10 },
+      { level: 10, smallBlind: 600, bigBlind: 1200, duration: 10 },
+      { level: 11, smallBlind: 750, bigBlind: 1500, duration: 10 },
+      { level: 12, smallBlind: 1000, bigBlind: 2000, duration: 10, breakAfter: 5 },
+      { level: 13, smallBlind: 1250, bigBlind: 2500, duration: 10 },
+      { level: 14, smallBlind: 1500, bigBlind: 3000, duration: 10 },
+      { level: 15, smallBlind: 2000, bigBlind: 4000, duration: 10 },
+      { level: 16, smallBlind: 2500, bigBlind: 5000, duration: 10 },
+      { level: 17, smallBlind: 3000, bigBlind: 6000, duration: 10 },
+      { level: 18, smallBlind: 4000, bigBlind: 8000, duration: 10, breakAfter: 5 },
+      { level: 19, smallBlind: 5000, bigBlind: 10000, duration: null }, // Infinite
     ];
   };
 
