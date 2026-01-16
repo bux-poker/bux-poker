@@ -33,13 +33,13 @@ function BetChip({ value }: { value: number }) {
   return (
     <div className="flex items-center gap-1">
       <div
-        className="w-6 h-6 rounded-full border-2 border-white shadow-lg flex items-center justify-center relative overflow-hidden"
+        className="w-6 h-6 rounded-full shadow-lg flex items-center justify-center relative overflow-hidden"
         style={{ backgroundColor: chipColor }}
       >
         <img
           src="/poker-chip.svg"
           alt="chip"
-          className="w-full h-full object-contain p-1"
+          className="w-full h-full object-contain"
           style={{ filter: 'brightness(0) invert(1)' }}
         />
       </div>
