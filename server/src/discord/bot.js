@@ -405,18 +405,18 @@ async function buildTournamentEmbed(tournament, discordUserId = null) {
   const logoUrl = `${clientUrl}/images/bux-poker.png`;
   const tournamentUrl = `${clientUrl}/tournaments/${tournament.id}`;
   
-  const embed = new EmbedBuilder()
-    .setTitle(`🃏 ${tournament.name}`)
-    .setDescription(tournament.description || 'Join the tournament and compete for prizes!')
-    .setThumbnail(logoUrl)
-    .addFields(
-      { name: 'Start Time', value: `<t:${Math.floor(startTime.getTime() / 1000)}:F>`, inline: true },
-      { name: 'Players', value: `${registrationCount} / ${tournament.maxPlayers}`, inline: true },
-      { name: 'Starting Chips', value: tournament.startingChips.toLocaleString(), inline: true },
-      { name: 'Prize Places', value: tournament.prizePlaces.toString(), inline: true },
-    )
-    .setColor(0x00AE86)
-    .setTimestamp();
+  // Get current registration count first
+  let registrationCount = 0;
+  try {
+    registrationCount = await prisma.tournamentRegistration.count({
+      where: {
+        tournamentId: tournament.id,
+        status: 'CONFIRMED',
+      },
+    });
+  } catch (error) {
+    console.error('[DISCORD BOT] Error getting registration count:', error);
+  }
 
   // Check if user is registered (if discordUserId provided)
   let isRegistered = false;
@@ -441,19 +441,19 @@ async function buildTournamentEmbed(tournament, discordUserId = null) {
       console.error('[DISCORD BOT] Error checking registration:', error);
     }
   }
-
-  // Get current registration count
-  let registrationCount = 0;
-  try {
-    registrationCount = await prisma.tournamentRegistration.count({
-      where: {
-        tournamentId: tournament.id,
-        status: 'CONFIRMED',
-      },
-    });
-  } catch (error) {
-    console.error('[DISCORD BOT] Error getting registration count:', error);
-  }
+  
+  const embed = new EmbedBuilder()
+    .setTitle(`🃏 ${tournament.name}`)
+    .setDescription(tournament.description || 'Join the tournament and compete for prizes!')
+    .setThumbnail(logoUrl)
+    .addFields(
+      { name: 'Start Time', value: `<t:${Math.floor(startTime.getTime() / 1000)}:F>`, inline: true },
+      { name: 'Players', value: `${registrationCount} / ${tournament.maxPlayers}`, inline: true },
+      { name: 'Starting Chips', value: tournament.startingChips.toLocaleString(), inline: true },
+      { name: 'Prize Places', value: tournament.prizePlaces.toString(), inline: true },
+    )
+    .setColor(0x00AE86)
+    .setTimestamp();
 
   const isFull = registrationCount >= tournament.maxPlayers;
   const canRegister = (tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING') && !isFull;
