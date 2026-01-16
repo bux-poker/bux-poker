@@ -263,17 +263,16 @@ export async function startHandForGame(gameId, io) {
     startingPot: game.pot
   });
 
-  // Post blinds
-  if (sbPlayer.chips >= smallBlind) {
-    bettingRound.bet(sbPlayer.id, smallBlind);
+  // Post blinds using postBlinds method (doesn't require minimum raise validation)
+  if (sbPlayer.chips >= smallBlind && bbPlayer.chips >= bigBlind) {
+    bettingRound.postBlinds(sbPlayer.id, bbPlayer.id);
+    
+    // Deduct chips from players
     await prisma.player.update({
       where: { id: sbPlayer.id },
       data: { chips: sbPlayer.chips - smallBlind }
     });
-  }
-
-  if (bbPlayer.chips >= bigBlind) {
-    bettingRound.bet(bbPlayer.id, bigBlind);
+    
     await prisma.player.update({
       where: { id: bbPlayer.id },
       data: { chips: bbPlayer.chips - bigBlind }

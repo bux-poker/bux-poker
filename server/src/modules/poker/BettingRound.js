@@ -57,5 +57,15 @@ export class BettingRound {
     this.playerBets.set(playerId, contribution + amount);
     return amount;
   }
+
+  /**
+   * Post blinds - directly set player contributions without raise validation
+   * This is used at the start of a hand to post small blind and big blind
+   */
+  postBlinds(smallBlindPlayerId, bigBlindPlayerId) {
+    this.playerBets.set(smallBlindPlayerId, this.smallBlind);
+    this.playerBets.set(bigBlindPlayerId, this.bigBlind);
+    this.currentBet = this.bigBlind; // Big blind is the current bet to call
+  }
 }
 
