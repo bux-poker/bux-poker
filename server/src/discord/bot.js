@@ -420,9 +420,13 @@ export async function postTournamentEmbed(tournament, serverIds) {
   });
 
   const startTime = new Date(tournament.startTime);
+  const clientUrl = process.env.CLIENT_URL || 'https://bux-poker.pro';
+  const logoUrl = `${clientUrl}/images/bux-poker.png`;
+  
   const embed = new EmbedBuilder()
     .setTitle(`🃏 ${tournament.name}`)
     .setDescription(tournament.description || 'Join the tournament and compete for prizes!')
+    .setThumbnail(logoUrl)
     .addFields(
       { name: 'Start Time', value: `<t:${Math.floor(startTime.getTime() / 1000)}:F>`, inline: true },
       { name: 'Max Players', value: tournament.maxPlayers.toString(), inline: true },

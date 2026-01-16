@@ -6,7 +6,8 @@ interface BlindLevel {
   level: number;
   smallBlind: number;
   bigBlind: number;
-  duration: number;
+  duration: number | null; // null means infinite (final round)
+  breakAfter?: number; // break duration in minutes (5, 10, or 15)
 }
 
 interface DiscordServer {
@@ -37,13 +38,16 @@ export function CreateTournament() {
     prizePlaces: 3,
   });
 
+  const [blindRoundDuration, setBlindRoundDuration] = useState(15); // Single duration for all rounds
   const [blindLevels, setBlindLevels] = useState<BlindLevel[]>([
     { level: 1, smallBlind: 25, bigBlind: 50, duration: 15 },
     { level: 2, smallBlind: 50, bigBlind: 100, duration: 15 },
     { level: 3, smallBlind: 100, bigBlind: 200, duration: 15 },
     { level: 4, smallBlind: 200, bigBlind: 400, duration: 15 },
-    { level: 5, smallBlind: 400, bigBlind: 800, duration: 15 },
+    { level: 5, smallBlind: 400, bigBlind: 800, duration: null }, // Final round is infinite
   ]);
+
+  const startingChipsOptions = [1000, 2000, 5000, 10000, 20000, 50000, 100000];
 
   useEffect(() => {
     // Fetch available Discord servers
@@ -96,11 +100,17 @@ export function CreateTournament() {
         throw new Error('Not authenticated');
       }
 
+      // Apply single duration to all rounds except the final one (which is infinite)
+      const blindLevelsWithDuration = blindLevels.map((level, index) => ({
+        ...level,
+        duration: index === blindLevels.length - 1 ? null : blindRoundDuration,
+      }));
+
       const response = await api.post(
         '/api/admin/tournaments',
         {
           ...formData,
-          blindLevelsJson: JSON.stringify(blindLevels),
+          blindLevelsJson: JSON.stringify(blindLevelsWithDuration),
           serverIds: selectedServerIds, // Include selected Discord servers
         },
         {
@@ -133,13 +143,21 @@ export function CreateTournament() {
 
   const addBlindLevel = () => {
     const lastLevel = blindLevels[blindLevels.length - 1];
+    // When adding a new level, make the previous last level non-infinite
+    const updatedLevels = blindLevels.map((level, index) => {
+      if (index === blindLevels.length - 1) {
+        return { ...level, duration: blindRoundDuration }; // Make previous final round use the standard duration
+      }
+      return level;
+    });
+    
     setBlindLevels([
-      ...blindLevels,
+      ...updatedLevels,
       {
         level: lastLevel.level + 1,
         smallBlind: lastLevel.bigBlind,
         bigBlind: lastLevel.bigBlind * 2,
-        duration: 15,
+        duration: null, // New final round is infinite
       },
     ]);
   };
@@ -150,10 +168,32 @@ export function CreateTournament() {
     }
   };
 
-  const updateBlindLevel = (index: number, field: keyof BlindLevel, value: number) => {
+  const updateBlindLevel = (index: number, field: keyof BlindLevel, value: number | null) => {
     const updated = [...blindLevels];
     updated[index] = { ...updated[index], [field]: value };
     setBlindLevels(updated);
+  };
+
+  const updateBlindLevelBreak = (index: number, breakDuration: number | undefined) => {
+    const updated = [...blindLevels];
+    if (breakDuration) {
+      updated[index] = { ...updated[index], breakAfter: breakDuration };
+    } else {
+      const { breakAfter, ...rest } = updated[index];
+      updated[index] = rest as BlindLevel;
+    }
+    setBlindLevels(updated);
+  };
+
+  // Update durations when blindRoundDuration changes (except final round)
+  const handleBlindRoundDurationChange = (newDuration: number) => {
+    setBlindRoundDuration(newDuration);
+    setBlindLevels(blindLevels.map((level, index) => {
+      if (index === blindLevels.length - 1) {
+        return level; // Keep final round as infinite
+      }
+      return { ...level, duration: newDuration };
+    }));
   };
 
   return (
@@ -251,15 +291,19 @@ export function CreateTournament() {
               <label className="block text-sm font-medium text-slate-300">
                 Starting Chips
               </label>
-              <input
-                type="number"
-                min="100"
+              <select
                 value={formData.startingChips}
                 onChange={(e) =>
                   setFormData({ ...formData, startingChips: parseInt(e.target.value) })
                 }
                 className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
-              />
+              >
+                {startingChipsOptions.map((chips) => (
+                  <option key={chips} value={chips}>
+                    {chips.toLocaleString()}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -291,60 +335,97 @@ export function CreateTournament() {
               + Add Level
             </button>
           </div>
+          
+          {/* Single Duration Input for All Rounds */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-slate-300">
+              Blind Round Duration (minutes) - applies to all rounds except final
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={blindRoundDuration}
+              onChange={(e) => handleBlindRoundDurationChange(parseInt(e.target.value))}
+              className="mt-1 w-full max-w-xs rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+            />
+          </div>
+
           <div className="space-y-3">
-            {blindLevels.map((level, index) => (
-              <div
-                key={index}
-                className="flex items-center gap-3 rounded border border-slate-700 bg-slate-800/50 p-3"
-              >
-                <div className="w-16 text-sm text-slate-400">Level {level.level}</div>
-                <div className="flex-1">
-                  <label className="block text-xs text-slate-400">Small Blind</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={level.smallBlind}
-                    onChange={(e) =>
-                      updateBlindLevel(index, 'smallBlind', parseInt(e.target.value))
-                    }
-                    className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-                  />
+            {blindLevels.map((level, index) => {
+              const isFinalRound = index === blindLevels.length - 1;
+              return (
+                <div
+                  key={index}
+                  className="rounded border border-slate-700 bg-slate-800/50 p-3"
+                >
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="w-16 text-sm font-medium text-slate-300">
+                      Level {level.level}
+                      {isFinalRound && <span className="block text-xs text-emerald-400">∞ Final</span>}
+                    </div>
+                    <div className="flex-1 min-w-[120px]">
+                      <label className="block text-xs text-slate-400">Small Blind</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={level.smallBlind}
+                        onChange={(e) =>
+                          updateBlindLevel(index, 'smallBlind', parseInt(e.target.value))
+                        }
+                        className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-[120px]">
+                      <label className="block text-xs text-slate-400">Big Blind</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={level.bigBlind}
+                        onChange={(e) =>
+                          updateBlindLevel(index, 'bigBlind', parseInt(e.target.value))
+                        }
+                        className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                    <div className="w-32">
+                      <label className="block text-xs text-slate-400">Duration</label>
+                      <div className="mt-1 flex items-center gap-1 rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100">
+                        {isFinalRound ? (
+                          <span className="text-emerald-400 font-medium">∞ Infinite</span>
+                        ) : (
+                          <span>{level.duration} min</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="w-32">
+                      <label className="block text-xs text-slate-400">Break After</label>
+                      <select
+                        value={level.breakAfter || ''}
+                        onChange={(e) => {
+                          const value = e.target.value ? parseInt(e.target.value) : undefined;
+                          updateBlindLevelBreak(index, value);
+                        }}
+                        className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                      >
+                        <option value="">No break</option>
+                        <option value="5">5 minutes</option>
+                        <option value="10">10 minutes</option>
+                        <option value="15">15 minutes</option>
+                      </select>
+                    </div>
+                    {blindLevels.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeBlindLevel(index)}
+                        className="rounded bg-red-600 px-3 py-1 text-xs text-white transition-colors hover:bg-red-700"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <label className="block text-xs text-slate-400">Big Blind</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={level.bigBlind}
-                    onChange={(e) =>
-                      updateBlindLevel(index, 'bigBlind', parseInt(e.target.value))
-                    }
-                    className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-                  />
-                </div>
-                <div className="w-24">
-                  <label className="block text-xs text-slate-400">Duration (min)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={level.duration}
-                    onChange={(e) =>
-                      updateBlindLevel(index, 'duration', parseInt(e.target.value))
-                    }
-                    className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-                  />
-                </div>
-                {blindLevels.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeBlindLevel(index)}
-                    className="rounded bg-red-600 px-2 py-1 text-xs text-white transition-colors hover:bg-red-700"
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
