@@ -267,10 +267,38 @@ async function handleRegisterButton(interaction, tournamentId) {
       },
     });
 
-    await interaction.reply({
-      content: '✅ Successfully registered for the tournament!',
-      ephemeral: true,
-    });
+    // Update the embed message with new button states
+    try {
+      const tournament = await prisma.tournament.findUnique({
+        where: { id: tournamentId },
+      });
+
+      if (tournament && interaction.message) {
+        const { embed: updatedEmbed, components: updatedComponents } = await buildTournamentEmbed(
+          tournament,
+          discordUserId
+        );
+
+        await interaction.update({
+          embeds: [updatedEmbed],
+          components: updatedComponents,
+        });
+      } else {
+        await interaction.reply({
+          content: '✅ Successfully registered for the tournament!',
+          ephemeral: true,
+        });
+      }
+    } catch (updateError) {
+      console.error('[DISCORD BOT] Error updating embed:', updateError);
+      // Fallback to ephemeral reply if update fails
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '✅ Successfully registered for the tournament!',
+          ephemeral: true,
+        });
+      }
+    }
   } catch (error) {
     console.error('[DISCORD BOT] Error registering user:', error);
     throw error;
@@ -332,14 +360,126 @@ async function handleUnregisterButton(interaction, tournamentId) {
       },
     });
 
-    await interaction.reply({
-      content: '✅ Successfully unregistered from the tournament.',
-      ephemeral: true,
-    });
+    // Update the embed message with new button states
+    try {
+      const tournament = await prisma.tournament.findUnique({
+        where: { id: tournamentId },
+      });
+
+      if (tournament && interaction.message) {
+        const { embed: updatedEmbed, components: updatedComponents } = await buildTournamentEmbed(
+          tournament,
+          discordUserId
+        );
+
+        await interaction.update({
+          embeds: [updatedEmbed],
+          components: updatedComponents,
+        });
+      } else {
+        await interaction.reply({
+          content: '✅ Successfully unregistered from the tournament.',
+          ephemeral: true,
+        });
+      }
+    } catch (updateError) {
+      console.error('[DISCORD BOT] Error updating embed:', updateError);
+      // Fallback to ephemeral reply if update fails
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '✅ Successfully unregistered from the tournament.',
+          ephemeral: true,
+        });
+      }
+    }
   } catch (error) {
     console.error('[DISCORD BOT] Error unregistering user:', error);
     throw error;
   }
+}
+
+// Helper function to build tournament embed with buttons
+async function buildTournamentEmbed(tournament, discordUserId = null) {
+  const startTime = new Date(tournament.startTime);
+  const clientUrl = process.env.CLIENT_URL || 'https://bux-poker.pro';
+  const logoUrl = `${clientUrl}/images/bux-poker.png`;
+  const tournamentUrl = `${clientUrl}/tournaments/${tournament.id}`;
+  
+  const embed = new EmbedBuilder()
+    .setTitle(`🃏 ${tournament.name}`)
+    .setDescription(tournament.description || 'Join the tournament and compete for prizes!')
+    .setThumbnail(logoUrl)
+    .addFields(
+      { name: 'Start Time', value: `<t:${Math.floor(startTime.getTime() / 1000)}:F>`, inline: true },
+      { name: 'Players', value: `${registrationCount} / ${tournament.maxPlayers}`, inline: true },
+      { name: 'Starting Chips', value: tournament.startingChips.toLocaleString(), inline: true },
+      { name: 'Prize Places', value: tournament.prizePlaces.toString(), inline: true },
+    )
+    .setColor(0x00AE86)
+    .setTimestamp();
+
+  // Check if user is registered (if discordUserId provided)
+  let isRegistered = false;
+  if (discordUserId) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { discordId: discordUserId },
+      });
+      
+      if (user) {
+        const registration = await prisma.tournamentRegistration.findUnique({
+          where: {
+            tournamentId_userId: {
+              tournamentId: tournament.id,
+              userId: user.id,
+            },
+          },
+        });
+        isRegistered = !!registration && registration.status === 'CONFIRMED';
+      }
+    } catch (error) {
+      console.error('[DISCORD BOT] Error checking registration:', error);
+    }
+  }
+
+  // Get current registration count
+  let registrationCount = 0;
+  try {
+    registrationCount = await prisma.tournamentRegistration.count({
+      where: {
+        tournamentId: tournament.id,
+        status: 'CONFIRMED',
+      },
+    });
+  } catch (error) {
+    console.error('[DISCORD BOT] Error getting registration count:', error);
+  }
+
+  const isFull = registrationCount >= tournament.maxPlayers;
+  const canRegister = (tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING') && !isFull;
+
+  // Build buttons
+  const registerButton = new ButtonBuilder()
+    .setCustomId(`register_${tournament.id}`)
+    .setLabel(isFull ? 'Full' : 'Register')
+    .setStyle(ButtonStyle.Primary)
+    .setDisabled(!canRegister || isRegistered);
+
+  const unregisterButton = new ButtonBuilder()
+    .setCustomId(`unregister_${tournament.id}`)
+    .setLabel('Unregister')
+    .setStyle(ButtonStyle.Secondary)
+    .setDisabled(!isRegistered || tournament.status === 'RUNNING' || tournament.status === 'ACTIVE' || tournament.status === 'COMPLETED');
+
+  const viewLobbyButton = new ButtonBuilder()
+    .setLabel('View Tournament Lobby')
+    .setURL(tournamentUrl)
+    .setStyle(ButtonStyle.Link);
+
+  const row1 = new ActionRowBuilder().addComponents(registerButton, unregisterButton);
+  const row2 = new ActionRowBuilder().addComponents(viewLobbyButton);
+
+  return { embed, components: [row1, row2], isRegistered, registrationCount };
 }
 
 export async function postTournamentEmbed(tournament, serverIds) {
@@ -371,34 +511,16 @@ export async function postTournamentEmbed(tournament, serverIds) {
 
   console.log(`[DISCORD BOT] Found ${servers.length} valid server(s) to post to`);
 
-  const startTime = new Date(tournament.startTime);
-  const clientUrl = process.env.CLIENT_URL || 'https://bux-poker.pro';
-  const logoUrl = `${clientUrl}/images/bux-poker.png`;
+  // Build embed without user context (initial post)
+  // Get registration count to include in embed
+  const initialRegistrationCount = await prisma.tournamentRegistration.count({
+    where: {
+      tournamentId: tournament.id,
+      status: 'CONFIRMED',
+    },
+  });
   
-  const embed = new EmbedBuilder()
-    .setTitle(`🃏 ${tournament.name}`)
-    .setDescription(tournament.description || 'Join the tournament and compete for prizes!')
-    .setThumbnail(logoUrl)
-    .addFields(
-      { name: 'Start Time', value: `<t:${Math.floor(startTime.getTime() / 1000)}:F>`, inline: true },
-      { name: 'Max Players', value: tournament.maxPlayers.toString(), inline: true },
-      { name: 'Starting Chips', value: tournament.startingChips.toLocaleString(), inline: true },
-      { name: 'Prize Places', value: tournament.prizePlaces.toString(), inline: true },
-    )
-    .setColor(0x00AE86)
-    .setTimestamp();
-
-  const registerButton = new ButtonBuilder()
-    .setCustomId(`register_${tournament.id}`)
-    .setLabel('Register')
-    .setStyle(ButtonStyle.Primary);
-
-  const unregisterButton = new ButtonBuilder()
-    .setCustomId(`unregister_${tournament.id}`)
-    .setLabel('Unregister')
-    .setStyle(ButtonStyle.Secondary);
-
-  const row = new ActionRowBuilder().addComponents(registerButton, unregisterButton);
+  const { embed, components } = await buildTournamentEmbed(tournament);
 
   const posts = [];
 
@@ -422,7 +544,7 @@ export async function postTournamentEmbed(tournament, serverIds) {
 
       const message = await channel.send({
         embeds: [embed],
-        components: [row],
+        components: components,
       });
 
       console.log(`[DISCORD BOT] Successfully posted embed to ${server.serverName}, message ID: ${message.id}`);
