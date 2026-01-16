@@ -249,6 +249,17 @@ router.post("/tournaments", async (req, res, next) => {
   }
 });
 
+// Close registration: seat players but don't start
+router.post("/tournaments/:id/close-registration", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await engine.closeRegistration(id);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post("/tournaments/:id/start", async (req, res, next) => {
   try {
     const { id } = req.params;

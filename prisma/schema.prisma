@@ -224,6 +224,7 @@ model TournamentPost {
 enum TournamentStatus {
   SCHEDULED
   REGISTERING
+  SEATED
   RUNNING
   COMPLETED
   CANCELLED

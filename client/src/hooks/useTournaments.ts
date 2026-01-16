@@ -12,7 +12,7 @@ export interface Tournament {
   id: string;
   name: string;
   startTime: Date | string;
-  status: 'UPCOMING' | 'REGISTRATION' | 'ACTIVE' | 'COMPLETED' | 'SCHEDULED' | 'CANCELLED' | 'REGISTERING' | 'RUNNING';
+  status: 'UPCOMING' | 'REGISTRATION' | 'ACTIVE' | 'COMPLETED' | 'SCHEDULED' | 'CANCELLED' | 'REGISTERING' | 'SEATED' | 'RUNNING';
   maxPlayers: number;
   seatsPerTable: number;
   startingChips: number;
@@ -69,26 +69,26 @@ export function useTournament(id: string | undefined) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchTournament = async () => {
     if (!id) {
       setLoading(false);
       return;
     }
 
-    const fetchTournament = async () => {
-      try {
-        setLoading(true);
-        const response = await api.get(`/api/tournaments/${id}`);
-        setTournament(response.data);
-        setError(null);
-      } catch (err: any) {
-        setError(err.response?.data?.error || 'Failed to fetch tournament');
-        console.error('Error fetching tournament:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
+    try {
+      setLoading(true);
+      const response = await api.get(`/api/tournaments/${id}`);
+      setTournament(response.data);
+      setError(null);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to fetch tournament');
+      console.error('Error fetching tournament:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchTournament();
   }, [id]);
 
@@ -97,8 +97,7 @@ export function useTournament(id: string | undefined) {
     try {
       await api.post(`/api/tournaments/${id}/register`);
       // Refetch tournament to get updated registration count
-      const response = await api.get(`/api/tournaments/${id}`);
-      setTournament(response.data);
+      await fetchTournament();
       return { success: true };
     } catch (err: any) {
       const errorMsg = err.response?.data?.error || 'Failed to register for tournament';
@@ -107,5 +106,5 @@ export function useTournament(id: string | undefined) {
     }
   };
 
-  return { tournament, loading, error, register };
+  return { tournament, loading, error, register, refetch: fetchTournament };
 }

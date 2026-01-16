@@ -6,24 +6,72 @@ import { prisma } from "../config/database.js";
 
 export class TournamentEngine {
   /**
-   * Start a tournament: mark RUNNING and seat players into tables.
+   * Close registration: seat players into tables but don't start the game.
    */
-  async startTournament(tournamentId) {
+  async closeRegistration(tournamentId) {
     const tournament = await prisma.tournament.findUnique({
-      where: { id: tournamentId }
+      where: { id: tournamentId },
+      include: {
+        games: true
+      }
     });
 
     if (!tournament) {
       throw new Error("Tournament not found");
     }
 
-    if (
-      tournament.status !== "SCHEDULED" &&
-      tournament.status !== "REGISTERING"
-    ) {
-      throw new Error("Tournament already started or completed");
+    if (tournament.status !== "REGISTERING" && tournament.status !== "SCHEDULED") {
+      throw new Error("Can only close registration for REGISTERING or SCHEDULED tournaments");
     }
 
+    // Check if players are already seated
+    if (tournament.games && tournament.games.length > 0) {
+      throw new Error("Players are already seated");
+    }
+
+    // Seat players
+    const games = await this.seatPlayers(tournamentId);
+
+    // Update status to SEATED
+    await prisma.tournament.update({
+      where: { id: tournamentId },
+      data: {
+        status: "SEATED"
+      }
+    });
+
+    return { tournamentId, games };
+  }
+
+  /**
+   * Start a tournament: mark RUNNING (players should already be seated).
+   */
+  async startTournament(tournamentId) {
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      include: {
+        games: {
+          include: {
+            players: true
+          }
+        }
+      }
+    });
+
+    if (!tournament) {
+      throw new Error("Tournament not found");
+    }
+
+    if (tournament.status === "RUNNING" || tournament.status === "COMPLETED" || tournament.status === "CANCELLED") {
+      throw new Error("Tournament already started, completed, or cancelled");
+    }
+
+    // If players aren't seated yet, seat them first
+    if (!tournament.games || tournament.games.length === 0) {
+      await this.seatPlayers(tournamentId);
+    }
+
+    // Mark as RUNNING
     await prisma.tournament.update({
       where: { id: tournamentId },
       data: {
@@ -31,8 +79,7 @@ export class TournamentEngine {
       }
     });
 
-    const games = await this.seatPlayers(tournamentId);
-    return { tournamentId, games };
+    return { tournamentId, games: tournament.games || [] };
   }
 
   /**

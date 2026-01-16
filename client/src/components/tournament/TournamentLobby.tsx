@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTournament } from '../../hooks/useTournaments';
 import { useAuth } from '@shared/features/auth/AuthContext';
+import { useAdmin } from '../../hooks/useAdmin';
 import { TournamentTimestamp } from './TournamentTimestamp';
 import api from '../../services/api';
 
@@ -32,7 +33,8 @@ export function TournamentLobby() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { tournament, loading, error } = useTournament(id);
+  const { isAdmin } = useAdmin();
+  const { tournament, loading, error, refetch } = useTournament(id);
   const [activeTab, setActiveTab] = useState<Tab>('players');
   const [players, setPlayers] = useState<Player[]>([]);
   const [runningTime, setRunningTime] = useState<string>('');
@@ -42,6 +44,8 @@ export function TournamentLobby() {
   const [remainingPlayers, setRemainingPlayers] = useState<number>(0);
   const [currentPosition, setCurrentPosition] = useState<number | null>(null);
   const [blindLevels, setBlindLevels] = useState<BlindLevel[]>([]);
+  const [closingRegistration, setClosingRegistration] = useState(false);
+  const [startingTournament, setStartingTournament] = useState(false);
 
   // Parse blind levels from tournament
   useEffect(() => {
@@ -214,10 +218,74 @@ export function TournamentLobby() {
     );
   }
 
+  const handleCloseRegistration = async () => {
+    if (!confirm('Close registration and seat all players? This cannot be undone.')) {
+      return;
+    }
+
+    setClosingRegistration(true);
+    try {
+      const token = localStorage.getItem('sessionToken');
+      if (!token) {
+        alert('Not authenticated');
+        return;
+      }
+
+      await api.post(
+        `/api/admin/tournaments/${id}/close-registration`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      alert('✅ Registration closed! Players have been seated. You can now start the tournament.');
+      await refetch();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to close registration');
+      console.error('Error closing registration:', err);
+    } finally {
+      setClosingRegistration(false);
+    }
+  };
+
+  const handleStartTournament = async () => {
+    if (!confirm('Start the tournament? This will begin gameplay.')) {
+      return;
+    }
+
+    setStartingTournament(true);
+    try {
+      const token = localStorage.getItem('sessionToken');
+      if (!token) {
+        alert('Not authenticated');
+        return;
+      }
+
+      await api.post(
+        `/api/admin/tournaments/${id}/start`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      alert('✅ Tournament started!');
+      await refetch();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to start tournament');
+      console.error('Error starting tournament:', err);
+    } finally {
+      setStartingTournament(false);
+    }
+  };
+
   const startTime = new Date(tournament.startTime);
   const registeredCount = tournament.registeredCount || 0;
   const isRunning = tournament.status === 'RUNNING' || tournament.status === 'ACTIVE';
   const isCompleted = tournament.status === 'COMPLETED';
+  const isSeated = tournament.status === 'SEATED';
+  const isRegistering = tournament.status === 'REGISTERING' || tournament.status === 'REGISTRATION' || tournament.status === 'SCHEDULED';
   const servers = tournament.servers || [];
 
   return (
@@ -257,6 +325,8 @@ export function TournamentLobby() {
                 ? 'bg-emerald-500/20 text-emerald-200'
                 : tournament.status === 'REGISTRATION' || tournament.status === 'REGISTERING'
                 ? 'bg-blue-500/20 text-blue-200'
+                : tournament.status === 'SEATED'
+                ? 'bg-purple-500/20 text-purple-200'
                 : isCompleted
                 ? 'bg-slate-500/20 text-slate-300'
                 : 'bg-yellow-500/20 text-yellow-200'
@@ -265,6 +335,30 @@ export function TournamentLobby() {
             {tournament.status}
           </span>
         </div>
+
+        {/* Admin Actions */}
+        {isAdmin && !isCompleted && (
+          <div className="mt-4 flex gap-3 border-t border-slate-800 pt-4">
+            {isRegistering && (
+              <button
+                onClick={handleCloseRegistration}
+                disabled={closingRegistration}
+                className="rounded bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {closingRegistration ? 'Closing Registration...' : 'Close Registration & Seat Players'}
+              </button>
+            )}
+            {isSeated && (
+              <button
+                onClick={handleStartTournament}
+                disabled={startingTournament}
+                className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {startingTournament ? 'Starting Tournament...' : 'Start Tournament'}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Running Tournament Stats */}
         {isRunning && (
