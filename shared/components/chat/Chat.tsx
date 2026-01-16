@@ -21,6 +21,13 @@ export interface ChatMessage {
   isGameMessage?: boolean;
 }
 
+// Define PlayerStatsModalProps if it's not already defined globally or in a shared type file
+interface PlayerStatsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  player: any; // TODO: Define a proper Player type
+}
+
 interface ChatProps {
   gameId: string;
   userId: string;
@@ -35,6 +42,7 @@ interface ChatProps {
   gameMessages?: Record<string, ChatMessage>;
   isSpectator?: boolean;
   onPlayerClick?: (player: Player) => void;
+  PlayerStatsModal?: React.ComponentType<PlayerStatsModalProps>; // Make it an optional prop
 }
 
 export default function Chat({
@@ -50,7 +58,8 @@ export default function Chat({
   lobbyMessages = [],
   gameMessages = {},
   isSpectator = false,
-  onPlayerClick
+  onPlayerClick,
+  PlayerStatsModal // Destructure the prop
 }: ChatProps) {
   
   // Use the chat hooks for all state management and event handling
