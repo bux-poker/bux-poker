@@ -109,18 +109,12 @@ export function TournamentDetail() {
           </div>
         </div>
 
-        {canRegister && (
-          <div className="mt-6">
-            <button
-              onClick={handleRegister}
-              disabled={registering}
-              className="rounded-lg bg-emerald-500 px-6 py-3 font-medium text-white transition-colors hover:bg-emerald-600 disabled:opacity-50"
-            >
-              {registering ? 'Registering...' : 'Register for Tournament'}
-            </button>
-            {registerError && (
-              <p className="mt-2 text-sm text-red-400">{registerError}</p>
-            )}
+        {/* Registration only available via Discord */}
+        {servers.length > 0 && canRegister && (
+          <div className="mt-6 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
+            <p className="text-sm text-emerald-200">
+              📱 Registration is only available via Discord. Join one of the host servers above and click the Register button on the tournament embed.
+            </p>
           </div>
         )}
 

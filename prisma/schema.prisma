@@ -8,10 +8,10 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  discordId String?  @unique
+  id        String  @id @default(cuid())
+  discordId String? @unique
   username  String
-  email     String?  @unique
+  email     String? @unique
   avatarUrl String?
 
   createdAt DateTime @default(now())
@@ -24,7 +24,7 @@ model User {
 }
 
 model Tournament {
-  id            String   @id @default(cuid())
+  id            String           @id @default(cuid())
   name          String
   description   String?
   startTime     DateTime
@@ -33,7 +33,7 @@ model Tournament {
   seatsPerTable Int
   startingChips Int
 
-  blindLevelsJson String   // JSON config for blinds structure
+  blindLevelsJson String // JSON config for blinds structure
   prizePlaces     Int
 
   createdById String
@@ -49,12 +49,12 @@ model Tournament {
 }
 
 model TournamentRegistration {
-  id           String              @id @default(cuid())
+  id           String             @id @default(cuid())
   tournamentId String
   userId       String
-  status       RegistrationStatus  @default(PENDING)
+  status       RegistrationStatus @default(PENDING)
 
-  registeredAt DateTime            @default(now())
+  registeredAt DateTime @default(now())
 
   tournament Tournament @relation(fields: [tournamentId], references: [id])
   user       User       @relation(fields: [userId], references: [id])
@@ -63,15 +63,15 @@ model TournamentRegistration {
 }
 
 model Game {
-  id           String          @id @default(cuid())
+  id           String  @id @default(cuid())
   tournamentId String?
   tableNumber  Int?
 
-  status           GameStatus   @default(PENDING)
+  status            GameStatus @default(PENDING)
   currentBlindLevel Int?
 
-  pot             Int           @default(0)
-  communityCards  String        @default("") // encoded representation
+  pot            Int    @default(0)
+  communityCards String @default("") // encoded representation
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -82,38 +82,38 @@ model Game {
 }
 
 model Player {
-  id      String @id @default(cuid())
-  gameId  String
-  userId  String
+  id     String @id @default(cuid())
+  gameId String
+  userId String
 
   seatNumber Int
   chips      Int
 
-  holeCards String  @default("") // encoded two-card hand
+  holeCards String       @default("") // encoded two-card hand
   status    PlayerStatus @default(ACTIVE)
-  position  String?      // e.g. "BTN", "SB", "BB"
+  position  String? // e.g. "BTN", "SB", "BB"
 
-  lastAction     String? // last betting action
-  lastActionAt   DateTime?
+  lastAction   String? // last betting action
+  lastActionAt DateTime?
 
   game Game @relation(fields: [gameId], references: [id])
   user User @relation(fields: [userId], references: [id])
 
-  hands Hand[] @relation("PlayerHands")
-  wonHands Hand[] @relation("HandWinner")
+  hands       Hand[]       @relation("PlayerHands")
+  wonHands    Hand[]       @relation("HandWinner")
   handActions HandAction[]
 
   @@unique([gameId, seatNumber])
 }
 
 model Hand {
-  id      String @id @default(cuid())
-  gameId  String
+  id     String @id @default(cuid())
+  gameId String
 
   handNumber Int
-  pot        Int   @default(0)
+  pot        Int @default(0)
 
-  communityCards String  @default("")
+  communityCards String @default("")
 
   winnerPlayerId String?
 
@@ -121,8 +121,8 @@ model Hand {
 
   createdAt DateTime @default(now())
 
-  game   Game   @relation(fields: [gameId], references: [id])
-  winner Player? @relation("HandWinner", fields: [winnerPlayerId], references: [id])
+  game    Game     @relation(fields: [gameId], references: [id])
+  winner  Player?  @relation("HandWinner", fields: [winnerPlayerId], references: [id])
   players Player[] @relation("PlayerHands")
 
   actions HandAction[]
@@ -131,14 +131,14 @@ model Hand {
 }
 
 model HandAction {
-  id     String @id @default(cuid())
-  handId String
+  id       String @id @default(cuid())
+  handId   String
   playerId String
 
   action   BettingAction
-  amount   Int      @default(0)
+  amount   Int           @default(0)
   street   Street
-  position String?  // e.g. BTN, SB, BB, UTG
+  position String? // e.g. BTN, SB, BB, UTG
 
   createdAt DateTime @default(now())
 
@@ -147,24 +147,24 @@ model HandAction {
 }
 
 model League {
-  id        String @id @default(cuid())
-  name      String
-  month     Int
-  year      Int
-  status    LeagueStatus @default(PLANNED)
+  id         String       @id @default(cuid())
+  name       String
+  month      Int
+  year       Int
+  status     LeagueStatus @default(PLANNED)
   totalGames Int
 
   createdAt DateTime @default(now())
 
-  games      LeagueGame[]
-  standings  LeagueStanding[]
+  games     LeagueGame[]
+  standings LeagueStanding[]
 }
 
 model LeagueGame {
-  id          String @id @default(cuid())
-  leagueId    String
+  id           String @id @default(cuid())
+  leagueId     String
   tournamentId String
-  gameNumber  Int
+  gameNumber   Int
 
   completedAt DateTime?
 
@@ -175,13 +175,13 @@ model LeagueGame {
 }
 
 model LeagueStanding {
-  id        String @id @default(cuid())
-  leagueId  String
-  userId    String
+  id       String @id @default(cuid())
+  leagueId String
+  userId   String
 
-  points      Int   @default(0)
-  gamesPlayed Int   @default(0)
-  bestFinish  Int?  // 1 = first, etc
+  points      Int  @default(0)
+  gamesPlayed Int  @default(0)
+  bestFinish  Int? // 1 = first, etc
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -193,14 +193,14 @@ model LeagueStanding {
 }
 
 model DiscordServer {
-  id                   String @id @default(cuid())
-  serverId             String @unique
-  serverName           String
+  id                    String  @id @default(cuid())
+  serverId              String  @unique
+  serverName            String
   announcementChannelId String?
-  inviteLink           String?
-  adminRoleId          String?
-  enabled              Boolean @default(true)
-  setupCompleted       Boolean @default(false)
+  inviteLink            String?
+  adminRoleId           String?
+  enabled               Boolean @default(true)
+  setupCompleted        Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -209,13 +209,13 @@ model DiscordServer {
 }
 
 model TournamentPost {
-  id           String @id @default(cuid())
+  id           String    @id @default(cuid())
   tournamentId String
   serverId     String
   messageId    String? // Discord message ID after posting
   postedAt     DateTime?
 
-  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  tournament Tournament    @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   server     DiscordServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
 
   @@unique([tournamentId, serverId])
@@ -269,4 +269,3 @@ enum LeagueStatus {
   ACTIVE
   COMPLETED
 }
-

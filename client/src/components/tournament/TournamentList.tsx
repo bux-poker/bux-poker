@@ -1,15 +1,28 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTournaments, Tournament } from '../../hooks/useTournaments';
+import { useAdmin } from '../../hooks/useAdmin';
+import { useState } from 'react';
+import api from '../../services/api';
 
-function TournamentCard({ tournament }: { tournament: Tournament }) {
+function TournamentCard({ tournament, onCancel, onDuplicate }: { tournament: Tournament; onCancel?: (id: string) => void; onDuplicate?: (id: string) => void }) {
+  const { isAdmin } = useAdmin();
   const startTime = new Date(tournament.startTime);
   const registeredCount = tournament.registeredCount || 0;
   const spotsLeft = tournament.maxPlayers - registeredCount;
   const servers = tournament.servers || [];
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't navigate if clicking on admin buttons
+    if ((e.target as HTMLElement).closest('.admin-actions')) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+
   return (
     <Link
       to={`/tournaments/${tournament.id}`}
+      onClick={handleCardClick}
       className="block rounded-lg border border-slate-800 bg-slate-900/50 p-6 transition-all hover:border-emerald-500/50 hover:bg-slate-900"
     >
       <div className="flex items-start justify-between">
@@ -94,12 +107,99 @@ function TournamentCard({ tournament }: { tournament: Tournament }) {
           {spotsLeft} spot{spotsLeft !== 1 ? 's' : ''} remaining
         </div>
       )}
+
+      {/* Admin Actions */}
+      {isAdmin && (
+        <div className="admin-actions mt-4 border-t border-slate-800 pt-4 flex gap-2">
+          {(tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING' || tournament.status === 'REGISTRATION') && (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (onCancel) onCancel(tournament.id);
+              }}
+              className="rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700"
+            >
+              Cancel Tournament
+            </button>
+          )}
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (onDuplicate) onDuplicate(tournament.id);
+            }}
+            className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+          >
+            Duplicate
+          </button>
+        </div>
+      )}
     </Link>
   );
 }
 
 export function TournamentList() {
-  const { tournaments, loading, error } = useTournaments();
+  const { tournaments, loading, error, refetch } = useTournaments();
+  const navigate = useNavigate();
+  const [cancelling, setCancelling] = useState<string | null>(null);
+  const [duplicating, setDuplicating] = useState<string | null>(null);
+
+  const handleCancel = async (tournamentId: string) => {
+    if (!confirm('Are you sure you want to cancel this tournament?')) {
+      return;
+    }
+
+    setCancelling(tournamentId);
+    try {
+      const token = localStorage.getItem('sessionToken');
+      if (!token) {
+        alert('Not authenticated');
+        return;
+      }
+
+      await api.patch(
+        `/api/admin/tournaments/${tournamentId}/cancel`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      await refetch();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to cancel tournament');
+    } finally {
+      setCancelling(null);
+    }
+  };
+
+  const handleDuplicate = async (tournamentId: string) => {
+    setDuplicating(tournamentId);
+    try {
+      const token = localStorage.getItem('sessionToken');
+      if (!token) {
+        alert('Not authenticated');
+        return;
+      }
+
+      const response = await api.post(
+        `/api/admin/tournaments/${tournamentId}/duplicate`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (response.data?.id) {
+        navigate(`/admin`);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to duplicate tournament');
+    } finally {
+      setDuplicating(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -148,7 +248,12 @@ export function TournamentList() {
           </h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {activeTournaments.map((tournament) => (
-              <TournamentCard key={tournament.id} tournament={tournament} />
+              <TournamentCard 
+                key={tournament.id} 
+                tournament={tournament} 
+                onCancel={handleCancel}
+                onDuplicate={handleDuplicate}
+              />
             ))}
           </div>
         </div>
@@ -161,7 +266,12 @@ export function TournamentList() {
           </h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {upcomingTournaments.map((tournament) => (
-              <TournamentCard key={tournament.id} tournament={tournament} />
+              <TournamentCard 
+                key={tournament.id} 
+                tournament={tournament} 
+                onCancel={handleCancel}
+                onDuplicate={handleDuplicate}
+              />
             ))}
           </div>
         </div>
@@ -174,7 +284,12 @@ export function TournamentList() {
           </h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {completedTournaments.map((tournament) => (
-              <TournamentCard key={tournament.id} tournament={tournament} />
+              <TournamentCard 
+                key={tournament.id} 
+                tournament={tournament} 
+                onCancel={handleCancel}
+                onDuplicate={handleDuplicate}
+              />
             ))}
           </div>
         </div>

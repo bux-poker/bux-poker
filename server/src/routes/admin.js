@@ -225,5 +225,78 @@ router.post("/tournaments/:id/end", async (req, res, next) => {
   }
 });
 
+// Cancel tournament
+router.patch("/tournaments/:id/cancel", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const tournament = await prisma.tournament.findUnique({
+      where: { id },
+    });
+
+    if (!tournament) {
+      return res.status(404).json({ error: "Tournament not found" });
+    }
+
+    if (tournament.status === "COMPLETED" || tournament.status === "CANCELLED") {
+      return res.status(400).json({ error: "Cannot cancel a completed or already cancelled tournament" });
+    }
+
+    // Update tournament status
+    await prisma.tournament.update({
+      where: { id },
+      data: { status: "CANCELLED" },
+    });
+
+    res.json({ tournamentId: id, status: "CANCELLED" });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Duplicate tournament with same blind structure
+router.post("/tournaments/:id/duplicate", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const tournament = await prisma.tournament.findUnique({
+      where: { id },
+    });
+
+    if (!tournament) {
+      return res.status(404).json({ error: "Tournament not found" });
+    }
+
+    // Create new tournament with same settings except name and start time
+    const duplicatedTournament = await prisma.tournament.create({
+      data: {
+        name: `${tournament.name} (Copy)`,
+        description: tournament.description,
+        startTime: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
+        maxPlayers: tournament.maxPlayers,
+        seatsPerTable: tournament.seatsPerTable,
+        startingChips: tournament.startingChips,
+        blindLevelsJson: tournament.blindLevelsJson, // Same blind structure
+        prizePlaces: tournament.prizePlaces,
+        status: "SCHEDULED",
+        createdById: req.userId, // From JWT auth middleware
+      },
+      include: {
+        createdBy: {
+          select: {
+            id: true,
+            username: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    res.status(201).json(duplicatedTournament);
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;
 

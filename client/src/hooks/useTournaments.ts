@@ -12,7 +12,7 @@ export interface Tournament {
   id: string;
   name: string;
   startTime: Date | string;
-  status: 'UPCOMING' | 'REGISTRATION' | 'ACTIVE' | 'COMPLETED' | 'SCHEDULED';
+  status: 'UPCOMING' | 'REGISTRATION' | 'ACTIVE' | 'COMPLETED' | 'SCHEDULED' | 'CANCELLED' | 'REGISTERING' | 'RUNNING';
   maxPlayers: number;
   seatsPerTable: number;
   startingChips: number;
