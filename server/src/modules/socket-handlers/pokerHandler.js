@@ -295,8 +295,9 @@ export function registerPokerHandlers(io) {
         socket.emit("game-state", payload);
         
         // Broadcast to all players in the room if we just started a hand
+        // (socket.server is the io instance)
         if (state) {
-          io.to(`game:${gameId}`).emit("game-state", payload);
+          socket.server.to(`game:${gameId}`).emit("game-state", payload);
         }
       } catch (err) {
         // eslint-disable-next-line no-console
