@@ -179,17 +179,19 @@ function TournamentCard({ tournament, onCancel, onDuplicate, onAddTestPlayers }:
               >
                 Cancel Tournament
               </button>
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (onAddTestPlayers) onAddTestPlayers(tournament.id);
-                }}
-                className="rounded bg-purple-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-purple-700"
-                title="Add test players for development/testing"
-              >
-                Add Test Players
-              </button>
+              {onAddTestPlayers && (
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onAddTestPlayers(tournament.id);
+                  }}
+                  className="rounded bg-purple-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-purple-700"
+                  title="Add test players for development/testing"
+                >
+                  Add Test Players
+                </button>
+              )}
             </>
           )}
           <button
