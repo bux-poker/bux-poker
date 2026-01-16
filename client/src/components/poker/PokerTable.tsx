@@ -17,14 +17,14 @@ function PokerCardImage({
   if (faceDown) {
     return (
       <div
-        className={`${className} bg-blue-800 border-4 border-white rounded-lg relative overflow-hidden`}
+        className={`${className} bg-blue-800 border-2 border-white rounded-lg relative overflow-hidden`}
         style={{ width, height }}
       >
         <div className="absolute inset-0 opacity-20">
           <div 
             className="absolute inset-0" 
             style={{
-              backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 10px, white 10px, white 12px), repeating-linear-gradient(-45deg, transparent, transparent 10px, white 10px, white 12px)"
+              backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 6px, white 6px, white 7px), repeating-linear-gradient(-45deg, transparent, transparent 6px, white 6px, white 7px)"
             }}
           />
         </div>
@@ -194,11 +194,11 @@ export function PokerTable({
           const isMyPlayer = player && myUserId === player.id;
           const isCurrentTurn = player && currentPlayer === player.id;
           
-          // Determine if seat is left or right of center (for card positioning)
-          // Seats 1-5 (angles 162° to 18°) are left of center, cards go right of avatar
-          // Seats 6-10 (angles -18° to -162°) are right of center, cards go left of avatar
-          const isLeftOfCenter = position.angle >= 0 || position.angle <= -90;
-          const cardOffset = isLeftOfCenter ? 80 : -80; // Offset cards to right or left of avatar
+          // Determine card positioning relative to avatar
+          // Seats 1, 2, 3, 9, 10: cards to the RIGHT of avatar (positive offset)
+          // Seats 4, 5, 6, 7, 8: cards to the LEFT of avatar (negative offset)
+          const cardsOnRight = [1, 2, 3, 9, 10].includes(seatIdx + 1);
+          const cardOffset = cardsOnRight ? 80 : -80; // Offset cards to right or left of avatar
 
           const elements = [
             <div
