@@ -144,10 +144,19 @@ export class TournamentService {
 
       if (!tournament) return null;
 
-      // Add registeredCount and server info
+      // Add registeredCount, server info, and parse blindLevels
       try {
+        let blindLevels = [];
+        try {
+          blindLevels = JSON.parse(tournament.blindLevelsJson || '[]');
+        } catch (e) {
+          console.warn(`[TOURNAMENT SERVICE] Failed to parse blindLevels for tournament ${id}:`, e);
+          blindLevels = [];
+        }
+
         return {
           ...tournament,
+          blindLevels: blindLevels, // Add parsed blind levels
           registeredCount: tournament.registrations?.filter(
             (r) => r.status === "CONFIRMED" || r.status === "PENDING"
           ).length || 0,

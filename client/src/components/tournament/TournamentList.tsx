@@ -24,27 +24,37 @@ function TournamentCard({ tournament, onCancel, onDuplicate }: { tournament: Tou
   const [serversWithMembership, setServersWithMembership] = useState<ServerWithMembership[]>(servers);
 
   useEffect(() => {
-    // Fetch server membership status
-    if (user && servers.length > 0) {
-      const token = localStorage.getItem('sessionToken');
-      if (token) {
-        api.get(`/api/tournaments/${tournament.id}/server-membership`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-          .then((response) => {
-            if (response.data?.servers) {
-              setServersWithMembership(response.data.servers);
-            }
+    // Initialize with servers from tournament data
+    if (servers.length > 0) {
+      // Fetch server membership status if user is logged in
+      if (user) {
+        const token = localStorage.getItem('sessionToken');
+        if (token) {
+          api.get(`/api/tournaments/${tournament.id}/server-membership`, {
+            headers: { Authorization: `Bearer ${token}` },
           })
-          .catch(() => {
-            // If not authenticated or error, just use servers as-is
-            setServersWithMembership(servers.map(s => ({ ...s, isMember: false })));
-          });
+            .then((response) => {
+              if (response.data?.servers && response.data.servers.length > 0) {
+                setServersWithMembership(response.data.servers);
+              } else {
+                // Fallback to original servers
+                setServersWithMembership(servers.map(s => ({ ...s, isMember: false })));
+              }
+            })
+            .catch((err) => {
+              console.error('Error fetching server membership:', err);
+              // If error, show servers without membership info
+              setServersWithMembership(servers.map(s => ({ ...s, isMember: false })));
+            });
+        } else {
+          setServersWithMembership(servers.map(s => ({ ...s, isMember: false })));
+        }
       } else {
+        // User not logged in - show all servers with invite links
         setServersWithMembership(servers.map(s => ({ ...s, isMember: false })));
       }
     } else {
-      setServersWithMembership(servers.map(s => ({ ...s, isMember: false })));
+      setServersWithMembership([]);
     }
   }, [tournament.id, servers, user]);
 
@@ -185,11 +195,14 @@ function TournamentCard({ tournament, onCancel, onDuplicate }: { tournament: Tou
   );
 }
 
+type TournamentFilter = 'all' | 'registering' | 'in-progress' | 'completed';
+
 export function TournamentList() {
   const { tournaments, loading, error, refetch } = useTournaments();
   const navigate = useNavigate();
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [duplicating, setDuplicating] = useState<string | null>(null);
+  const [filter, setFilter] = useState<TournamentFilter>('all');
 
   const handleCancel = async (tournamentId: string) => {
     if (!confirm('Are you sure you want to cancel this tournament?')) {
@@ -280,73 +293,99 @@ export function TournamentList() {
     );
   }
 
-  const activeTournaments = tournaments.filter(
-    (t) => t.status === 'ACTIVE' || t.status === 'RUNNING'
-  );
-  const upcomingTournaments = tournaments.filter(
-    (t) =>
-      t.status === 'REGISTRATION' ||
-      t.status === 'REGISTERING' ||
-      t.status === 'UPCOMING' ||
-      t.status === 'SCHEDULED'
-  );
-  const completedTournaments = tournaments.filter(
-    (t) => t.status === 'COMPLETED'
-  );
+  // Filter tournaments based on selected filter
+  const filteredTournaments = tournaments.filter((t) => {
+    switch (filter) {
+      case 'registering':
+        return (
+          t.status === 'REGISTRATION' ||
+          t.status === 'REGISTERING' ||
+          t.status === 'SCHEDULED'
+        );
+      case 'in-progress':
+        return t.status === 'ACTIVE' || t.status === 'RUNNING';
+      case 'completed':
+        return t.status === 'COMPLETED';
+      default:
+        return true; // 'all'
+    }
+  });
+
+  // Sort tournaments: newest to oldest (by startTime)
+  const sortedTournaments = [...filteredTournaments].sort((a, b) => {
+    const timeA = new Date(a.startTime).getTime();
+    const timeB = new Date(b.startTime).getTime();
+    return timeB - timeA; // Newest first
+  });
 
   return (
-    <div className="space-y-8">
-      {activeTournaments.length > 0 && (
-        <div>
-          <h2 className="mb-4 text-xl font-semibold text-slate-100">
-            Active Tournaments
-          </h2>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {activeTournaments.map((tournament) => (
-              <TournamentCard 
-                key={tournament.id} 
-                tournament={tournament} 
-                onCancel={handleCancel}
-                onDuplicate={handleDuplicate}
-              />
-            ))}
-          </div>
+    <div className="space-y-6">
+      {/* Header with Filter */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-semibold text-slate-100">Tournaments</h1>
+        <div className="flex gap-2 rounded-lg border border-slate-800 bg-slate-900/50 p-1">
+          <button
+            onClick={() => setFilter('all')}
+            className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+              filter === 'all'
+                ? 'bg-emerald-600 text-white'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            All
+          </button>
+          <button
+            onClick={() => setFilter('registering')}
+            className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+              filter === 'registering'
+                ? 'bg-emerald-600 text-white'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Registering
+          </button>
+          <button
+            onClick={() => setFilter('in-progress')}
+            className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+              filter === 'in-progress'
+                ? 'bg-emerald-600 text-white'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            In Progress
+          </button>
+          <button
+            onClick={() => setFilter('completed')}
+            className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+              filter === 'completed'
+                ? 'bg-emerald-600 text-white'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Completed
+          </button>
         </div>
-      )}
+      </div>
 
-      {upcomingTournaments.length > 0 && (
-        <div>
-          <h2 className="mb-4 text-xl font-semibold text-slate-100">
-            Upcoming Tournaments
-          </h2>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {upcomingTournaments.map((tournament) => (
-              <TournamentCard 
-                key={tournament.id} 
-                tournament={tournament} 
-                onCancel={handleCancel}
-                onDuplicate={handleDuplicate}
-              />
-            ))}
-          </div>
+      {/* Tournament Grid */}
+      {sortedTournaments.length === 0 ? (
+        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-8 text-center">
+          <p className="text-slate-400">
+            {filter === 'all'
+              ? 'No tournaments available'
+              : `No ${filter.replace('-', ' ')} tournaments`}
+          </p>
         </div>
-      )}
-
-      {completedTournaments.length > 0 && (
-        <div>
-          <h2 className="mb-4 text-xl font-semibold text-slate-100">
-            Completed Tournaments
-          </h2>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {completedTournaments.map((tournament) => (
-              <TournamentCard 
-                key={tournament.id} 
-                tournament={tournament} 
-                onCancel={handleCancel}
-                onDuplicate={handleDuplicate}
-              />
-            ))}
-          </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {sortedTournaments.map((tournament) => (
+            <TournamentCard
+              key={tournament.id}
+              tournament={tournament}
+              onCancel={handleCancel}
+              onDuplicate={handleDuplicate}
+            />
+          ))}
         </div>
       )}
     </div>
