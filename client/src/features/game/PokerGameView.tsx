@@ -56,6 +56,7 @@ export function PokerGameView() {
   const [gameState, setGameState] = useState<GameStatePayload | null>(null);
   const [connecting, setConnecting] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [turnTimer, setTurnTimer] = useState<{ userId: string; expiresAt: number; duration: number } | null>(null);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -87,12 +88,39 @@ export function PokerGameView() {
       socket.emit("join-table", { gameId: id });
     });
 
+    socket.on("game_message", (message) => {
+      // Dispatch a custom event to be caught by ChatHooks
+      window.dispatchEvent(new CustomEvent('gameMessage', { detail: { gameId: id, message } }));
+    });
+
+    socket.on("turn-timer-start", (payload: { gameId: string; userId: string; expiresAt: number; duration: number }) => {
+      if (payload.gameId === id) {
+        setTurnTimer({ userId: payload.userId, expiresAt: payload.expiresAt, duration: payload.duration });
+      }
+    });
+
+    // Update timer every second to keep it synced
+    const timerInterval = setInterval(() => {
+      setTurnTimer((prev) => {
+        if (prev) {
+          const remaining = prev.expiresAt - Date.now();
+          if (remaining <= 0) {
+            return null;
+          }
+        }
+        return prev;
+      });
+    }, 100);
+
     return () => {
       socket.off("game-state");
       socket.off("error");
       socket.off("connect");
+      socket.off("game_message");
+      socket.off("turn-timer-start");
+      clearInterval(timerInterval);
     };
-  }, [id]);
+  }, [id, turnTimer]);
 
   const handleAction = (action: string, amount: number) => {
     if (!id || !gameState || !user) return;
@@ -193,6 +221,7 @@ export function PokerGameView() {
           <div className="relative flex-1 overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900 min-h-0">
             <PokerTable
               gameId={gameState.id}
+              turnTimer={turnTimer}
               players={gameState.players.map((p: any) => ({
                 id: p.id,
                 name: p.name,

@@ -157,6 +157,7 @@ function PokerCardImage({
 
 interface PokerTableProps {
   gameId: string;
+  turnTimer?: { userId: string; expiresAt: number; duration: number } | null;
   players: Array<{
     id: string;
     name: string;
@@ -196,6 +197,7 @@ const PLAYER_POSITIONS = [
 
 export function PokerTable({
   gameId,
+  turnTimer,
   players,
   communityCards,
   pot,
@@ -246,6 +248,10 @@ export function PokerTable({
           
           const isMyPlayer = player && myUserId === player.id;
           const isCurrentTurn = player && currentPlayer === player.id;
+          const hasActiveTimer = turnTimer && player && player.userId === turnTimer.userId;
+          const timerRemaining = hasActiveTimer 
+            ? Math.max(0, Math.ceil((turnTimer.expiresAt - Date.now()) / 1000))
+            : null;
           
           // Determine card positioning relative to avatar
           // Seats 1, 2, 3, 9, 10: cards to the RIGHT of avatar (positive offset)
@@ -267,8 +273,8 @@ export function PokerTable({
                   {/* Player Avatar or Empty Seat */}
                   {player ? (
                     <>
-                      <div className={`relative mb-2 ${isCurrentTurn ? 'ring-4 ring-emerald-400 ring-offset-2 ring-offset-slate-900' : ''}`}>
-                        <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-slate-700 bg-slate-800">
+                      <div className={`relative mb-2 ${hasActiveTimer ? 'animate-pulse' : ''} ${hasActiveTimer ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-900' : (isCurrentTurn ? 'ring-4 ring-emerald-400 ring-offset-2 ring-offset-slate-900' : '')}`}>
+                        <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-slate-700 bg-slate-800 relative">
                           {(() => {
                             // Use Discord avatar for real players (not test players)
                             const isTestPlayer = player.name.toLowerCase().startsWith('test player');
@@ -291,6 +297,15 @@ export function PokerTable({
                               </div>
                             );
                           })()}
+                          
+                          {/* Timer Overlay */}
+                          {hasActiveTimer && timerRemaining !== null && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full">
+                              <span className="text-xl font-bold text-yellow-400 drop-shadow-lg">
+                                {timerRemaining}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       
                         {/* Dealer Button */}
