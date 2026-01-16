@@ -19,9 +19,11 @@ function App() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <Link to="/" className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600">
-                <span className="text-xl">🃏</span>
-              </div>
+              <img
+                src="/images/bux-poker.png"
+                alt="BUX Poker Logo"
+                className="h-10 w-10 rounded-lg object-contain"
+              />
               <div className="flex flex-col">
                 <span className="text-lg font-bold tracking-tight text-white">
                   BUX Poker
@@ -128,7 +130,11 @@ function App() {
                       {/* Text Content */}
                       <div className="relative z-10 flex-1 p-4 sm:p-6 md:p-8 lg:p-10">
                         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] text-emerald-300 sm:px-3 sm:py-1.5 sm:text-xs md:px-4 md:py-2 md:text-sm">
-                          <span>🃏</span>
+                          <img
+                            src="/images/bux-poker.png"
+                            alt="BUX Poker Logo"
+                            className="h-4 w-4 object-contain sm:h-5 sm:w-5 md:h-6 md:w-6"
+                          />
                           <span className="whitespace-nowrap">Community Poker Platform</span>
                         </div>
                         <h1 className="mb-2 text-2xl font-bold tracking-tight text-white sm:text-3xl md:text-4xl lg:text-5xl">
