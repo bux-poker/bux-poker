@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@shared/features/auth/AuthContext';
+import { useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 
 interface BlindLevel {
@@ -21,6 +22,7 @@ interface DiscordServer {
 
 export function CreateTournament() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -28,26 +30,67 @@ export function CreateTournament() {
   const [selectedServerIds, setSelectedServerIds] = useState<string[]>([]);
   const [loadingServers, setLoadingServers] = useState(true);
 
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    startTime: '',
-    maxPlayers: 100,
-    seatsPerTable: 9,
-    startingChips: 10000,
-    prizePlaces: 3,
-  });
+  // Initialize form data from URL params if present (for duplication)
+  const getInitialFormData = () => {
+    const name = searchParams.get('name') || '';
+    const description = searchParams.get('description') || '';
+    const maxPlayers = parseInt(searchParams.get('maxPlayers') || '100');
+    const seatsPerTable = parseInt(searchParams.get('seatsPerTable') || '9');
+    const startingChips = parseInt(searchParams.get('startingChips') || '10000');
+    const prizePlaces = parseInt(searchParams.get('prizePlaces') || '3');
+    
+    return {
+      name,
+      description,
+      startTime: '',
+      maxPlayers,
+      seatsPerTable,
+      startingChips,
+      prizePlaces,
+    };
+  };
 
-  const [blindRoundDuration, setBlindRoundDuration] = useState(15); // Single duration for all rounds
-  const [blindLevels, setBlindLevels] = useState<BlindLevel[]>([
-    { level: 1, smallBlind: 25, bigBlind: 50, duration: 15 },
-    { level: 2, smallBlind: 50, bigBlind: 100, duration: 15 },
-    { level: 3, smallBlind: 100, bigBlind: 200, duration: 15 },
-    { level: 4, smallBlind: 200, bigBlind: 400, duration: 15 },
-    { level: 5, smallBlind: 400, bigBlind: 800, duration: null }, // Final round is infinite
-  ]);
+  const getInitialBlindLevels = (): BlindLevel[] => {
+    const blindLevelsParam = searchParams.get('blindLevels');
+    if (blindLevelsParam) {
+      try {
+        const parsed = JSON.parse(blindLevelsParam);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error('Failed to parse blind levels from URL:', e);
+      }
+    }
+    return [
+      { level: 1, smallBlind: 25, bigBlind: 50, duration: 15 },
+      { level: 2, smallBlind: 50, bigBlind: 100, duration: 15 },
+      { level: 3, smallBlind: 100, bigBlind: 200, duration: 15 },
+      { level: 4, smallBlind: 200, bigBlind: 400, duration: 15 },
+      { level: 5, smallBlind: 400, bigBlind: 800, duration: null }, // Final round is infinite
+    ];
+  };
+
+  const getInitialBlindRoundDuration = () => {
+    const blindLevels = getInitialBlindLevels();
+    if (blindLevels.length > 0 && blindLevels[0].duration !== null) {
+      return blindLevels[0].duration;
+    }
+    return 15;
+  };
+
+  const [formData, setFormData] = useState(getInitialFormData());
+  const [blindRoundDuration, setBlindRoundDuration] = useState(getInitialBlindRoundDuration());
+  const [blindLevels, setBlindLevels] = useState<BlindLevel[]>(getInitialBlindLevels());
 
   const startingChipsOptions = [1000, 2000, 5000, 10000, 20000, 50000, 100000];
+
+  // Clear URL params after loading (for cleaner URLs)
+  useEffect(() => {
+    if (searchParams.toString()) {
+      // Keep the params for now, user can clear them manually or we clear on submit
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     // Fetch available Discord servers
@@ -122,6 +165,8 @@ export function CreateTournament() {
 
       if (response.data) {
         setSuccess(true);
+        // Clear URL params
+        setSearchParams({});
         // Reset form
         setFormData({
           name: '',

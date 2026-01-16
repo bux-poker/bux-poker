@@ -1,15 +1,52 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useTournaments, Tournament } from '../../hooks/useTournaments';
 import { useAdmin } from '../../hooks/useAdmin';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { TournamentTimestamp } from './TournamentTimestamp';
+import { useAuth } from '@shared/features/auth/AuthContext';
+
+interface ServerWithMembership {
+  id: string;
+  serverId: string;
+  serverName: string;
+  inviteLink: string | null;
+  isMember?: boolean;
+}
 
 function TournamentCard({ tournament, onCancel, onDuplicate }: { tournament: Tournament; onCancel?: (id: string) => void; onDuplicate?: (id: string) => void }) {
   const { isAdmin } = useAdmin();
+  const { user } = useAuth();
   const startTime = new Date(tournament.startTime);
   const registeredCount = tournament.registeredCount || 0;
   const spotsLeft = tournament.maxPlayers - registeredCount;
   const servers = tournament.servers || [];
+  const [serversWithMembership, setServersWithMembership] = useState<ServerWithMembership[]>(servers);
+
+  useEffect(() => {
+    // Fetch server membership status
+    if (user && servers.length > 0) {
+      const token = localStorage.getItem('sessionToken');
+      if (token) {
+        api.get(`/api/tournaments/${tournament.id}/server-membership`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then((response) => {
+            if (response.data?.servers) {
+              setServersWithMembership(response.data.servers);
+            }
+          })
+          .catch(() => {
+            // If not authenticated or error, just use servers as-is
+            setServersWithMembership(servers.map(s => ({ ...s, isMember: false })));
+          });
+      } else {
+        setServersWithMembership(servers.map(s => ({ ...s, isMember: false })));
+      }
+    } else {
+      setServersWithMembership(servers.map(s => ({ ...s, isMember: false })));
+    }
+  }, [tournament.id, servers, user]);
 
   const handleCardClick = (e: React.MouseEvent) => {
     // Don't navigate if clicking on admin buttons
@@ -30,9 +67,7 @@ function TournamentCard({ tournament, onCancel, onDuplicate }: { tournament: Tou
           <h3 className="text-lg font-semibold text-slate-100">
             {tournament.name}
           </h3>
-          <p className="mt-1 text-sm text-slate-400">
-            {startTime.toLocaleString()}
-          </p>
+          <TournamentTimestamp startTime={startTime} showCountdown={tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING' || tournament.status === 'REGISTRATION'} />
         </div>
         <span
           className={`rounded-full px-3 py-1 text-xs font-medium ${
@@ -64,37 +99,48 @@ function TournamentCard({ tournament, onCancel, onDuplicate }: { tournament: Tou
         </div>
       </div>
 
-      {servers.length > 0 && (
+      {serversWithMembership.length > 0 && (
         <div className="mt-4 border-t border-slate-800 pt-4">
-          <div className="mb-2 text-xs font-medium text-slate-400">Host Servers:</div>
-          <div className="flex flex-wrap gap-2">
-            {servers.map((server) => (
+          <div className="mb-2 text-xs font-medium text-slate-400">Registration Available From:</div>
+          <div className="space-y-2">
+            {serversWithMembership.map((server) => (
               <div
                 key={server.id}
-                className="flex items-center gap-1.5 rounded bg-slate-800/50 px-2 py-1 text-xs"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (server.inviteLink) {
-                    window.open(server.inviteLink, '_blank', 'noopener,noreferrer');
-                  }
-                }}
+                className={`flex items-center gap-2 rounded px-2 py-1.5 text-xs ${
+                  server.isMember ? 'bg-slate-800/30' : 'bg-slate-800/50'
+                }`}
               >
-                <span className="text-slate-300">{server.serverName}</span>
-                {server.inviteLink && (
-                  <svg
-                    className="h-3 w-3 text-emerald-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                {server.isMember ? (
+                  <>
+                    <img
+                      src="/images/bux-poker.png"
+                      alt={server.serverName}
+                      className="h-4 w-4 rounded object-contain"
                     />
-                  </svg>
+                    <span className="text-slate-300">{server.serverName}</span>
+                  </>
+                ) : (
+                  <>
+                    <img
+                      src="/images/bux-poker.png"
+                      alt={server.serverName}
+                      className="h-4 w-4 rounded object-contain opacity-50"
+                    />
+                    <span className="text-slate-300">{server.serverName}</span>
+                    {server.inviteLink && (
+                      <a
+                        href={server.inviteLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
+                        className="ml-auto rounded bg-emerald-600 px-2 py-0.5 text-xs font-medium text-white transition-colors hover:bg-emerald-700"
+                      >
+                        Join
+                      </a>
+                    )}
+                  </>
                 )}
               </div>
             ))}
@@ -183,19 +229,28 @@ export function TournamentList() {
         return;
       }
 
-      const response = await api.post(
+      const response = await api.get(
         `/api/admin/tournaments/${tournamentId}/duplicate`,
-        {},
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
 
-      if (response.data?.id) {
-        navigate(`/admin`);
+      if (response.data) {
+        // Navigate to create page with pre-filled data
+        const params = new URLSearchParams({
+          name: response.data.name || '',
+          description: response.data.description || '',
+          maxPlayers: response.data.maxPlayers?.toString() || '100',
+          seatsPerTable: response.data.seatsPerTable?.toString() || '9',
+          startingChips: response.data.startingChips?.toString() || '10000',
+          prizePlaces: response.data.prizePlaces?.toString() || '3',
+          blindLevels: JSON.stringify(response.data.blindLevels || []),
+        });
+        navigate(`/admin?${params.toString()}`);
       }
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to duplicate tournament');
+      alert(err.response?.data?.error || 'Failed to load tournament data');
     } finally {
       setDuplicating(null);
     }

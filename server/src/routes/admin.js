@@ -254,8 +254,8 @@ router.patch("/tournaments/:id/cancel", async (req, res, next) => {
   }
 });
 
-// Duplicate tournament with same blind structure
-router.post("/tournaments/:id/duplicate", async (req, res, next) => {
+// Get tournament data for duplication (returns data to pre-fill create form)
+router.get("/tournaments/:id/duplicate", async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -267,32 +267,24 @@ router.post("/tournaments/:id/duplicate", async (req, res, next) => {
       return res.status(404).json({ error: "Tournament not found" });
     }
 
-    // Create new tournament with same settings except name and start time
-    const duplicatedTournament = await prisma.tournament.create({
-      data: {
-        name: `${tournament.name} (Copy)`,
-        description: tournament.description,
-        startTime: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
-        maxPlayers: tournament.maxPlayers,
-        seatsPerTable: tournament.seatsPerTable,
-        startingChips: tournament.startingChips,
-        blindLevelsJson: tournament.blindLevelsJson, // Same blind structure
-        prizePlaces: tournament.prizePlaces,
-        status: "SCHEDULED",
-        createdById: req.userId, // From JWT auth middleware
-      },
-      include: {
-        createdBy: {
-          select: {
-            id: true,
-            username: true,
-            avatarUrl: true,
-          },
-        },
-      },
-    });
+    // Parse blind levels
+    let blindLevels = [];
+    try {
+      blindLevels = JSON.parse(tournament.blindLevelsJson || '[]');
+    } catch (e) {
+      blindLevels = [];
+    }
 
-    res.status(201).json(duplicatedTournament);
+    // Return tournament data for pre-filling form
+    res.json({
+      name: `${tournament.name} (Copy)`,
+      description: tournament.description || '',
+      maxPlayers: tournament.maxPlayers,
+      seatsPerTable: tournament.seatsPerTable,
+      startingChips: tournament.startingChips,
+      prizePlaces: tournament.prizePlaces,
+      blindLevels: blindLevels,
+    });
   } catch (err) {
     next(err);
   }
