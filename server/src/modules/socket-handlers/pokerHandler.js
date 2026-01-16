@@ -341,7 +341,10 @@ function startTurnTimer(gameId, userId, io) {
   // Clear existing timer for this game
   const existingTimer = turnTimers.get(gameId);
   if (existingTimer) {
-    clearTimeout(existingTimer.timeout);
+    clearTimeout(existingTimer.timerId);
+    if (existingTimer.graceTimerId) {
+      clearTimeout(existingTimer.graceTimerId);
+    }
     turnTimers.delete(gameId);
   }
 
@@ -408,28 +411,6 @@ function startTurnTimer(gameId, userId, io) {
       gracePeriodMs 
     });
   }
-    io.to(`game:${gameId}`).emit("turn-timer-start", {
-      gameId,
-      userId,
-      expiresAt,
-      duration: timeoutMs
-    });
-  }
-
-  const timeout = setTimeout(async () => {
-    // Timer expired - auto-fold for human players, or auto-act for test players
-    if (isTestPlayer) {
-      // Test player auto-action logic (3 second delay already passed)
-      await handleTestPlayerAction(gameId, userId, io);
-    } else {
-      // Human player auto-fold
-      await autoFoldPlayer(gameId, userId, io);
-    }
-    
-    turnTimers.delete(gameId);
-  }, timeoutMs);
-
-  turnTimers.set(gameId, { timeout, expiresAt, userId });
 }
 
 /**
