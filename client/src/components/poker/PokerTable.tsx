@@ -116,6 +116,7 @@ interface PokerTableProps {
     isSmallBlind?: boolean;
     isBigBlind?: boolean;
     avatarUrl?: string;
+    userId?: string;
   }>;
   communityCards: Card[];
   pot: number;
@@ -167,15 +168,6 @@ export function PokerTable({
       <div className="relative h-full w-full max-h-[calc(85vh-4rem)] max-w-[calc(90vw-4rem)] rounded-[50%] border-8 border-amber-600/40 bg-gradient-to-br from-emerald-900/60 to-slate-900/80 shadow-2xl" style={{ aspectRatio: '3/2' }}>
         
 
-        {/* Pot Display - Above community cards */}
-        <div className="absolute left-1/2 top-[40%] z-10 -translate-x-1/2 -translate-y-1/2">
-          <div className="rounded-lg border-2 border-emerald-500/50 bg-emerald-900/80 px-6 py-3 shadow-lg backdrop-blur-sm">
-            <div className="text-xs font-semibold text-emerald-200/80 uppercase tracking-wide">Total Pot</div>
-            <div className="text-2xl font-bold text-white">
-              ${pot.toLocaleString()}
-            </div>
-          </div>
-        </div>
 
         {/* Community Cards - Center of table */}
         {communityCards.length > 0 && (
@@ -218,20 +210,28 @@ export function PokerTable({
                   <>
                     <div className={`relative mb-2 ${isCurrentTurn ? 'ring-4 ring-emerald-400 ring-offset-2 ring-offset-slate-900' : ''}`}>
                       <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-slate-700 bg-slate-800">
-                        {player.avatarUrl ? (
-                          <img 
-                            src={player.avatarUrl} 
-                            alt={player.name}
-                            className="h-full w-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = '/guest-avatar.png';
-                            }}
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-600 to-purple-600 text-2xl font-bold text-white">
-                            {player.name.charAt(0).toUpperCase()}
-                          </div>
-                        )}
+                        {(() => {
+                          // Use Discord avatar for real players (not test players)
+                          const isTestPlayer = player.name.toLowerCase().startsWith('test player');
+                          if (!isTestPlayer && player.avatarUrl) {
+                            return (
+                              <img 
+                                src={player.avatarUrl} 
+                                alt={player.name}
+                                className="h-full w-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = '/guest-avatar.png';
+                                }}
+                              />
+                            );
+                          }
+                          // Fallback to initial for test players or no avatar
+                          return (
+                            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-600 to-purple-600 text-2xl font-bold text-white">
+                              {player.name.charAt(0).toUpperCase()}
+                            </div>
+                          );
+                        })()}
                       </div>
                   
                   {/* Dealer Button */}
@@ -244,25 +244,29 @@ export function PokerTable({
                   {/* Small Blind Chip */}
                   {player.isSmallBlind && (
                     <div className="absolute -bottom-1 -left-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 border-2 border-white shadow-md">
-                      <span className="text-[10px] font-bold text-white">${smallBlind}</span>
+                      <span className="text-[10px] font-bold text-white">{smallBlind}</span>
                     </div>
                   )}
                   
                   {/* Big Blind Chip */}
                   {player.isBigBlind && (
                     <div className="absolute -bottom-1 -left-2 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 border-2 border-white shadow-md">
-                      <span className="text-[10px] font-bold text-white">${bigBlind}</span>
+                      <span className="text-[10px] font-bold text-white">{bigBlind}</span>
                     </div>
                   )}
                 </div>
 
-                {/* Player Name */}
-                <div className="mb-1 text-center">
-                  <div className="text-sm font-semibold text-white drop-shadow-lg">
-                    {player.name.length > 12 ? `${player.name.substring(0, 12)}...` : player.name}
+                {/* Player Name and Chips - In containers, no wrapping */}
+                <div className="mb-1 flex flex-col items-center gap-1 min-w-0 max-w-[120px]">
+                  <div className="w-full px-2 py-1 rounded bg-slate-900/80 border border-slate-700/50">
+                    <div className="text-sm font-semibold text-white drop-shadow-lg truncate text-center whitespace-nowrap">
+                      {player.name}
+                    </div>
                   </div>
-                  <div className="text-xs font-medium text-emerald-300">
-                    ${player.chips.toLocaleString()}
+                  <div className="w-full px-2 py-1 rounded bg-slate-900/80 border border-slate-700/50">
+                    <div className="text-xs font-medium text-emerald-300 text-center whitespace-nowrap">
+                      {player.chips.toLocaleString()}
+                    </div>
                   </div>
                 </div>
 

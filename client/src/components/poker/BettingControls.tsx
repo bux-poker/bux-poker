@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface BettingControlsProps {
   onAction: (action: string, amount: number) => void;
   currentBet?: number;
   bigBlind?: number;
   myChips?: number;
+  street?: string;
+  minimumRaise?: number;
+  isBigBlind?: boolean;
 }
 
 export function BettingControls({ 
@@ -12,12 +15,33 @@ export function BettingControls({
   currentBet = 0, 
   bigBlind = 20,
   myChips = 0,
+  street = 'PREFLOP',
+  minimumRaise = 20,
+  isBigBlind = false,
 }: BettingControlsProps) {
   const [raiseAmount, setRaiseAmount] = useState(bigBlind * 2);
 
-  const callAmount = currentBet || bigBlind;
   const potSize = 100; // TODO: Get actual pot size from props
-  const maxBet = myChips;
+  const isPreflop = street === 'PREFLOP';
+  // Determine if there have been raises (any bet > big blind in preflop, or any bet > 0 post-flop)
+  const hasRaises = isPreflop ? currentBet > bigBlind : currentBet > 0;
+  const canCheck = !isPreflop || (isPreflop && isBigBlind && !hasRaises && currentBet === bigBlind);
+  const callAmount = currentBet || bigBlind;
+  const minRaiseAmount = currentBet + minimumRaise;
+
+  // Update raise amount when current bet changes
+  useEffect(() => {
+    if (isPreflop && currentBet === 0) {
+      // Preflop, no bets yet - min raise is 2x big blind
+      setRaiseAmount(bigBlind * 2);
+    } else if (currentBet > 0) {
+      // There's a current bet - min raise is current bet + minimum raise
+      setRaiseAmount(minRaiseAmount);
+    } else {
+      // Post-flop, no bets yet - min bet is big blind
+      setRaiseAmount(bigBlind);
+    }
+  }, [currentBet, bigBlind, minimumRaise, isPreflop, minRaiseAmount]);
 
   const handlePreset = (preset: string) => {
     switch (preset) {
@@ -36,34 +60,60 @@ export function BettingControls({
     }
   };
 
+  const handleFold = () => {
+    if (!isPreflop && currentBet === 0) {
+      // Post-flop, no bets - warn it's free to check
+      if (window.confirm('It\'s free to check. Are you sure you want to fold?')) {
+        onAction("FOLD", 0);
+      }
+    } else {
+      onAction("FOLD", 0);
+    }
+  };
+
   // Calculate button width to match main action buttons - wider to prevent text wrapping
   const buttonWidth = '140px'; // Wider to prevent text wrapping
   const buttonHeight = '48px'; // Same height for all main buttons
+
+  // Determine which buttons to show
+  const showCheck = !isPreflop || (isPreflop && isBigBlind && !hasRaises && currentBet === bigBlind);
+  const actionLabel = isPreflop && currentBet === 0 ? 'RAISE' : (currentBet > 0 ? 'RAISE' : 'BET');
+  const actionAmount = raiseAmount;
 
   return (
     <div className="flex flex-col items-end gap-3">
       {/* Main Action Buttons - Right justified, same size, wider to prevent wrapping */}
       <div className="flex items-center gap-3" style={{ width: `calc(${buttonWidth} * 3 + 0.75rem * 2)` }}>
         <button
-          onClick={() => onAction("FOLD", 0)}
+          onClick={handleFold}
           className="rounded-lg bg-red-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-red-700 transition-colors flex-1 whitespace-nowrap"
           style={{ minWidth: buttonWidth, height: buttonHeight }}
         >
           FOLD
         </button>
+        {showCheck ? (
+          <button
+            onClick={() => onAction("CHECK", 0)}
+            className="rounded-lg bg-blue-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-blue-700 transition-colors flex-1 whitespace-nowrap"
+            style={{ minWidth: buttonWidth, height: buttonHeight }}
+          >
+            CHECK
+          </button>
+        ) : (
+          <button
+            onClick={() => onAction("CALL", callAmount)}
+            className="rounded-lg bg-blue-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-blue-700 transition-colors flex-1 whitespace-nowrap"
+            style={{ minWidth: buttonWidth, height: buttonHeight }}
+          >
+            CALL {callAmount}
+          </button>
+        )}
         <button
-          onClick={() => onAction("CALL", callAmount)}
-          className="rounded-lg bg-blue-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-blue-700 transition-colors flex-1 whitespace-nowrap"
-          style={{ minWidth: buttonWidth, height: buttonHeight }}
-        >
-          {currentBet > 0 ? `CALL $${callAmount}` : 'CHECK'}
-        </button>
-        <button
-          onClick={() => onAction("RAISE", raiseAmount)}
+          onClick={() => onAction(actionLabel, actionAmount)}
           className="rounded-lg bg-emerald-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-emerald-700 transition-colors flex-1 whitespace-nowrap"
           style={{ minWidth: buttonWidth, height: buttonHeight }}
         >
-          RAISE {raiseAmount}
+          {actionLabel} {actionAmount}
         </button>
       </div>
 
@@ -106,7 +156,10 @@ export function BettingControls({
         {/* Right side: Amount Input with +/- Controls - same height as both preset rows combined */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setRaiseAmount(Math.max(bigBlind, raiseAmount - bigBlind))}
+            onClick={() => {
+              const minAmount = isPreflop && currentBet === 0 ? bigBlind * 2 : (currentBet > 0 ? minRaiseAmount : bigBlind);
+              setRaiseAmount(Math.max(minAmount, raiseAmount - minimumRaise));
+            }}
             className="flex h-[68px] w-12 items-center justify-center rounded-full bg-slate-700 text-xl font-bold text-white hover:bg-slate-600 transition-colors"
           >
             −
@@ -121,15 +174,16 @@ export function BettingControls({
             }}
             value={raiseAmount}
             onChange={(e) => {
-              const val = Math.max(bigBlind, Math.min(myChips, Number(e.target.value) || bigBlind));
+              const minAmount = isPreflop && currentBet === 0 ? bigBlind * 2 : (currentBet > 0 ? minRaiseAmount : bigBlind);
+              const val = Math.max(minAmount, Math.min(myChips, Number(e.target.value) || minAmount));
               setRaiseAmount(val);
             }}
             onWheel={(e) => e.currentTarget.blur()}
-            min={bigBlind}
+            min={isPreflop && currentBet === 0 ? bigBlind * 2 : (currentBet > 0 ? minRaiseAmount : bigBlind)}
             max={myChips}
           />
           <button
-            onClick={() => setRaiseAmount(Math.min(myChips, raiseAmount + bigBlind))}
+            onClick={() => setRaiseAmount(Math.min(myChips, raiseAmount + minimumRaise))}
             className="flex h-[68px] w-12 items-center justify-center rounded-full bg-slate-700 text-xl font-bold text-white hover:bg-slate-600 transition-colors"
           >
             +

@@ -20,13 +20,24 @@ function buildClientGameState(game, state) {
     tableNumber: game.tableNumber,
     pot: state?.pot ?? game.pot,
     communityCards: JSON.stringify(state?.communityCards ?? []),
+    street: state?.street || "PREFLOP",
+    currentBet: state?.bettingRound?.currentBet || 0,
+    minimumRaise: state?.bettingRound?.minimumRaise || (state?.bettingRound?.bigBlind || 20),
+    smallBlind: state?.bettingRound?.smallBlind || 10,
+    bigBlind: state?.bettingRound?.bigBlind || 20,
+    dealerSeat: game.dealerSeat,
+    smallBlindSeat: game.smallBlindSeat,
+    bigBlindSeat: game.bigBlindSeat,
+    currentTurnUserId: state?.currentTurnUserId,
     players: (state?.players ?? game.players).map((p) => ({
       id: p.id,
       userId: p.userId,
       name: p.user?.username || "Player",
       chips: p.chips,
       seatNumber: p.seatNumber,
-      status: p.status
+      status: p.status,
+      avatarUrl: p.user?.avatarUrl || null,
+      holeCards: p.holeCards ? JSON.parse(p.holeCards) : null
     }))
   };
 }

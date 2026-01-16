@@ -33,6 +33,9 @@ interface GameStatePayload {
   smallBlindSeat?: number;
   bigBlindSeat?: number;
   currentTurnUserId?: string;
+  street?: string;
+  currentBet?: number;
+  minimumRaise?: number;
 }
 
 function parseCommunityCards(encoded: string): Card[] {
@@ -157,11 +160,15 @@ export function PokerGameView() {
         <div className="flex items-center gap-6">
           <div className="flex flex-col">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">BLINDS</span>
-            <span className="text-lg font-bold text-white">${smallBlind}/${bigBlind}</span>
+            <span className="text-lg font-bold text-white">{smallBlind}/{bigBlind}</span>
           </div>
           <div className="flex flex-col">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">NEXT BLIND</span>
             <span className="text-lg font-bold text-white">10:00</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">TOTAL POT</span>
+            <span className="text-lg font-bold text-white">{gameState.pot.toLocaleString()}</span>
           </div>
         </div>
         <div className="flex items-center gap-6">
@@ -197,10 +204,11 @@ export function PokerGameView() {
                 isSmallBlind: p.seatNumber === gameState.smallBlindSeat,
                 isBigBlind: p.seatNumber === gameState.bigBlindSeat,
                 avatarUrl: p.avatarUrl,
+                userId: p.userId,
               }))}
               communityCards={communityCards}
               pot={gameState.pot}
-              currentBet={0}
+              currentBet={gameState.currentBet || 0}
               currentPlayer={gameState.currentTurnUserId}
               smallBlind={smallBlind}
               bigBlind={bigBlind}
@@ -212,9 +220,12 @@ export function PokerGameView() {
           <div className="border-t border-slate-800 bg-slate-900/95 p-4 backdrop-blur-sm">
             <BettingControls 
               onAction={handleAction} 
-              currentBet={0}
+              currentBet={gameState.currentBet || 0}
               bigBlind={bigBlind}
               myChips={myPlayer?.chips || 0}
+              street={gameState.street || 'PREFLOP'}
+              minimumRaise={gameState.minimumRaise || bigBlind}
+              isBigBlind={myPlayer?.seatNumber === gameState.bigBlindSeat}
             />
           </div>
         </div>
