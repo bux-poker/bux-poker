@@ -107,7 +107,7 @@ export function BettingControls({
         <div className="flex items-center gap-2">
           <button
             onClick={() => setRaiseAmount(Math.max(bigBlind, raiseAmount - bigBlind))}
-            className="flex h-[68px] w-12 items-center justify-center rounded-lg bg-slate-700 text-xl font-bold text-white hover:bg-slate-600 transition-colors"
+            className="flex h-[68px] w-12 items-center justify-center rounded-full bg-slate-700 text-xl font-bold text-white hover:bg-slate-600 transition-colors"
           >
             −
           </button>
@@ -130,7 +130,7 @@ export function BettingControls({
           />
           <button
             onClick={() => setRaiseAmount(Math.min(myChips, raiseAmount + bigBlind))}
-            className="flex h-[68px] w-12 items-center justify-center rounded-lg bg-slate-700 text-xl font-bold text-white hover:bg-slate-600 transition-colors"
+            className="flex h-[68px] w-12 items-center justify-center rounded-full bg-slate-700 text-xl font-bold text-white hover:bg-slate-600 transition-colors"
           >
             +
           </button>

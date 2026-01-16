@@ -162,9 +162,9 @@ export function PokerTable({
   const myHoleCards = myPlayer?.holeCards || [];
 
   return (
-    <div className="relative flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden">
+    <div className="relative flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden p-8">
       {/* Oval/Circular Table */}
-      <div className="relative h-full w-full max-h-[85vh] max-w-[90vw] rounded-[50%] border-8 border-amber-600/40 bg-gradient-to-br from-emerald-900/60 to-slate-900/80 shadow-2xl" style={{ aspectRatio: '3/2' }}>
+      <div className="relative h-full w-full max-h-[calc(85vh-4rem)] max-w-[calc(90vw-4rem)] rounded-[50%] border-8 border-amber-600/40 bg-gradient-to-br from-emerald-900/60 to-slate-900/80 shadow-2xl" style={{ aspectRatio: '3/2' }}>
         
 
         {/* Pot Display - Above community cards */}
