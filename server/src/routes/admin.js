@@ -348,5 +348,127 @@ router.get("/tournaments/:id/duplicate", async (req, res, next) => {
   }
 });
 
+// Add test/dummy players to a tournament for testing
+router.post("/tournaments/:id/add-test-players", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { count = 9 } = req.body; // Default to 9 players (one full table)
+
+    // Validate count
+    const playerCount = Math.max(1, Math.min(Number(count), 100)); // Clamp between 1-100
+
+    // Get tournament
+    const tournament = await prisma.tournament.findUnique({
+      where: { id },
+      include: {
+        registrations: true,
+      },
+    });
+
+    if (!tournament) {
+      return res.status(404).json({ error: "Tournament not found" });
+    }
+
+    // Check tournament status
+    if (tournament.status === "RUNNING" || tournament.status === "COMPLETED" || tournament.status === "CANCELLED") {
+      return res.status(400).json({ 
+        error: "Cannot add test players to a running, completed, or cancelled tournament" 
+      });
+    }
+
+    // Check if we have space for new players
+    const currentRegistrations = tournament.registrations.length;
+    const availableSlots = tournament.maxPlayers - currentRegistrations;
+
+    if (availableSlots <= 0) {
+      return res.status(400).json({ 
+        error: `Tournament is full (${tournament.maxPlayers}/${tournament.maxPlayers} players)` 
+      });
+    }
+
+    const playersToAdd = Math.min(playerCount, availableSlots);
+    const createdRegistrations = [];
+
+    // Create test players and register them
+    for (let i = 1; i <= playersToAdd; i++) {
+      // Create or find test user
+      const testUsername = `Test Player ${i}`;
+      const testEmail = `testplayer${i}@test.buxpoker.local`; // Local domain for test accounts
+
+      let testUser = await prisma.user.findUnique({
+        where: { email: testEmail },
+      });
+
+      // Create user if doesn't exist
+      if (!testUser) {
+        testUser = await prisma.user.create({
+          data: {
+            username: testUsername,
+            email: testEmail,
+            // No discordId for test accounts
+          },
+        });
+      }
+
+      // Check if already registered
+      const existingRegistration = await prisma.tournamentRegistration.findUnique({
+        where: {
+          tournamentId_userId: {
+            tournamentId: tournament.id,
+            userId: testUser.id,
+          },
+        },
+      });
+
+      if (existingRegistration) {
+        // Update to CONFIRMED if exists but not confirmed
+        if (existingRegistration.status !== "CONFIRMED") {
+          await prisma.tournamentRegistration.update({
+            where: { id: existingRegistration.id },
+            data: { status: "CONFIRMED" },
+          });
+        }
+        createdRegistrations.push(existingRegistration);
+      } else {
+        // Create new registration with CONFIRMED status (ready to play)
+        const registration = await prisma.tournamentRegistration.create({
+          data: {
+            tournamentId: tournament.id,
+            userId: testUser.id,
+            status: "CONFIRMED",
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        });
+        createdRegistrations.push(registration);
+      }
+    }
+
+    // Update tournament status to REGISTERING if it was SCHEDULED
+    if (tournament.status === "SCHEDULED") {
+      await prisma.tournament.update({
+        where: { id: tournament.id },
+        data: { status: "REGISTERING" },
+      });
+    }
+
+    res.json({
+      message: `Successfully added ${createdRegistrations.length} test player(s)`,
+      playersAdded: createdRegistrations.length,
+      totalRegistrations: currentRegistrations + createdRegistrations.length,
+      registrations: createdRegistrations,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;
 

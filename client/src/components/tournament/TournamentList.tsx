@@ -14,7 +14,7 @@ interface ServerWithMembership {
   isMember?: boolean;
 }
 
-function TournamentCard({ tournament, onCancel, onDuplicate }: { tournament: Tournament; onCancel?: (id: string) => void; onDuplicate?: (id: string) => void }) {
+function TournamentCard({ tournament, onCancel, onDuplicate, onAddTestPlayers }: { tournament: Tournament; onCancel?: (id: string) => void; onDuplicate?: (id: string) => void; onAddTestPlayers?: (id: string) => void }) {
   const { isAdmin } = useAdmin();
   const { user } = useAuth();
   const startTime = new Date(tournament.startTime);
@@ -166,18 +166,31 @@ function TournamentCard({ tournament, onCancel, onDuplicate }: { tournament: Tou
 
       {/* Admin Actions */}
       {isAdmin && (
-        <div className="admin-actions mt-4 border-t border-slate-800 pt-4 flex gap-2">
+        <div className="admin-actions mt-4 border-t border-slate-800 pt-4 flex flex-wrap gap-2">
           {(tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING' || tournament.status === 'REGISTRATION') && (
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (onCancel) onCancel(tournament.id);
-              }}
-              className="rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700"
-            >
-              Cancel Tournament
-            </button>
+            <>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (onCancel) onCancel(tournament.id);
+                }}
+                className="rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700"
+              >
+                Cancel Tournament
+              </button>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (onAddTestPlayers) onAddTestPlayers(tournament.id);
+                }}
+                className="rounded bg-purple-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-purple-700"
+                title="Add test players for development/testing"
+              >
+                Add Test Players
+              </button>
+            </>
           )}
           <button
             onClick={(e) => {
@@ -202,6 +215,7 @@ export function TournamentList() {
   const navigate = useNavigate();
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [duplicating, setDuplicating] = useState<string | null>(null);
+  const [addingTestPlayers, setAddingTestPlayers] = useState<string | null>(null);
   const [filter, setFilter] = useState<TournamentFilter>('all');
 
   const handleCancel = async (tournamentId: string) => {
@@ -230,6 +244,68 @@ export function TournamentList() {
       alert(err.response?.data?.error || 'Failed to cancel tournament');
     } finally {
       setCancelling(null);
+    }
+  };
+
+  const handleAddTestPlayers = async (tournamentId: string) => {
+    const tournament = tournaments?.find((t) => t.id === tournamentId);
+    if (!tournament) return;
+
+    const currentRegistered = tournament.registeredCount || 0;
+    const maxPlayers = tournament.maxPlayers;
+    const availableSlots = maxPlayers - currentRegistered;
+
+    if (availableSlots <= 0) {
+      alert('Tournament is full!');
+      return;
+    }
+
+    // Default to filling one table or available slots, whichever is smaller
+    const defaultCount = Math.min(tournament.seatsPerTable, availableSlots);
+    
+    const countInput = prompt(
+      `How many test players would you like to add?\n\n` +
+      `Current: ${currentRegistered}/${maxPlayers}\n` +
+      `Available slots: ${availableSlots}\n` +
+      `Recommended: ${defaultCount} (one full table)`,
+      String(defaultCount)
+    );
+
+    if (!countInput) return; // User cancelled
+
+    const count = parseInt(countInput, 10);
+    if (isNaN(count) || count < 1 || count > availableSlots) {
+      alert(`Please enter a number between 1 and ${availableSlots}`);
+      return;
+    }
+
+    if (!confirm(`Add ${count} test player(s) to "${tournament.name}"?`)) {
+      return;
+    }
+
+    setAddingTestPlayers(tournamentId);
+    try {
+      const token = localStorage.getItem('sessionToken');
+      if (!token) {
+        alert('Not authenticated');
+        return;
+      }
+
+      const response = await api.post(
+        `/api/admin/tournaments/${tournamentId}/add-test-players`,
+        { count },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      alert(`✅ ${response.data.message || `Added ${count} test player(s)`}`);
+      await refetch();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to add test players');
+      console.error('Error adding test players:', err);
+    } finally {
+      setAddingTestPlayers(null);
     }
   };
 
@@ -384,6 +460,7 @@ export function TournamentList() {
               tournament={tournament}
               onCancel={handleCancel}
               onDuplicate={handleDuplicate}
+              onAddTestPlayers={handleAddTestPlayers}
             />
           ))}
         </div>
