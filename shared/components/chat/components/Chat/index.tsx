@@ -7,7 +7,7 @@ import { ChatHeader } from './components/ChatHeader';
 import { ChatMessages } from './components/ChatMessages';
 import { ChatInput } from './components/ChatInput';
 import { PlayerList } from './components/PlayerList';
-import PlayerStatsModal from '../../../../components/modals/PlayerStatsModal';
+// PlayerStatsModal will be passed as a prop to avoid path resolution issues
 import type { Player } from "../../../../types/game";
 import type { ChatMessage } from "../../Chat";
 
