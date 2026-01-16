@@ -7,6 +7,7 @@ import { BettingControls } from "../../components/poker/BettingControls";
 import { useAuth } from "@shared/features/auth/AuthContext";
 import Chat from "@shared/components/chat/Chat";
 import type { Player } from "@shared/types/game";
+import PlayerStatsModal from "../../components/modals/PlayerStatsModal";
 
 interface PlayerViewModel {
   id: string;
@@ -174,6 +175,7 @@ export function PokerGameView() {
               showPlayerListTab={true}
               chatType="game"
               isSpectator={false}
+              PlayerStatsModal={PlayerStatsModal}
             />
           </div>
         )}

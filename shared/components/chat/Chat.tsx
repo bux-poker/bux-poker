@@ -7,8 +7,10 @@ import { ChatHeader } from './components/Chat/components/ChatHeader';
 import { ChatMessages } from './components/Chat/components/ChatMessages';
 import { ChatInput } from './components/Chat/components/ChatInput';
 import { PlayerList } from './components/Chat/components/PlayerList';
-import PlayerStatsModal from '@/components/modals/PlayerStatsModal';
-import type { Player } from '@/types/game';
+// PlayerStatsModal will be passed as a prop or imported from client
+// This avoids path resolution issues between shared and client
+// import PlayerStatsModal from '@/components/modals/PlayerStatsModal';
+import type { Player } from '../../types/game';
 
 export interface ChatMessage {
   id?: string;
@@ -165,11 +167,13 @@ export default function Chat({
       </div>
 
       {/* Player Stats Modal */}
-      <PlayerStatsModal
-        isOpen={isStatsOpen}
-        onClose={() => setIsStatsOpen(false)}
-        player={statsPlayer}
-      />
+      {PlayerStatsModal && (
+        <PlayerStatsModal
+          isOpen={isStatsOpen}
+          onClose={() => setIsStatsOpen(false)}
+          player={statsPlayer}
+        />
+      )}
     </>
   );
 }
