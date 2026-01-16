@@ -220,22 +220,30 @@ export function PokerGameView() {
           {/* Betting controls - fixed at bottom */}
           <div className="border-t border-slate-800 bg-slate-900/95 p-4 backdrop-blur-sm relative">
             {/* Player's own cards - bottom left, inline with action buttons */}
-            {myPlayer && myPlayer.holeCards && myPlayer.holeCards.length > 0 && (
-              <div className={`absolute bottom-4 left-4 z-30 flex gap-2 items-center ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ height: '68px' }}>
-                {myPlayer.holeCards.map((card, idx) => (
-                  <img
-                    key={idx}
-                    src={`/optimized/cards/${card.rank}${card.suit === 'SPADES' ? 'S' : card.suit === 'HEARTS' ? 'H' : card.suit === 'DIAMONDS' ? 'D' : 'C'}.png`}
-                    alt={`${card.rank}${card.suit}`}
-                    className="h-full w-auto object-contain rounded-lg shadow-lg"
-                    style={{ maxWidth: '50px' }}
-                    onError={(e) => {
-                      // Fallback to CSS card if image not found
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                    }}
-                  />
-                ))}
+            {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
+              <div className={`absolute bottom-4 left-4 z-50 flex gap-2 items-center ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ height: '68px', visibility: 'visible' }}>
+                {myPlayer.holeCards.map((card: Card, idx: number) => {
+                  // PokerCardImage is not exported, so we'll use a simple card display
+                  const getCardImage = (card: Card): string => {
+                    const suitMap: Record<string, string> = {
+                      "SPADES": "S", "HEARTS": "H", "DIAMONDS": "D", "CLUBS": "C"
+                    };
+                    const suit = suitMap[card.suit] || card.suit.charAt(0);
+                    return `${card.rank}${suit}.png`;
+                  };
+                  return (
+                    <img
+                      key={idx}
+                      src={`/optimized/cards/${getCardImage(card)}`}
+                      alt={`${card.rank}${card.suit}`}
+                      className="h-full w-auto object-contain rounded-lg shadow-lg"
+                      style={{ maxWidth: '50px', display: 'block' }}
+                      onError={(e) => {
+                        console.error('Card image failed to load:', getCardImage(card));
+                      }}
+                    />
+                  );
+                })}
               </div>
             )}
             <BettingControls 
