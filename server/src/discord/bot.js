@@ -603,6 +603,73 @@ export async function postTournamentEmbed(tournament, serverIds) {
   return posts;
 }
 
+/**
+ * Update all Discord embeds for a tournament (e.g., when registration closes)
+ */
+export async function updateTournamentEmbeds(tournamentId) {
+  if (!discordClient) {
+    console.warn('[DISCORD BOT] Cannot update embeds - bot not initialized');
+    return;
+  }
+
+  try {
+    // Get tournament with posts
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      include: {
+        posts: {
+          include: {
+            server: true
+          }
+        }
+      }
+    });
+
+    if (!tournament || !tournament.posts || tournament.posts.length === 0) {
+      console.log(`[DISCORD BOT] No posts found for tournament ${tournamentId}`);
+      return;
+    }
+
+    // Build updated embed (without user context)
+    const { embed, components } = await buildTournamentEmbed(tournament, null);
+
+    // Update each embed
+    for (const post of tournament.posts) {
+      if (!post.messageId || !post.server) continue;
+
+      try {
+        const guild = await discordClient.guilds.fetch(post.server.serverId);
+        const channel = await guild.channels.fetch(post.server.announcementChannelId);
+
+        if (!channel || !channel.isTextBased()) {
+          console.warn(`[DISCORD BOT] Invalid channel for server ${post.server.serverName}`);
+          continue;
+        }
+
+        // Check bot permissions
+        const permissions = channel.permissionsFor(guild.members.me);
+        if (!permissions.has('SendMessages') || !permissions.has('EmbedLinks')) {
+          console.error(`[DISCORD BOT] Bot lacks permissions in channel ${channel.name} for server ${post.server.serverName}`);
+          continue;
+        }
+
+        // Update the message
+        const message = await channel.messages.fetch(post.messageId);
+        await message.edit({
+          embeds: [embed],
+          components: components,
+        });
+
+        console.log(`[DISCORD BOT] Successfully updated embed for tournament ${tournamentId} in server ${post.server.serverName}`);
+      } catch (error) {
+        console.error(`[DISCORD BOT] Error updating embed for server ${post.server.serverName}:`, error.message || error);
+      }
+    }
+  } catch (error) {
+    console.error(`[DISCORD BOT] Error updating tournament embeds:`, error);
+  }
+}
+
 export function getDiscordClient() {
   return discordClient;
 }
