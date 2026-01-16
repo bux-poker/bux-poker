@@ -139,9 +139,9 @@ export function PokerGameView() {
   const myPosition = myPlayer ? activePlayers.findIndex(p => p.id === myPlayer.id) + 1 : null;
 
   return (
-    <div className="flex h-screen w-screen flex-col bg-gradient-to-br from-slate-950 to-slate-900">
+    <div className="flex h-screen w-screen flex-col bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden">
       {/* Top Bar - Game Info */}
-      <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900/90 px-6 py-3 backdrop-blur-sm">
+      <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900/90 px-6 py-3 backdrop-blur-sm flex-shrink-0">
         <div className="flex items-center gap-6">
           <div className="flex flex-col">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">BLINDS</span>
@@ -171,7 +171,7 @@ export function PokerGameView() {
         {/* Left side - Table and controls */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Table area - takes most of the space */}
-          <div className="relative flex-1 overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900">
+          <div className="relative flex-1 overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900 min-h-0">
             <PokerTable
               gameId={gameState.id}
               players={gameState.players.map((p) => ({

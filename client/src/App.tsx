@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Route, Routes, Link, Navigate } from "react-router-dom";
+import { Route, Routes, Link, Navigate, useLocation } from "react-router-dom";
 import { TournamentList } from "./components/tournament/TournamentList";
 import { TournamentDetail } from "./components/tournament/TournamentDetail";
 import { PokerGameView } from "./features/game/PokerGameView";
@@ -13,8 +13,11 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isAdmin, loading: adminLoading } = useAdmin();
 
+  const isGameRoute = window.location.pathname.startsWith('/game/');
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50">
+      {!isGameRoute && (
       <header className="sticky top-0 z-50 border-b border-slate-800/50 bg-slate-950/80 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
@@ -116,8 +119,9 @@ function App() {
           )}
         </div>
       </header>
+      )}
 
-      <main className="mx-auto max-w-7xl flex-1 px-4 sm:px-6 lg:px-8">
+      <main className={isGameRoute ? "flex-1" : "mx-auto max-w-7xl flex-1 px-4 sm:px-6 lg:px-8"}>
         <Routes>
           <Route
             path="/"

@@ -126,14 +126,18 @@ interface PokerTableProps {
   myUserId?: string;
 }
 
-// Player positions around the table (6-player layout)
+// Player positions around the table (10-seat layout, evenly spaced)
 const PLAYER_POSITIONS = [
-  { angle: 180, label: 'bottom' }, // Bottom center (seat 1)
-  { angle: 120, label: 'bottom-left' }, // Bottom left (seat 2)
-  { angle: 60, label: 'top-left' }, // Top left (seat 3)
-  { angle: 0, label: 'top' }, // Top center (seat 4)
-  { angle: -60, label: 'top-right' }, // Top right (seat 5)
-  { angle: -120, label: 'bottom-right' }, // Bottom right (seat 6)
+  { angle: 162, label: 'bottom-left' }, // Seat 1
+  { angle: 126, label: 'bottom-left' }, // Seat 2
+  { angle: 90, label: 'left' }, // Seat 3
+  { angle: 54, label: 'top-left' }, // Seat 4
+  { angle: 18, label: 'top-left' }, // Seat 5
+  { angle: -18, label: 'top-right' }, // Seat 6
+  { angle: -54, label: 'top-right' }, // Seat 7
+  { angle: -90, label: 'right' }, // Seat 8
+  { angle: -126, label: 'bottom-right' }, // Seat 9
+  { angle: -162, label: 'bottom-right' }, // Seat 10
 ];
 
 export function PokerTable({
@@ -147,17 +151,20 @@ export function PokerTable({
   bigBlind = 20,
   myUserId,
 }: PokerTableProps) {
-  // Sort players by seat number
-  const sortedPlayers = [...players].sort((a, b) => a.seatNumber - b.seatNumber);
+  // Create array with 10 seats (empty seats if needed)
+  const allSeats = Array.from({ length: 10 }, (_, idx) => {
+    const seatNumber = idx + 1;
+    return players.find(p => p.seatNumber === seatNumber) || null;
+  });
   
   // Get player's own hole cards (face up) - shown separately at bottom
-  const myPlayer = myUserId ? sortedPlayers.find(p => p.id === myUserId) : null;
+  const myPlayer = myUserId ? players.find(p => p.id === myUserId) : null;
   const myHoleCards = myPlayer?.holeCards || [];
 
   return (
-    <div className="relative flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-950 to-slate-900">
+    <div className="relative flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden">
       {/* Oval/Circular Table */}
-      <div className="relative h-[600px] w-[900px] rounded-[50%] border-8 border-amber-600/40 bg-gradient-to-br from-emerald-900/60 to-slate-900/80 shadow-2xl">
+      <div className="relative h-full w-full max-h-[85vh] max-w-[90vw] rounded-[50%] border-8 border-amber-600/40 bg-gradient-to-br from-emerald-900/60 to-slate-900/80 shadow-2xl" style={{ aspectRatio: '3/2' }}>
         
         {/* BUX DAO Logo in Center */}
         <div className="absolute left-1/2 top-1/2 z-0 -translate-x-1/2 -translate-y-1/2">
@@ -193,49 +200,47 @@ export function PokerTable({
           </div>
         )}
 
-        {/* Player Positions */}
-        {sortedPlayers.map((player, idx) => {
-          // Use seat number to determine position, fallback to index
-          const seatIdx = (player.seatNumber - 1) % PLAYER_POSITIONS.length;
-          const position = PLAYER_POSITIONS[seatIdx] || PLAYER_POSITIONS[idx % PLAYER_POSITIONS.length];
-          const radius = 280;
+        {/* Player Positions - 10 seats at table edge */}
+        {allSeats.map((player, seatIdx) => {
+          const position = PLAYER_POSITIONS[seatIdx];
+          // Calculate radius to position at table edge (use percentage of table size)
+          const radiusPercent = 45; // Position at 45% from center (near edge)
           const angleRad = (position.angle * Math.PI) / 180;
-          const x = Math.cos(angleRad) * radius;
-          const y = Math.sin(angleRad) * radius;
           
-          const isMyPlayer = myUserId === player.id;
-          const isCurrentTurn = currentPlayer === player.id;
-          const showCards = isMyPlayer && player.holeCards && player.holeCards.length > 0;
+          const isMyPlayer = player && myUserId === player.id;
+          const isCurrentTurn = player && currentPlayer === player.id;
 
           return (
             <div
-              key={player.id}
+              key={player?.id || `seat-${seatIdx + 1}`}
               className="absolute z-20"
               style={{
-                left: `calc(50% + ${x}px)`,
-                top: `calc(50% + ${y}px)`,
+                left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}%)`,
+                top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}%)`,
                 transform: 'translate(-50%, -50%)',
               }}
             >
               <div className="flex flex-col items-center">
-                {/* Player Avatar */}
-                <div className={`relative mb-2 ${isCurrentTurn ? 'ring-4 ring-emerald-400 ring-offset-2 ring-offset-slate-900' : ''}`}>
-                  <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-slate-700 bg-slate-800">
-                    {player.avatarUrl ? (
-                      <img 
-                        src={player.avatarUrl} 
-                        alt={player.name}
-                        className="h-full w-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = '/guest-avatar.png';
-                        }}
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-600 to-purple-600 text-2xl font-bold text-white">
-                        {player.name.charAt(0).toUpperCase()}
+                {/* Player Avatar or Empty Seat */}
+                {player ? (
+                  <>
+                    <div className={`relative mb-2 ${isCurrentTurn ? 'ring-4 ring-emerald-400 ring-offset-2 ring-offset-slate-900' : ''}`}>
+                      <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-slate-700 bg-slate-800">
+                        {player.avatarUrl ? (
+                          <img 
+                            src={player.avatarUrl} 
+                            alt={player.name}
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/guest-avatar.png';
+                            }}
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-600 to-purple-600 text-2xl font-bold text-white">
+                            {player.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
                   
                   {/* Dealer Button */}
                   {player.isDealer && (
@@ -282,6 +287,17 @@ export function PokerTable({
                         faceDown={true}
                       />
                     ))}
+                  </div>
+                )}
+                  </>
+                ) : (
+                  /* Empty Seat Indicator */
+                  <div className="relative mb-2 opacity-30">
+                    <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-dashed border-slate-600 bg-slate-800/50">
+                      <div className="flex h-full w-full items-center justify-center">
+                        <span className="text-xs text-slate-500">{seatIdx + 1}</span>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
