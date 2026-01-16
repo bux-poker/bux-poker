@@ -77,9 +77,14 @@ export class TournamentEngine {
       throw new Error("Tournament already started, completed, or cancelled");
     }
 
-    // If players aren't seated yet, seat them first
+    // Tournament must be SEATED before starting (players must be seated first)
+    if (tournament.status !== "SEATED") {
+      throw new Error("Tournament must be SEATED (registration closed and players seated) before starting");
+    }
+
+    // Ensure games exist
     if (!tournament.games || tournament.games.length === 0) {
-      await this.seatPlayers(tournamentId);
+      throw new Error("No games found - players must be seated first");
     }
 
     // Mark as RUNNING and record actual start time
