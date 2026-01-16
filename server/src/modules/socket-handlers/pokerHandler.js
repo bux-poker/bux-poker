@@ -333,7 +333,9 @@ export async function startHandForGame(gameId, io) {
 }
 
 /**
- * Start a turn timer for a player (10 seconds for human, 3 seconds for test players)
+ * Start a turn timer for a player
+ * Human players: 10 seconds grace period, then 10 second countdown (20 seconds total)
+ * Test players: 3 seconds total
  */
 function startTurnTimer(gameId, userId, io) {
   // Clear existing timer for this game
@@ -352,13 +354,60 @@ function startTurnTimer(gameId, userId, io) {
 
   const isTestPlayer = player.name?.toLowerCase().startsWith('test player');
 
-  // Test players get 3 seconds, human players get 10 seconds
-  const timeoutMs = isTestPlayer ? 3000 : 10000;
-  
-  const expiresAt = Date.now() + timeoutMs;
+  if (isTestPlayer) {
+    // Test players: 3 seconds total, auto-act after
+    const timeoutMs = 3000;
+    const expiresAt = Date.now() + timeoutMs;
+    
+    const timerId = setTimeout(() => {
+      autoActTestPlayer(gameId, userId, io);
+    }, timeoutMs);
 
-  // Emit timer start event to clients
-  if (io) {
+    turnTimers.set(gameId, { timerId, userId, expiresAt, duration: timeoutMs });
+
+    // Emit timer start immediately for test players
+    if (io) {
+      io.to(`game:${gameId}`).emit("turn-timer-start", {
+        gameId,
+        userId,
+        expiresAt,
+        duration: timeoutMs
+      });
+    }
+  } else {
+    // Human players: 10 seconds grace, then 10 second countdown (20 seconds total)
+    const gracePeriodMs = 10000;
+    const countdownMs = 10000;
+    const totalTimeoutMs = gracePeriodMs + countdownMs;
+    const expiresAt = Date.now() + totalTimeoutMs;
+    
+    // After grace period, emit timer start event (shows countdown)
+    const graceTimerId = setTimeout(() => {
+      if (io) {
+        io.to(`game:${gameId}`).emit("turn-timer-start", {
+          gameId,
+          userId,
+          expiresAt,
+          duration: countdownMs
+        });
+      }
+    }, gracePeriodMs);
+
+    // After total timeout, auto-fold
+    const timeoutTimerId = setTimeout(() => {
+      autoFoldPlayer(gameId, userId, io);
+    }, totalTimeoutMs);
+
+    // Store both timers
+    turnTimers.set(gameId, { 
+      timerId: timeoutTimerId, 
+      graceTimerId,
+      userId, 
+      expiresAt, 
+      duration: countdownMs,
+      gracePeriodMs 
+    });
+  }
     io.to(`game:${gameId}`).emit("turn-timer-start", {
       gameId,
       userId,
@@ -557,15 +606,19 @@ export function registerPokerHandlers(io) {
         // Auto-start a hand if:
         // 1. No hand state exists yet
         // 2. Game is ACTIVE
-        // 3. There are at least 2 players
+        // 3. Tournament is RUNNING (not just SEATED)
+        // 4. There are at least 2 players
         let state = tableState.get(gameId);
         if (!state && game.status === "ACTIVE" && game.players.length >= 2) {
-          try {
-            // Use the exported startHandForGame function to ensure consistency
-            state = await startHandForGame(gameId, socket.server);
-          } catch (handError) {
-            console.error("[POKER] Error auto-starting hand:", handError);
-            // Continue without state if hand creation fails
+          // Only start hand if tournament is RUNNING
+          if (game.tournament && game.tournament.status === "RUNNING") {
+            try {
+              // Use the exported startHandForGame function to ensure consistency
+              state = await startHandForGame(gameId, socket.server);
+            } catch (handError) {
+              console.error("[POKER] Error auto-starting hand:", handError);
+              // Continue without state if hand creation fails
+            }
           }
         }
 

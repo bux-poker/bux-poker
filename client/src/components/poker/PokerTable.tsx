@@ -273,7 +273,7 @@ export function PokerTable({
                   {/* Player Avatar or Empty Seat */}
                   {player ? (
                     <>
-                      <div className={`relative mb-2 ${hasActiveTimer ? 'animate-pulse' : ''} ${hasActiveTimer ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-900' : (isCurrentTurn ? 'ring-4 ring-emerald-400 ring-offset-2 ring-offset-slate-900' : '')}`}>
+                      <div className={`relative mb-2 ${hasActiveTimer ? 'animate-pulse' : ''} ${hasActiveTimer ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-900 rounded-full' : (isCurrentTurn ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-900 rounded-full' : '')}`}>
                         <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-slate-700 bg-slate-800 relative">
                           {(() => {
                             // Use Discord avatar for real players (not test players)
@@ -312,20 +312,6 @@ export function PokerTable({
                         {player.isDealer && (
                           <div className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-yellow-500 border-2 border-white shadow-lg">
                             <span className="text-xs font-bold text-yellow-900">D</span>
-                          </div>
-                        )}
-                        
-                        {/* Small Blind Chip */}
-                        {player.isSmallBlind && (
-                          <div className="absolute -bottom-1 -left-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 border-2 border-white shadow-md">
-                            <span className="text-[10px] font-bold text-white">{smallBlind}</span>
-                          </div>
-                        )}
-                        
-                        {/* Big Blind Chip */}
-                        {player.isBigBlind && (
-                          <div className="absolute -bottom-1 -left-2 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 border-2 border-white shadow-md">
-                            <span className="text-[10px] font-bold text-white">{bigBlind}</span>
                           </div>
                         )}
                       </div>

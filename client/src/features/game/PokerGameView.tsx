@@ -278,15 +278,16 @@ export function PokerGameView() {
                 })}
               </div>
             )}
-            <BettingControls 
-              onAction={handleAction} 
-              currentBet={gameState.currentBet || 0}
-              bigBlind={bigBlind}
-              myChips={myPlayer?.chips || 0}
-              street={gameState.street || 'PREFLOP'}
-              minimumRaise={gameState.minimumRaise || bigBlind}
-              isBigBlind={myPlayer?.seatNumber === gameState.bigBlindSeat}
-            />
+              <BettingControls 
+                onAction={handleAction} 
+                currentBet={gameState.currentBet || 0}
+                bigBlind={bigBlind}
+                myChips={myPlayer?.chips || 0}
+                street={gameState.street || 'PREFLOP'}
+                minimumRaise={gameState.minimumRaise || bigBlind}
+                isBigBlind={myPlayer?.seatNumber === gameState.bigBlindSeat}
+                isMyTurn={gameState.currentTurnUserId === user?.id}
+              />
           </div>
         </div>
 

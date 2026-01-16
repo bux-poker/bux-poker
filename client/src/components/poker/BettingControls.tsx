@@ -18,6 +18,7 @@ export function BettingControls({
   street = 'PREFLOP',
   minimumRaise = 20,
   isBigBlind = false,
+  isMyTurn = false,
 }: BettingControlsProps) {
   const [raiseAmount, setRaiseAmount] = useState(bigBlind * 2);
 
@@ -86,7 +87,8 @@ export function BettingControls({
       <div className="flex items-center gap-3" style={{ width: `calc(${buttonWidth} * 3 + 0.75rem * 2)` }}>
         <button
           onClick={handleFold}
-          className="rounded-lg bg-red-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-red-700 transition-colors flex-1 whitespace-nowrap"
+          disabled={!isMyTurn}
+          className="rounded-lg bg-red-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-red-700 transition-colors flex-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ minWidth: buttonWidth, height: buttonHeight }}
         >
           FOLD
@@ -94,7 +96,8 @@ export function BettingControls({
         {showCheck ? (
           <button
             onClick={() => onAction("CHECK", 0)}
-            className="rounded-lg bg-blue-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-blue-700 transition-colors flex-1 whitespace-nowrap"
+            disabled={!isMyTurn}
+            className="rounded-lg bg-blue-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-blue-700 transition-colors flex-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ minWidth: buttonWidth, height: buttonHeight }}
           >
             CHECK
@@ -102,7 +105,8 @@ export function BettingControls({
         ) : (
           <button
             onClick={() => onAction("CALL", callAmount)}
-            className="rounded-lg bg-blue-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-blue-700 transition-colors flex-1 whitespace-nowrap"
+            disabled={!isMyTurn}
+            className="rounded-lg bg-blue-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-blue-700 transition-colors flex-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ minWidth: buttonWidth, height: buttonHeight }}
           >
             CALL {callAmount}
@@ -110,7 +114,8 @@ export function BettingControls({
         )}
         <button
           onClick={() => onAction(actionLabel, actionAmount)}
-          className="rounded-lg bg-emerald-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-emerald-700 transition-colors flex-1 whitespace-nowrap"
+          disabled={!isMyTurn}
+          className="rounded-lg bg-emerald-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-emerald-700 transition-colors flex-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ minWidth: buttonWidth, height: buttonHeight }}
         >
           {actionLabel} {actionAmount}
@@ -125,13 +130,15 @@ export function BettingControls({
           <div className="flex items-center gap-2">
             <button
               onClick={() => handlePreset('half')}
-              className="rounded bg-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-600 transition-colors flex-1"
+              disabled={!isMyTurn}
+              className="rounded bg-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               1/2
             </button>
             <button
               onClick={() => handlePreset('pot')}
-              className="rounded bg-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-600 transition-colors flex-1"
+              disabled={!isMyTurn}
+              className="rounded bg-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               POT
             </button>
@@ -140,13 +147,15 @@ export function BettingControls({
           <div className="flex items-center gap-2">
             <button
               onClick={() => handlePreset('twothirds')}
-              className="rounded bg-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-600 transition-colors flex-1"
+              disabled={!isMyTurn}
+              className="rounded bg-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               2/3
             </button>
             <button
               onClick={() => handlePreset('allin')}
-              className="rounded bg-red-700 px-3 py-2 text-sm font-medium text-white hover:bg-red-600 transition-colors flex-1"
+              disabled={!isMyTurn}
+              className="rounded bg-red-700 px-3 py-2 text-sm font-medium text-white hover:bg-red-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               ALL IN
             </button>
@@ -155,18 +164,20 @@ export function BettingControls({
 
         {/* Right side: Amount Input with +/- Controls - same height as both preset rows combined */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => {
-              const minAmount = isPreflop && currentBet === 0 ? bigBlind * 2 : (currentBet > 0 ? minRaiseAmount : bigBlind);
-              setRaiseAmount(Math.max(minAmount, raiseAmount - minimumRaise));
-            }}
-            className="flex h-[68px] w-12 items-center justify-center rounded-full bg-slate-700 text-xl font-bold text-white hover:bg-slate-600 transition-colors"
-          >
-            −
-          </button>
+            <button
+              onClick={() => {
+                const minAmount = isPreflop && currentBet === 0 ? bigBlind * 2 : (currentBet > 0 ? minRaiseAmount : bigBlind);
+                setRaiseAmount(Math.max(minAmount, raiseAmount - minimumRaise));
+              }}
+              disabled={!isMyTurn}
+              className="flex h-[68px] w-12 items-center justify-center rounded-full bg-slate-700 text-xl font-bold text-white hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              −
+            </button>
           <input
             type="number"
-            className="h-[68px] w-32 rounded-lg border-2 border-slate-600 bg-slate-800 px-4 text-center text-lg font-bold text-white focus:border-emerald-500 focus:outline-none no-spinner"
+            disabled={!isMyTurn}
+            className="h-[68px] w-32 rounded-lg border-2 border-slate-600 bg-slate-800 px-4 text-center text-lg font-bold text-white focus:border-emerald-500 focus:outline-none no-spinner disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ 
               WebkitAppearance: 'none',
               MozAppearance: 'textfield',
@@ -184,7 +195,8 @@ export function BettingControls({
           />
           <button
             onClick={() => setRaiseAmount(Math.min(myChips, raiseAmount + minimumRaise))}
-            className="flex h-[68px] w-12 items-center justify-center rounded-full bg-slate-700 text-xl font-bold text-white hover:bg-slate-600 transition-colors"
+            disabled={!isMyTurn}
+            className="flex h-[68px] w-12 items-center justify-center rounded-full bg-slate-700 text-xl font-bold text-white hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             +
           </button>
