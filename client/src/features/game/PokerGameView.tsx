@@ -218,16 +218,16 @@ export function PokerGameView() {
           </div>
 
           {/* Betting controls - fixed at bottom */}
-          <div className="border-t border-slate-800 bg-slate-900/95 p-4 backdrop-blur-sm flex items-center gap-4">
+          <div className="border-t border-slate-800 bg-slate-900/95 p-4 backdrop-blur-sm relative">
             {/* Player's own cards - bottom left, inline with action buttons */}
             {myPlayer && myPlayer.holeCards && myPlayer.holeCards.length > 0 && (
-              <div className={`flex gap-2 items-center ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`}>
+              <div className={`absolute bottom-4 left-4 z-30 flex gap-2 items-center ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ height: '68px' }}>
                 {myPlayer.holeCards.map((card, idx) => (
                   <img
                     key={idx}
                     src={`/optimized/cards/${card.rank}${card.suit === 'SPADES' ? 'S' : card.suit === 'HEARTS' ? 'H' : card.suit === 'DIAMONDS' ? 'D' : 'C'}.png`}
                     alt={`${card.rank}${card.suit}`}
-                    className="h-[68px] w-auto object-contain rounded-lg shadow-lg"
+                    className="h-full w-auto object-contain rounded-lg shadow-lg"
                     style={{ maxWidth: '50px' }}
                     onError={(e) => {
                       // Fallback to CSS card if image not found
