@@ -10,7 +10,9 @@ export default defineConfig({
       "@shared": path.resolve(__dirname, "../shared"),
       react: path.resolve(__dirname, "node_modules/react"),
       "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
-      axios: path.resolve(__dirname, "node_modules/axios")
+      axios: path.resolve(__dirname, "node_modules/axios"),
+      "@emoji-mart/react": path.resolve(__dirname, "node_modules/@emoji-mart/react"),
+      "@emoji-mart/data": path.resolve(__dirname, "node_modules/@emoji-mart/data")
     }
   },
   server: {
