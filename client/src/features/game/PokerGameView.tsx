@@ -223,23 +223,26 @@ export function PokerGameView() {
             {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
               <div className={`absolute bottom-4 left-4 z-50 flex gap-2 items-center ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ height: '68px', visibility: 'visible' }}>
                 {myPlayer.holeCards.map((card: Card, idx: number) => {
-                  // PokerCardImage is not exported, so we'll use a simple card display
                   const getCardImage = (card: Card): string => {
                     const suitMap: Record<string, string> = {
                       "SPADES": "S", "HEARTS": "H", "DIAMONDS": "D", "CLUBS": "C"
                     };
                     const suit = suitMap[card.suit] || card.suit.charAt(0);
-                    return `${card.rank}${suit}.png`;
+                    // Handle 10 specially since it's "10" not "TEN"
+                    const rank = card.rank === "10" ? "10" : card.rank;
+                    return `${rank}${suit}.png`;
                   };
                   return (
                     <img
                       key={idx}
-                      src={`/optimized/cards/${getCardImage(card)}`}
+                      src={`/cards/${getCardImage(card)}`}
                       alt={`${card.rank}${card.suit}`}
-                      className="h-full w-auto object-contain rounded-lg shadow-lg"
-                      style={{ maxWidth: '50px', display: 'block' }}
+                      className="h-full w-auto object-contain rounded-lg shadow-lg border-2 border-white/20"
+                      style={{ maxWidth: '50px', minWidth: '35px', display: 'block' }}
                       onError={(e) => {
-                        console.error('Card image failed to load:', getCardImage(card));
+                        console.error('Card image failed to load:', getCardImage(card), 'Full path:', `/cards/${getCardImage(card)}`);
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
                       }}
                     />
                   );

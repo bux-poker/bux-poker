@@ -88,43 +88,45 @@ function PokerCardImage({
       "SPADES": "S", "HEARTS": "H", "DIAMONDS": "D", "CLUBS": "C"
     };
     const suit = suitMap[card.suit] || card.suit.charAt(0);
-    return `${card.rank}${suit}.png`;
+    // Handle 10 specially since it's "10" not "TEN"
+    const rank = card.rank === "10" ? "10" : card.rank;
+    return `${rank}${suit}.png`;
   };
 
   const isLargeScreen = window.innerWidth >= 900 && window.innerHeight > 449;
   
-  if (isLargeScreen) {
-    return (
-      <img
-        src={`/optimized/cards/${getCardImage(card)}`}
-        alt={`${card.rank}${card.suit}`}
-        className={className}
-        style={{ 
-          width: width - 2, 
-          height, 
-          objectFit: 'contain', 
-          padding: 0, 
-          margin: 0, 
-          borderRadius: '8px'
-        }}
-        onError={(e) => {
-          // Fallback to CSS card if image not found
-          const target = e.target as HTMLImageElement;
-          target.style.display = 'none';
-          const parent = target.parentElement;
-          if (parent) {
-            parent.innerHTML = `
-              <div class="bg-white rounded-lg border-2 border-black" style="width: ${width - 2}px; height: ${height}px; display: flex; flex-direction: column; justify-content: space-between; padding: 4px;">
-                <div class="text-black text-sm font-bold">${card.rank}</div>
-                <div class="text-black text-lg self-center">${card.suit === 'HEARTS' ? '♥' : card.suit === 'DIAMONDS' ? '♦' : card.suit === 'CLUBS' ? '♣' : '♠'}</div>
-                <div class="text-black text-sm font-bold rotate-180">${card.rank}</div>
-              </div>
-            `;
-          }
-        }}
-      />
-    );
-  }
+    if (isLargeScreen) {
+      return (
+        <img
+          src={`/cards/${getCardImage(card)}`}
+          alt={`${card.rank}${card.suit}`}
+          className={className}
+          style={{ 
+            width: width - 2, 
+            height, 
+            objectFit: 'contain', 
+            padding: 0, 
+            margin: 0, 
+            borderRadius: '8px'
+          }}
+          onError={(e) => {
+            // Fallback to CSS card if image not found
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+            const parent = target.parentElement;
+            if (parent) {
+              parent.innerHTML = `
+                <div class="bg-white rounded-lg border-2 border-black" style="width: ${width - 2}px; height: ${height}px; display: flex; flex-direction: column; justify-content: space-between; padding: 4px;">
+                  <div class="text-black text-sm font-bold">${card.rank}</div>
+                  <div class="text-black text-lg self-center">${card.suit === 'HEARTS' ? '♥' : card.suit === 'DIAMONDS' ? '♦' : card.suit === 'CLUBS' ? '♣' : '♠'}</div>
+                  <div class="text-black text-sm font-bold rotate-180">${card.rank}</div>
+                </div>
+              `;
+            }
+          }}
+        />
+      );
+    }
 
   // CSS-based card for small screens
   const suitSymbol = card.suit === 'HEARTS' ? '♥' : card.suit === 'DIAMONDS' ? '♦' : card.suit === 'CLUBS' ? '♣' : '♠';
