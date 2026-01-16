@@ -2,62 +2,121 @@ import { useState } from "react";
 
 interface BettingControlsProps {
   onAction: (action: string, amount: number) => void;
+  currentBet?: number;
+  bigBlind?: number;
+  myChips?: number;
 }
 
-export function BettingControls({ onAction }: BettingControlsProps) {
-  const [amount, setAmount] = useState(0);
+export function BettingControls({ 
+  onAction, 
+  currentBet = 0, 
+  bigBlind = 20,
+  myChips = 0,
+}: BettingControlsProps) {
+  const [raiseAmount, setRaiseAmount] = useState(bigBlind * 2);
+
+  const callAmount = currentBet || bigBlind;
+  const potSize = 100; // TODO: Get actual pot size from props
+  const maxBet = myChips;
+
+  const handlePreset = (preset: string) => {
+    switch (preset) {
+      case 'half':
+        setRaiseAmount(Math.floor(potSize / 2));
+        break;
+      case 'twothirds':
+        setRaiseAmount(Math.floor(potSize * 0.67));
+        break;
+      case 'pot':
+        setRaiseAmount(potSize);
+        break;
+      case 'allin':
+        setRaiseAmount(myChips);
+        break;
+    }
+  };
 
   return (
-    <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/70 p-4">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-col items-center gap-4">
+      {/* Main Action Buttons */}
+      <div className="flex items-center gap-3">
         <button
           onClick={() => onAction("FOLD", 0)}
-          className="rounded bg-slate-700 px-4 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600"
+          className="rounded-lg bg-red-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-red-700 transition-colors"
         >
-          Fold
+          FOLD
         </button>
         <button
-          onClick={() => onAction("CHECK", 0)}
-          className="rounded bg-slate-700 px-4 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600"
+          onClick={() => onAction("CALL", callAmount)}
+          className="rounded-lg bg-blue-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-blue-700 transition-colors"
         >
-          Check
+          {currentBet > 0 ? `CALL $${callAmount}` : 'CHECK'}
         </button>
         <button
-          onClick={() => onAction("CALL", amount)}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+          onClick={() => onAction("RAISE", raiseAmount)}
+          className="rounded-lg bg-emerald-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-emerald-700 transition-colors"
         >
-          Call
+          RAISE {raiseAmount}
         </button>
-        <button
-          onClick={() => onAction("BET", amount)}
-          className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
-        >
-          Bet
-        </button>
-        <button
-          onClick={() => onAction("RAISE", amount)}
-          className="rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500"
-        >
-          Raise
-        </button>
-        <button
-          onClick={() => onAction("ALL_IN", amount)}
-          className="rounded bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500"
-        >
-          All-in
-        </button>
-        <div className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-slate-400">Amount</span>
+      </div>
+
+      {/* Amount Controls */}
+      <div className="flex flex-col items-center gap-3">
+        {/* Preset Buttons */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => handlePreset('half')}
+            className="rounded bg-slate-700 px-3 py-1 text-sm font-medium text-slate-200 hover:bg-slate-600 transition-colors"
+          >
+            1/2
+          </button>
+          <button
+            onClick={() => handlePreset('twothirds')}
+            className="rounded bg-slate-700 px-3 py-1 text-sm font-medium text-slate-200 hover:bg-slate-600 transition-colors"
+          >
+            2/3
+          </button>
+          <button
+            onClick={() => handlePreset('pot')}
+            className="rounded bg-slate-700 px-3 py-1 text-sm font-medium text-slate-200 hover:bg-slate-600 transition-colors"
+          >
+            POT
+          </button>
+          <button
+            onClick={() => handlePreset('allin')}
+            className="rounded bg-red-700 px-3 py-1 text-sm font-medium text-white hover:bg-red-600 transition-colors"
+          >
+            ALL IN
+          </button>
+        </div>
+
+        {/* Amount Input with +/- Controls */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setRaiseAmount(Math.max(bigBlind, raiseAmount - bigBlind))}
+            className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-700 text-xl font-bold text-white hover:bg-slate-600 transition-colors"
+          >
+            −
+          </button>
           <input
             type="number"
-            className="w-24 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100"
-            value={amount}
-            onChange={(e) => setAmount(Number(e.target.value) || 0)}
-            min={0}
+            className="h-10 w-32 rounded-lg border-2 border-slate-600 bg-slate-800 px-4 text-center text-lg font-bold text-white focus:border-emerald-500 focus:outline-none"
+            value={raiseAmount}
+            onChange={(e) => {
+              const val = Math.max(bigBlind, Math.min(myChips, Number(e.target.value) || bigBlind));
+              setRaiseAmount(val);
+            }}
+            min={bigBlind}
+            max={myChips}
           />
+          <button
+            onClick={() => setRaiseAmount(Math.min(myChips, raiseAmount + bigBlind))}
+            className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-700 text-xl font-bold text-white hover:bg-slate-600 transition-colors"
+          >
+            +
+          </button>
         </div>
       </div>
     </div>
   );
 }
-

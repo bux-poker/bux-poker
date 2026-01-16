@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Socket } from 'socket.io-client';
-import { getSocketManager } from '@/features/game/services/lib/socketManager';
 import { useAuth } from './AuthContext';
 
+// Simple socket connection - use getSocket from client services directly
+// This context just provides socket state for Chat components
 interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
@@ -32,9 +33,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   });
 
   useEffect(() => {
-    console.log('SOCKET CONTEXT - User changed:', user);
     if (!user) {
-      console.log('SOCKET CONTEXT - No user, clearing socket');
       setSocket(null);
       setState({
         isConnected: false,
@@ -45,34 +44,15 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return;
     }
 
-    console.log('SOCKET CONTEXT - Initializing socket for user:', { id: user.id, username: user.username });
-    const socketManager = getSocketManager();
-    socketManager.onStateChange((newState) => {
-      console.log('SOCKET CONTEXT - State changed:', newState);
-      setState(newState);
-      setSocket(socketManager.getSocket());
+    // For poker, socket is managed per-game in PokerGameView
+    // This context just provides basic state for Chat components
+    // Chat components should use the socket passed via props or getSocket() directly
+    setState({
+      isConnected: true,
+      isAuthenticated: true,
+      isReady: true,
+      error: null
     });
-
-    socketManager.initialize(user.id, user.username, user.avatarUrl || undefined);
-
-    // Ensure we auto-join any active game room after authentication
-    socketManager.onStateChange((s) => {
-      if (s.isReady) {
-        try {
-          const stored = localStorage.getItem('activeGameId');
-          if (stored) {
-            const sock = socketManager.getSocket();
-            if (sock && sock.connected) {
-              // sock.emit('join_game', { gameId: activeGameId }); // User already in game
-            }
-          }
-        } catch {}
-      }
-    });
-
-    return () => {
-      socketManager.disconnect();
-    };
   }, [user]);
 
   return (
