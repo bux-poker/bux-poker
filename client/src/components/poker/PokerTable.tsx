@@ -353,9 +353,9 @@ export function PokerTable({
                   transform: 'translate(-50%, -50%)',
                 }}
               >
-                {/* Bet chip above cards for seats 1-5, below for seats 6-10 */}
-                {player.contribution && player.contribution > 0 && (seatIdx + 1 <= 5) && (
-                  <BetChip value={player.contribution} />
+                {/* Bet chip above cards for seats 1-5 */}
+                {(player.contribution ?? 0) > 0 && (seatIdx + 1 <= 5) && (
+                  <BetChip value={player.contribution!} />
                 )}
                 <div className="flex gap-1">
                   {player.holeCards.map((_, cardIdx) => (
@@ -370,12 +370,12 @@ export function PokerTable({
                   ))}
                 </div>
                 {/* Bet chip below cards for seats 6-10 */}
-                {player.contribution && player.contribution > 0 && (seatIdx + 1 > 5) && (
-                  <BetChip value={player.contribution} />
+                {(player.contribution ?? 0) > 0 && (seatIdx + 1 > 5) && (
+                  <BetChip value={player.contribution!} />
                 )}
               </div>
             );
-          } else if (player && !isMyPlayer && player.contribution && player.contribution > 0) {
+          } else if (player && !isMyPlayer && (player.contribution ?? 0) > 0) {
             // Bet chip for players without cards but with bets
             elements.push(
               <div
@@ -396,21 +396,6 @@ export function PokerTable({
         })}
       </div>
 
-      {/* My Hole Cards - Shown at bottom left (like in screenshot) */}
-      {myHoleCards.length > 0 && (
-        <div className="absolute bottom-4 left-4 z-30 flex gap-2">
-          {myHoleCards.map((card, idx) => (
-            <PokerCardImage
-              key={idx}
-              card={card}
-              width={100}
-              height={140}
-              className="shadow-2xl"
-              faceDown={false}
-            />
-          ))}
-        </div>
-      )}
     </div>
   );
 }

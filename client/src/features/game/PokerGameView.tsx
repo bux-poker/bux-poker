@@ -218,7 +218,26 @@ export function PokerGameView() {
           </div>
 
           {/* Betting controls - fixed at bottom */}
-          <div className="border-t border-slate-800 bg-slate-900/95 p-4 backdrop-blur-sm">
+          <div className="border-t border-slate-800 bg-slate-900/95 p-4 backdrop-blur-sm flex items-center gap-4">
+            {/* Player's own cards - bottom left, inline with action buttons */}
+            {myPlayer && myPlayer.holeCards && myPlayer.holeCards.length > 0 && (
+              <div className={`flex gap-2 items-center ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`}>
+                {myPlayer.holeCards.map((card, idx) => (
+                  <img
+                    key={idx}
+                    src={`/optimized/cards/${card.rank}${card.suit === 'SPADES' ? 'S' : card.suit === 'HEARTS' ? 'H' : card.suit === 'DIAMONDS' ? 'D' : 'C'}.png`}
+                    alt={`${card.rank}${card.suit}`}
+                    className="h-[68px] w-auto object-contain rounded-lg shadow-lg"
+                    style={{ maxWidth: '50px' }}
+                    onError={(e) => {
+                      // Fallback to CSS card if image not found
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                    }}
+                  />
+                ))}
+              </div>
+            )}
             <BettingControls 
               onAction={handleAction} 
               currentBet={gameState.currentBet || 0}
