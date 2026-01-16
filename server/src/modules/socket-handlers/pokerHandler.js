@@ -313,11 +313,14 @@ export async function startHandForGame(gameId, io) {
     bigBlindSeat: bbPlayer.seatNumber,
     currentTurnUserId: utgPlayer.userId, // First to act after BB (UTG)
     players: await Promise.all(
-      game.players.map(async (p) => {
+      game.players.map(async (p, index) => {
         const updated = await prisma.player.findUnique({ where: { id: p.id } });
+        // Parse hole cards from database (stored as JSON string)
+        const holeCards = updated?.holeCards ? JSON.parse(updated.holeCards) : (p.holeCards ? JSON.parse(p.holeCards) : dealtHands[index]);
         return {
           ...p,
           chips: updated?.chips || p.chips,
+          holeCards: holeCards, // Include parsed hole cards
           contributions: (p.id === sbPlayer.id ? smallBlind : 0) + (p.id === bbPlayer.id ? bigBlind : 0)
         };
       })

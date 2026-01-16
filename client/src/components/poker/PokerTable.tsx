@@ -214,8 +214,21 @@ export function PokerTable({
   });
   
   // Get player's own hole cards (face up) - shown separately at bottom
-  const myPlayer = myUserId ? players.find(p => p.id === myUserId) : null;
+  const myPlayer = myUserId ? players.find(p => p.id === myUserId || p.userId === myUserId) : null;
   const myHoleCards = myPlayer?.holeCards || [];
+  
+  // Timer state for countdown
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  
+  // Update timer every second
+  useEffect(() => {
+    if (turnTimer) {
+      const interval = setInterval(() => {
+        setCurrentTime(Date.now());
+      }, 100); // Update every 100ms for smooth countdown
+      return () => clearInterval(interval);
+    }
+  }, [turnTimer]);
 
   return (
     <div className="relative flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden p-8">
@@ -246,11 +259,11 @@ export function PokerTable({
           const radiusPercent = 45; // Position at 45% from center (near edge)
           const angleRad = (position.angle * Math.PI) / 180;
           
-          const isMyPlayer = player && myUserId === player.id;
-          const isCurrentTurn = player && currentPlayer === player.id;
-          const hasActiveTimer = turnTimer && player && player.userId === turnTimer.userId;
+          const isMyPlayer = player && (myUserId === player.id || myUserId === player.userId);
+          const isCurrentTurn = player && (currentPlayer === player.id || currentPlayer === player.userId);
+          const hasActiveTimer = turnTimer && player && (player.userId === turnTimer.userId || player.id === turnTimer.userId);
           const timerRemaining = hasActiveTimer 
-            ? Math.max(0, Math.ceil((turnTimer.expiresAt - Date.now()) / 1000))
+            ? Math.max(0, Math.ceil((turnTimer.expiresAt - currentTime) / 1000))
             : null;
           
           // Determine card positioning relative to avatar
