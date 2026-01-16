@@ -5,6 +5,8 @@ import { PokerTable } from "../../components/poker/PokerTable";
 import type { Card } from "@shared/types/poker";
 import { BettingControls } from "../../components/poker/BettingControls";
 import { useAuth } from "@shared/features/auth/AuthContext";
+import Chat from "@shared/components/chat/Chat";
+import type { Player } from "@shared/types/game";
 
 interface PlayerViewModel {
   id: string;
@@ -108,32 +110,74 @@ export function PokerGameView() {
 
   const communityCards = parseCommunityCards(gameState.communityCards);
 
+  // Convert players to format expected by Chat component
+  const chatPlayers: Player[] = gameState.players.map((p) => ({
+    id: p.id,
+    userId: p.id, // Assuming player id maps to userId for now
+    name: p.name,
+    avatarUrl: undefined,
+    isBot: false,
+    chips: p.chips,
+    seatNumber: p.seatNumber,
+    status: p.status as any,
+  }));
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-100">
-            Table {gameState.tableNumber ?? ""}
-          </h1>
-          <p className="text-sm text-slate-400">
-            Game ID: {gameState.id}
-          </p>
+    <div className="flex h-screen w-screen flex-col bg-slate-900">
+      {/* Main game area - full screen layout */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left side - Table and controls */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Table header */}
+          <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900 px-6 py-4">
+            <div>
+              <h1 className="text-2xl font-semibold text-slate-100">
+                Table {gameState.tableNumber ?? ""}
+              </h1>
+              <p className="text-sm text-slate-400">
+                Game ID: {gameState.id}
+              </p>
+            </div>
+          </div>
+
+          {/* Table area - takes most of the space */}
+          <div className="flex-1 overflow-auto p-6">
+            <PokerTable
+              gameId={gameState.id}
+              players={gameState.players.map((p) => ({
+                id: p.id,
+                name: p.name,
+                chips: p.chips
+              }))}
+              communityCards={communityCards}
+              pot={gameState.pot}
+              currentBet={0}
+            />
+          </div>
+
+          {/* Betting controls - fixed at bottom */}
+          <div className="border-t border-slate-800 bg-slate-900 p-4">
+            <BettingControls onAction={handleAction} />
+          </div>
         </div>
+
+        {/* Right side - Chat */}
+        {user && (
+          <div className="w-80 border-l border-slate-800">
+            <Chat
+              gameId={gameState.id}
+              userId={user.id}
+              userName={user.username || 'Player'}
+              players={chatPlayers}
+              spectators={[]}
+              userAvatar={user.avatarUrl}
+              showPlayerListTab={true}
+              chatType="game"
+              isSpectator={false}
+            />
+          </div>
+        )}
       </div>
-
-      <PokerTable
-        gameId={gameState.id}
-        players={gameState.players.map((p) => ({
-          id: p.id,
-          name: p.name,
-          chips: p.chips
-        }))}
-        communityCards={communityCards}
-        pot={gameState.pot}
-        currentBet={0}
-      />
-
-      <BettingControls onAction={handleAction} />
     </div>
   );
 }
