@@ -704,14 +704,14 @@ export function TournamentLobby() {
                         <div className="flex gap-2">
                           {isMyTable ? (
                             <button
-                              onClick={() => navigate(`/game/${table.id}`)}
+                              onClick={() => window.open(`/game/${table.id}`, '_blank', 'width=1400,height=900')}
                               className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
                             >
                               Join Table
                             </button>
                           ) : (
                             <button
-                              onClick={() => navigate(`/game/${table.id}`)}
+                              onClick={() => window.open(`/game/${table.id}`, '_blank', 'width=1400,height=900')}
                               className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                             >
                               Watch
