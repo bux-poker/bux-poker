@@ -2,17 +2,30 @@ import { Card } from '@shared/types/poker';
 
 // Chip component with color based on value
 function BetChip({ value }: { value: number }) {
-  // Determine chip color based on value
+  // Determine chip color based on exact value
   const getChipColor = (val: number): string => {
-    if (val >= 10000) return '#FFD700'; // Gold for 10000
-    if (val >= 5000) return '#8B00FF'; // Purple for 5000
-    if (val >= 1000) return '#FF0000'; // Red for 1000
-    if (val >= 500) return '#0000FF'; // Blue for 500
-    if (val >= 200) return '#00FF00'; // Green for 200
-    if (val >= 100) return '#FFFF00'; // Yellow for 100
-    if (val >= 50) return '#FFA500'; // Orange for 50
-    if (val >= 20) return '#808080'; // Gray for 20
-    return '#FFC0CB'; // Pink for 10
+    switch (val) {
+      case 10: return '#FFC0CB'; // Pink for 10
+      case 20: return '#808080'; // Gray for 20
+      case 50: return '#FFA500'; // Orange for 50
+      case 100: return '#FFFF00'; // Yellow for 100
+      case 200: return '#00FF00'; // Green for 200
+      case 500: return '#0000FF'; // Blue for 500
+      case 1000: return '#FF0000'; // Red for 1000
+      case 5000: return '#8B00FF'; // Purple for 5000
+      case 10000: return '#FFD700'; // Gold for 10000
+      default:
+        // For values not in the list, use the highest matching tier
+        if (val >= 10000) return '#FFD700';
+        if (val >= 5000) return '#8B00FF';
+        if (val >= 1000) return '#FF0000';
+        if (val >= 500) return '#0000FF';
+        if (val >= 200) return '#00FF00';
+        if (val >= 100) return '#FFFF00';
+        if (val >= 50) return '#FFA500';
+        if (val >= 20) return '#808080';
+        return '#FFC0CB';
+    }
   };
 
   const chipColor = getChipColor(value);
@@ -20,12 +33,15 @@ function BetChip({ value }: { value: number }) {
   return (
     <div className="flex items-center gap-1">
       <div
-        className="w-6 h-6 rounded-full border-2 border-white shadow-lg flex items-center justify-center"
+        className="w-6 h-6 rounded-full border-2 border-white shadow-lg flex items-center justify-center relative overflow-hidden"
         style={{ backgroundColor: chipColor }}
       >
-        <span className="text-[8px] font-bold text-white drop-shadow">
-          {value >= 1000 ? `${Math.floor(value / 1000)}k` : value}
-        </span>
+        <img
+          src="/poker-chip.svg"
+          alt="chip"
+          className="w-full h-full object-contain p-1"
+          style={{ filter: 'brightness(0) invert(1)' }}
+        />
       </div>
       <span className="text-xs font-semibold text-white drop-shadow-lg">
         {value.toLocaleString()}
