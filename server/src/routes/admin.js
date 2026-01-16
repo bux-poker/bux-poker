@@ -323,6 +323,31 @@ router.patch("/tournaments/:id/cancel", async (req, res, next) => {
   }
 });
 
+// Delete tournament (permanently removes from database)
+router.delete("/tournaments/:id", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const tournament = await prisma.tournament.findUnique({
+      where: { id },
+    });
+
+    if (!tournament) {
+      return res.status(404).json({ error: "Tournament not found" });
+    }
+
+    // Delete tournament - Prisma will cascade delete related records
+    // (TournamentPost, TournamentRegistration, Game, Player, etc.)
+    await prisma.tournament.delete({
+      where: { id },
+    });
+
+    res.json({ tournamentId: id, deleted: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Get tournament data for duplication (returns data to pre-fill create form)
 router.get("/tournaments/:id/duplicate", async (req, res, next) => {
   try {

@@ -14,7 +14,7 @@ interface ServerWithMembership {
   isMember?: boolean;
 }
 
-function TournamentCard({ tournament, onCancel, onDuplicate, onAddTestPlayers }: { tournament: Tournament; onCancel?: (id: string) => void; onDuplicate?: (id: string) => void; onAddTestPlayers?: (id: string) => void }) {
+function TournamentCard({ tournament, onCancel, onDuplicate, onAddTestPlayers, onDelete, isDeleting }: { tournament: Tournament; onCancel?: (id: string) => void; onDuplicate?: (id: string) => void; onAddTestPlayers?: (id: string) => void; onDelete?: (id: string) => void; isDeleting?: boolean }) {
   const { isAdmin } = useAdmin();
   const { user } = useAuth();
   const startTime = new Date(tournament.startTime);
@@ -204,6 +204,17 @@ function TournamentCard({ tournament, onCancel, onDuplicate, onAddTestPlayers }:
           >
             Duplicate
           </button>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (onDelete) onDelete(tournament.id);
+            }}
+            disabled={isDeleting}
+            className="rounded bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </button>
         </div>
       )}
     </Link>
@@ -218,6 +229,7 @@ export function TournamentList() {
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [duplicating, setDuplicating] = useState<string | null>(null);
   const [addingTestPlayers, setAddingTestPlayers] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [filter, setFilter] = useState<TournamentFilter>('all');
 
   const handleCancel = async (tournamentId: string) => {
@@ -246,6 +258,37 @@ export function TournamentList() {
       alert(err.response?.data?.error || 'Failed to cancel tournament');
     } finally {
       setCancelling(null);
+    }
+  };
+
+  const handleDelete = async (tournamentId: string) => {
+    const tournament = tournaments?.find((t) => t.id === tournamentId);
+    if (!tournament) return;
+
+    if (!confirm(`Are you sure you want to PERMANENTLY DELETE "${tournament.name}"?\n\nThis action cannot be undone and will delete all related data (registrations, games, players, etc.).`)) {
+      return;
+    }
+
+    setDeleting(tournamentId);
+    try {
+      const token = localStorage.getItem('sessionToken');
+      if (!token) {
+        alert('Not authenticated');
+        return;
+      }
+
+      await api.delete(
+        `/api/admin/tournaments/${tournamentId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      await refetch();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to delete tournament');
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -463,6 +506,8 @@ export function TournamentList() {
               onCancel={handleCancel}
               onDuplicate={handleDuplicate}
               onAddTestPlayers={handleAddTestPlayers}
+              onDelete={handleDelete}
+              isDeleting={deleting === tournament.id}
             />
           ))}
         </div>
