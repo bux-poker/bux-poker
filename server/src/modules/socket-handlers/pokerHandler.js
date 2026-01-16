@@ -267,7 +267,7 @@ export async function startHandForGame(gameId, io) {
   if (sbPlayer.chips >= smallBlind && bbPlayer.chips >= bigBlind) {
     bettingRound.postBlinds(sbPlayer.id, bbPlayer.id);
     
-    // Deduct chips from players
+    // Deduct chips from players in database
     await prisma.player.update({
       where: { id: sbPlayer.id },
       data: { chips: sbPlayer.chips - smallBlind }
@@ -277,6 +277,10 @@ export async function startHandForGame(gameId, io) {
       where: { id: bbPlayer.id },
       data: { chips: bbPlayer.chips - bigBlind }
     });
+    
+    // Update chips in memory for state
+    sbPlayer.chips -= smallBlind;
+    bbPlayer.chips -= bigBlind;
   }
 
   // Calculate UTG (first to act after BB)
