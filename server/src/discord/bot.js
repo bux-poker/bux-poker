@@ -370,9 +370,11 @@ async function handleUnregisterButton(interaction, tournamentId) {
       });
 
       if (tournament && interaction.message && !interaction.replied && !interaction.deferred) {
+        // Don't pass discordUserId - we want buttons to be enabled for everyone
+        // The button handlers will check individual registration status
         const { embed: updatedEmbed, components: updatedComponents } = await buildTournamentEmbed(
           tournament,
-          discordUserId
+          null
         );
 
         await interaction.update({
