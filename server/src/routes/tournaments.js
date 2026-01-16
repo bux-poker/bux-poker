@@ -119,5 +119,48 @@ router.get("/:id/server-membership", authenticateToken, async (req, res, next) =
   }
 });
 
+// Get user's game/table for a tournament
+router.get("/:id/my-table", authenticateToken, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+
+    // Find player in tournament games
+    const player = await prisma.player.findFirst({
+      where: {
+        userId: userId,
+        game: {
+          tournamentId: id,
+        },
+      },
+      include: {
+        game: {
+          include: {
+            tournament: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!player) {
+      return res.status(404).json({ error: "You are not playing in this tournament" });
+    }
+
+    res.json({
+      gameId: player.gameId,
+      tableNumber: player.game.tableNumber,
+      seatNumber: player.seatNumber,
+      game: player.game,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;
 

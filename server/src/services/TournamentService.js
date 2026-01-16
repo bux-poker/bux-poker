@@ -126,7 +126,24 @@ export class TournamentService {
               },
             },
           },
-          games: true,
+          games: {
+            include: {
+              players: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      username: true,
+                      avatarUrl: true,
+                    },
+                  },
+                },
+              },
+            },
+            orderBy: {
+              tableNumber: 'asc',
+            },
+          },
           posts: {
             include: {
               server: true,

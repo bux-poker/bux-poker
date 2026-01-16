@@ -28,6 +28,7 @@ model Tournament {
   name          String
   description   String?
   startTime     DateTime
+  startedAt     DateTime? // Actual start time when admin starts tournament
   status        TournamentStatus @default(SCHEDULED)
   maxPlayers    Int
   seatsPerTable Int

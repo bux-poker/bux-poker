@@ -6,7 +6,7 @@ import { useAdmin } from '../../hooks/useAdmin';
 import { TournamentTimestamp } from './TournamentTimestamp';
 import api from '../../services/api';
 
-type Tab = 'players' | 'blinds' | 'prizes';
+type Tab = 'players' | 'blinds' | 'prizes' | 'tables';
 
 interface BlindLevel {
   level: number;
@@ -46,6 +46,8 @@ export function TournamentLobby() {
   const [blindLevels, setBlindLevels] = useState<BlindLevel[]>([]);
   const [closingRegistration, setClosingRegistration] = useState(false);
   const [startingTournament, setStartingTournament] = useState(false);
+  const [tables, setTables] = useState<any[]>([]);
+  const [myGameId, setMyGameId] = useState<string | null>(null);
 
   // Parse blind levels from tournament
   useEffect(() => {
@@ -62,6 +64,49 @@ export function TournamentLobby() {
     }
   }, [tournament]);
 
+  // Fetch tables/games for tournament
+  useEffect(() => {
+    if (!tournament || !id) return;
+
+    const fetchTables = async () => {
+      try {
+        // Tables are included in tournament data from getTournamentById
+        if (tournament.games && Array.isArray(tournament.games)) {
+          setTables(tournament.games);
+        }
+      } catch (err) {
+        console.error('Error fetching tables:', err);
+      }
+    };
+
+    fetchTables();
+  }, [tournament, id]);
+
+  // Fetch user's table/game
+  useEffect(() => {
+    if (!tournament || !user || !id) return;
+
+    const fetchMyTable = async () => {
+      try {
+        const token = localStorage.getItem('sessionToken');
+        if (!token) return;
+
+        const response = await api.get(`/api/tournaments/${id}/my-table`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setMyGameId(response.data.gameId);
+      } catch (err: any) {
+        // User might not be playing, that's ok
+        if (err.response?.status !== 404) {
+          console.error('Error fetching my table:', err);
+        }
+        setMyGameId(null);
+      }
+    };
+
+    fetchMyTable();
+  }, [tournament, user, id]);
+
   // Calculate running tournament stats
   useEffect(() => {
     if (!tournament || (tournament.status !== 'RUNNING' && tournament.status !== 'ACTIVE')) {
@@ -69,10 +114,12 @@ export function TournamentLobby() {
     }
 
     const updateRunningStats = () => {
-      // Calculate running time
-      const startTime = new Date(tournament.startTime);
+      // Calculate running time - use startedAt if available, otherwise startTime
+      const actualStartTime = (tournament as any).startedAt 
+        ? new Date((tournament as any).startedAt) 
+        : new Date(tournament.startTime);
       const now = new Date();
-      const diff = now.getTime() - startTime.getTime();
+      const diff = now.getTime() - actualStartTime.getTime();
       const hours = Math.floor(diff / (1000 * 60 * 60));
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       setRunningTime(`${hours}h ${minutes}m`);
@@ -490,6 +537,18 @@ export function TournamentLobby() {
             >
               Prizes
             </button>
+            {(isRunning || isSeated) && (
+              <button
+                onClick={() => setActiveTab('tables')}
+                className={`px-6 py-3 text-sm font-medium transition-colors ${
+                  activeTab === 'tables'
+                    ? 'border-b-2 border-emerald-500 text-emerald-400'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Tables ({tables.length})
+              </button>
+            )}
           </nav>
         </div>
 
@@ -597,6 +656,73 @@ export function TournamentLobby() {
           {activeTab === 'prizes' && (
             <div className="text-center py-8">
               <p className="text-slate-400">Prize structure coming soon</p>
+            </div>
+          )}
+
+          {activeTab === 'tables' && (
+            <div className="space-y-4">
+              {tables.length === 0 ? (
+                <p className="text-slate-400 text-center py-8">No tables created yet.</p>
+              ) : (
+                tables.map((table) => {
+                  const playerCount = table.players?.length || 0;
+                  const isMyTable = myGameId === table.id;
+                  return (
+                    <div
+                      key={table.id}
+                      className={`rounded-lg border p-4 ${
+                        isMyTable
+                          ? 'border-emerald-500 bg-emerald-500/10'
+                          : 'border-slate-800 bg-slate-800/30'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-semibold text-slate-200">
+                            Table {table.tableNumber}
+                            {isMyTable && (
+                              <span className="ml-2 text-xs text-emerald-400">(Your Table)</span>
+                            )}
+                          </h3>
+                          <p className="mt-1 text-sm text-slate-400">
+                            {playerCount} / {tournament.seatsPerTable} players
+                          </p>
+                          {table.players && table.players.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {table.players.map((player: any) => (
+                                <span
+                                  key={player.id}
+                                  className="rounded bg-slate-700 px-2 py-1 text-xs text-slate-300"
+                                >
+                                  {player.user?.username || 'Player'}
+                                  {player.userId === user?.id && ' (You)'}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          {isMyTable ? (
+                            <button
+                              onClick={() => navigate(`/game/${table.id}`)}
+                              className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
+                            >
+                              Join Table
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => navigate(`/game/${table.id}`)}
+                              className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                            >
+                              Watch
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           )}
         </div>

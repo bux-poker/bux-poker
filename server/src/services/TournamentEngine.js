@@ -71,11 +71,12 @@ export class TournamentEngine {
       await this.seatPlayers(tournamentId);
     }
 
-    // Mark as RUNNING
+    // Mark as RUNNING and record actual start time
     await prisma.tournament.update({
       where: { id: tournamentId },
       data: {
-        status: "RUNNING"
+        status: "RUNNING",
+        startedAt: new Date() // Record actual start time
       }
     });
 
