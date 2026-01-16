@@ -2,11 +2,32 @@
 // Extracted from Chat.tsx
 
 import { useState, useEffect, useRef } from 'react';
-import { useSocket } from '../../../../auth/SocketContext';
-import { useAuth } from '../../../../auth/AuthContext';
-import { api } from '../../../../../services/lib/api';
+import { useSocket } from '../../../../../features/auth/SocketContext';
+import { useAuth } from '../../../../../features/auth/AuthContext';
+import axios from 'axios';
 import type { ChatMessage } from "../../../Chat";
 import type { Player } from '../../../../../types/game';
+
+// Create api client for shared components
+const API_BASE_URL = typeof window !== 'undefined' 
+  ? (import.meta.env?.VITE_API_BASE_URL || '')
+  : '';
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true
+});
+
+// Intercept requests to add auth token
+api.interceptors.request.use((config) => {
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('sessionToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  }
+  return config;
+});
 
 interface ChatHooksProps {
   gameId: string;
