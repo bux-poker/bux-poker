@@ -238,7 +238,7 @@ export function PokerGameView() {
                       src={`/cards/${getCardImage(card)}`}
                       alt={`${card.rank}${card.suit}`}
                       className="h-full w-auto object-contain rounded-lg shadow-lg border-2 border-white/20"
-                      style={{ maxWidth: '50px', minWidth: '35px', display: 'block' }}
+                      style={{ display: 'block' }}
                       onError={(e) => {
                         console.error('Card image failed to load:', getCardImage(card), 'Full path:', `/cards/${getCardImage(card)}`);
                         const target = e.target as HTMLImageElement;
