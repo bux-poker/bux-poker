@@ -113,16 +113,18 @@ export function BettingControls({
           </button>
           <input
             type="number"
-            className="h-[68px] w-32 rounded-lg border-2 border-slate-600 bg-slate-800 px-4 text-center text-lg font-bold text-white focus:border-emerald-500 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            className="h-[68px] w-32 rounded-lg border-2 border-slate-600 bg-slate-800 px-4 text-center text-lg font-bold text-white focus:border-emerald-500 focus:outline-none no-spinner"
             style={{ 
               WebkitAppearance: 'none',
-              MozAppearance: 'textfield'
+              MozAppearance: 'textfield',
+              appearance: 'textfield'
             }}
             value={raiseAmount}
             onChange={(e) => {
               const val = Math.max(bigBlind, Math.min(myChips, Number(e.target.value) || bigBlind));
               setRaiseAmount(val);
             }}
+            onWheel={(e) => e.currentTarget.blur()}
             min={bigBlind}
             max={myChips}
           />

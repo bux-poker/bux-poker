@@ -49,6 +49,18 @@
     @apply px-4 py-2 rounded-md font-medium transition-colors duration-200;
   }
 
+  /* Remove spinner arrows from number inputs */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
   .btn-primary {
     @apply bg-blue-600 hover:bg-blue-700 text-white;
   }
