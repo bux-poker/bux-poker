@@ -6,6 +6,10 @@ import "../../shared/styles/index.css";
 import "../../shared/styles/mobile.css";
 import { AuthProvider } from "../../shared/features/auth/AuthContext";
 import { SocketProvider } from "../../shared/features/auth/SocketContext";
+import { getSocket } from "./services/socket";
+
+// Initialize socket early so it's available to SocketContext
+getSocket();
 
 const rootElement = document.getElementById("root");
 
