@@ -98,11 +98,16 @@ export async function initializeDiscordBot() {
         }
       } catch (error) {
         console.error(`[DISCORD BOT] Error handling interaction:`, error);
-        const replyContent = { content: `❌ Error: ${error.message}`, ephemeral: true };
-        if (interaction.replied || interaction.deferred) {
-          await interaction.followUp(replyContent);
-        } else {
-          await interaction.reply(replyContent);
+        try {
+          const replyContent = { content: `❌ Error: ${error.message}`, ephemeral: true };
+          if (interaction.replied || interaction.deferred) {
+            await interaction.followUp(replyContent);
+          } else {
+            await interaction.reply(replyContent);
+          }
+        } catch (replyError) {
+          // Interaction might already be acknowledged, log but don't crash
+          console.error(`[DISCORD BOT] Error replying to interaction:`, replyError);
         }
       }
     });
@@ -273,7 +278,7 @@ async function handleRegisterButton(interaction, tournamentId) {
         where: { id: tournamentId },
       });
 
-      if (tournament && interaction.message) {
+      if (tournament && interaction.message && !interaction.replied && !interaction.deferred) {
         const { embed: updatedEmbed, components: updatedComponents } = await buildTournamentEmbed(
           tournament,
           discordUserId
@@ -283,21 +288,19 @@ async function handleRegisterButton(interaction, tournamentId) {
           embeds: [updatedEmbed],
           components: updatedComponents,
         });
-      } else {
-        await interaction.reply({
-          content: '✅ Successfully registered for the tournament!',
-          ephemeral: true,
-        });
+        return; // Successfully updated, don't reply
       }
     } catch (updateError) {
       console.error('[DISCORD BOT] Error updating embed:', updateError);
-      // Fallback to ephemeral reply if update fails
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({
-          content: '✅ Successfully registered for the tournament!',
-          ephemeral: true,
-        });
-      }
+      // If update fails, we'll fall through to reply
+    }
+
+    // Fallback to ephemeral reply if update failed or not possible
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: '✅ Successfully registered for the tournament!',
+        ephemeral: true,
+      });
     }
   } catch (error) {
     console.error('[DISCORD BOT] Error registering user:', error);
@@ -366,7 +369,7 @@ async function handleUnregisterButton(interaction, tournamentId) {
         where: { id: tournamentId },
       });
 
-      if (tournament && interaction.message) {
+      if (tournament && interaction.message && !interaction.replied && !interaction.deferred) {
         const { embed: updatedEmbed, components: updatedComponents } = await buildTournamentEmbed(
           tournament,
           discordUserId
@@ -376,21 +379,19 @@ async function handleUnregisterButton(interaction, tournamentId) {
           embeds: [updatedEmbed],
           components: updatedComponents,
         });
-      } else {
-        await interaction.reply({
-          content: '✅ Successfully unregistered from the tournament.',
-          ephemeral: true,
-        });
+        return; // Successfully updated, don't reply
       }
     } catch (updateError) {
       console.error('[DISCORD BOT] Error updating embed:', updateError);
-      // Fallback to ephemeral reply if update fails
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({
-          content: '✅ Successfully unregistered from the tournament.',
-          ephemeral: true,
-        });
-      }
+      // If update fails, we'll fall through to reply
+    }
+
+    // Fallback to ephemeral reply if update failed or not possible
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: '✅ Successfully unregistered from the tournament.',
+        ephemeral: true,
+      });
     }
   } catch (error) {
     console.error('[DISCORD BOT] Error unregistering user:', error);
