@@ -11,6 +11,12 @@ import { PlayerList } from './components/PlayerList';
 import type { Player } from "../../../../types/game";
 import type { ChatMessage } from "../../Chat";
 
+interface PlayerStatsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  player: Player | null;
+}
+
 interface ChatModularProps {
   gameId: string;
   userId: string;
@@ -25,6 +31,7 @@ interface ChatModularProps {
   gameMessages?: Record<string, ChatMessage>;
   isSpectator?: boolean;
   onPlayerClick?: (player: Player) => void;
+  PlayerStatsModal?: React.ComponentType<PlayerStatsModalProps>;
 }
 
 export default function ChatModular({
@@ -40,7 +47,8 @@ export default function ChatModular({
   lobbyMessages = [],
   gameMessages = {},
   isSpectator = false,
-  onPlayerClick
+  onPlayerClick,
+  PlayerStatsModal
 }: ChatModularProps) {
   
   // Use the chat hooks for all state management and event handling
@@ -159,11 +167,13 @@ export default function ChatModular({
       </div>
 
       {/* Player Stats Modal */}
-      <PlayerStatsModal
-        isOpen={isStatsOpen}
-        onClose={() => setIsStatsOpen(false)}
-        player={statsPlayer}
-      />
+      {PlayerStatsModal && (
+        <PlayerStatsModal
+          isOpen={isStatsOpen}
+          onClose={() => setIsStatsOpen(false)}
+          player={statsPlayer}
+        />
+      )}
     </>
   );
 }
