@@ -336,8 +336,38 @@ router.delete("/tournaments/:id", async (req, res, next) => {
       return res.status(404).json({ error: "Tournament not found" });
     }
 
-    // Delete tournament - Prisma will cascade delete related records
-    // (TournamentPost, TournamentRegistration, Game, Player, etc.)
+    // Manually delete related records first (some don't have cascade delete set)
+    // Delete in order to respect foreign key constraints
+    
+    // 1. Delete players (and their related records)
+    const games = await prisma.game.findMany({
+      where: { tournamentId: id },
+      include: { players: true },
+    });
+    
+    for (const game of games) {
+      // Delete players in each game
+      await prisma.player.deleteMany({
+        where: { gameId: game.id },
+      });
+    }
+    
+    // 2. Delete games
+    await prisma.game.deleteMany({
+      where: { tournamentId: id },
+    });
+    
+    // 3. Delete registrations
+    await prisma.tournamentRegistration.deleteMany({
+      where: { tournamentId: id },
+    });
+    
+    // 4. Delete posts (has cascade, but being explicit)
+    await prisma.tournamentPost.deleteMany({
+      where: { tournamentId: id },
+    });
+    
+    // 5. Finally, delete the tournament itself
     await prisma.tournament.delete({
       where: { id },
     });
