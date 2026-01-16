@@ -1,5 +1,39 @@
 import { Card } from '@shared/types/poker';
 
+// Chip component with color based on value
+function BetChip({ value }: { value: number }) {
+  // Determine chip color based on value
+  const getChipColor = (val: number): string => {
+    if (val >= 10000) return '#FFD700'; // Gold for 10000
+    if (val >= 5000) return '#8B00FF'; // Purple for 5000
+    if (val >= 1000) return '#FF0000'; // Red for 1000
+    if (val >= 500) return '#0000FF'; // Blue for 500
+    if (val >= 200) return '#00FF00'; // Green for 200
+    if (val >= 100) return '#FFFF00'; // Yellow for 100
+    if (val >= 50) return '#FFA500'; // Orange for 50
+    if (val >= 20) return '#808080'; // Gray for 20
+    return '#FFC0CB'; // Pink for 10
+  };
+
+  const chipColor = getChipColor(value);
+
+  return (
+    <div className="flex items-center gap-1">
+      <div
+        className="w-6 h-6 rounded-full border-2 border-white shadow-lg flex items-center justify-center"
+        style={{ backgroundColor: chipColor }}
+      >
+        <span className="text-[8px] font-bold text-white drop-shadow">
+          {value >= 1000 ? `${Math.floor(value / 1000)}k` : value}
+        </span>
+      </div>
+      <span className="text-xs font-semibold text-white drop-shadow-lg">
+        {value.toLocaleString()}
+      </span>
+    </div>
+  );
+}
+
 // Simple poker card image component
 function PokerCardImage({ 
   card, 
@@ -117,6 +151,7 @@ interface PokerTableProps {
     isBigBlind?: boolean;
     avatarUrl?: string;
     userId?: string;
+    contribution?: number;
   }>;
   communityCards: Card[];
   pot: number;
@@ -295,23 +330,48 @@ export function PokerTable({
             elements.push(
               <div
                 key={`cards-${player.id}`}
-                className="absolute z-20 flex gap-1"
+                className="absolute z-20 flex flex-col items-center gap-1"
                 style={{
                   left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset}px)`,
                   top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}%)`,
                   transform: 'translate(-50%, -50%)',
                 }}
               >
-                {player.holeCards.map((_, cardIdx) => (
-                  <PokerCardImage
-                    key={cardIdx}
-                    card={player.holeCards![cardIdx]}
-                    width={28}
-                    height={39}
-                    className="shadow-md"
-                    faceDown={true}
-                  />
-                ))}
+                {/* Bet chip above cards for seats 1-5, below for seats 6-10 */}
+                {player.contribution && player.contribution > 0 && (seatIdx + 1 <= 5) && (
+                  <BetChip value={player.contribution} />
+                )}
+                <div className="flex gap-1">
+                  {player.holeCards.map((_, cardIdx) => (
+                    <PokerCardImage
+                      key={cardIdx}
+                      card={player.holeCards![cardIdx]}
+                      width={28}
+                      height={39}
+                      className="shadow-md"
+                      faceDown={true}
+                    />
+                  ))}
+                </div>
+                {/* Bet chip below cards for seats 6-10 */}
+                {player.contribution && player.contribution > 0 && (seatIdx + 1 > 5) && (
+                  <BetChip value={player.contribution} />
+                )}
+              </div>
+            );
+          } else if (player && !isMyPlayer && player.contribution && player.contribution > 0) {
+            // Bet chip for players without cards but with bets
+            elements.push(
+              <div
+                key={`bet-${player.id}`}
+                className="absolute z-20"
+                style={{
+                  left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset}px)`,
+                  top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}% + ${seatIdx + 1 <= 5 ? -60 : 60}px)`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+              >
+                <BetChip value={player.contribution} />
               </div>
             );
           }

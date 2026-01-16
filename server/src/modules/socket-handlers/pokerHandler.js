@@ -37,7 +37,8 @@ function buildClientGameState(game, state) {
       seatNumber: p.seatNumber,
       status: p.status,
       avatarUrl: p.user?.avatarUrl || null,
-      holeCards: p.holeCards ? JSON.parse(p.holeCards) : null
+      holeCards: p.holeCards ? JSON.parse(p.holeCards) : null,
+      contribution: state?.bettingRound?.getPlayerContribution(p.id) || 0
     }))
   };
 }

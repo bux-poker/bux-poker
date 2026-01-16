@@ -193,7 +193,7 @@ export function PokerGameView() {
           <div className="relative flex-1 overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900 min-h-0">
             <PokerTable
               gameId={gameState.id}
-              players={gameState.players.map((p) => ({
+              players={gameState.players.map((p: any) => ({
                 id: p.id,
                 name: p.name,
                 chips: p.chips,
@@ -205,6 +205,7 @@ export function PokerGameView() {
                 isBigBlind: p.seatNumber === gameState.bigBlindSeat,
                 avatarUrl: p.avatarUrl,
                 userId: p.userId,
+                contribution: p.contribution || 0,
               }))}
               communityCards={communityCards}
               pot={gameState.pot}
