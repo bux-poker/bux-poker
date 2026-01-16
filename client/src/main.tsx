@@ -5,6 +5,7 @@ import App from "./App";
 import "../../shared/styles/index.css";
 import "../../shared/styles/mobile.css";
 import { AuthProvider } from "../../shared/features/auth/AuthContext";
+import { SocketProvider } from "../../shared/features/auth/SocketContext";
 
 const rootElement = document.getElementById("root");
 
@@ -15,7 +16,9 @@ if (rootElement) {
     <React.StrictMode>
       <BrowserRouter>
         <AuthProvider>
-          <App />
+          <SocketProvider>
+            <App />
+          </SocketProvider>
         </AuthProvider>
       </BrowserRouter>
     </React.StrictMode>

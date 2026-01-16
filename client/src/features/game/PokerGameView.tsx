@@ -59,6 +59,12 @@ export function PokerGameView() {
     if (!id) return;
 
     const socket = getSocket();
+    
+    // Ensure socket is connected
+    if (!socket.connected) {
+      socket.connect();
+    }
+
     // Use default namespace - backend handles routing
     socket.emit("join-table", { gameId: id });
 
@@ -73,9 +79,15 @@ export function PokerGameView() {
       setConnecting(false);
     });
 
+    socket.on("connect", () => {
+      // Re-join table when reconnected
+      socket.emit("join-table", { gameId: id });
+    });
+
     return () => {
       socket.off("game-state");
       socket.off("error");
+      socket.off("connect");
     };
   }, [id]);
 

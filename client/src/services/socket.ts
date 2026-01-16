@@ -12,8 +12,17 @@ export function getSocket(): Socket {
     socket = io(SOCKET_URL, {
       withCredentials: true,
       path: "/socket.io",
-      transports: ["websocket", "polling"]
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
     });
+
+    // Make socket available to shared components via window
+    if (typeof window !== 'undefined') {
+      (window as any).__getSocket = getSocket;
+    }
   }
 
   return socket;

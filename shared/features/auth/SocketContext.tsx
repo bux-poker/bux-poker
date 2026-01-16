@@ -44,15 +44,54 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return;
     }
 
-    // For poker, socket is managed per-game in PokerGameView
-    // This context just provides basic state for Chat components
-    // Chat components should use the socket passed via props or getSocket() directly
-    setState({
-      isConnected: true,
-      isAuthenticated: true,
-      isReady: true,
-      error: null
-    });
+    // Dynamically import getSocket from client services
+    // This allows shared components to use the socket without direct dependency
+    const initSocket = async () => {
+      try {
+        // Try to get socket from window if available (set by client)
+        const getSocket = (window as any).__getSocket;
+        if (getSocket && typeof getSocket === 'function') {
+          const sock = getSocket();
+          setSocket(sock);
+          
+          // Monitor connection status
+          const updateConnection = () => {
+            setState({
+              isConnected: sock.connected,
+              isAuthenticated: !!user,
+              isReady: sock.connected && !!user,
+              error: null
+            });
+          };
+
+          sock.on('connect', updateConnection);
+          sock.on('disconnect', updateConnection);
+          sock.on('connect_error', (err) => {
+            setState(prev => ({ ...prev, error: err.message }));
+          });
+
+          updateConnection();
+        } else {
+          // Fallback: assume connected if user exists
+          setState({
+            isConnected: true,
+            isAuthenticated: true,
+            isReady: true,
+            error: null
+          });
+        }
+      } catch (error) {
+        console.error('Error initializing socket:', error);
+        setState({
+          isConnected: false,
+          isAuthenticated: false,
+          isReady: false,
+          error: 'Failed to connect'
+        });
+      }
+    };
+
+    initSocket();
   }, [user]);
 
   return (
