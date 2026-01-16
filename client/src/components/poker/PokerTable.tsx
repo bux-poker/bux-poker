@@ -185,7 +185,7 @@ export function PokerTable({
         )}
 
         {/* Player Positions - 10 seats at table edge */}
-        {allSeats.map((player, seatIdx) => {
+        {allSeats.flatMap((player, seatIdx) => {
           const position = PLAYER_POSITIONS[seatIdx];
           // Calculate radius to position at table edge (use percentage of table size)
           const radiusPercent = 45; // Position at 45% from center (near edge)
@@ -193,10 +193,16 @@ export function PokerTable({
           
           const isMyPlayer = player && myUserId === player.id;
           const isCurrentTurn = player && currentPlayer === player.id;
+          
+          // Determine if seat is left or right of center (for card positioning)
+          // Seats 1-5 (angles 162° to 18°) are left of center, cards go right of avatar
+          // Seats 6-10 (angles -18° to -162°) are right of center, cards go left of avatar
+          const isLeftOfCenter = position.angle >= 0 || position.angle <= -90;
+          const cardOffset = isLeftOfCenter ? 80 : -80; // Offset cards to right or left of avatar
 
-          return (
+          const elements = [
             <div
-              key={player?.id || `seat-${seatIdx + 1}`}
+              key={`player-${player?.id || `seat-${seatIdx + 1}`}`}
               className="absolute z-20"
               style={{
                 left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}%)`,
@@ -205,100 +211,112 @@ export function PokerTable({
               }}
             >
               <div className="flex flex-col items-center">
-                {/* Player Avatar or Empty Seat */}
-                {player ? (
-                  <>
-                    <div className={`relative mb-2 ${isCurrentTurn ? 'ring-4 ring-emerald-400 ring-offset-2 ring-offset-slate-900' : ''}`}>
-                      <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-slate-700 bg-slate-800">
-                        {(() => {
-                          // Use Discord avatar for real players (not test players)
-                          const isTestPlayer = player.name.toLowerCase().startsWith('test player');
-                          if (!isTestPlayer && player.avatarUrl) {
+                  {/* Player Avatar or Empty Seat */}
+                  {player ? (
+                    <>
+                      <div className={`relative mb-2 ${isCurrentTurn ? 'ring-4 ring-emerald-400 ring-offset-2 ring-offset-slate-900' : ''}`}>
+                        <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-slate-700 bg-slate-800">
+                          {(() => {
+                            // Use Discord avatar for real players (not test players)
+                            const isTestPlayer = player.name.toLowerCase().startsWith('test player');
+                            if (!isTestPlayer && player.avatarUrl) {
+                              return (
+                                <img 
+                                  src={player.avatarUrl} 
+                                  alt={player.name}
+                                  className="h-full w-full object-cover"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).src = '/guest-avatar.png';
+                                  }}
+                                />
+                              );
+                            }
+                            // Fallback to initial for test players or no avatar
                             return (
-                              <img 
-                                src={player.avatarUrl} 
-                                alt={player.name}
-                                className="h-full w-full object-cover"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src = '/guest-avatar.png';
-                                }}
-                              />
+                              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-600 to-purple-600 text-2xl font-bold text-white">
+                                {player.name.charAt(0).toUpperCase()}
+                              </div>
                             );
-                          }
-                          // Fallback to initial for test players or no avatar
-                          return (
-                            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-600 to-purple-600 text-2xl font-bold text-white">
-                              {player.name.charAt(0).toUpperCase()}
-                            </div>
-                          );
-                        })()}
+                          })()}
+                        </div>
+                      
+                        {/* Dealer Button */}
+                        {player.isDealer && (
+                          <div className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-yellow-500 border-2 border-white shadow-lg">
+                            <span className="text-xs font-bold text-yellow-900">D</span>
+                          </div>
+                        )}
+                        
+                        {/* Small Blind Chip */}
+                        {player.isSmallBlind && (
+                          <div className="absolute -bottom-1 -left-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 border-2 border-white shadow-md">
+                            <span className="text-[10px] font-bold text-white">{smallBlind}</span>
+                          </div>
+                        )}
+                        
+                        {/* Big Blind Chip */}
+                        {player.isBigBlind && (
+                          <div className="absolute -bottom-1 -left-2 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 border-2 border-white shadow-md">
+                            <span className="text-[10px] font-bold text-white">{bigBlind}</span>
+                          </div>
+                        )}
                       </div>
-                  
-                  {/* Dealer Button */}
-                  {player.isDealer && (
-                    <div className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-yellow-500 border-2 border-white shadow-lg">
-                      <span className="text-xs font-bold text-yellow-900">D</span>
-                    </div>
-                  )}
-                  
-                  {/* Small Blind Chip */}
-                  {player.isSmallBlind && (
-                    <div className="absolute -bottom-1 -left-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 border-2 border-white shadow-md">
-                      <span className="text-[10px] font-bold text-white">{smallBlind}</span>
-                    </div>
-                  )}
-                  
-                  {/* Big Blind Chip */}
-                  {player.isBigBlind && (
-                    <div className="absolute -bottom-1 -left-2 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 border-2 border-white shadow-md">
-                      <span className="text-[10px] font-bold text-white">{bigBlind}</span>
-                    </div>
-                  )}
-                </div>
 
-                {/* Player Name and Chips - In containers, no wrapping */}
-                <div className="mb-1 flex flex-col items-center gap-1 min-w-0 max-w-[120px]">
-                  <div className="w-full px-2 py-1 rounded bg-slate-900/80 border border-slate-700/50">
-                    <div className="text-sm font-semibold text-white drop-shadow-lg truncate text-center whitespace-nowrap">
-                      {player.name}
-                    </div>
-                  </div>
-                  <div className="w-full px-2 py-1 rounded bg-slate-900/80 border border-slate-700/50">
-                    <div className="text-xs font-medium text-emerald-300 text-center whitespace-nowrap">
-                      {player.chips.toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Face-down cards for other players, face-up for current player (if not showing separately) */}
-                {!isMyPlayer && player.holeCards && player.holeCards.length > 0 && (
-                  <div className="flex gap-1">
-                    {player.holeCards.map((_, cardIdx) => (
-                      <PokerCardImage
-                        key={cardIdx}
-                        card={player.holeCards![cardIdx]}
-                        width={40}
-                        height={56}
-                        className="shadow-md"
-                        faceDown={true}
-                      />
-                    ))}
-                  </div>
-                )}
-                  </>
-                ) : (
-                  /* Empty Seat Indicator */
-                  <div className="relative mb-2 opacity-30">
-                    <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-dashed border-slate-600 bg-slate-800/50">
-                      <div className="flex h-full w-full items-center justify-center">
-                        <span className="text-xs text-slate-500">{seatIdx + 1}</span>
+                      {/* Player Name and Chips - In containers, no wrapping */}
+                      <div className="flex flex-col items-center gap-1 min-w-0 max-w-[120px]">
+                        <div className="w-full px-2 py-1 rounded bg-slate-900/80 border border-slate-700/50">
+                          <div className="text-sm font-semibold text-white drop-shadow-lg truncate text-center whitespace-nowrap">
+                            {player.name}
+                          </div>
+                        </div>
+                        <div className="w-full px-2 py-1 rounded bg-slate-900/80 border border-slate-700/50">
+                          <div className="text-xs font-medium text-emerald-300 text-center whitespace-nowrap">
+                            {player.chips.toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    /* Empty Seat Indicator */
+                    <div className="relative mb-2 opacity-30">
+                      <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-dashed border-slate-600 bg-slate-800/50">
+                        <div className="flex h-full w-full items-center justify-center">
+                          <span className="text-xs text-slate-500">{seatIdx + 1}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </div>
             </div>
-          );
+          ];
+
+          // Add cards as separate element if player has cards
+          if (player && !isMyPlayer && player.holeCards && player.holeCards.length > 0) {
+            elements.push(
+              <div
+                key={`cards-${player.id}`}
+                className="absolute z-20 flex gap-1"
+                style={{
+                  left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset}px)`,
+                  top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}%)`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+              >
+                {player.holeCards.map((_, cardIdx) => (
+                  <PokerCardImage
+                    key={cardIdx}
+                    card={player.holeCards![cardIdx]}
+                    width={28}
+                    height={39}
+                    className="shadow-md"
+                    faceDown={true}
+                  />
+                ))}
+              </div>
+            );
+          }
+
+          return elements;
         })}
       </div>
 
