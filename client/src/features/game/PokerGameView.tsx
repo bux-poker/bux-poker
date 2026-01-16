@@ -221,7 +221,7 @@ export function PokerGameView() {
           <div className="border-t border-slate-800 bg-slate-900/95 p-4 backdrop-blur-sm relative">
             {/* Player's own cards - bottom left, inline with action buttons */}
             {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
-              <div className={`absolute bottom-4 left-4 z-50 flex gap-2 items-center ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ height: '68px', visibility: 'visible' }}>
+              <div className={`absolute bottom-4 left-4 z-50 flex gap-2 items-center ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ height: '128px', visibility: 'visible' }}>
                 {myPlayer.holeCards.map((card: Card, idx: number) => {
                   const getCardImage = (card: Card): string => {
                     const suitMap: Record<string, string> = {
