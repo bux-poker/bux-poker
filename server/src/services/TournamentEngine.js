@@ -84,9 +84,10 @@ export class TournamentEngine {
 
     // Start a hand for each game
     const { startHandForGame, getIO } = await import("../modules/socket-handlers/pokerHandler.js");
-    const io = getIO();
+    // Use provided io or get from pokerHandler
+    const socketIO = io || getIO();
     
-    if (io) {
+    if (socketIO) {
       const games = await prisma.game.findMany({
         where: { tournamentId },
         include: {
@@ -100,7 +101,7 @@ export class TournamentEngine {
       for (const game of games) {
         if (game.status === "ACTIVE" && game.players.length >= 2) {
           try {
-            await startHandForGame(game.id, io);
+            await startHandForGame(game.id, socketIO);
           } catch (err) {
             console.error(`[TOURNAMENT] Error starting hand for game ${game.id}:`, err);
           }
