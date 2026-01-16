@@ -6,7 +6,7 @@
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "prestart": "rm -rf ../node_modules/.prisma ../node_modules/@prisma/client node_modules/.prisma node_modules/@prisma/client 2>/dev/null || true && cd .. && npx prisma migrate deploy && npx prisma generate && cd server || echo 'Prisma setup failed, continuing...'",
+    "prestart": "echo '[PRESTART] Starting Prisma setup...' && rm -rf ../node_modules/.prisma ../node_modules/@prisma/client node_modules/.prisma node_modules/@prisma/client 2>/dev/null || true && cd .. && echo '[PRESTART] Running migrations...' && npx prisma migrate deploy && echo '[PRESTART] Generating Prisma client...' && npx prisma generate && cd server && echo '[PRESTART] Prisma setup complete!' || echo '[PRESTART] Prisma setup failed, continuing...'",
     "start": "node src/index.js",
     "build": "tsc",
     "prisma:generate": "cd .. && npx prisma generate",
