@@ -229,7 +229,7 @@ export function PokerGameView() {
               players={chatPlayers}
               spectators={[]}
               userAvatar={user.avatarUrl}
-              showPlayerListTab={true}
+              showPlayerListTab={false}
               chatType="game"
               isSpectator={false}
               PlayerStatsModal={PlayerStatsModal}

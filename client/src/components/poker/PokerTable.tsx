@@ -166,14 +166,6 @@ export function PokerTable({
       {/* Oval/Circular Table */}
       <div className="relative h-full w-full max-h-[85vh] max-w-[90vw] rounded-[50%] border-8 border-amber-600/40 bg-gradient-to-br from-emerald-900/60 to-slate-900/80 shadow-2xl" style={{ aspectRatio: '3/2' }}>
         
-        {/* BUX DAO Logo in Center */}
-        <div className="absolute left-1/2 top-1/2 z-0 -translate-x-1/2 -translate-y-1/2">
-          <img 
-            src="/images/bux-poker.png" 
-            alt="BUX DAO" 
-            className="h-24 w-24 opacity-30"
-          />
-        </div>
 
         {/* Pot Display - Above community cards */}
         <div className="absolute left-1/2 top-[40%] z-10 -translate-x-1/2 -translate-y-1/2">

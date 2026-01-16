@@ -132,9 +132,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               ref={emojiPickerRef}
               className="fixed z-[99999]"
               style={{
-                top: emojiButtonRef.current.getBoundingClientRect().top - 10,
-                left: emojiButtonRef.current.getBoundingClientRect().right - 300,
-                transform: 'translateY(-100%)'
+                top: `${emojiButtonRef.current.getBoundingClientRect().top - 350}px`,
+                left: `${emojiButtonRef.current.getBoundingClientRect().right - 300}px`
               }}
             >
               <Picker

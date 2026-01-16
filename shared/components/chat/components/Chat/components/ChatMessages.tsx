@@ -11,11 +11,11 @@ interface ChatMessagesProps {
   userAvatar?: string;
   currentUserId?: string;
   onPlayerClick?: (player: any) => void;
-  playerStatuses: Record<string, 'friend' | 'blocked' | 'not_friend'>;
-  onAddFriend: (playerId: string) => void;
-  onRemoveFriend: (playerId: string) => void;
-  onBlockUser: (playerId: string) => void;
-  onUnblockUser: (playerId: string) => void;
+  playerStatuses?: Record<string, 'friend' | 'blocked' | 'not_friend'>;
+  onAddFriend?: (playerId: string) => void;
+  onRemoveFriend?: (playerId: string) => void;
+  onBlockUser?: (playerId: string) => void;
+  onUnblockUser?: (playerId: string) => void;
 }
 
 // Fallback avatars 
@@ -37,7 +37,7 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
   userAvatar,
   currentUserId,
   onPlayerClick,
-  playerStatuses,
+  playerStatuses = {},
   onAddFriend,
   onRemoveFriend,
   onBlockUser,
@@ -79,17 +79,7 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
     return playerStatuses[userId] || 'not_friend';
   };
 
-  const handlePlayerAction = (action: string, playerId: string, playerName: string) => {
-    if (action === 'add_friend') {
-      onAddFriend(playerId);
-    } else if (action === 'remove_friend') {
-      onRemoveFriend(playerId);
-    } else if (action === 'block_user') {
-      onBlockUser(playerId);
-    } else if (action === 'unblock_user') {
-      onUnblockUser(playerId);
-    }
-  };
+  // Removed friend/block functionality - not needed for poker
 
   return (
     <div className={`flex-1 overflow-y-auto flex flex-col p-4 ${isMobile ? 'gap-y-2' : 'gap-y-4'}`}>

@@ -341,6 +341,17 @@ export function registerPokerHandlers(io) {
       }
     });
 
+    socket.on("game_message", async ({ gameId, message }) => {
+      try {
+        // Broadcast message to all players in the game
+        io.to(`game:${gameId}`).emit("game_message", { gameId, message });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error("game_message error", err);
+        socket.emit("error", { message: "Failed to send message" });
+      }
+    });
+
     socket.on("disconnect", () => {
       // eslint-disable-next-line no-console
       console.log("Poker client disconnected", socket.id);

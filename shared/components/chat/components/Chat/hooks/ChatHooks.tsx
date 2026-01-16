@@ -181,13 +181,26 @@ export const useChatHooks = ({
       setMessages(prev => [...prev, sys]);
     };
 
+    // Listen for game messages directly from socket
+    const handleGameMessage = (data: any) => {
+      if (data && data.gameId === gameId && data.message && data.message.userId !== 'system') {
+        setMessages(prev => {
+          const exists = prev.some(m => m.id === data.message.id);
+          if (exists) return prev;
+          return [...prev, data.message];
+        });
+      }
+    };
+
     window.addEventListener('gameMessage', handleGameMessageEvent as EventListener);
     socket.on('lobby_chat_message', handleLobbyMessage);
+    socket.on('game_message', handleGameMessage); // Listen directly to socket
     window.addEventListener('systemMessage', handleSystemMessageEvent as EventListener);
 
     return () => {
       window.removeEventListener('gameMessage', handleGameMessageEvent as EventListener);
       socket.off('lobby_chat_message', handleLobbyMessage);
+      socket.off('game_message', handleGameMessage);
       window.removeEventListener('systemMessage', handleSystemMessageEvent as EventListener);
     };
   }, [socket, gameId]);

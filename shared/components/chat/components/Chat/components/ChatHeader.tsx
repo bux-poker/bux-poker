@@ -27,6 +27,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   const isSmallScreen = screenWidth >= 600 && screenWidth <= 649;
   const isMediumScreen = screenWidth >= 700 && screenWidth <= 750;
   const scale = isSmallScreen ? 0.8 : isMediumScreen ? 0.85 : 1;
+  // Don't show header if player list tab is disabled
+  if (!showPlayerListTab) {
+    return null;
+  }
+
   return (
     <div 
       className="flex items-center justify-between bg-gray-900 border-b border-gray-600"
