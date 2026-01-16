@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { Card } from '@shared/types/poker';
 
 // Chip component with color based on value
