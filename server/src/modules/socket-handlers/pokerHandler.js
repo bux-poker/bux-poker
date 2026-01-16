@@ -558,114 +558,16 @@ export function registerPokerHandlers(io) {
         let state = tableState.get(gameId);
         if (!state && game.status === "ACTIVE" && game.players.length >= 2) {
           try {
-            // Get the tournament's first blind level
-            let smallBlind = 10;
-            let bigBlind = 20;
-            
-            if (game.tournament?.blindLevelsJson) {
-              try {
-                const blindLevels = JSON.parse(game.tournament.blindLevelsJson);
-                if (blindLevels && blindLevels.length > 0) {
-                  const firstLevel = blindLevels[0];
-                  smallBlind = firstLevel.smallBlind || 10;
-                  bigBlind = firstLevel.bigBlind || 20;
-                }
-              } catch (e) {
-                console.warn("Failed to parse blind levels, using defaults");
-              }
-            }
-
-            // Create engine with tournament blind levels
-            const tournamentEngine = new TexasHoldem({ 
-              smallBlind, 
-              bigBlind 
-            });
-
-            // Deal hole cards
-            const deck = tournamentEngine.createShuffledDeck();
-            const { deck: remainingDeck, players: dealtHands } = tournamentEngine.dealHoleCards(
-              deck,
-              game.players.length
-            );
-
-            // Persist hole cards
-            await Promise.all(
-              game.players.map((p, index) =>
-                prisma.player.update({
-                  where: { id: p.id },
-                  data: {
-                    holeCards: JSON.stringify(dealtHands[index])
-                  }
-                })
-              )
-            );
-
-            // Create betting round
-            const bettingRound = new BettingRound({
-              smallBlind,
-              bigBlind,
-              startingPot: game.pot
-            });
-
-            // Set up blinds (SB and BB)
-            // Dealer is the last player (position before SB, wrapping around)
-            const dealerPlayer = game.players[game.players.length - 1];
-            const sbPlayer = game.players[0];
-            const bbPlayer = game.players[1] || game.players[0];
-            
-            if (sbPlayer.chips >= smallBlind) {
-              bettingRound.bet(sbPlayer.id, smallBlind);
-              await prisma.player.update({
-                where: { id: sbPlayer.id },
-                data: { chips: sbPlayer.chips - smallBlind }
-              });
-            }
-
-            if (bbPlayer.chips >= bigBlind) {
-              bettingRound.bet(bbPlayer.id, bigBlind);
-              await prisma.player.update({
-                where: { id: bbPlayer.id },
-                data: { chips: bbPlayer.chips - bigBlind }
-              });
-            }
-
-            // Create hand state
-            state = {
-              street: "PREFLOP",
-              deck: remainingDeck,
-              communityCards: [],
-              bettingRound,
-              pot: bettingRound.getTotalPot(),
-              dealerSeat: dealerPlayer.seatNumber,
-              smallBlindSeat: sbPlayer.seatNumber,
-              bigBlindSeat: bbPlayer.seatNumber,
-              players: await Promise.all(
-                game.players.map(async (p) => {
-                  const updated = await prisma.player.findUnique({ where: { id: p.id } });
-                  return {
-                    ...p,
-                    chips: updated?.chips || p.chips,
-                    contributions: (p.id === sbPlayer.id ? smallBlind : 0) + (p.id === bbPlayer.id ? bigBlind : 0)
-                  };
-                })
-              )
-            };
-
-            tableState.set(gameId, state);
-
-            // Update game pot
-            await prisma.game.update({
-              where: { id: gameId },
-              data: { pot: state.pot }
-            });
-
-            console.log(`[POKER] Auto-started hand for game ${gameId} with ${game.players.length} players`);
+            // Use the exported startHandForGame function to ensure consistency
+            state = await startHandForGame(gameId, socket.server);
           } catch (handError) {
             console.error("[POKER] Error auto-starting hand:", handError);
             // Continue without state if hand creation fails
           }
         }
 
+        // Get state again in case it was just created
+        state = tableState.get(gameId);
         const payload = buildClientGameState(game, state);
 
         socket.emit("game-state", payload);
