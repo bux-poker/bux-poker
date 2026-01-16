@@ -226,16 +226,26 @@ export async function startHandForGame(gameId, io) {
     bigBlind 
   });
 
-  // Randomly assign dealer (pick random player index)
+  // Randomly assign dealer (pick random player)
   const dealerIndex = Math.floor(Math.random() * game.players.length);
-  
-  // Calculate SB and BB positions (dealer + 1 = SB, dealer + 2 = BB, wrapping)
-  const sbIndex = (dealerIndex + 1) % game.players.length;
-  const bbIndex = (dealerIndex + 2) % game.players.length;
-  
   const dealerPlayer = game.players[dealerIndex];
-  const sbPlayer = game.players[sbIndex];
-  const bbPlayer = game.players[bbIndex];
+  
+  // Seats are numbered anticlockwise, but blinds move clockwise (to the left)
+  // So we need to decrease seat numbers (wrapping around) to move clockwise
+  const dealerSeat = dealerPlayer.seatNumber;
+  const maxSeat = game.players.length;
+  
+  // Calculate SB and BB seat numbers (clockwise = decreasing seat numbers, wrapping)
+  const sbSeat = dealerSeat - 1 <= 0 ? maxSeat : dealerSeat - 1;
+  const bbSeat = dealerSeat - 2 <= 0 ? (maxSeat + dealerSeat - 2) : dealerSeat - 2;
+  
+  // Find players at those seat numbers
+  const sbPlayer = game.players.find(p => p.seatNumber === sbSeat);
+  const bbPlayer = game.players.find(p => p.seatNumber === bbSeat);
+  
+  if (!sbPlayer || !bbPlayer) {
+    throw new Error(`Could not find SB or BB players. Dealer seat: ${dealerSeat}, SB seat: ${sbSeat}, BB seat: ${bbSeat}`);
+  }
 
   // Deal hole cards
   const deck = tournamentEngine.createShuffledDeck();
