@@ -882,8 +882,28 @@ async function moveToNextPlayer(gameId, io) {
     startTurnTimer(gameId, state.currentTurnUserId, io);
   } else {
     // No player found who needs to act - betting round should be complete
+    // Set currentTurnUserId to null to signal that betting is complete
     console.log(`[POKER] Turn rotation: No next player found from seat ${currentSeat} (checked seats: ${checkedSeats.join(', ')}) - betting should be complete`);
     state.currentTurnUserId = null;
+    
+    // Immediately check if betting is complete and advance if needed
+    // This ensures post-flop betting rounds complete correctly
+    const activePlayerIds = state.players
+      .filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED')
+      .map(p => p.id);
+    
+    const bettingComplete = state.bettingRound.isBettingComplete(
+      activePlayerIds,
+      state.lastRaiseUserId,
+      state.currentTurnUserId, // This is now null
+      state.players
+    );
+    
+    if (bettingComplete && io) {
+      // Advance to next street
+      const { advanceToNextStreet } = await import("./pokerHandler.js");
+      await advanceToNextStreet(gameId, io);
+    }
   }
 }
 

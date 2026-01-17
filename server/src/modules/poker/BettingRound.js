@@ -96,10 +96,21 @@ export class BettingRound {
       return false; // Can't be complete if contributions aren't equal
     }
     
-    // If no one has raised, betting is complete when all have equal contributions
+    // If no one has raised, betting is complete when:
+    // 1. All have equal contributions (checked above)
+    // 2. AND there's no current turn (meaning action has gone around to all players)
+    // OR currentTurnUserId is null (no player needs to act)
     if (!lastRaiseUserId) {
-      console.log(`[BETTING] Complete: all contributed equally, no raises`);
-      return true;
+      // No raise - betting is complete only if no player needs to act (currentTurnUserId is null)
+      // This means action has gone around to all players
+      if (!currentTurnUserId) {
+        console.log(`[BETTING] Complete: all contributed equally, no raises, no player needs to act`);
+        return true;
+      } else {
+        // Still have a current turn - players still need to act
+        console.log(`[BETTING] Not complete: all contributed equally, no raises, but currentTurnUserId is ${currentTurnUserId} - players still need to act`);
+        return false;
+      }
     }
     
     // If someone raised, we need to ensure action has come back to them
