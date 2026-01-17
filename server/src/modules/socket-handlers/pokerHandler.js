@@ -142,6 +142,7 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
       state.bettingRound.bet(player.id, amount);
       player.chips -= amount;
       state.pot = state.bettingRound.getTotalPot();
+      state.lastRaiseUserId = player.userId; // Track who raised
       break;
     }
     case "CALL": {
@@ -169,6 +170,12 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
       const allInAmount = player.chips;
       if (allInAmount <= 0) {
         throw new Error("Cannot go all-in with zero chips");
+      }
+      // All-in acts as a raise if it's more than current bet
+      const currentContribution = state.bettingRound.getPlayerContribution(player.id);
+      const allInContribution = currentContribution + allInAmount;
+      if (allInContribution > state.bettingRound.currentBet) {
+        state.lastRaiseUserId = player.userId; // Track who raised (all-in counts as raise)
       }
       state.bettingRound.bet(player.id, allInAmount);
       player.chips = 0;
@@ -584,12 +591,36 @@ async function handleTestPlayerAction(gameId, userId, io) {
 
     if (!game) return;
 
-    // Move to next player
-    await moveToNextPlayer(gameId, io);
-
-    const payload = buildClientGameState(game, newState);
-    if (io) {
-      io.to(`game:${gameId}`).emit("game-state", payload);
+    // Check if betting round is complete (same logic as regular player action)
+    const activePlayerIds = newState.players
+      .filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED')
+      .map(p => p.id);
+    
+    const bettingComplete = newState.bettingRound.isBettingComplete(
+      activePlayerIds, 
+      newState.lastRaiseUserId,
+      newState.currentTurnUserId,
+      newState.players
+    );
+    
+    if (bettingComplete) {
+      // Advance to next street
+      await advanceToNextStreet(gameId, io);
+      // Get updated state after advancing street
+      const updatedGame = await prisma.game.findUnique({
+        where: { id: gameId },
+        include: { players: { include: { user: true } } }
+      });
+      if (updatedGame) {
+        const updatedState = tableState.get(gameId);
+        const payload = buildClientGameState(updatedGame, updatedState);
+        if (io) io.to(`game:${gameId}`).emit("game-state", payload);
+      }
+    } else {
+      // Move to next player in current betting round
+      await moveToNextPlayer(gameId, io);
+      const payload = buildClientGameState(game, newState);
+      if (io) io.to(`game:${gameId}`).emit("game-state", payload);
     }
   } catch (err) {
     console.error("[POKER] Error handling test player action:", err);
@@ -878,7 +909,12 @@ export function registerPokerHandlers(io) {
           .filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED')
           .map(p => p.id);
         
-        const bettingComplete = state.bettingRound.isBettingComplete(activePlayerIds, state.lastRaiseUserId);
+        const bettingComplete = state.bettingRound.isBettingComplete(
+          activePlayerIds, 
+          state.lastRaiseUserId,
+          state.currentTurnUserId,
+          state.players
+        );
         
         if (bettingComplete) {
           // Advance to next street
