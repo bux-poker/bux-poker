@@ -885,9 +885,17 @@ async function moveToNextPlayer(gameId, io) {
   // Find the first one who needs to act, starting from the player after current player
   // Clockwise = decreasing seat numbers (seats numbered anticlockwise)
   
-  // Build ordered list of active players in clockwise order starting from current player
+  // Build ordered list of active seats in clockwise order (descending)
   const activeSeatsList = Array.from(activeSeats).sort((a, b) => b - a); // Sort descending for clockwise
   const currentIndex = activeSeatsList.indexOf(currentSeat);
+  
+  console.log(`[TURN ORDER] Active seats (descending/clockwise): [${activeSeatsList.join(', ')}]`);
+  console.log(`[TURN ORDER] Current seat: ${currentSeat}, index in list: ${currentIndex}`);
+  
+  if (currentIndex === -1) {
+    console.error(`[TURN ORDER] ERROR: Current seat ${currentSeat} not found in active seats!`);
+    return;
+  }
   
   // Get all players in clockwise order starting from next player after current
   const playersInOrder = [];
@@ -901,6 +909,8 @@ async function moveToNextPlayer(gameId, io) {
     }
   }
   
+  console.log(`[TURN ORDER] Players in clockwise order from seat ${currentSeat}: ${playersInOrder.map(p => `seat ${p.seatNumber} (${p.name || p.userId})`).join(' → ')}`);
+  
   // Find first player who needs to act
   for (const player of playersInOrder) {
     const contribution = state.bettingRound?.getPlayerContribution(player.id) || 0;
@@ -908,16 +918,24 @@ async function moveToNextPlayer(gameId, io) {
     let needsToAct = false;
     if (currentBet === 0) {
       // When currentBet === 0, player needs to act if they haven't acted yet this round
-      needsToAct = !state.actedPlayersInRound.has(player.userId);
+      const hasActed = state.actedPlayersInRound.has(player.userId);
+      needsToAct = !hasActed;
+      console.log(`[TURN ORDER] Checking seat ${player.seatNumber} (${player.name || player.userId}): currentBet=0, hasActed=${hasActed}, needsToAct=${needsToAct}`);
     } else {
       // When currentBet > 0, player needs to act if contribution < currentBet
       needsToAct = contribution < currentBet;
+      console.log(`[TURN ORDER] Checking seat ${player.seatNumber} (${player.name || player.userId}): contribution=${contribution}, currentBet=${currentBet}, needsToAct=${needsToAct}`);
     }
     
     if (needsToAct) {
       nextPlayer = player;
+      console.log(`[TURN ORDER] SELECTED: seat ${player.seatNumber} (${player.name || player.userId}) as next player`);
       break;
     }
+  }
+  
+  if (!nextPlayer) {
+    console.log(`[TURN ORDER] No player found who needs to act after checking all ${playersInOrder.length} players in clockwise order`);
   }
   
   if (nextPlayer) {
