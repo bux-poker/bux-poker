@@ -149,11 +149,10 @@ export function PokerGameView() {
       return;
     }
     
-    // Timer should work when tournament is RUNNING OR SEATED (if startedAt is set)
-    // SEATED means registration closed and players seated, but game not started yet
-    // RUNNING means game has started
-    if (tournament.status !== 'RUNNING' && tournament.status !== 'SEATED') {
-      console.log('[BLIND TIMER] Tournament status is not RUNNING or SEATED:', tournament.status);
+    // Timer only works when tournament is RUNNING (after Start Tournament is clicked)
+    // This sets startedAt and status to RUNNING
+    if (tournament.status !== 'RUNNING') {
+      console.log('[BLIND TIMER] Tournament status is not RUNNING:', tournament.status, '- Timer will work after clicking Start Tournament');
       setNextBlindTime('--:--');
       return;
     }
