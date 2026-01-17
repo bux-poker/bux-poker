@@ -5,6 +5,7 @@ import { prisma } from "../../config/database.js";
 import { PokerGameService } from "../../services/PokerGameService.js";
 import { TexasHoldem } from "../poker/TexasHoldem.js";
 import { BettingRound } from "../poker/BettingRound.js";
+import { HandEvaluator } from "../poker/HandEvaluator.js";
 
 const gameService = new PokerGameService();
 const engine = new TexasHoldem({ smallBlind: 10, bigBlind: 20 });
@@ -108,7 +109,7 @@ async function ensureHandState(gameId) {
   const bettingRound = new BettingRound({
     smallBlind: engine.smallBlind,
     bigBlind: engine.bigBlind,
-    startingPot: game.pot
+    startingPot: 0 // Pot is tracked in state, not in BettingRound
   });
 
   state = {
@@ -116,7 +117,7 @@ async function ensureHandState(gameId) {
     deck: remainingDeck,
     communityCards: [],
     bettingRound,
-    pot: game.pot,
+    pot: game.pot + bettingRound.getTotalPot(), // Start with game.pot + current betting round (blinds)
     players: game.players.map((p) => ({
       ...p,
       contributions: 0
@@ -331,10 +332,12 @@ export async function startHandForGame(gameId, io) {
   );
 
   // Create betting round
+  // Note: startingPot is set to 0 because we track the pot in state.pot
+  // The BettingRound only tracks bets for the current street
   const bettingRound = new BettingRound({
     smallBlind,
     bigBlind,
-    startingPot: game.pot
+    startingPot: 0
   });
 
   // Post blinds using postBlinds method (doesn't require minimum raise validation)
@@ -392,7 +395,7 @@ export async function startHandForGame(gameId, io) {
     deck: remainingDeck,
     communityCards: [],
     bettingRound,
-    pot: bettingRound.getTotalPot(),
+    pot: game.pot + bettingRound.getTotalPot(), // Start with game.pot + current betting round (blinds)
     dealerSeat: dealerPlayer.seatNumber,
     smallBlindSeat: sbPlayer.seatNumber,
     bigBlindSeat: bbPlayer.seatNumber,
@@ -724,6 +727,158 @@ async function handleTestPlayerAction(gameId, userId, io) {
 }
 
 /**
+ * Handle showdown when river betting completes - determine winners and distribute pot
+ */
+async function handleShowdown(gameId, io) {
+  const state = tableState.get(gameId);
+  if (!state) return;
+
+  const evaluator = new HandEvaluator();
+  
+  // Collect pot from current betting round
+  const collectedPot = state.bettingRound.getTotalPot();
+  const oldPot = state.pot || 0;
+  state.pot = oldPot + collectedPot;
+  
+  const activePlayers = state.players.filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
+  
+  if (activePlayers.length === 0) {
+    console.log(`[SHOWDOWN] No active players for showdown`);
+    return;
+  }
+
+  console.log(`[SHOWDOWN] Starting showdown with ${activePlayers.length} active players`);
+  console.log(`[SHOWDOWN] Community cards:`, state.communityCards);
+  console.log(`[SHOWDOWN] Total pot: ${state.pot} (old: ${oldPot}, collected: ${collectedPot})`);
+
+  // Evaluate all active players' hands
+  const handResults = activePlayers.map(player => {
+    if (!player.holeCards || !Array.isArray(player.holeCards) || player.holeCards.length !== 2) {
+      console.warn(`[SHOWDOWN] Player ${player.name || player.userId} (seat ${player.seatNumber}) has invalid hole cards:`, player.holeCards);
+      return { player, hand: null, strength: -1 };
+    }
+
+    const sevenCards = [...state.communityCards, ...player.holeCards];
+    const hand = evaluator.evaluateBestHand(sevenCards);
+    
+    console.log(`[SHOWDOWN] Player ${player.name || player.userId} (seat ${player.seatNumber}): ${hand.category}, strength=${hand.strength}`);
+    
+    return {
+      player,
+      hand,
+      strength: hand.strength
+    };
+  }).filter(result => result.hand !== null);
+
+  if (handResults.length === 0) {
+    console.error(`[SHOWDOWN] No valid hands evaluated`);
+    return;
+  }
+
+  // Find maximum strength (best hand)
+  const maxStrength = Math.max(...handResults.map(r => r.strength));
+  const winners = handResults.filter(r => r.strength === maxStrength);
+
+  console.log(`[SHOWDOWN] ${winners.length} winner(s) with strength ${maxStrength}:`);
+  winners.forEach(w => {
+    console.log(`[SHOWDOWN]   Winner: ${w.player.name || w.player.userId} (seat ${w.player.seatNumber}) - ${w.hand.category}`);
+  });
+
+  // Distribute pot among winners (split evenly)
+  const potPerWinner = Math.floor(state.pot / winners.length);
+  const remainder = state.pot % winners.length; // Extra chips go to first winner
+
+  winners.forEach((winner, index) => {
+    const amount = potPerWinner + (index === 0 ? remainder : 0);
+    winner.player.chips += amount;
+    console.log(`[SHOWDOWN] Distributing ${amount} chips to ${winner.player.name || winner.player.userId} (seat ${winner.player.seatNumber})`);
+    
+    // Update player chips in database (async)
+    prisma.player.update({
+      where: { id: winner.player.id },
+      data: { chips: winner.player.chips }
+    }).catch(err => console.error(`[SHOWDOWN] Error updating chips for player ${winner.player.id}:`, err));
+  });
+
+  // Reset pot
+  const oldPot = state.pot;
+  state.pot = 0;
+
+  // Update game pot in database (async)
+  prisma.game.update({
+    where: { id: gameId },
+    data: { pot: 0 }
+  }).catch(err => console.error(`[SHOWDOWN] Error updating game pot:`, err));
+
+  // Build game state with showdown results
+  const game = await prisma.game.findUnique({
+    where: { id: gameId },
+    include: {
+      players: {
+        include: { user: true }
+      }
+    }
+  });
+
+  if (!game) return;
+
+  // Build result payload for clients
+  const showdownResults = {
+    winners: winners.map(w => ({
+      playerId: w.player.id,
+      userId: w.player.userId,
+      name: w.player.name || w.player.user?.username || `Player ${w.player.seatNumber}`,
+      seatNumber: w.player.seatNumber,
+      handCategory: w.hand.category,
+      potWon: potPerWinner + (winners.indexOf(w) === 0 ? remainder : 0)
+    })),
+    allHands: handResults.map(r => ({
+      playerId: r.player.id,
+      userId: r.player.userId,
+      name: r.player.name || r.player.user?.username || `Player ${r.player.seatNumber}`,
+      seatNumber: r.player.seatNumber,
+      handCategory: r.hand.category,
+      strength: r.strength
+    }))
+  };
+
+  // Emit showdown results
+  if (io) {
+    io.to(`game:${gameId}`).emit("showdown", {
+      gameId,
+      results: showdownResults
+    });
+
+    // Also emit updated game state
+    const payload = buildClientGameState(game, state);
+    io.to(`game:${gameId}`).emit("game-state", payload);
+  }
+
+  // Clear hand state after a short delay (allow clients to see results)
+  setTimeout(() => {
+    console.log(`[SHOWDOWN] Clearing hand state for next hand`);
+    const savedPlayers = [...state.players]; // Save players array before clearing state
+    tableState.delete(gameId);
+    
+    // Reset all players' statuses for next hand
+    const resetPromises = savedPlayers.map(p => 
+      prisma.player.update({
+        where: { id: p.id },
+        data: { 
+          status: 'ACTIVE',
+          holeCards: "",
+          lastAction: null
+        }
+      }).catch(err => console.error(`[SHOWDOWN] Error resetting player ${p.id}:`, err))
+    );
+    
+    Promise.all(resetPromises).then(() => {
+      console.log(`[SHOWDOWN] All players reset for next hand`);
+    });
+  }, 5000); // 5 second delay to show results
+}
+
+/**
  * Advance to next street (deal community cards) when betting round completes
  */
 async function advanceToNextStreet(gameId, io) {
@@ -767,9 +922,8 @@ async function advanceToNextStreet(gameId, io) {
     state.communityCards = [...state.communityCards, riverCard];
     state.street = "RIVER";
   } else if (state.street === "RIVER") {
-    // Hand complete - showdown or end hand
-    // TODO: Implement showdown logic
-    state.currentTurnUserId = null;
+    // Hand complete - showdown
+    await handleShowdown(gameId, io);
     return;
   }
 

@@ -12,7 +12,10 @@ export class BettingRound {
   }
 
   getTotalPot() {
-    let total = this.pot;
+    // Only return the sum of player bets for this betting round
+    // The startingPot (this.pot) is only for tracking, not included in getTotalPot
+    // because it's already been added to state.pot when the betting round was created
+    let total = 0;
     for (const amount of this.playerBets.values()) {
       total += amount;
     }
