@@ -687,12 +687,17 @@ async function handleTestPlayerAction(gameId, userId, io) {
       .filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED')
       .map(p => p.id);
     
+    console.log(`[TEST PLAYER] Checking betting complete after ${action} by ${player.name || userId}`);
+    console.log(`[TEST PLAYER] Active players: ${activePlayerIds.length}, lastRaiseUserId=${newState.lastRaiseUserId || 'null'}, currentTurnUserId=${newState.currentTurnUserId || 'null'}`);
+    
     const bettingComplete = newState.bettingRound.isBettingComplete(
       activePlayerIds, 
       newState.lastRaiseUserId,
       newState.currentTurnUserId,
       newState.players
     );
+    
+    console.log(`[TEST PLAYER] Betting complete? ${bettingComplete}`);
     
     if (bettingComplete) {
       // Advance to next street
@@ -840,11 +845,57 @@ async function moveToNextPlayer(gameId, io) {
   const currentPlayer = activePlayers.find((p) => p.userId === state.currentTurnUserId);
   
   if (!currentPlayer) {
-    // Current player not found, start with UTG (first after BB)
-    // This should already be set in startHandForGame, but fallback here
+    // Current player not found (they might have folded or been eliminated)
+    // Find the player that was the current turn from ALL players (including folded)
+    const allPlayersCurrent = state.players.find((p) => p.userId === state.currentTurnUserId);
+    
+    console.log(`[TURN ORDER] Current player not in active players. Looking for folded player: ${state.currentTurnUserId}, found: ${!!allPlayersCurrent}`);
+    
+    if (allPlayersCurrent) {
+      // The current player exists but is folded/eliminated - start from next seat clockwise after them
+      const currentSeat = allPlayersCurrent.seatNumber;
+      const allSeatNumbers = state.players.map(p => p.seatNumber);
+      const minSeat = Math.min(...allSeatNumbers);
+      const maxSeat = Math.max(...allSeatNumbers);
+      
+      console.log(`[TURN ORDER] Folded player was at seat ${currentSeat}, starting search clockwise from seat ${currentSeat - 1 < minSeat ? maxSeat : currentSeat - 1}`);
+      
+      // Start from next seat clockwise after the folded player
+      let nextSeat = currentSeat - 1;
+      if (nextSeat < minSeat) nextSeat = maxSeat;
+      
+      // Find first active player at or after this seat
+      let nextPlayer = activePlayers.find(p => p.seatNumber === nextSeat);
+      let attempts = 0;
+      while (!nextPlayer && attempts < activePlayers.length) {
+        nextSeat = nextSeat - 1;
+        if (nextSeat < minSeat) nextSeat = maxSeat;
+        nextPlayer = activePlayers.find(p => p.seatNumber === nextSeat);
+        attempts++;
+        console.log(`[TURN ORDER] Searching for active player, checked seat ${nextSeat}, found: ${!!nextPlayer}`);
+      }
+      
+      if (nextPlayer) {
+        console.log(`[TURN ORDER] Found next player after folded player: seat ${nextPlayer.seatNumber} (${nextPlayer.name || nextPlayer.userId})`);
+        state.currentTurnUserId = nextPlayer.userId;
+        startTurnTimer(gameId, state.currentTurnUserId, io);
+        return;
+      } else {
+        console.log(`[TURN ORDER] No active players found after folded player at seat ${currentSeat}`);
+      }
+    }
+    
+    // Fallback: start with first active player
+    console.log(`[TURN ORDER] Falling back to first active player`);
     const sortedPlayers = [...activePlayers].sort((a, b) => a.seatNumber - b.seatNumber);
-    state.currentTurnUserId = sortedPlayers[0].userId;
-    startTurnTimer(gameId, state.currentTurnUserId, io);
+    if (sortedPlayers.length > 0) {
+      state.currentTurnUserId = sortedPlayers[0].userId;
+      startTurnTimer(gameId, state.currentTurnUserId, io);
+      console.log(`[TURN ORDER] Set turn to first active player: seat ${sortedPlayers[0].seatNumber} (${sortedPlayers[0].name || sortedPlayers[0].userId})`);
+    } else {
+      console.log(`[TURN ORDER] No active players found, setting currentTurnUserId to null`);
+      state.currentTurnUserId = null;
+    }
     return;
   }
 
