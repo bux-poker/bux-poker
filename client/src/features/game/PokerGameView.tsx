@@ -72,7 +72,24 @@ export function PokerGameView() {
     }
   }, [gameState?.tournamentId, refetchTournament]);
   
-  // Also refetch periodically if tournament hasn't started yet
+  // Listen for tournament-started socket event to refetch immediately
+  useEffect(() => {
+    if (!socket || !gameState?.tournamentId) return;
+    
+    const handleTournamentStarted = (data: { tournamentId: string; startedAt: string }) => {
+      if (data.tournamentId === gameState.tournamentId) {
+        console.log('[BLIND TIMER] Tournament started event received, refetching tournament data...');
+        refetchTournament();
+      }
+    };
+    
+    socket.on('tournament-started', handleTournamentStarted);
+    return () => {
+      socket.off('tournament-started', handleTournamentStarted);
+    };
+  }, [socket, gameState?.tournamentId, refetchTournament]);
+  
+  // Also refetch periodically if tournament hasn't started yet (fallback)
   useEffect(() => {
     if (gameState?.tournamentId && tournament && tournament.status !== 'RUNNING' && tournament.status !== 'COMPLETED' && !tournament.startedAt) {
       // Refetch every 3 seconds if tournament hasn't started yet

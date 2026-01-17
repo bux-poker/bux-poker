@@ -88,11 +88,12 @@ export class TournamentEngine {
     }
 
     // Mark as RUNNING and record actual start time
+    const startedAt = new Date();
     await prisma.tournament.update({
       where: { id: tournamentId },
       data: {
         status: "RUNNING",
-        startedAt: new Date() // Record actual start time
+        startedAt: startedAt // Record actual start time
       }
     });
 
@@ -100,6 +101,15 @@ export class TournamentEngine {
     const { startHandForGame, getIO } = await import("../modules/socket-handlers/pokerHandler.js");
     // Use provided io or get from pokerHandler
     const socketIO = io || getIO();
+    
+    // Broadcast tournament started event to all clients so they can refetch tournament data
+    if (socketIO) {
+      socketIO.emit("tournament-started", {
+        tournamentId,
+        startedAt: startedAt.toISOString()
+      });
+      console.log(`[TOURNAMENT] Broadcasted tournament-started event for tournament ${tournamentId}`);
+    }
     
     if (socketIO) {
       const games = await prisma.game.findMany({
