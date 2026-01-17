@@ -609,48 +609,55 @@ async function moveToNextPlayer(gameId, io) {
     return;
   }
 
-  // Sort players by seat number (ascending = anticlockwise order)
-  const sortedPlayers = [...activePlayers].sort((a, b) => a.seatNumber - b.seatNumber);
-  
   if (!state.currentTurnUserId) {
-    // No current player, start with first active player (lowest seat number)
+    // No current player, start with UTG (first player after BB, which we'll calculate from dealer)
+    // For now, just use the first active player with lowest seat number
+    const sortedPlayers = [...activePlayers].sort((a, b) => a.seatNumber - b.seatNumber);
     state.currentTurnUserId = sortedPlayers[0].userId;
     startTurnTimer(gameId, state.currentTurnUserId, io);
     return;
   }
 
-  const currentPlayer = sortedPlayers.find((p) => p.userId === state.currentTurnUserId);
+  // Get max seat number from all players (not just active)
+  const allSeats = Math.max(...state.players.map(p => p.seatNumber));
+  const currentPlayer = activePlayers.find((p) => p.userId === state.currentTurnUserId);
   
   if (!currentPlayer) {
-    // Current player not found in active players, start with first
+    // Current player not found, start with first active
+    const sortedPlayers = [...activePlayers].sort((a, b) => a.seatNumber - b.seatNumber);
     state.currentTurnUserId = sortedPlayers[0].userId;
     startTurnTimer(gameId, state.currentTurnUserId, io);
     return;
   }
 
-  const maxSeat = Math.max(...sortedPlayers.map(p => p.seatNumber));
   const currentSeat = currentPlayer.seatNumber;
   
-  // Find next player clockwise (decreasing seat number, wrapping around)
+  // Find next player clockwise (decreasing seat number, wrapping)
+  // Start from currentSeat - 1 and search backwards
   let nextSeat = currentSeat - 1;
-  if (nextSeat <= 0) nextSeat = maxSeat;
+  if (nextSeat <= 0) nextSeat = allSeats;
   
-  let nextPlayer = sortedPlayers.find(p => p.seatNumber === nextSeat);
-  
-  // If no player found at nextSeat, keep going backwards until we find one
   let attempts = 0;
-  while (!nextPlayer && attempts < sortedPlayers.length) {
-    nextSeat = nextSeat - 1;
-    if (nextSeat <= 0) nextSeat = maxSeat;
-    nextPlayer = sortedPlayers.find(p => p.seatNumber === nextSeat);
-    attempts++;
+  let nextPlayer = null;
+  
+  // Search through all possible seats (at most allSeats attempts)
+  while (attempts < allSeats && !nextPlayer) {
+    // Look for an active player at this seat (excluding current player)
+    nextPlayer = activePlayers.find(p => p.seatNumber === nextSeat && p.userId !== state.currentTurnUserId);
+    
+    if (!nextPlayer) {
+      // Move to next seat clockwise (decrease seat number)
+      nextSeat = nextSeat - 1;
+      if (nextSeat <= 0) nextSeat = allSeats;
+      attempts++;
+    }
   }
   
   if (nextPlayer && nextPlayer.userId !== state.currentTurnUserId) {
     state.currentTurnUserId = nextPlayer.userId;
     startTurnTimer(gameId, state.currentTurnUserId, io);
   } else {
-    // No next player found or same player, end turn
+    // Only one player left or no valid next player
     state.currentTurnUserId = null;
   }
 }
