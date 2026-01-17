@@ -363,6 +363,11 @@ export function PokerGameView() {
     id: p.id,
     userId: p.id, // Assuming player id maps to userId for now
     name: p.name,
+    team: 1, // Default team for poker (not team-based)
+    position: p.seatNumber, // Use seatNumber as position
+    seatIndex: p.seatNumber - 1, // Convert to 0-based index
+    isDealer: p.seatNumber === gameState.dealerSeat,
+    hand: [], // Poker hands are separate from player list
     avatarUrl: undefined,
     isBot: false,
     chips: p.chips,

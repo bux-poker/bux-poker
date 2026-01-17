@@ -8,6 +8,7 @@ interface BettingControlsProps {
   street?: string;
   minimumRaise?: number;
   isBigBlind?: boolean;
+  isMyTurn?: boolean; // Whether it's currently the player's turn
   myContribution?: number; // How much I've already contributed this round
 }
 
