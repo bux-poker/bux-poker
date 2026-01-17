@@ -134,18 +134,23 @@ export function PokerGameView() {
       return;
     }
     
-    console.log('[BLIND TIMER] Tournament data:', {
-      id: tournament.id,
-      startedAt: tournament.startedAt,
-      status: tournament.status,
-      blindLevels: tournament.blindLevels
-    });
-
     const calculateNextBlind = () => {
+      if (!tournament.startedAt) {
+        console.warn('[BLIND TIMER] Tournament startedAt is null/undefined:', tournament);
+        setNextBlindTime('--:--');
+        return;
+      }
+      
       const now = new Date();
       const startedAt = new Date(tournament.startedAt);
       const elapsedMs = now.getTime() - startedAt.getTime();
       let elapsedMinutes = elapsedMs / 1000 / 60;
+      
+      if (elapsedMs < 0) {
+        // Tournament hasn't started yet
+        setNextBlindTime('--:--');
+        return;
+      }
 
       const blindLevels = tournament.blindLevels || [];
       if (blindLevels.length === 0) {

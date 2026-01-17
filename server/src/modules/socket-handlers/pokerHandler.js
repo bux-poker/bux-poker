@@ -724,7 +724,9 @@ async function advanceToNextStreet(gameId, io) {
     }
     
     if (firstToActPlayer) {
+      console.log(`[POKER] advanceToNextStreet: Starting new betting round on ${state.street}, first to act: seat ${firstToActPlayer.seatNumber} (${firstToActPlayer.name || firstToActPlayer.userId})`);
       state.currentTurnUserId = firstToActPlayer.userId;
+      state.lastRaiseUserId = null; // Reset last raise for new street
       startTurnTimer(gameId, firstToActPlayer.userId, io);
     }
   }
