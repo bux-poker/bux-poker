@@ -376,9 +376,11 @@ export async function startHandForGame(gameId, io) {
         }
         return {
           ...p,
+          user: p.user, // Include user object for test player detection
           chips: updated?.chips || p.chips,
           holeCards: holeCards, // Include parsed hole cards
-          contributions: (p.id === sbPlayer.id ? smallBlind : 0) + (p.id === bbPlayer.id ? bigBlind : 0)
+          contributions: (p.id === sbPlayer.id ? smallBlind : 0) + (p.id === bbPlayer.id ? bigBlind : 0),
+          name: p.user?.username || "Player" // Store name for test player detection
         };
       })
     )
@@ -429,7 +431,9 @@ function startTurnTimer(gameId, userId, io) {
   const player = state.players.find((p) => p.userId === userId);
   if (!player) return;
 
-  const isTestPlayer = player.name?.toLowerCase().startsWith('test player');
+  // Check if test player - test players have username that starts with "Test Player"
+  const playerName = player.name || player.user?.username || "";
+  const isTestPlayer = playerName.toLowerCase().startsWith('test player');
 
   if (isTestPlayer) {
     // Test players: 3 seconds total, auto-act after

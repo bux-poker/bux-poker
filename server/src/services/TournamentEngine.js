@@ -123,6 +123,9 @@ export class TournamentEngine {
       }
     }
 
+    // Start blind level timer
+    this.startBlindLevelTimer(tournamentId);
+
     // Refresh games after starting hands
     const updatedTournament = await prisma.tournament.findUnique({
       where: { id: tournamentId },
@@ -136,6 +139,114 @@ export class TournamentEngine {
     });
 
     return { tournamentId, games: updatedTournament?.games || [] };
+  }
+
+  /**
+   * Start blind level progression timer for a running tournament
+   */
+  startBlindLevelTimer(tournamentId) {
+    // Clear existing timer if any
+    if (this.blindTimers && this.blindTimers.has(tournamentId)) {
+      clearInterval(this.blindTimers.get(tournamentId));
+      this.blindTimers.delete(tournamentId);
+    }
+
+    // Initialize timers map if needed
+    if (!this.blindTimers) {
+      this.blindTimers = new Map();
+    }
+
+    // Check tournament blind levels every minute
+    const intervalId = setInterval(async () => {
+      try {
+        const tournament = await prisma.tournament.findUnique({
+          where: { id: tournamentId },
+        });
+
+        if (!tournament || tournament.status !== 'RUNNING' || !tournament.startedAt) {
+          // Tournament not running, clear timer
+          clearInterval(intervalId);
+          if (this.blindTimers) {
+            this.blindTimers.delete(tournamentId);
+          }
+          return;
+        }
+
+        // Parse blind levels
+        let blindLevels = [];
+        try {
+          blindLevels = tournament.blindLevelsJson ? JSON.parse(tournament.blindLevelsJson) : [];
+        } catch (e) {
+          console.error(`[TOURNAMENT] Failed to parse blind levels for tournament ${tournamentId}:`, e);
+          return;
+        }
+
+        if (blindLevels.length === 0) return;
+
+        // Calculate elapsed time since tournament started
+        const now = new Date();
+        const startedAt = new Date(tournament.startedAt);
+        const elapsedMs = now.getTime() - startedAt.getTime();
+        let elapsedMinutes = elapsedMs / 1000 / 60;
+
+        // Determine current blind level based on elapsed time
+        let currentLevelIndex = 0;
+        for (let i = 0; i < blindLevels.length; i++) {
+          const level = blindLevels[i];
+          if (level.duration === null) {
+            // Final level (infinite duration)
+            currentLevelIndex = i;
+            break;
+          }
+          if (elapsedMinutes <= level.duration) {
+            currentLevelIndex = i;
+            break;
+          }
+          elapsedMinutes -= level.duration;
+          // Account for break after level
+          if (level.breakAfter) {
+            elapsedMinutes -= level.breakAfter;
+          }
+        }
+
+        // Get current level from games
+        const games = await prisma.game.findMany({
+          where: {
+            tournamentId,
+            status: "ACTIVE"
+          }
+        });
+
+        if (games.length === 0) return;
+
+        // Check if we need to advance to next level
+        const gameLevel = games[0].currentBlindLevel || 0;
+        if (currentLevelIndex > gameLevel) {
+          console.log(`[TOURNAMENT] Advancing blind level for tournament ${tournamentId} from ${gameLevel} to ${currentLevelIndex}`);
+          await this.advanceBlindLevel(tournamentId);
+          
+          // Update blinds in active games
+          const newLevel = blindLevels[currentLevelIndex];
+          if (newLevel) {
+            for (const game of games) {
+              // Update game blinds - this will affect new hands
+              // Existing hands continue with their current blinds
+              await prisma.game.update({
+                where: { id: game.id },
+                data: {
+                  smallBlind: newLevel.smallBlind,
+                  bigBlind: newLevel.bigBlind
+                }
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`[TOURNAMENT] Error in blind level timer for tournament ${tournamentId}:`, err);
+      }
+    }, 60000); // Check every minute
+
+    this.blindTimers.set(tournamentId, intervalId);
   }
 
   /**
