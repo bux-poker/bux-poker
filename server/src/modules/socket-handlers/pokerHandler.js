@@ -873,12 +873,32 @@ export function registerPokerHandlers(io) {
           return;
         }
 
-        // Move to next player
-        await moveToNextPlayer(gameId, io);
-
-        const payload = buildClientGameState(game, state);
-
-        io.to(`game:${gameId}`).emit("game-state", payload);
+        // Check if betting round is complete
+        const activePlayerIds = state.players
+          .filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED')
+          .map(p => p.id);
+        
+        const bettingComplete = state.bettingRound.isBettingComplete(activePlayerIds, state.lastRaiseUserId);
+        
+        if (bettingComplete) {
+          // Advance to next street
+          await advanceToNextStreet(gameId, io);
+          // Get updated state after advancing street
+          const updatedGame = await prisma.game.findUnique({
+            where: { id: gameId },
+            include: { players: { include: { user: true } } }
+          });
+          if (updatedGame) {
+            const updatedState = tableState.get(gameId);
+            const payload = buildClientGameState(updatedGame, updatedState);
+            io.to(`game:${gameId}`).emit("game-state", payload);
+          }
+        } else {
+          // Move to next player in current betting round
+          await moveToNextPlayer(gameId, io);
+          const payload = buildClientGameState(game, state);
+          io.to(`game:${gameId}`).emit("game-state", payload);
+        }
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error("player-action error", err);
