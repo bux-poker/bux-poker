@@ -139,10 +139,50 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
   switch (action) {
     case "BET":
     case "RAISE": {
+      const wasRaise = state.lastRaiseUserId !== null;
       state.bettingRound.bet(player.id, amount);
       player.chips -= amount;
       state.pot = state.bettingRound.getTotalPot();
       state.lastRaiseUserId = player.userId; // Track who raised
+      
+      // If this is a raise, action needs to return to the first player clockwise from the raiser
+      // But we'll handle this in moveToNextPlayer by finding the first player who needs to act
+      if (wasRaise) {
+        // Reset turn to first player clockwise from raiser who needs to act on new bet
+        const raiserSeat = player.seatNumber;
+        const allSeatNumbers = state.players.map(p => p.seatNumber);
+        const minSeat = Math.min(...allSeatNumbers);
+        const maxSeat = Math.max(...allSeatNumbers);
+        
+        // Find first active player clockwise from raiser (excluding raiser themselves)
+        let nextSeat = raiserSeat - 1; // Clockwise = decrease
+        if (nextSeat < minSeat) nextSeat = maxSeat;
+        
+        const activePlayers = state.players.filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
+        let attempts = 0;
+        let nextPlayer = null;
+        
+        while (attempts < activePlayers.length && !nextPlayer) {
+          const playerAtSeat = activePlayers.find(p => p.seatNumber === nextSeat && p.userId !== player.userId);
+          if (playerAtSeat) {
+            // Check if this player needs to act (their contribution < current bet)
+            const contribution = state.bettingRound.getPlayerContribution(playerAtSeat.id);
+            if (contribution < state.bettingRound.currentBet) {
+              nextPlayer = playerAtSeat;
+            }
+          }
+          
+          if (!nextPlayer) {
+            nextSeat = nextSeat - 1;
+            if (nextSeat < minSeat) nextSeat = maxSeat;
+            attempts++;
+          }
+        }
+        
+        if (nextPlayer) {
+          state.currentTurnUserId = nextPlayer.userId;
+        }
+      }
       break;
     }
     case "CALL": {
