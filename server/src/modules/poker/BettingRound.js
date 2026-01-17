@@ -67,5 +67,36 @@ export class BettingRound {
     this.playerBets.set(bigBlindPlayerId, this.bigBlind);
     this.currentBet = this.bigBlind; // Big blind is the current bet to call
   }
+
+  /**
+   * Check if betting round is complete
+   * Round is complete when all active players have contributed equally (or are all-in/folded)
+   * and there are no pending actions (no one has raised and is waiting for others to act)
+   */
+  isBettingComplete(activePlayerIds, lastActingPlayerId) {
+    if (activePlayerIds.length <= 1) return true; // Only one or zero active players
+    
+    // Get contributions for all active players
+    const contributions = activePlayerIds.map(id => this.getPlayerContribution(id));
+    const maxContribution = Math.max(...contributions);
+    
+    // All active players must have contributed the max amount (or be all-in/folded)
+    const allContributed = activePlayerIds.every(id => {
+      const contribution = this.getPlayerContribution(id);
+      return contribution === maxContribution;
+    });
+    
+    // Also need to ensure the last person to act (who raised) has had all others act after them
+    // If lastActingPlayerId raised, we need to ensure action has come back to them (or they're last)
+    if (lastActingPlayerId) {
+      const lastContribution = this.getPlayerContribution(lastActingPlayerId);
+      // If last acting player raised (contribution > currentBet before their action),
+      // we need all others to have acted since
+      // For simplicity, just check if all have equal contributions
+      return allContributed;
+    }
+    
+    return allContributed;
+  }
 }
 

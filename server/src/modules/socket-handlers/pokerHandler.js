@@ -251,14 +251,14 @@ export async function startHandForGame(gameId, io) {
   const dealerIndex = Math.floor(Math.random() * game.players.length);
   const dealerPlayer = game.players[dealerIndex];
   
-  // Seats are numbered anticlockwise, so clockwise movement = INCREASING seat numbers
+  // Seats are numbered ANTICLOCKWISE, so CLOCKWISE movement = DECREASING seat numbers
   const dealerSeat = dealerPlayer.seatNumber;
   const maxSeat = Math.max(...game.players.map(p => p.seatNumber));
   const minSeat = Math.min(...game.players.map(p => p.seatNumber));
   
-  // Calculate SB and BB seat numbers (clockwise = increasing seat numbers, wrapping)
-  const sbSeat = dealerSeat + 1 > maxSeat ? minSeat : dealerSeat + 1;
-  const bbSeat = sbSeat + 1 > maxSeat ? minSeat : sbSeat + 1;
+  // Calculate SB and BB seat numbers (clockwise = DECREASING seat numbers, wrapping)
+  const sbSeat = dealerSeat - 1 < minSeat ? maxSeat : dealerSeat - 1;
+  const bbSeat = sbSeat - 1 < minSeat ? maxSeat : sbSeat - 1;
   
   // Find players at those seat numbers
   const sbPlayer = game.players.find(p => p.seatNumber === sbSeat);
@@ -314,8 +314,8 @@ export async function startHandForGame(gameId, io) {
     bbPlayer.chips -= bigBlind;
   }
 
-  // Calculate UTG (first to act after BB) - continue clockwise (increasing seat numbers)
-  const utgSeat = bbSeat + 1 > maxSeat ? minSeat : bbSeat + 1;
+  // Calculate UTG (first to act after BB) - continue clockwise (DECREASING seat numbers)
+  const utgSeat = bbSeat - 1 < minSeat ? maxSeat : bbSeat - 1;
   const utgPlayer = game.players.find(p => p.seatNumber === utgSeat);
   
   if (!utgPlayer) {
@@ -333,6 +333,7 @@ export async function startHandForGame(gameId, io) {
     smallBlindSeat: sbPlayer.seatNumber,
     bigBlindSeat: bbPlayer.seatNumber,
     currentTurnUserId: utgPlayer.userId, // First to act after BB (UTG)
+    lastRaiseUserId: null, // Track who last raised (for betting completion check)
     players: await Promise.all(
       game.players.map(async (p, index) => {
         const updated = await prisma.player.findUnique({ where: { id: p.id } });
@@ -596,6 +597,93 @@ async function handleTestPlayerAction(gameId, userId, io) {
 }
 
 /**
+ * Advance to next street (deal community cards) when betting round completes
+ */
+async function advanceToNextStreet(gameId, io) {
+  const state = tableState.get(gameId);
+  if (!state) return;
+
+  const { TexasHoldem } = await import("../poker/TexasHoldem.js");
+  const smallBlind = state.bettingRound?.smallBlind || 10;
+  const bigBlind = state.bettingRound?.bigBlind || 20;
+  const engine = new TexasHoldem({ smallBlind, bigBlind });
+
+  // Collect pot from current betting round
+  const collectedPot = state.bettingRound.getTotalPot();
+  const oldPot = state.pot || 0;
+  state.pot = oldPot + collectedPot;
+
+  // Clear betting round contributions
+  state.bettingRound.playerBets.clear();
+  state.bettingRound.currentBet = 0;
+  state.lastRaiseUserId = null;
+
+  // Deal community cards based on current street
+  if (state.street === "PREFLOP") {
+    // Deal flop
+    const { deck: newDeck, cards: flopCards } = engine.dealFlop(state.deck);
+    state.deck = newDeck;
+    state.communityCards = flopCards;
+    state.street = "FLOP";
+  } else if (state.street === "FLOP") {
+    // Deal turn
+    const { deck: newDeck, card: turnCard } = engine.dealTurnOrRiver(state.deck);
+    state.deck = newDeck;
+    state.communityCards = [...state.communityCards, turnCard];
+    state.street = "TURN";
+  } else if (state.street === "TURN") {
+    // Deal river
+    const { deck: newDeck, card: riverCard } = engine.dealTurnOrRiver(state.deck);
+    state.deck = newDeck;
+    state.communityCards = [...state.communityCards, riverCard];
+    state.street = "RIVER";
+  } else if (state.street === "RIVER") {
+    // Hand complete - showdown or end hand
+    // TODO: Implement showdown logic
+    state.currentTurnUserId = null;
+    return;
+  }
+
+  // Start new betting round - first player to act is first active player after dealer
+  const activePlayers = state.players.filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
+  if (activePlayers.length > 1) {
+    // Find first active player after dealer (clockwise)
+    const dealerSeat = state.dealerSeat;
+    const maxSeat = Math.max(...state.players.map(p => p.seatNumber));
+    const minSeat = Math.min(...state.players.map(p => p.seatNumber));
+    
+    let firstToActSeat = dealerSeat - 1; // Clockwise = decrease
+    if (firstToActSeat < minSeat) firstToActSeat = maxSeat;
+    
+    // Find active player at or after this seat
+    let firstToActPlayer = activePlayers.find(p => p.seatNumber === firstToActSeat);
+    let attempts = 0;
+    while (!firstToActPlayer && attempts < activePlayers.length) {
+      firstToActSeat = firstToActSeat - 1;
+      if (firstToActSeat < minSeat) firstToActSeat = maxSeat;
+      firstToActPlayer = activePlayers.find(p => p.seatNumber === firstToActSeat);
+      attempts++;
+    }
+    
+    if (firstToActPlayer) {
+      state.currentTurnUserId = firstToActPlayer.userId;
+      startTurnTimer(gameId, firstToActPlayer.userId, io);
+    }
+  }
+
+  // Update community cards in database
+  await prisma.game.update({
+    where: { id: gameId },
+    data: {
+      pot: state.pot,
+      communityCards: JSON.stringify(state.communityCards)
+    }
+  });
+
+  tableState.set(gameId, state);
+}
+
+/**
  * Move to the next player to act (clockwise - decreasing seat numbers for anticlockwise seat numbering)
  */
 async function moveToNextPlayer(gameId, io) {
@@ -649,10 +737,10 @@ async function moveToNextPlayer(gameId, io) {
   console.log(`[POKER] Turn rotation from seat ${currentSeat}: active seats = [${Array.from(activeSeats).sort((a,b) => a-b).join(', ')}], min=${minSeat}, max=${maxSeat}`);
   
   // Find next player clockwise
-  // Seats are numbered ANTICLOCKWISE, so clockwise = INCREASING seat numbers
-  // Start from currentSeat + 1 and wrap to minSeat if we go above maxSeat
-  let nextSeat = currentSeat + 1;
-  if (nextSeat > maxSeat) nextSeat = minSeat;
+  // Seats are numbered ANTICLOCKWISE, so clockwise = DECREASING seat numbers
+  // Start from currentSeat - 1 and wrap to maxSeat if we go below minSeat
+  let nextSeat = currentSeat - 1;
+  if (nextSeat < minSeat) nextSeat = maxSeat;
   
   let attempts = 0;
   let nextPlayer = null;
@@ -666,9 +754,9 @@ async function moveToNextPlayer(gameId, io) {
     nextPlayer = seatMap.get(nextSeat);
     
     if (!nextPlayer) {
-      // Move to next seat clockwise (increase seat number, wrap)
-      nextSeat = nextSeat + 1;
-      if (nextSeat > maxSeat) nextSeat = minSeat;
+      // Move to next seat clockwise (DECREASE seat number, wrap)
+      nextSeat = nextSeat - 1;
+      if (nextSeat < minSeat) nextSeat = maxSeat;
       attempts++;
     }
   }
