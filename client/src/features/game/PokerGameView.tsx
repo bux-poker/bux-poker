@@ -149,8 +149,11 @@ export function PokerGameView() {
       return;
     }
     
-    if (tournament.status !== 'RUNNING') {
-      console.log('[BLIND TIMER] Tournament status is not RUNNING:', tournament.status);
+    // Timer should work when tournament is RUNNING OR SEATED (if startedAt is set)
+    // SEATED means registration closed and players seated, but game not started yet
+    // RUNNING means game has started
+    if (tournament.status !== 'RUNNING' && tournament.status !== 'SEATED') {
+      console.log('[BLIND TIMER] Tournament status is not RUNNING or SEATED:', tournament.status);
       setNextBlindTime('--:--');
       return;
     }
