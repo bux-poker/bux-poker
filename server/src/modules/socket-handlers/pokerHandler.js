@@ -156,6 +156,13 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
     }
     case "FOLD": {
       player.status = "FOLDED";
+      // Clear hole cards when player folds (hide them from view)
+      player.holeCards = [];
+      // Also clear in database
+      await prisma.player.update({
+        where: { id: player.id },
+        data: { holeCards: "" }
+      });
       break;
     }
     case "ALL_IN": {
@@ -598,51 +605,54 @@ async function moveToNextPlayer(gameId, io) {
   const activePlayers = state.players.filter((p) => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
   
   if (activePlayers.length === 0) {
+    state.currentTurnUserId = null;
     return;
   }
 
-  const currentPlayer = activePlayers.find((p) => p.userId === state.currentTurnUserId);
+  // Sort players by seat number (ascending = anticlockwise order)
+  const sortedPlayers = [...activePlayers].sort((a, b) => a.seatNumber - b.seatNumber);
   
-  if (!currentPlayer) {
+  if (!state.currentTurnUserId) {
     // No current player, start with first active player (lowest seat number)
-    const sortedPlayers = [...activePlayers].sort((a, b) => a.seatNumber - b.seatNumber);
     state.currentTurnUserId = sortedPlayers[0].userId;
     startTurnTimer(gameId, state.currentTurnUserId, io);
     return;
   }
 
-  // Sort active players by seat number (ascending = anticlockwise order)
-  const sortedPlayers = [...activePlayers].sort((a, b) => a.seatNumber - b.seatNumber);
-  const maxSeat = Math.max(...sortedPlayers.map(p => p.seatNumber));
+  const currentPlayer = sortedPlayers.find((p) => p.userId === state.currentTurnUserId);
   
-  // Find current player's position in sorted list
+  if (!currentPlayer) {
+    // Current player not found in active players, start with first
+    state.currentTurnUserId = sortedPlayers[0].userId;
+    startTurnTimer(gameId, state.currentTurnUserId, io);
+    return;
+  }
+
+  const maxSeat = Math.max(...sortedPlayers.map(p => p.seatNumber));
   const currentSeat = currentPlayer.seatNumber;
   
   // Find next player clockwise (decreasing seat number, wrapping around)
-  // Try seat - 1, seat - 2, etc. until we find an active player
   let nextSeat = currentSeat - 1;
   if (nextSeat <= 0) nextSeat = maxSeat;
   
   let nextPlayer = sortedPlayers.find(p => p.seatNumber === nextSeat);
   
   // If no player found at nextSeat, keep going backwards until we find one
-  if (!nextPlayer) {
-    let attempts = 0;
-    while (!nextPlayer && attempts < sortedPlayers.length) {
-      nextSeat = nextSeat - 1;
-      if (nextSeat <= 0) nextSeat = maxSeat;
-      nextPlayer = sortedPlayers.find(p => p.seatNumber === nextSeat);
-      attempts++;
-    }
+  let attempts = 0;
+  while (!nextPlayer && attempts < sortedPlayers.length) {
+    nextSeat = nextSeat - 1;
+    if (nextSeat <= 0) nextSeat = maxSeat;
+    nextPlayer = sortedPlayers.find(p => p.seatNumber === nextSeat);
+    attempts++;
   }
   
-  // If still no player found, wrap to first player (lowest seat number)
-  if (!nextPlayer) {
-    nextPlayer = sortedPlayers[0];
+  if (nextPlayer && nextPlayer.userId !== state.currentTurnUserId) {
+    state.currentTurnUserId = nextPlayer.userId;
+    startTurnTimer(gameId, state.currentTurnUserId, io);
+  } else {
+    // No next player found or same player, end turn
+    state.currentTurnUserId = null;
   }
-  
-  state.currentTurnUserId = nextPlayer.userId;
-  startTurnTimer(gameId, state.currentTurnUserId, io);
 }
 
 export function registerPokerHandlers(io) {
