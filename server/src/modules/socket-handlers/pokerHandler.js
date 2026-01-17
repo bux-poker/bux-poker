@@ -190,11 +190,11 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
       player.status = "FOLDED";
       // Clear hole cards when player folds (hide them from view)
       player.holeCards = [];
-      // Also clear in database
-      await prisma.player.update({
+      // Also clear in database (async - don't block)
+      prisma.player.update({
         where: { id: player.id },
         data: { holeCards: "" }
-      });
+      }).catch(err => console.error('[ACTION] Error clearing hole cards in DB:', err));
       console.log(`[ACTION] After FOLD: player status=FOLDED, holeCards cleared`);
       break;
     }
@@ -222,23 +222,23 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
       throw new Error("Unknown action");
   }
 
-  // Persist chips and status for this player.
-  await prisma.player.update({
+  // Persist chips and status for this player (async - don't block)
+  prisma.player.update({
     where: { id: player.id },
     data: {
       chips: player.chips,
       status: player.status,
       lastAction: action
     }
-  });
+  }).catch(err => console.error('[ACTION] Error updating player in DB:', err));
 
-  // Persist pot to game.
-  await prisma.game.update({
+  // Persist pot to game (async - don't block)
+  prisma.game.update({
     where: { id: gameId },
     data: {
       pot: state.pot
     }
-  });
+  }).catch(err => console.error('[ACTION] Error updating game in DB:', err));
 
   return state;
 }
@@ -1105,7 +1105,29 @@ export function registerPokerHandlers(io) {
           amount: Number(amount) || 0
         });
 
-        // Get game data (this query might be slow, but we need it for buildClientGameState)
+        // Build game state from in-memory state (fast - no DB query)
+        // We need game data but can use the state we have
+        const gameFromState = {
+          id: gameId,
+          pot: state.pot,
+          players: state.players.map(p => ({
+            id: p.id,
+            userId: p.userId,
+            name: p.name,
+            chips: p.chips,
+            seatNumber: p.seatNumber,
+            status: p.status,
+            holeCards: p.holeCards,
+            avatarUrl: p.avatarUrl || p.user?.avatarUrl,
+            user: p.user
+          }))
+        };
+
+        // Emit game state IMMEDIATELY after action (no DB query - use in-memory state)
+        const immediatePayload = buildClientGameState(gameFromState, state);
+        io.to(`game:${gameId}`).emit("game-state", immediatePayload);
+
+        // Get fresh game data from DB asynchronously for accurate state
         const game = await prisma.game.findUnique({
           where: { id: gameId },
           include: {
@@ -1121,10 +1143,6 @@ export function registerPokerHandlers(io) {
           socket.emit("error", { message: "Game not found" });
           return;
         }
-
-        // Emit game state IMMEDIATELY after action to update UI right away
-        const immediatePayload = buildClientGameState(game, state);
-        io.to(`game:${gameId}`).emit("game-state", immediatePayload);
 
         // Check if betting round is complete
         const activePlayerIds = state.players
