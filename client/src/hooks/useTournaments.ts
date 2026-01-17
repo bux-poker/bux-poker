@@ -12,6 +12,7 @@ export interface Tournament {
   id: string;
   name: string;
   startTime: Date | string;
+  startedAt?: Date | string | null; // Actual start time when tournament starts
   status: 'UPCOMING' | 'REGISTRATION' | 'ACTIVE' | 'COMPLETED' | 'SCHEDULED' | 'CANCELLED' | 'REGISTERING' | 'SEATED' | 'RUNNING';
   maxPlayers: number;
   seatsPerTable: number;

@@ -133,6 +133,13 @@ export function PokerGameView() {
       setNextBlindTime('--:--');
       return;
     }
+    
+    console.log('[BLIND TIMER] Tournament data:', {
+      id: tournament.id,
+      startedAt: tournament.startedAt,
+      status: tournament.status,
+      blindLevels: tournament.blindLevels
+    });
 
     const calculateNextBlind = () => {
       const now = new Date();
