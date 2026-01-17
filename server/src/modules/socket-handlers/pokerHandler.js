@@ -251,14 +251,14 @@ export async function startHandForGame(gameId, io) {
   const dealerIndex = Math.floor(Math.random() * game.players.length);
   const dealerPlayer = game.players[dealerIndex];
   
-  // Seats are numbered anticlockwise, but blinds move clockwise (to the left)
-  // So we need to decrease seat numbers (wrapping around) to move clockwise
+  // Seats are numbered anticlockwise, so clockwise movement = INCREASING seat numbers
   const dealerSeat = dealerPlayer.seatNumber;
-  const maxSeat = game.players.length;
+  const maxSeat = Math.max(...game.players.map(p => p.seatNumber));
+  const minSeat = Math.min(...game.players.map(p => p.seatNumber));
   
-  // Calculate SB and BB seat numbers (clockwise = decreasing seat numbers, wrapping)
-  const sbSeat = dealerSeat - 1 <= 0 ? maxSeat : dealerSeat - 1;
-  const bbSeat = dealerSeat - 2 <= 0 ? (maxSeat + dealerSeat - 2) : dealerSeat - 2;
+  // Calculate SB and BB seat numbers (clockwise = increasing seat numbers, wrapping)
+  const sbSeat = dealerSeat + 1 > maxSeat ? minSeat : dealerSeat + 1;
+  const bbSeat = sbSeat + 1 > maxSeat ? minSeat : sbSeat + 1;
   
   // Find players at those seat numbers
   const sbPlayer = game.players.find(p => p.seatNumber === sbSeat);
@@ -314,8 +314,8 @@ export async function startHandForGame(gameId, io) {
     bbPlayer.chips -= bigBlind;
   }
 
-  // Calculate UTG (first to act after BB) - continue clockwise (decreasing seat numbers)
-  const utgSeat = bbSeat - 1 <= 0 ? maxSeat : bbSeat - 1;
+  // Calculate UTG (first to act after BB) - continue clockwise (increasing seat numbers)
+  const utgSeat = bbSeat + 1 > maxSeat ? minSeat : bbSeat + 1;
   const utgPlayer = game.players.find(p => p.seatNumber === utgSeat);
   
   if (!utgPlayer) {
@@ -429,7 +429,7 @@ function startTurnTimer(gameId, userId, io) {
     const expiresAt = Date.now() + timeoutMs;
     
     const timerId = setTimeout(() => {
-      autoActTestPlayer(gameId, userId, io);
+      handleTestPlayerAction(gameId, userId, io);
     }, timeoutMs);
 
     turnTimers.set(gameId, { timerId, userId, expiresAt, duration: timeoutMs });
@@ -618,12 +618,16 @@ async function moveToNextPlayer(gameId, io) {
     return;
   }
 
-  // Get max seat number from all players (not just active)
-  const allSeats = Math.max(...state.players.map(p => p.seatNumber));
+  // Get all seat numbers to find min and max for wrapping
+  const allSeatNumbers = state.players.map(p => p.seatNumber);
+  const minSeat = Math.min(...allSeatNumbers);
+  const maxSeat = Math.max(...allSeatNumbers);
+  
   const currentPlayer = activePlayers.find((p) => p.userId === state.currentTurnUserId);
   
   if (!currentPlayer) {
-    // Current player not found, start with first active
+    // Current player not found, start with UTG (first after BB)
+    // This should already be set in startHandForGame, but fallback here
     const sortedPlayers = [...activePlayers].sort((a, b) => a.seatNumber - b.seatNumber);
     state.currentTurnUserId = sortedPlayers[0].userId;
     startTurnTimer(gameId, state.currentTurnUserId, io);
@@ -632,42 +636,50 @@ async function moveToNextPlayer(gameId, io) {
 
   const currentSeat = currentPlayer.seatNumber;
   
-  // Create a map of seat number to player for faster lookup
+  // Create a map of seat number to player for faster lookup (exclude current player)
   const seatMap = new Map();
+  const activeSeats = new Set();
   activePlayers.forEach(p => {
     if (p.userId !== state.currentTurnUserId) {
       seatMap.set(p.seatNumber, p);
+      activeSeats.add(p.seatNumber);
     }
   });
   
-  // Find next player clockwise (decreasing seat number, wrapping)
-  // Start from currentSeat - 1 and search backwards
-  let nextSeat = currentSeat - 1;
-  if (nextSeat <= 0) nextSeat = allSeats;
+  console.log(`[POKER] Turn rotation from seat ${currentSeat}: active seats = [${Array.from(activeSeats).sort((a,b) => a-b).join(', ')}], min=${minSeat}, max=${maxSeat}`);
+  
+  // Find next player clockwise
+  // Seats are numbered ANTICLOCKWISE, so clockwise = INCREASING seat numbers
+  // Start from currentSeat + 1 and wrap to minSeat if we go above maxSeat
+  let nextSeat = currentSeat + 1;
+  if (nextSeat > maxSeat) nextSeat = minSeat;
   
   let attempts = 0;
   let nextPlayer = null;
+  const totalSeats = maxSeat - minSeat + 1;
+  const checkedSeats = [];
   
-  // Search through all possible seats (at most allSeats attempts)
-  while (attempts < allSeats && !nextPlayer) {
+  // Search through all possible seats (at most totalSeats attempts)
+  while (attempts < totalSeats && !nextPlayer) {
+    checkedSeats.push(nextSeat);
     // Look for an active player at this seat
     nextPlayer = seatMap.get(nextSeat);
     
     if (!nextPlayer) {
-      // Move to next seat clockwise (decrease seat number)
-      nextSeat = nextSeat - 1;
-      if (nextSeat <= 0) nextSeat = allSeats;
+      // Move to next seat clockwise (increase seat number, wrap)
+      nextSeat = nextSeat + 1;
+      if (nextSeat > maxSeat) nextSeat = minSeat;
       attempts++;
     }
   }
   
   if (nextPlayer) {
-    console.log(`[POKER] Turn rotation: seat ${currentSeat} → seat ${nextPlayer.seatNumber} (clockwise)`);
+    console.log(`[POKER] Turn rotation: seat ${currentSeat} → seat ${nextPlayer.seatNumber} (checked seats: ${checkedSeats.join(', ')})`);
     state.currentTurnUserId = nextPlayer.userId;
     startTurnTimer(gameId, state.currentTurnUserId, io);
   } else {
     // Only one player left or no valid next player
-    console.log(`[POKER] Turn rotation: No next player found from seat ${currentSeat}`);
+    console.log(`[POKER] Turn rotation: No next player found from seat ${currentSeat} (checked seats: ${checkedSeats.join(', ')})`);
     state.currentTurnUserId = null;
   }
 }
