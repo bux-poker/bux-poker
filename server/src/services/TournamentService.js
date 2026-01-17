@@ -173,6 +173,7 @@ export class TournamentService {
 
         return {
           ...tournament,
+          startedAt: tournament.startedAt, // Include startedAt for blind timer
           blindLevels: blindLevels, // Add parsed blind levels
           registeredCount: tournament.registrations?.filter(
             (r) => r.status === "CONFIRMED" || r.status === "PENDING"
