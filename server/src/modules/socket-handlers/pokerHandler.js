@@ -129,11 +129,23 @@ async function ensureHandState(gameId) {
 
 async function applyPlayerAction({ gameId, userId, action, amount }) {
   const state = await ensureHandState(gameId);
+  
+  // Initialize actedPlayersInRound if not exists (for new betting rounds)
+  if (!state.actedPlayersInRound) {
+    state.actedPlayersInRound = new Set();
+  }
 
   const player = state.players.find((p) => p.userId === userId);
   if (!player) {
     throw new Error("Player not at this table");
   }
+
+  const playerName = player.name || player.user?.username || `Player ${player.seatNumber}`;
+  const currentBetBefore = state.bettingRound?.currentBet || 0;
+  const playerContributionBefore = state.bettingRound?.getPlayerContribution(player.id) || 0;
+  
+  console.log(`[ACTION] Player ${playerName} (seat ${player.seatNumber}) performing ${action} with amount ${amount}`);
+  console.log(`[ACTION] Before: currentBet=${currentBetBefore}, playerContribution=${playerContributionBefore}, lastRaiseUserId=${state.lastRaiseUserId || 'null'}`);
 
   // Basic action handling. This is intentionally simplified:
   switch (action) {
@@ -144,55 +156,32 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
       player.chips -= amount;
       state.pot = state.bettingRound.getTotalPot();
       state.lastRaiseUserId = player.userId; // Track who raised
+      // Reset acted players when someone raises - all players need to act again
+      state.actedPlayersInRound.clear();
       
-      // If this is a raise, action needs to return to the first player clockwise from the raiser
-      // But we'll handle this in moveToNextPlayer by finding the first player who needs to act
-      if (wasRaise) {
-        // Reset turn to first player clockwise from raiser who needs to act on new bet
-        const raiserSeat = player.seatNumber;
-        const allSeatNumbers = state.players.map(p => p.seatNumber);
-        const minSeat = Math.min(...allSeatNumbers);
-        const maxSeat = Math.max(...allSeatNumbers);
-        
-        // Find first active player clockwise from raiser (excluding raiser themselves)
-        let nextSeat = raiserSeat - 1; // Clockwise = decrease
-        if (nextSeat < minSeat) nextSeat = maxSeat;
-        
-        const activePlayers = state.players.filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
-        let attempts = 0;
-        let nextPlayer = null;
-        
-        while (attempts < activePlayers.length && !nextPlayer) {
-          const playerAtSeat = activePlayers.find(p => p.seatNumber === nextSeat && p.userId !== player.userId);
-          if (playerAtSeat) {
-            // Check if this player needs to act (their contribution < current bet)
-            const contribution = state.bettingRound.getPlayerContribution(playerAtSeat.id);
-            if (contribution < state.bettingRound.currentBet) {
-              nextPlayer = playerAtSeat;
-            }
-          }
-          
-          if (!nextPlayer) {
-            nextSeat = nextSeat - 1;
-            if (nextSeat < minSeat) nextSeat = maxSeat;
-            attempts++;
-          }
-        }
-        
-        if (nextPlayer) {
-          state.currentTurnUserId = nextPlayer.userId;
-        }
-      }
+      const newBet = state.bettingRound.currentBet;
+      const newContribution = state.bettingRound.getPlayerContribution(player.id);
+      console.log(`[ACTION] After ${action}: currentBet=${newBet}, playerContribution=${newContribution}, lastRaiseUserId=${state.lastRaiseUserId}`);
+      
+      // Note: We don't set next player here - moveToNextPlayer will handle it
+      // The raise logic above was trying to set next player, but moveToNextPlayer does this correctly
       break;
     }
     case "CALL": {
       const spent = state.bettingRound.call(player.id, player.chips);
       player.chips -= spent;
       state.pot = state.bettingRound.getTotalPot();
+      const newContribution = state.bettingRound.getPlayerContribution(player.id);
+      console.log(`[ACTION] After CALL: playerContribution=${newContribution}, spent=${spent}`);
+      // Mark player as acted in this betting round
+      state.actedPlayersInRound.add(userId);
       break;
     }
     case "CHECK": {
       // No chips moved; validity (no outstanding bet) assumed client-side for now.
+      console.log(`[ACTION] After CHECK: no change to contributions`);
+      // Mark player as acted in this betting round
+      state.actedPlayersInRound.add(userId);
       break;
     }
     case "FOLD": {
@@ -204,6 +193,7 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
         where: { id: player.id },
         data: { holeCards: "" }
       });
+      console.log(`[ACTION] After FOLD: player status=FOLDED, holeCards cleared`);
       break;
     }
     case "ALL_IN": {
@@ -715,6 +705,8 @@ async function advanceToNextStreet(gameId, io) {
   state.bettingRound.playerBets.clear();
   state.bettingRound.currentBet = 0;
   state.lastRaiseUserId = null;
+  // Reset acted players tracking for new betting round
+  state.actedPlayersInRound = new Set();
 
   // Deal community cards based on current street
   if (state.street === "PREFLOP") {
@@ -849,7 +841,19 @@ async function moveToNextPlayer(gameId, io) {
   const currentBet = state.bettingRound?.currentBet || 0;
   
   // Search through all possible seats (at most totalSeats attempts)
-  // Only give turn to players who need to act (contribution < current bet)
+  // Give turn to players who need to act:
+  // - When currentBet > 0: players with contribution < currentBet need to act
+  // - When currentBet === 0: ALL players need ONE turn (they can check or bet)
+  //   Problem: When currentBet === 0 and a player checks, contribution stays 0 (same as currentBet)
+  //   So "contribution < currentBet" is false (0 < 0), and they're skipped incorrectly
+  //   Solution: Track which players have acted in this betting round in state
+  //   When currentBet === 0, give turns to players who haven't acted yet in this round
+  
+  // Initialize actedPlayersInRound if not exists (for new betting rounds)
+  if (!state.actedPlayersInRound) {
+    state.actedPlayersInRound = new Set();
+  }
+  
   while (attempts < totalSeats && !nextPlayer) {
     checkedSeats.push(nextSeat);
     // Look for an active player at this seat
@@ -857,13 +861,22 @@ async function moveToNextPlayer(gameId, io) {
     
     // If we found a player at this seat AND it's not the current player, check if they need to act
     if (playerAtSeat && playerAtSeat.userId !== state.currentTurnUserId) {
-      // Check if this player needs to act (their contribution < current bet)
       const contribution = state.bettingRound?.getPlayerContribution(playerAtSeat.id) || 0;
-      if (contribution < currentBet) {
+      
+      let needsToAct = false;
+      if (currentBet === 0) {
+        // When currentBet === 0, player needs to act if they haven't acted yet this round
+        needsToAct = !state.actedPlayersInRound.has(playerAtSeat.userId);
+      } else {
+        // When currentBet > 0, player needs to act if contribution < currentBet
+        needsToAct = contribution < currentBet;
+      }
+      
+      if (needsToAct) {
         // Player needs to act on current bet level
         nextPlayer = playerAtSeat;
       } else {
-        // Player has already matched current bet, continue searching clockwise
+        // Player has already acted or matched current bet, continue searching clockwise
         nextSeat = nextSeat - 1;
         if (nextSeat < minSeat) nextSeat = maxSeat;
         attempts++;
@@ -877,13 +890,22 @@ async function moveToNextPlayer(gameId, io) {
   }
   
   if (nextPlayer) {
-    console.log(`[POKER] Turn rotation: seat ${currentSeat} → seat ${nextPlayer.seatNumber} (checked seats: ${checkedSeats.join(', ')})`);
+    const nextContribution = state.bettingRound?.getPlayerContribution(nextPlayer.id) || 0;
+    console.log(`[POKER] Turn rotation: seat ${currentSeat} → seat ${nextPlayer.seatNumber} (${nextPlayer.name || nextPlayer.userId})`);
+    console.log(`[POKER] Next player contribution=${nextContribution}, currentBet=${currentBet}, needsToAct=${nextContribution < currentBet}`);
+    console.log(`[POKER] Checked seats in order: ${checkedSeats.join(' → ')}`);
     state.currentTurnUserId = nextPlayer.userId;
     startTurnTimer(gameId, state.currentTurnUserId, io);
   } else {
     // No player found who needs to act - betting round should be complete
     // Set currentTurnUserId to null to signal that betting is complete
-    console.log(`[POKER] Turn rotation: No next player found from seat ${currentSeat} (checked seats: ${checkedSeats.join(', ')}) - betting should be complete`);
+    console.log(`[POKER] Turn rotation: No next player found from seat ${currentSeat}`);
+    console.log(`[POKER] Checked seats: ${checkedSeats.join(' → ')}`);
+    console.log(`[POKER] Current bet: ${currentBet}, All active players:`);
+    activePlayers.forEach(p => {
+      const contrib = state.bettingRound?.getPlayerContribution(p.id) || 0;
+      console.log(`[POKER]   Seat ${p.seatNumber} (${p.name || p.userId}): contribution=${contrib}, status=${p.status}`);
+    });
     state.currentTurnUserId = null;
     
     // Immediately check if betting is complete and advance if needed
@@ -1013,12 +1035,22 @@ export function registerPokerHandlers(io) {
           .filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED')
           .map(p => p.id);
         
+        console.log(`[BETTING] Checking if betting complete after ${action} by ${playerName}`);
+        console.log(`[BETTING] Active players: ${activePlayerIds.length}, lastRaiseUserId=${state.lastRaiseUserId || 'null'}, currentTurnUserId=${state.currentTurnUserId || 'null'}`);
+        activePlayerIds.forEach(id => {
+          const p = state.players.find(pl => pl.id === id);
+          const contrib = state.bettingRound?.getPlayerContribution(id) || 0;
+          console.log(`[BETTING]   Player ${p?.name || id} (seat ${p?.seatNumber}): contribution=${contrib}`);
+        });
+        
         const bettingComplete = state.bettingRound.isBettingComplete(
           activePlayerIds, 
           state.lastRaiseUserId,
           state.currentTurnUserId,
           state.players
         );
+        
+        console.log(`[BETTING] Betting complete? ${bettingComplete}`);
         
         if (bettingComplete) {
           // Advance to next street
