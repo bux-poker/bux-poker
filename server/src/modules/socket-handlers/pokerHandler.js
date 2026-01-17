@@ -352,12 +352,33 @@ export async function startHandForGame(gameId, io) {
   }
 
   // Calculate UTG (first to act after BB) - continue clockwise (DECREASING seat numbers)
-  const utgSeat = bbSeat - 1 < minSeat ? maxSeat : bbSeat - 1;
+  // UTG is the first player clockwise after BB (not BB themselves, not SB, not dealer)
+  let utgSeat = bbSeat - 1;
+  if (utgSeat < minSeat) utgSeat = maxSeat;
+  
+  // Skip SB and dealer if they're the next player (shouldn't happen in normal play, but handle edge cases)
+  // In normal play: Dealer -> SB -> BB -> UTG (clockwise)
+  // So UTG should be BB - 1, which should never be SB or dealer
+  // But if there are only 2-3 players, we need to ensure UTG is not SB or dealer
+  let attempts = 0;
+  while ((utgSeat === sbSeat || utgSeat === dealerSeat) && attempts < game.players.length) {
+    utgSeat = utgSeat - 1;
+    if (utgSeat < minSeat) utgSeat = maxSeat;
+    attempts++;
+  }
+  
   const utgPlayer = game.players.find(p => p.seatNumber === utgSeat);
   
   if (!utgPlayer) {
-    throw new Error(`Could not find UTG player. BB seat: ${bbSeat}, UTG seat: ${utgSeat}`);
+    throw new Error(`Could not find UTG player. BB seat: ${bbSeat}, UTG seat: ${utgSeat}, SB seat: ${sbSeat}, Dealer seat: ${dealerSeat}`);
   }
+  
+  // CRITICAL: Ensure UTG is NOT the big blind
+  if (utgPlayer.id === bbPlayer.id) {
+    throw new Error(`UTG calculation error: UTG player (${utgPlayer.userId}) is the same as BB player. BB seat: ${bbSeat}, UTG seat: ${utgSeat}`);
+  }
+  
+  console.log(`[POKER] UTG calculation: dealer=${dealerSeat}, sb=${sbSeat}, bb=${bbSeat}, utg=${utgSeat} (${utgPlayer.user?.username || utgPlayer.userId})`);
 
   // Create hand state
   const state = {
@@ -431,9 +452,15 @@ export async function startHandForGame(gameId, io) {
   }
 
   // Start turn timer for first player to act (UTG)
+  // CRITICAL: Ensure currentTurnUserId is UTG, not BB
+  console.log(`[POKER] Starting hand: dealer=${dealerPlayer.seatNumber}, sb=${sbPlayer.seatNumber}, bb=${bbPlayer.seatNumber}, utg=${utgPlayer.seatNumber}`);
+  console.log(`[POKER] Setting currentTurnUserId to UTG: ${utgPlayer.userId} (${utgPlayer.user?.username || 'unknown'}), NOT BB: ${bbPlayer.userId}`);
+  console.log(`[POKER] BB contribution: ${bettingRound.getPlayerContribution(bbPlayer.id)}, currentBet: ${bettingRound.currentBet}`);
+  console.log(`[POKER] UTG contribution: ${bettingRound.getPlayerContribution(utgPlayer.id)}, currentBet: ${bettingRound.currentBet}`);
+  
   startTurnTimer(gameId, utgPlayer.userId, io);
 
-  console.log(`[POKER] Started hand for game ${gameId}: dealer=${dealerPlayer.seatNumber}, sb=${sbPlayer.seatNumber}, bb=${bbPlayer.seatNumber}`);
+  console.log(`[POKER] Started hand for game ${gameId}: dealer=${dealerPlayer.seatNumber}, sb=${sbPlayer.seatNumber}, bb=${bbPlayer.seatNumber}, utg=${utgPlayer.seatNumber}`);
   
   return state;
 }
