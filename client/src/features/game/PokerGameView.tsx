@@ -62,7 +62,27 @@ export function PokerGameView() {
   const [turnTimer, setTurnTimer] = useState<{ userId: string; expiresAt: number; duration: number } | null>(null);
   const [nextBlindTime, setNextBlindTime] = useState<string>('--:--');
   const { user } = useAuth();
-  const { tournament } = useTournament(gameState?.tournamentId);
+  const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
+  
+  // Refetch tournament data when gameState changes to get updated status/startedAt
+  useEffect(() => {
+    if (gameState?.tournamentId) {
+      // Refetch tournament data whenever gameState.tournamentId changes
+      refetchTournament();
+    }
+  }, [gameState?.tournamentId, refetchTournament]);
+  
+  // Also refetch periodically if tournament hasn't started yet
+  useEffect(() => {
+    if (gameState?.tournamentId && tournament && tournament.status !== 'RUNNING' && tournament.status !== 'COMPLETED' && !tournament.startedAt) {
+      // Refetch every 3 seconds if tournament hasn't started yet
+      const interval = setInterval(() => {
+        console.log('[BLIND TIMER] Refetching tournament data to check for startedAt...');
+        refetchTournament();
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [gameState?.tournamentId, tournament?.status, tournament?.startedAt, refetchTournament]);
 
   useEffect(() => {
     if (!id) return;
