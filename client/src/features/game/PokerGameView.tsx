@@ -54,9 +54,23 @@ function parseCommunityCards(encoded: string): Card[] {
   return [];
 }
 
+// Helper function to play sound effects
+function playSound(soundFile: string, volume: number = 0.7) {
+  try {
+    const audio = new Audio(`/sounds/${soundFile}`);
+    audio.volume = volume;
+    audio.play().catch((err) => {
+      console.warn(`Failed to play sound ${soundFile}:`, err);
+    });
+  } catch (err) {
+    console.warn(`Error creating audio for ${soundFile}:`, err);
+  }
+}
+
 export function PokerGameView() {
   const { id } = useParams<{ id: string }>();
   const [gameState, setGameState] = useState<GameStatePayload | null>(null);
+  const [prevGameState, setPrevGameState] = useState<GameStatePayload | null>(null);
   const [connecting, setConnecting] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [turnTimer, setTurnTimer] = useState<{ userId: string; expiresAt: number; duration: number } | null>(null);
@@ -108,7 +122,13 @@ export function PokerGameView() {
     socket.emit("join-table", { gameId: id });
 
     socket.on("game-state", (payload: GameStatePayload) => {
-      setGameState(payload);
+      setGameState((prev) => {
+        // Store previous state before updating
+        if (prev) {
+          setPrevGameState(prev);
+        }
+        return payload;
+      });
       setConnecting(false);
       setError(null);
     });
@@ -246,6 +266,56 @@ export function PokerGameView() {
 
     return () => clearInterval(interval);
   }, [tournament]);
+
+  // Sound effects: Play sounds when game state changes
+  useEffect(() => {
+    if (!gameState || !prevGameState || !user) return;
+
+    // 1. Turn sound: Play when it becomes my turn
+    const prevWasMyTurn = prevGameState.currentTurnUserId === user.id;
+    const nowIsMyTurn = gameState.currentTurnUserId === user.id;
+    if (!prevWasMyTurn && nowIsMyTurn) {
+      playSound('turn.mp3', 0.6);
+    }
+
+    // 2. Detect player actions by comparing previous and current state
+    const prevPlayers = new Map(prevGameState.players.map(p => [p.id, p]));
+    
+    gameState.players.forEach(currentPlayer => {
+      const prevPlayer = prevPlayers.get(currentPlayer.id);
+      if (!prevPlayer) return;
+
+      // Fold sound: Player status changed to FOLDED
+      if (prevPlayer.status !== 'FOLDED' && currentPlayer.status === 'FOLDED') {
+        playSound('fold.wav', 0.5);
+        return;
+      }
+
+      // Skip if this is me (don't play sounds for my own actions)
+      if (currentPlayer.userId === user.id || currentPlayer.id === user.id) {
+        return;
+      }
+
+      // Bet/Call/Raise sound: Contribution increased and player is still active
+      const prevContribution = prevPlayer.contribution || 0;
+      const currentContribution = currentPlayer.contribution || 0;
+      if (currentContribution > prevContribution && currentPlayer.status === 'ACTIVE') {
+        playSound('bet.wav', 0.5);
+        return;
+      }
+
+      // Check sound: Player was the current turn, now they're not, contribution didn't change, and currentBet is 0
+      const wasCurrentTurn = prevGameState.currentTurnUserId === currentPlayer.userId || prevGameState.currentTurnUserId === currentPlayer.id;
+      const isNotCurrentTurn = gameState.currentTurnUserId !== currentPlayer.userId && gameState.currentTurnUserId !== currentPlayer.id;
+      const contributionUnchanged = currentContribution === prevContribution;
+      const noCurrentBet = (gameState.currentBet || 0) === 0;
+      
+      if (wasCurrentTurn && isNotCurrentTurn && contributionUnchanged && noCurrentBet && currentPlayer.status === 'ACTIVE') {
+        playSound('check.wav', 0.5);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState, user]); // Only run when gameState changes, prevGameState is captured in closure
 
   const handleAction = (action: string, amount: number) => {
     if (!id || !gameState || !user) return;
