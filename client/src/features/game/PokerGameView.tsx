@@ -360,6 +360,7 @@ export function PokerGameView() {
                 minimumRaise={gameState.minimumRaise || bigBlind}
                 isBigBlind={myPlayer?.seatNumber === gameState.bigBlindSeat}
                 isMyTurn={gameState.currentTurnUserId === user?.id}
+                myContribution={myContribution}
               />
           </div>
         </div>
