@@ -836,7 +836,7 @@ async function moveToNextPlayer(gameId, io) {
   
   console.log(`[POKER] Turn rotation from seat ${currentSeat}: ALL active seats = [${Array.from(activeSeats).sort((a,b) => a-b).join(', ')}], min=${minSeat}, max=${maxSeat}, currentTurn=${state.currentTurnUserId}`);
   
-  // Find next player clockwise
+  // Find next player clockwise who needs to act
   // Seats are numbered ANTICLOCKWISE, so clockwise = DECREASING seat numbers
   // Start from currentSeat - 1 and wrap to maxSeat if we go below minSeat
   let nextSeat = currentSeat - 1;
@@ -846,17 +846,28 @@ async function moveToNextPlayer(gameId, io) {
   let nextPlayer = null;
   const totalSeats = maxSeat - minSeat + 1;
   const checkedSeats = [];
+  const currentBet = state.bettingRound?.currentBet || 0;
   
   // Search through all possible seats (at most totalSeats attempts)
-  // Skip the current player, but include all other active players
+  // Only give turn to players who need to act (contribution < current bet)
   while (attempts < totalSeats && !nextPlayer) {
     checkedSeats.push(nextSeat);
     // Look for an active player at this seat
     const playerAtSeat = seatMap.get(nextSeat);
     
-    // If we found a player at this seat AND it's not the current player, we found our next player
+    // If we found a player at this seat AND it's not the current player, check if they need to act
     if (playerAtSeat && playerAtSeat.userId !== state.currentTurnUserId) {
-      nextPlayer = playerAtSeat;
+      // Check if this player needs to act (their contribution < current bet)
+      const contribution = state.bettingRound?.getPlayerContribution(playerAtSeat.id) || 0;
+      if (contribution < currentBet) {
+        // Player needs to act on current bet level
+        nextPlayer = playerAtSeat;
+      } else {
+        // Player has already matched current bet, continue searching clockwise
+        nextSeat = nextSeat - 1;
+        if (nextSeat < minSeat) nextSeat = maxSeat;
+        attempts++;
+      }
     } else {
       // No player at this seat, or it's the current player - move to next seat clockwise (DECREASE seat number, wrap)
       nextSeat = nextSeat - 1;
@@ -870,8 +881,8 @@ async function moveToNextPlayer(gameId, io) {
     state.currentTurnUserId = nextPlayer.userId;
     startTurnTimer(gameId, state.currentTurnUserId, io);
   } else {
-    // Only one player left or no valid next player
-    console.log(`[POKER] Turn rotation: No next player found from seat ${currentSeat} (checked seats: ${checkedSeats.join(', ')})`);
+    // No player found who needs to act - betting round should be complete
+    console.log(`[POKER] Turn rotation: No next player found from seat ${currentSeat} (checked seats: ${checkedSeats.join(', ')}) - betting should be complete`);
     state.currentTurnUserId = null;
   }
 }
