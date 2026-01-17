@@ -723,10 +723,13 @@ export function registerPokerHandlers(io) {
 
     socket.on("player-action", async ({ gameId, userId, action, amount }) => {
       try {
-        // Clear turn timer for this game
+        // Clear turn timer for this game before processing action
         const existingTimer = turnTimers.get(gameId);
         if (existingTimer) {
-          clearTimeout(existingTimer.timeout);
+          clearTimeout(existingTimer.timerId);
+          if (existingTimer.graceTimerId) {
+            clearTimeout(existingTimer.graceTimerId);
+          }
           turnTimers.delete(gameId);
         }
 
