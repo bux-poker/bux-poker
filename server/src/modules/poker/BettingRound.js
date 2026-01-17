@@ -91,23 +91,38 @@ export class BettingRound {
       return contribution === maxContribution;
     });
     
-    if (!allContributed) return false; // Can't be complete if contributions aren't equal
+    if (!allContributed) {
+      console.log(`[BETTING] Not complete: contributions not equal. Max: ${maxContribution}, contributions:`, contributions);
+      return false; // Can't be complete if contributions aren't equal
+    }
     
     // If no one has raised, betting is complete when all have equal contributions
-    if (!lastRaiseUserId) return true;
+    if (!lastRaiseUserId) {
+      console.log(`[BETTING] Complete: all contributed equally, no raises`);
+      return true;
+    }
     
     // If someone raised, we need to ensure action has come back to them
     // This means the current turn should be the player AFTER the last raiser (clockwise)
-    if (!currentTurnUserId) return false; // No current turn means not complete
+    if (!currentTurnUserId) {
+      console.log(`[BETTING] Not complete: no current turn`);
+      return false; // No current turn means not complete
+    }
     
     // Find the last raiser and current turn player
     const lastRaiser = allPlayers.find(p => p.userId === lastRaiseUserId);
     const currentTurnPlayer = allPlayers.find(p => p.userId === currentTurnUserId);
     
-    if (!lastRaiser || !currentTurnPlayer) return false; // Can't determine if players not found
+    if (!lastRaiser || !currentTurnPlayer) {
+      console.log(`[BETTING] Not complete: players not found. lastRaiser: ${!!lastRaiser}, currentTurnPlayer: ${!!currentTurnPlayer}`);
+      return false; // Can't determine if players not found
+    }
     
     // If current turn is the last raiser, betting is NOT complete (they need to act again)
-    if (currentTurnUserId === lastRaiseUserId) return false;
+    if (currentTurnUserId === lastRaiseUserId) {
+      console.log(`[BETTING] Not complete: current turn is last raiser (seat ${lastRaiser.seatNumber})`);
+      return false;
+    }
     
     // Get seat numbers for turn order check
     const seats = allPlayers.map(p => p.seatNumber);
@@ -117,17 +132,22 @@ export class BettingRound {
     const currentSeat = currentTurnPlayer.seatNumber;
     
     // Check if we've passed the last raiser (clockwise = decreasing seat numbers)
-    // If last raiser is at seat X, and current is at seat X-1 (or wrapped around), we've passed them
+    // Betting is complete when all have acted after the raiser AND we're back at/before the raiser
+    // We need to check: did action complete a full circle? If current seat is <= lastRaiserSeat (with wrapping), we've passed them
+    
     let hasPassedLastRaiser = false;
     
-    // Check if we're between last raiser and min seat (going clockwise)
+    // Special case: if last raiser is at minSeat, we've passed them if we're at maxSeat or minSeat-1 wrapped
     if (lastRaiserSeat === minSeat) {
-      // Last raiser is at minimum seat, so we've passed them if we're at maxSeat or any seat < maxSeat
-      hasPassedLastRaiser = currentSeat >= maxSeat || currentSeat < lastRaiserSeat;
+      // Last raiser at minimum seat - we've passed if we're anywhere from maxSeat down to before wrapping back
+      hasPassedLastRaiser = currentSeat < lastRaiserSeat || currentSeat >= maxSeat;
     } else {
       // Normal case: we've passed if current seat < last raiser seat (moving clockwise/decreasing)
+      // OR if we wrapped around (current seat >= maxSeat and we came from below minSeat)
       hasPassedLastRaiser = currentSeat < lastRaiserSeat;
     }
+    
+    console.log(`[BETTING] Check: lastRaiser=seat${lastRaiserSeat}, current=seat${currentSeat}, hasPassed=${hasPassedLastRaiser}, allContributed=${allContributed}`);
     
     // Betting is complete if all have equal contributions AND we've passed the last raiser
     return hasPassedLastRaiser;
