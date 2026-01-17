@@ -784,17 +784,17 @@ async function moveToNextPlayer(gameId, io) {
 
   const currentSeat = currentPlayer.seatNumber;
   
-  // Create a map of seat number to player for faster lookup (exclude current player)
+  // Create a map of seat number to player for faster lookup (include ALL active players)
+  // We need ALL players who haven't folded, not just those who haven't acted yet
   const seatMap = new Map();
   const activeSeats = new Set();
   activePlayers.forEach(p => {
-    if (p.userId !== state.currentTurnUserId) {
-      seatMap.set(p.seatNumber, p);
-      activeSeats.add(p.seatNumber);
-    }
+    // Include all active players (even current one for logging, but we'll skip them in search)
+    seatMap.set(p.seatNumber, p);
+    activeSeats.add(p.seatNumber);
   });
   
-  console.log(`[POKER] Turn rotation from seat ${currentSeat}: active seats = [${Array.from(activeSeats).sort((a,b) => a-b).join(', ')}], min=${minSeat}, max=${maxSeat}`);
+  console.log(`[POKER] Turn rotation from seat ${currentSeat}: ALL active seats = [${Array.from(activeSeats).sort((a,b) => a-b).join(', ')}], min=${minSeat}, max=${maxSeat}, currentTurn=${state.currentTurnUserId}`);
   
   // Find next player clockwise
   // Seats are numbered ANTICLOCKWISE, so clockwise = DECREASING seat numbers
@@ -808,13 +808,17 @@ async function moveToNextPlayer(gameId, io) {
   const checkedSeats = [];
   
   // Search through all possible seats (at most totalSeats attempts)
+  // Skip the current player, but include all other active players
   while (attempts < totalSeats && !nextPlayer) {
     checkedSeats.push(nextSeat);
     // Look for an active player at this seat
-    nextPlayer = seatMap.get(nextSeat);
+    const playerAtSeat = seatMap.get(nextSeat);
     
-    if (!nextPlayer) {
-      // Move to next seat clockwise (DECREASE seat number, wrap)
+    // If we found a player at this seat AND it's not the current player, we found our next player
+    if (playerAtSeat && playerAtSeat.userId !== state.currentTurnUserId) {
+      nextPlayer = playerAtSeat;
+    } else {
+      // No player at this seat, or it's the current player - move to next seat clockwise (DECREASE seat number, wrap)
       nextSeat = nextSeat - 1;
       if (nextSeat < minSeat) nextSeat = maxSeat;
       attempts++;
