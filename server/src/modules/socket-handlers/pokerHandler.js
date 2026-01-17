@@ -403,7 +403,7 @@ export async function startHandForGame(gameId, io) {
     deck: remainingDeck,
     communityCards: [],
     bettingRound,
-    pot: game.pot + bettingRound.getTotalPot(), // Start with game.pot + current betting round (blinds)
+    pot: game.pot, // Start with game.pot (should be 0 for new hand), current betting round is added separately in buildClientGameState
     dealerSeat: dealerPlayer.seatNumber,
     smallBlindSeat: sbPlayer.seatNumber,
     bigBlindSeat: bbPlayer.seatNumber,
@@ -879,8 +879,47 @@ async function handleShowdown(gameId, io) {
       }).catch(err => console.error(`[SHOWDOWN] Error resetting player ${p.id}:`, err))
     );
     
-    Promise.all(resetPromises).then(() => {
+    Promise.all(resetPromises).then(async () => {
       console.log(`[SHOWDOWN] All players reset for next hand`);
+      
+      // Move dealer button clockwise (decrease seat number, wrap if needed)
+      const gameForNextHand = await prisma.game.findUnique({
+        where: { id: gameId },
+        include: {
+          players: {
+            include: { user: true }
+          }
+        }
+      });
+      
+      if (gameForNextHand && gameForNextHand.players.length >= 2) {
+        // Find current dealer seat from saved state
+        const oldDealerSeat = state.dealerSeat;
+        const maxSeat = Math.max(...gameForNextHand.players.map(p => p.seatNumber));
+        const minSeat = Math.min(...gameForNextHand.players.map(p => p.seatNumber));
+        
+        // Move dealer clockwise (decrease seat number)
+        let newDealerSeat = oldDealerSeat - 1;
+        if (newDealerSeat < minSeat) newDealerSeat = maxSeat;
+        
+        // Update dealer seat in database
+        await prisma.game.update({
+          where: { id: gameId },
+          data: { dealerSeat: newDealerSeat }
+        });
+        
+        console.log(`[SHOWDOWN] Moved dealer button from seat ${oldDealerSeat} to seat ${newDealerSeat}`);
+        
+        // Start new hand
+        if (io) {
+          try {
+            await startHandForGame(gameId, io);
+            console.log(`[SHOWDOWN] Started new hand after showdown`);
+          } catch (err) {
+            console.error(`[SHOWDOWN] Error starting new hand:`, err);
+          }
+        }
+      }
     });
   }, 5000); // 5 second delay to show results
 }
@@ -1163,6 +1202,7 @@ async function moveToNextPlayer(gameId, io) {
     
     // Immediately check if betting is complete and advance if needed
     // This ensures post-flop betting rounds complete correctly
+    // Note: Only do this if no player needs to act, otherwise the action handler will check
     const activePlayerIds = state.players
       .filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED')
       .map(p => p.id);
@@ -1175,8 +1215,11 @@ async function moveToNextPlayer(gameId, io) {
     );
     
     if (bettingComplete && io) {
-      // Advance to next street
+      // Advance to next street - don't return here, let the action handler handle it
+      // This is a fallback for when betting completes naturally (e.g., all check)
+      console.log(`[POKER] Betting complete in moveToNextPlayer, advancing street`);
       await advanceToNextStreet(gameId, io);
+      return; // Return early to avoid emitting state here
     }
   }
 }
