@@ -955,14 +955,14 @@ async function advanceToNextStreet(gameId, io) {
     }
   }
 
-  // Update community cards in database
-  await prisma.game.update({
+  // Update community cards in database (async - don't block)
+  prisma.game.update({
     where: { id: gameId },
     data: {
       pot: state.pot,
       communityCards: JSON.stringify(state.communityCards)
     }
-  });
+  }).catch(err => console.error('[ADVANCE STREET] Error updating game in DB:', err));
 
   tableState.set(gameId, state);
 }
@@ -1280,23 +1280,6 @@ export function registerPokerHandlers(io) {
         const immediatePayload = buildClientGameState(gameFromState, state);
         io.to(`game:${gameId}`).emit("game-state", immediatePayload);
 
-        // Get fresh game data from DB asynchronously for accurate state
-        const game = await prisma.game.findUnique({
-          where: { id: gameId },
-          include: {
-            players: {
-              include: {
-                user: true
-              }
-            }
-          }
-        });
-
-        if (!game) {
-          socket.emit("error", { message: "Game not found" });
-          return;
-        }
-
         // Check if betting round is complete
         const activePlayerIds = state.players
           .filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED')
@@ -1326,27 +1309,50 @@ export function registerPokerHandlers(io) {
         if (bettingComplete) {
           // Advance to next street
           await advanceToNextStreet(gameId, io);
-          // Get updated state after advancing street and emit
-          const updatedGame = await prisma.game.findUnique({
-            where: { id: gameId },
-            include: { players: { include: { user: true } } }
-          });
-          if (updatedGame) {
-            const updatedState = tableState.get(gameId);
-            const payload = buildClientGameState(updatedGame, updatedState);
+          // Emit updated state immediately from in-memory state (no DB query needed)
+          const updatedState = tableState.get(gameId);
+          if (updatedState) {
+            const updatedGameFromState = {
+              id: gameId,
+              pot: updatedState.pot,
+              communityCards: updatedState.communityCards,
+              players: updatedState.players.map(p => ({
+                id: p.id,
+                userId: p.userId,
+                name: p.name,
+                chips: p.chips,
+                seatNumber: p.seatNumber,
+                status: p.status,
+                holeCards: p.holeCards,
+                avatarUrl: p.avatarUrl || p.user?.avatarUrl,
+                user: p.user
+              }))
+            };
+            const payload = buildClientGameState(updatedGameFromState, updatedState);
             io.to(`game:${gameId}`).emit("game-state", payload);
           }
         } else {
           // Move to next player in current betting round
           await moveToNextPlayer(gameId, io);
-          // Get fresh game data and emit updated state with new turn
-          const updatedGame = await prisma.game.findUnique({
-            where: { id: gameId },
-            include: { players: { include: { user: true } } }
-          });
-          if (updatedGame) {
-            const updatedState = tableState.get(gameId);
-            const payload = buildClientGameState(updatedGame, updatedState);
+          // Emit updated state immediately from in-memory state (no DB query needed)
+          const updatedState = tableState.get(gameId);
+          if (updatedState) {
+            const updatedGameFromState = {
+              id: gameId,
+              pot: updatedState.pot,
+              players: updatedState.players.map(p => ({
+                id: p.id,
+                userId: p.userId,
+                name: p.name,
+                chips: p.chips,
+                seatNumber: p.seatNumber,
+                status: p.status,
+                holeCards: p.holeCards,
+                avatarUrl: p.avatarUrl || p.user?.avatarUrl,
+                user: p.user
+              }))
+            };
+            const payload = buildClientGameState(updatedGameFromState, updatedState);
             io.to(`game:${gameId}`).emit("game-state", payload);
           }
         }
