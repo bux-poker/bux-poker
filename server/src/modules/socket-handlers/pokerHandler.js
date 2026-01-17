@@ -1015,7 +1015,6 @@ async function moveToNextPlayer(gameId, io) {
     
     if (bettingComplete && io) {
       // Advance to next street
-      const { advanceToNextStreet } = await import("./pokerHandler.js");
       await advanceToNextStreet(gameId, io);
     }
   }
@@ -1106,6 +1105,7 @@ export function registerPokerHandlers(io) {
           amount: Number(amount) || 0
         });
 
+        // Get game data (this query might be slow, but we need it for buildClientGameState)
         const game = await prisma.game.findUnique({
           where: { id: gameId },
           include: {
@@ -1121,6 +1121,10 @@ export function registerPokerHandlers(io) {
           socket.emit("error", { message: "Game not found" });
           return;
         }
+
+        // Emit game state IMMEDIATELY after action to update UI right away
+        const immediatePayload = buildClientGameState(game, state);
+        io.to(`game:${gameId}`).emit("game-state", immediatePayload);
 
         // Check if betting round is complete
         const activePlayerIds = state.players
@@ -1151,7 +1155,7 @@ export function registerPokerHandlers(io) {
         if (bettingComplete) {
           // Advance to next street
           await advanceToNextStreet(gameId, io);
-          // Get updated state after advancing street
+          // Get updated state after advancing street and emit
           const updatedGame = await prisma.game.findUnique({
             where: { id: gameId },
             include: { players: { include: { user: true } } }
@@ -1164,8 +1168,16 @@ export function registerPokerHandlers(io) {
         } else {
           // Move to next player in current betting round
           await moveToNextPlayer(gameId, io);
-          const payload = buildClientGameState(game, state);
-          io.to(`game:${gameId}`).emit("game-state", payload);
+          // Get fresh game data and emit updated state with new turn
+          const updatedGame = await prisma.game.findUnique({
+            where: { id: gameId },
+            include: { players: { include: { user: true } } }
+          });
+          if (updatedGame) {
+            const updatedState = tableState.get(gameId);
+            const payload = buildClientGameState(updatedGame, updatedState);
+            io.to(`game:${gameId}`).emit("game-state", payload);
+          }
         }
       } catch (err) {
         // eslint-disable-next-line no-console
