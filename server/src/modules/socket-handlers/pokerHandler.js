@@ -898,26 +898,30 @@ async function moveToNextPlayer(gameId, io) {
     
     if (playerAtSeat && playerAtSeat.userId !== state.currentTurnUserId) {
       const contribution = state.bettingRound?.getPlayerContribution(playerAtSeat.id) || 0;
+      const hasActed = state.actedPlayersInRound.has(playerAtSeat.userId);
+      const isLastRaiser = state.lastRaiseUserId === playerAtSeat.userId;
       
       let needsToAct = false;
       if (currentBet === 0) {
         // When currentBet === 0, player needs to act if they haven't acted yet this round
-        const hasActed = state.actedPlayersInRound.has(playerAtSeat.userId);
         needsToAct = !hasActed;
+        console.log(`[TURN ORDER] Checking seat ${nextSeat} (${playerAtSeat.name || playerAtSeat.userId}): currentBet=0, hasActed=${hasActed}, needsToAct=${needsToAct}`);
       } else {
         // When currentBet > 0, player needs to act if their contribution < currentBet
         // (they haven't matched the bet yet)
-        // Note: actedPlayersInRound is cleared when someone raises, so it's not used here
-        // The raiser is added to actedPlayersInRound after raising, but they'll still get
-        // a turn after action goes around (because contribution check happens first)
         needsToAct = contribution < currentBet;
+        console.log(`[TURN ORDER] Checking seat ${nextSeat} (${playerAtSeat.name || playerAtSeat.userId}): contribution=${contribution}, currentBet=${currentBet}, hasActed=${hasActed}, isLastRaiser=${isLastRaiser}, needsToAct=${needsToAct}`);
       }
       
       if (needsToAct) {
         nextPlayer = playerAtSeat;
-        console.log(`[TURN ORDER] Selected seat ${nextSeat} (${playerAtSeat.name || playerAtSeat.userId}) as next player. Checked seats in order: ${checkedSeats.join(' → ')}`);
+        console.log(`[TURN ORDER] ✓ Selected seat ${nextSeat} (${playerAtSeat.name || playerAtSeat.userId}) as next player. Checked seats in order: ${checkedSeats.join(' → ')}`);
         break;
+      } else {
+        console.log(`[TURN ORDER] ✗ Skipped seat ${nextSeat} (${playerAtSeat.name || playerAtSeat.userId}): doesn't need to act`);
       }
+    } else if (playerAtSeat && playerAtSeat.userId === state.currentTurnUserId) {
+      console.log(`[TURN ORDER] ✗ Skipped seat ${nextSeat}: this is the current player`);
     }
     
     // Move to next seat clockwise (decreasing)
