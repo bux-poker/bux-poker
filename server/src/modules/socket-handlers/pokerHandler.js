@@ -28,11 +28,16 @@ export function getIO() {
 }
 
 function buildClientGameState(game, state) {
+  // Calculate total pot: state.pot (accumulated from previous streets) + current betting round
+  const totalPot = state 
+    ? (state.pot || 0) + (state.bettingRound?.getTotalPot() || 0)
+    : game.pot || 0;
+  
   return {
     id: game.id,
     tournamentId: game.tournamentId,
     tableNumber: game.tableNumber,
-    pot: state?.pot ?? game.pot,
+    pot: totalPot,
     communityCards: JSON.stringify(state?.communityCards ?? []),
     street: state?.street || "PREFLOP",
     currentBet: state?.bettingRound?.currentBet || 0,
@@ -155,7 +160,8 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
       const wasRaise = state.lastRaiseUserId !== null;
       state.bettingRound.bet(player.id, amount);
       player.chips -= amount;
-      state.pot = state.bettingRound.getTotalPot();
+      // Don't update state.pot here - it's accumulated when advancing streets
+      // state.pot should only change when collecting from betting round
       state.lastRaiseUserId = player.userId; // Track who raised
       // Reset acted players when someone raises - all players need to act again
       state.actedPlayersInRound.clear();
@@ -173,7 +179,8 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
     case "CALL": {
       const spent = state.bettingRound.call(player.id, player.chips);
       player.chips -= spent;
-      state.pot = state.bettingRound.getTotalPot();
+      // Don't update state.pot here - it's accumulated when advancing streets
+      // state.pot should only change when collecting from betting round
       const newContribution = state.bettingRound.getPlayerContribution(player.id);
       console.log(`[ACTION] After CALL: playerContribution=${newContribution}, spent=${spent}`);
       // Mark player as acted in this betting round
@@ -214,7 +221,8 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
       }
       state.bettingRound.bet(player.id, allInAmount);
       player.chips = 0;
-      state.pot = state.bettingRound.getTotalPot();
+      // Don't update state.pot here - it's accumulated when advancing streets
+      // state.pot should only change when collecting from betting round
       // Mark player as having acted (they went all-in)
       state.actedPlayersInRound.add(userId);
       break;
@@ -1307,7 +1315,72 @@ export function registerPokerHandlers(io) {
         console.log(`[BETTING] Betting complete? ${bettingComplete}`);
         
         if (bettingComplete) {
-          // Advance to next street
+          // Check if only 1 player remains - award pot immediately without dealing cards
+          const activePlayersAfterAction = state.players.filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
+          if (activePlayersAfterAction.length === 1) {
+            // Only one player remaining - award pot and end hand
+            const winner = activePlayersAfterAction[0];
+            const collectedPot = state.bettingRound.getTotalPot();
+            const totalPot = state.pot + collectedPot;
+            
+            winner.chips += totalPot;
+            state.pot = 0;
+            
+            console.log(`[POKER] Single player remaining - awarding pot of ${totalPot} to ${winner.name || winner.userId}`);
+            
+            // Update winner chips in database (async)
+            prisma.player.update({
+              where: { id: winner.id },
+              data: { chips: winner.chips }
+            }).catch(err => console.error('[POKER] Error updating winner chips:', err));
+            
+            // Update game pot in database (async)
+            prisma.game.update({
+              where: { id: gameId },
+              data: { pot: 0 }
+            }).catch(err => console.error('[POKER] Error updating game pot:', err));
+            
+            // Clear hand state
+            const savedPlayers = [...state.players];
+            tableState.delete(gameId);
+            
+            // Reset player statuses (async)
+            setTimeout(() => {
+              savedPlayers.forEach(p => {
+                prisma.player.update({
+                  where: { id: p.id },
+                  data: { 
+                    status: 'ACTIVE',
+                    holeCards: "",
+                    lastAction: null
+                  }
+                }).catch(err => console.error(`[POKER] Error resetting player ${p.id}:`, err));
+              });
+            }, 2000);
+            
+            // Emit updated state
+            const updatedGameFromState = {
+              id: gameId,
+              pot: 0,
+              players: state.players.map(p => ({
+                id: p.id,
+                userId: p.userId,
+                name: p.name,
+                chips: p.chips,
+                seatNumber: p.seatNumber,
+                status: p.status,
+                holeCards: p.holeCards,
+                avatarUrl: p.avatarUrl || p.user?.avatarUrl,
+                user: p.user
+              }))
+            };
+            const payload = buildClientGameState(updatedGameFromState, state);
+            io.to(`game:${gameId}`).emit("game-state", payload);
+            
+            return; // Don't advance to next street
+          }
+          
+          // Multiple players remaining - advance to next street
           await advanceToNextStreet(gameId, io);
           // Emit updated state immediately from in-memory state (no DB query needed)
           const updatedState = tableState.get(gameId);
