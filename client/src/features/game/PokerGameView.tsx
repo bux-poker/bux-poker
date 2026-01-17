@@ -129,7 +129,28 @@ export function PokerGameView() {
 
   // Calculate next blind timer based on tournament startedAt
   useEffect(() => {
-    if (!tournament || !tournament.startedAt || tournament.status !== 'RUNNING') {
+    console.log('[BLIND TIMER] Tournament data check:', {
+      tournament: tournament ? 'exists' : 'null',
+      tournamentId: gameState?.tournamentId,
+      startedAt: tournament?.startedAt,
+      status: tournament?.status,
+      blindLevels: tournament?.blindLevels?.length || 0
+    });
+    
+    if (!tournament) {
+      console.log('[BLIND TIMER] No tournament data');
+      setNextBlindTime('--:--');
+      return;
+    }
+    
+    if (!tournament.startedAt) {
+      console.log('[BLIND TIMER] Tournament startedAt is null/undefined');
+      setNextBlindTime('--:--');
+      return;
+    }
+    
+    if (tournament.status !== 'RUNNING') {
+      console.log('[BLIND TIMER] Tournament status is not RUNNING:', tournament.status);
       setNextBlindTime('--:--');
       return;
     }
