@@ -358,8 +358,8 @@ export function PokerTable({
             </div>
           ];
 
-          // Add cards as separate element if player has cards
-          if (player && !isMyPlayer && player.holeCards && player.holeCards.length > 0) {
+          // Add cards as separate element if player has cards (including own player)
+          if (player && player.holeCards && player.holeCards.length > 0) {
             elements.push(
               <div
                 key={`cards-${player.id}`}
@@ -382,7 +382,7 @@ export function PokerTable({
                       width={28}
                       height={39}
                       className="shadow-md"
-                      faceDown={true}
+                      faceDown={!isMyPlayer}
                     />
                   ))}
                 </div>
@@ -392,8 +392,8 @@ export function PokerTable({
                 )}
               </div>
             );
-          } else if (player && !isMyPlayer && (player.contribution ?? 0) > 0) {
-            // Bet chip for players without cards but with bets
+          } else if (player && (player.contribution ?? 0) > 0) {
+            // Bet chip for players without cards but with bets (including own player)
             elements.push(
               <div
                 key={`bet-${player.id}`}
