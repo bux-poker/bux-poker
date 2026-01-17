@@ -434,13 +434,18 @@ function startTurnTimer(gameId, userId, io) {
   // Check if test player - test players have username that starts with "Test Player"
   const playerName = player.name || player.user?.username || "";
   const isTestPlayer = playerName.toLowerCase().startsWith('test player');
+  
+  console.log(`[POKER] startTurnTimer for player ${playerName} (userId: ${userId}): isTestPlayer=${isTestPlayer}`);
 
   if (isTestPlayer) {
     // Test players: 3 seconds total, auto-act after
     const timeoutMs = 3000;
     const expiresAt = Date.now() + timeoutMs;
     
+    console.log(`[POKER] Starting 3-second timer for test player ${playerName}, will call handleTestPlayerAction`);
+    
     const timerId = setTimeout(() => {
+      console.log(`[POKER] Timer expired for test player ${playerName}, calling handleTestPlayerAction`);
       handleTestPlayerAction(gameId, userId, io);
     }, timeoutMs);
 
@@ -531,11 +536,24 @@ async function autoFoldPlayer(gameId, userId, io) {
  */
 async function handleTestPlayerAction(gameId, userId, io) {
   try {
+    console.log(`[POKER] handleTestPlayerAction called for userId: ${userId}`);
     const state = tableState.get(gameId);
-    if (!state) return;
+    if (!state) {
+      console.log(`[POKER] No state found for gameId: ${gameId}`);
+      return;
+    }
 
     const player = state.players.find((p) => p.userId === userId);
-    if (!player || player.status === 'FOLDED') return;
+    if (!player) {
+      console.log(`[POKER] Player not found in state for userId: ${userId}`);
+      return;
+    }
+    if (player.status === 'FOLDED') {
+      console.log(`[POKER] Player ${player.name || userId} is already FOLDED, skipping action`);
+      return;
+    }
+    
+    console.log(`[POKER] Test player ${player.name || userId} is acting...`);
 
     const currentBet = state.bettingRound?.currentBet || 0;
     const bigBlind = state.bettingRound?.bigBlind || 20;
@@ -553,14 +571,17 @@ async function handleTestPlayerAction(gameId, userId, io) {
       // 30% fold
       action = "FOLD";
       amount = 0;
+      console.log(`[POKER] Test player ${player.name || userId} decided to FOLD (rand=${rand.toFixed(2)})`);
     } else if (rand < 0.7 || canCheck) {
       // 40% call/check (or check if no bet)
       if (canCheck) {
         action = "CHECK";
         amount = 0;
+        console.log(`[POKER] Test player ${player.name || userId} decided to CHECK (rand=${rand.toFixed(2)})`);
       } else {
         action = "CALL";
         amount = Math.min(amountToCall, myChips);
+        console.log(`[POKER] Test player ${player.name || userId} decided to CALL ${amount} (rand=${rand.toFixed(2)})`);
       }
     } else {
       // 30% bet/raise (minimum raise or half pot)
@@ -571,8 +592,10 @@ async function handleTestPlayerAction(gameId, userId, io) {
       
       if (currentBet === 0) {
         action = "BET";
+        console.log(`[POKER] Test player ${player.name || userId} decided to BET ${amount} (rand=${rand.toFixed(2)})`);
       } else {
         action = "RAISE";
+        console.log(`[POKER] Test player ${player.name || userId} decided to RAISE ${amount} (rand=${rand.toFixed(2)})`);
       }
     }
 

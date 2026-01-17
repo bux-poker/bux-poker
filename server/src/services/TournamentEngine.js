@@ -124,6 +124,7 @@ export class TournamentEngine {
     }
 
     // Start blind level timer
+    console.log(`[TOURNAMENT] Starting blind level timer for tournament ${tournamentId}`);
     this.startBlindLevelTimer(tournamentId);
 
     // Refresh games after starting hands
@@ -157,6 +158,7 @@ export class TournamentEngine {
     }
 
     // Check tournament blind levels every minute
+    console.log(`[TOURNAMENT] Blind level timer started for tournament ${tournamentId}, checking every 60 seconds`);
     const intervalId = setInterval(async () => {
       try {
         const tournament = await prisma.tournament.findUnique({
@@ -165,12 +167,15 @@ export class TournamentEngine {
 
         if (!tournament || tournament.status !== 'RUNNING' || !tournament.startedAt) {
           // Tournament not running, clear timer
+          console.log(`[TOURNAMENT] Tournament ${tournamentId} not running, clearing blind timer`);
           clearInterval(intervalId);
           if (this.blindTimers) {
             this.blindTimers.delete(tournamentId);
           }
           return;
         }
+        
+        console.log(`[TOURNAMENT] Blind timer check for tournament ${tournamentId}`);
 
         // Parse blind levels
         let blindLevels = [];
