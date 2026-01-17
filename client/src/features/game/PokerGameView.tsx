@@ -20,6 +20,7 @@ interface PlayerViewModel {
   holeCards?: Card[];
   avatarUrl?: string;
   userId?: string;
+  contribution?: number;
 }
 
 interface GameStatePayload {
@@ -251,6 +252,7 @@ export function PokerGameView() {
   const activePlayers = gameState.players.filter(p => p.status !== 'ELIMINATED');
   const myPlayer = gameState.players.find(p => p.userId === user?.id || p.id === user?.id);
   const myPosition = myPlayer ? activePlayers.findIndex(p => p.id === myPlayer.id) + 1 : null;
+  const myContribution = myPlayer?.contribution || 0;
 
   return (
     <div className="flex h-screen w-screen flex-col bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden">
