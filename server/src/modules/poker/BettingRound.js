@@ -132,22 +132,39 @@ export class BettingRound {
     const currentSeat = currentTurnPlayer.seatNumber;
     
     // Check if we've passed the last raiser (clockwise = decreasing seat numbers)
-    // Betting is complete when all have acted after the raiser AND we're back at/before the raiser
-    // We need to check: did action complete a full circle? If current seat is <= lastRaiserSeat (with wrapping), we've passed them
+    // Clockwise path from lastRaiserSeat: decreases until minSeat, then wraps to maxSeat
+    // Example: if raiser at seat 3, clockwise: 3 -> 2 -> 1 -> 7 -> 6 -> 5 -> 4 -> 3
+    // If current is at seat 5, we've gone: 3 -> 2 -> 1 -> 7 -> 6 -> 5 (we HAVE passed 3)
     
     let hasPassedLastRaiser = false;
     
-    // Special case: if last raiser is at minSeat, we've passed them if we're at maxSeat or minSeat-1 wrapped
+    // Clockwise movement means DECREASING seat numbers (for anticlockwise seat numbering)
+    // If raiser is at seat 3 and current is at seat 5:
+    // Clockwise: 3 -> 2 -> 1 -> 7 -> 6 -> 5
+    // So we've passed 3 (we're at 5, which comes after 3 in clockwise order)
+    
     if (lastRaiserSeat === minSeat) {
-      // Last raiser at minimum seat - we've passed if we're anywhere from maxSeat down to before wrapping back
-      hasPassedLastRaiser = currentSeat < lastRaiserSeat || currentSeat >= maxSeat;
+      // Raiser at minimum seat - clockwise wraps: minSeat -> maxSeat -> ... -> minSeat
+      // We've passed if current is NOT minSeat (anywhere else in rotation)
+      hasPassedLastRaiser = currentSeat !== minSeat;
     } else {
-      // Normal case: we've passed if current seat < last raiser seat (moving clockwise/decreasing)
-      // OR if we wrapped around (current seat >= maxSeat and we came from below minSeat)
-      hasPassedLastRaiser = currentSeat < lastRaiserSeat;
+      // Raiser not at min seat
+      // Clockwise path: raiser -> (raiser-1) -> ... -> minSeat -> maxSeat -> ... -> back to raiser
+      // If currentSeat > lastRaiserSeat: we've wrapped (gone past minSeat and around to maxSeat side)
+      // If currentSeat < lastRaiserSeat: we've passed going down from raiser
+      // If currentSeat == lastRaiserSeat: we're back at raiser (NOT passed yet - they need to act)
+      // So we've passed if current != raiser AND (current < raiser OR current > raiser with wrap consideration)
+      
+      // Actually simpler: if current is NOT the raiser and all contributions equal, 
+      // and we've moved from raiser, we've passed them
+      // Clockwise from raiser: if current is higher numbered, we wrapped (passed)
+      // If current is lower numbered, we went down (passed)
+      // The only case we haven't passed is if current == raiser
+      
+      hasPassedLastRaiser = currentSeat !== lastRaiserSeat;
     }
     
-    console.log(`[BETTING] Check: lastRaiser=seat${lastRaiserSeat}, current=seat${currentSeat}, hasPassed=${hasPassedLastRaiser}, allContributed=${allContributed}`);
+    console.log(`[BETTING] Check: lastRaiser=seat${lastRaiserSeat}, current=seat${currentSeat}, min=${minSeat}, max=${maxSeat}, hasPassed=${hasPassedLastRaiser}, allContributed=${allContributed}`);
     
     // Betting is complete if all have equal contributions AND we've passed the last raiser
     return hasPassedLastRaiser;
