@@ -1072,6 +1072,10 @@ export function registerPokerHandlers(io) {
           .filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED')
           .map(p => p.id);
         
+        // Get player name for logging
+        const player = state.players.find((p) => p.userId === userId);
+        const playerName = player?.name || player?.user?.username || `Player ${player?.seatNumber || userId}`;
+        
         console.log(`[BETTING] Checking if betting complete after ${action} by ${playerName}`);
         console.log(`[BETTING] Active players: ${activePlayerIds.length}, lastRaiseUserId=${state.lastRaiseUserId || 'null'}, currentTurnUserId=${state.currentTurnUserId || 'null'}`);
         activePlayerIds.forEach(id => {
