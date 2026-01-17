@@ -632,6 +632,14 @@ async function moveToNextPlayer(gameId, io) {
 
   const currentSeat = currentPlayer.seatNumber;
   
+  // Create a map of seat number to player for faster lookup
+  const seatMap = new Map();
+  activePlayers.forEach(p => {
+    if (p.userId !== state.currentTurnUserId) {
+      seatMap.set(p.seatNumber, p);
+    }
+  });
+  
   // Find next player clockwise (decreasing seat number, wrapping)
   // Start from currentSeat - 1 and search backwards
   let nextSeat = currentSeat - 1;
@@ -642,8 +650,8 @@ async function moveToNextPlayer(gameId, io) {
   
   // Search through all possible seats (at most allSeats attempts)
   while (attempts < allSeats && !nextPlayer) {
-    // Look for an active player at this seat (excluding current player)
-    nextPlayer = activePlayers.find(p => p.seatNumber === nextSeat && p.userId !== state.currentTurnUserId);
+    // Look for an active player at this seat
+    nextPlayer = seatMap.get(nextSeat);
     
     if (!nextPlayer) {
       // Move to next seat clockwise (decrease seat number)
@@ -653,11 +661,13 @@ async function moveToNextPlayer(gameId, io) {
     }
   }
   
-  if (nextPlayer && nextPlayer.userId !== state.currentTurnUserId) {
+  if (nextPlayer) {
+    console.log(`[POKER] Turn rotation: seat ${currentSeat} → seat ${nextPlayer.seatNumber} (clockwise)`);
     state.currentTurnUserId = nextPlayer.userId;
     startTurnTimer(gameId, state.currentTurnUserId, io);
   } else {
     // Only one player left or no valid next player
+    console.log(`[POKER] Turn rotation: No next player found from seat ${currentSeat}`);
     state.currentTurnUserId = null;
   }
 }
