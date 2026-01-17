@@ -801,7 +801,6 @@ async function handleShowdown(gameId, io) {
   });
 
   // Reset pot
-  const oldPot = state.pot;
   state.pot = 0;
 
   // Update game pot in database (async)
