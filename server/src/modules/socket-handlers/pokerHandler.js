@@ -158,6 +158,8 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
       state.lastRaiseUserId = player.userId; // Track who raised
       // Reset acted players when someone raises - all players need to act again
       state.actedPlayersInRound.clear();
+      // Mark the raiser as having acted (they just raised)
+      state.actedPlayersInRound.add(userId);
       
       const newBet = state.bettingRound.currentBet;
       const newContribution = state.bettingRound.getPlayerContribution(player.id);
@@ -206,10 +208,14 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
       const allInContribution = currentContribution + allInAmount;
       if (allInContribution > state.bettingRound.currentBet) {
         state.lastRaiseUserId = player.userId; // Track who raised (all-in counts as raise)
+        // Reset acted players when someone raises - all players need to act again
+        state.actedPlayersInRound.clear();
       }
       state.bettingRound.bet(player.id, allInAmount);
       player.chips = 0;
       state.pot = state.bettingRound.getTotalPot();
+      // Mark player as having acted (they went all-in)
+      state.actedPlayersInRound.add(userId);
       break;
     }
     default:
@@ -392,6 +398,7 @@ export async function startHandForGame(gameId, io) {
     bigBlindSeat: bbPlayer.seatNumber,
     currentTurnUserId: utgPlayer.userId, // First to act after BB (UTG)
     lastRaiseUserId: null, // Track who last raised (for betting completion check)
+    actedPlayersInRound: new Set(), // Track which players have acted in current betting round
     players: await Promise.all(
       game.players.map(async (p, index) => {
         const updated = await prisma.player.findUnique({ where: { id: p.id } });
@@ -881,61 +888,42 @@ async function moveToNextPlayer(gameId, io) {
     state.actedPlayersInRound = new Set();
   }
   
-  // SIMPLE APPROACH: Go through ALL active players in clockwise order (decreasing seat numbers)
-  // Find the first one who needs to act, starting from the player after current player
-  // Clockwise = decreasing seat numbers (seats numbered anticlockwise)
-  
-  // Build ordered list of active seats in clockwise order (descending)
-  const activeSeatsList = Array.from(activeSeats).sort((a, b) => b - a); // Sort descending for clockwise
-  const currentIndex = activeSeatsList.indexOf(currentSeat);
-  
-  console.log(`[TURN ORDER] Active seats (descending/clockwise): [${activeSeatsList.join(', ')}]`);
-  console.log(`[TURN ORDER] Current seat: ${currentSeat}, index in list: ${currentIndex}`);
-  
-  if (currentIndex === -1) {
-    console.error(`[TURN ORDER] ERROR: Current seat ${currentSeat} not found in active seats!`);
-    return;
-  }
-  
-  // Get all players in clockwise order starting from next player after current
-  const playersInOrder = [];
-  for (let i = 1; i < activeSeatsList.length; i++) {
-    const idx = (currentIndex + i) % activeSeatsList.length;
-    const seat = activeSeatsList[idx];
-    const player = seatMap.get(seat);
-    if (player) {
-      playersInOrder.push(player);
-      checkedSeats.push(seat);
-    }
-  }
-  
-  console.log(`[TURN ORDER] Players in clockwise order from seat ${currentSeat}: ${playersInOrder.map(p => `seat ${p.seatNumber} (${p.name || p.userId})`).join(' → ')}`);
-  
-  // Find first player who needs to act
-  for (const player of playersInOrder) {
-    const contribution = state.bettingRound?.getPlayerContribution(player.id) || 0;
+  // Go through seats sequentially in clockwise order (decreasing for anticlockwise numbering)
+  // Use the variables already initialized above (lines 861-865)
+  while (attempts < totalSeats && !nextPlayer) {
+    checkedSeats.push(nextSeat);
     
-    let needsToAct = false;
-    if (currentBet === 0) {
-      // When currentBet === 0, player needs to act if they haven't acted yet this round
-      const hasActed = state.actedPlayersInRound.has(player.userId);
-      needsToAct = !hasActed;
-      console.log(`[TURN ORDER] Checking seat ${player.seatNumber} (${player.name || player.userId}): currentBet=0, hasActed=${hasActed}, needsToAct=${needsToAct}`);
-    } else {
-      // When currentBet > 0, player needs to act if contribution < currentBet
-      needsToAct = contribution < currentBet;
-      console.log(`[TURN ORDER] Checking seat ${player.seatNumber} (${player.name || player.userId}): contribution=${contribution}, currentBet=${currentBet}, needsToAct=${needsToAct}`);
+    // Check if there's a player at this seat
+    const playerAtSeat = seatMap.get(nextSeat);
+    
+    if (playerAtSeat && playerAtSeat.userId !== state.currentTurnUserId) {
+      const contribution = state.bettingRound?.getPlayerContribution(playerAtSeat.id) || 0;
+      
+      let needsToAct = false;
+      if (currentBet === 0) {
+        // When currentBet === 0, player needs to act if they haven't acted yet this round
+        const hasActed = state.actedPlayersInRound.has(playerAtSeat.userId);
+        needsToAct = !hasActed;
+      } else {
+        // When currentBet > 0, player needs to act if their contribution < currentBet
+        // (they haven't matched the bet yet)
+        // Note: actedPlayersInRound is cleared when someone raises, so it's not used here
+        // The raiser is added to actedPlayersInRound after raising, but they'll still get
+        // a turn after action goes around (because contribution check happens first)
+        needsToAct = contribution < currentBet;
+      }
+      
+      if (needsToAct) {
+        nextPlayer = playerAtSeat;
+        console.log(`[TURN ORDER] Selected seat ${nextSeat} (${playerAtSeat.name || playerAtSeat.userId}) as next player. Checked seats in order: ${checkedSeats.join(' → ')}`);
+        break;
+      }
     }
     
-    if (needsToAct) {
-      nextPlayer = player;
-      console.log(`[TURN ORDER] SELECTED: seat ${player.seatNumber} (${player.name || player.userId}) as next player`);
-      break;
-    }
-  }
-  
-  if (!nextPlayer) {
-    console.log(`[TURN ORDER] No player found who needs to act after checking all ${playersInOrder.length} players in clockwise order`);
+    // Move to next seat clockwise (decreasing)
+    nextSeat = nextSeat - 1;
+    if (nextSeat < minSeat) nextSeat = maxSeat;
+    attempts++;
   }
   
   if (nextPlayer) {
