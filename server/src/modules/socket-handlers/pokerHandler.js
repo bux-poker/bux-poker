@@ -881,38 +881,42 @@ async function moveToNextPlayer(gameId, io) {
     state.actedPlayersInRound = new Set();
   }
   
-  while (attempts < totalSeats && !nextPlayer) {
-    checkedSeats.push(nextSeat);
-    // Look for an active player at this seat
-    const playerAtSeat = seatMap.get(nextSeat);
+  // SIMPLE APPROACH: Go through ALL active players in clockwise order (decreasing seat numbers)
+  // Find the first one who needs to act, starting from the player after current player
+  // Clockwise = decreasing seat numbers (seats numbered anticlockwise)
+  
+  // Build ordered list of active players in clockwise order starting from current player
+  const activeSeatsList = Array.from(activeSeats).sort((a, b) => b - a); // Sort descending for clockwise
+  const currentIndex = activeSeatsList.indexOf(currentSeat);
+  
+  // Get all players in clockwise order starting from next player after current
+  const playersInOrder = [];
+  for (let i = 1; i < activeSeatsList.length; i++) {
+    const idx = (currentIndex + i) % activeSeatsList.length;
+    const seat = activeSeatsList[idx];
+    const player = seatMap.get(seat);
+    if (player) {
+      playersInOrder.push(player);
+      checkedSeats.push(seat);
+    }
+  }
+  
+  // Find first player who needs to act
+  for (const player of playersInOrder) {
+    const contribution = state.bettingRound?.getPlayerContribution(player.id) || 0;
     
-    // If we found a player at this seat AND it's not the current player, check if they need to act
-    if (playerAtSeat && playerAtSeat.userId !== state.currentTurnUserId) {
-      const contribution = state.bettingRound?.getPlayerContribution(playerAtSeat.id) || 0;
-      
-      let needsToAct = false;
-      if (currentBet === 0) {
-        // When currentBet === 0, player needs to act if they haven't acted yet this round
-        needsToAct = !state.actedPlayersInRound.has(playerAtSeat.userId);
-      } else {
-        // When currentBet > 0, player needs to act if contribution < currentBet
-        needsToAct = contribution < currentBet;
-      }
-      
-      if (needsToAct) {
-        // Player needs to act on current bet level
-        nextPlayer = playerAtSeat;
-      } else {
-        // Player has already acted or matched current bet, continue searching clockwise
-        nextSeat = nextSeat - 1;
-        if (nextSeat < minSeat) nextSeat = maxSeat;
-        attempts++;
-      }
+    let needsToAct = false;
+    if (currentBet === 0) {
+      // When currentBet === 0, player needs to act if they haven't acted yet this round
+      needsToAct = !state.actedPlayersInRound.has(player.userId);
     } else {
-      // No player at this seat, or it's the current player - move to next seat clockwise (DECREASE seat number, wrap)
-      nextSeat = nextSeat - 1;
-      if (nextSeat < minSeat) nextSeat = maxSeat;
-      attempts++;
+      // When currentBet > 0, player needs to act if contribution < currentBet
+      needsToAct = contribution < currentBet;
+    }
+    
+    if (needsToAct) {
+      nextPlayer = player;
+      break;
     }
   }
   
