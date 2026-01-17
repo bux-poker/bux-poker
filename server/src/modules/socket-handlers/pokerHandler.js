@@ -50,7 +50,21 @@ function buildClientGameState(game, state) {
       seatNumber: p.seatNumber,
       status: p.status,
       avatarUrl: p.user?.avatarUrl || null,
-      holeCards: p.holeCards ? JSON.parse(p.holeCards) : null,
+      holeCards: (() => {
+        if (!p.holeCards) return null;
+        // If already an object, return as-is
+        if (typeof p.holeCards === 'object') return p.holeCards;
+        // If it's a string, try to parse it
+        if (typeof p.holeCards === 'string') {
+          try {
+            return JSON.parse(p.holeCards);
+          } catch (e) {
+            console.warn(`[POKER] Failed to parse holeCards for player ${p.id}:`, e.message);
+            return null;
+          }
+        }
+        return null;
+      })(),
       contribution: state?.bettingRound?.getPlayerContribution(p.id) || 0
     }))
   };
@@ -316,7 +330,35 @@ export async function startHandForGame(gameId, io) {
       game.players.map(async (p, index) => {
         const updated = await prisma.player.findUnique({ where: { id: p.id } });
         // Parse hole cards from database (stored as JSON string)
-        const holeCards = updated?.holeCards ? JSON.parse(updated.holeCards) : (p.holeCards ? JSON.parse(p.holeCards) : dealtHands[index]);
+        // If updated player has holeCards, use those (parsed if string)
+        // Otherwise fall back to p.holeCards (parsed if string)
+        // If neither exists, use dealtHands from current hand
+        let holeCards = null;
+        if (updated?.holeCards) {
+          if (typeof updated.holeCards === 'object') {
+            holeCards = updated.holeCards;
+          } else if (typeof updated.holeCards === 'string') {
+            try {
+              holeCards = JSON.parse(updated.holeCards);
+            } catch (e) {
+              console.warn(`[POKER] Failed to parse holeCards from database for player ${p.id}:`, e.message);
+              holeCards = dealtHands[index];
+            }
+          }
+        } else if (p.holeCards) {
+          if (typeof p.holeCards === 'object') {
+            holeCards = p.holeCards;
+          } else if (typeof p.holeCards === 'string') {
+            try {
+              holeCards = JSON.parse(p.holeCards);
+            } catch (e) {
+              console.warn(`[POKER] Failed to parse holeCards from p for player ${p.id}:`, e.message);
+              holeCards = dealtHands[index];
+            }
+          }
+        } else {
+          holeCards = dealtHands[index];
+        }
         return {
           ...p,
           chips: updated?.chips || p.chips,
