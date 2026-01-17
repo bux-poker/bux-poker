@@ -8,6 +8,7 @@ interface BettingControlsProps {
   street?: string;
   minimumRaise?: number;
   isBigBlind?: boolean;
+  myContribution?: number; // How much I've already contributed this round
 }
 
 export function BettingControls({ 
@@ -19,6 +20,7 @@ export function BettingControls({
   minimumRaise = 20,
   isBigBlind = false,
   isMyTurn = false,
+  myContribution = 0, // How much I've already contributed this round
 }: BettingControlsProps) {
   const [raiseAmount, setRaiseAmount] = useState(bigBlind * 2);
 
@@ -27,7 +29,11 @@ export function BettingControls({
   // Determine if there have been raises (any bet > big blind in preflop, or any bet > 0 post-flop)
   const hasRaises = isPreflop ? currentBet > bigBlind : currentBet > 0;
   const canCheck = !isPreflop || (isPreflop && isBigBlind && !hasRaises && currentBet === bigBlind);
-  const callAmount = currentBet || bigBlind;
+  
+  // CALL amount: how much MORE I need to add (currentBet - what I've already contributed)
+  const callAmount = Math.max(0, currentBet - myContribution);
+  
+  // RAISE amount: total bet amount I'd raise to (currentBet + minimumRaise)
   const minRaiseAmount = currentBet + minimumRaise;
 
   // Update raise amount when current bet changes
@@ -79,6 +85,7 @@ export function BettingControls({
   // Determine which buttons to show
   const showCheck = !isPreflop || (isPreflop && isBigBlind && !hasRaises && currentBet === bigBlind);
   const actionLabel = isPreflop && currentBet === 0 ? 'RAISE' : (currentBet > 0 ? 'RAISE' : 'BET');
+  // RAISE button shows total bet amount to raise TO (currentBet + minimumRaise)
   const actionAmount = raiseAmount;
 
   return (

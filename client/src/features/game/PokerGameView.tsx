@@ -8,6 +8,8 @@ import { useAuth } from "@shared/features/auth/AuthContext";
 import Chat from "@shared/components/chat/Chat";
 import type { Player } from "@shared/types/game";
 import PlayerStatsModal from "../../components/modals/PlayerStatsModal";
+import { api } from "../../services/api";
+import { useTournament } from "../../hooks/useTournaments";
 
 interface PlayerViewModel {
   id: string;
@@ -57,7 +59,9 @@ export function PokerGameView() {
   const [connecting, setConnecting] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [turnTimer, setTurnTimer] = useState<{ userId: string; expiresAt: number; duration: number } | null>(null);
+  const [nextBlindTime, setNextBlindTime] = useState<string>('--:--');
   const { user } = useAuth();
+  const { tournament } = useTournament(gameState?.tournamentId);
 
   useEffect(() => {
     if (!id) return;
@@ -121,6 +125,73 @@ export function PokerGameView() {
       clearInterval(timerInterval);
     };
   }, [id, turnTimer]);
+
+  // Calculate next blind timer based on tournament startedAt
+  useEffect(() => {
+    if (!tournament || !tournament.startedAt || tournament.status !== 'RUNNING') {
+      setNextBlindTime('--:--');
+      return;
+    }
+
+    const calculateNextBlind = () => {
+      const now = new Date();
+      const startedAt = new Date(tournament.startedAt);
+      const elapsedMs = now.getTime() - startedAt.getTime();
+      let elapsedMinutes = elapsedMs / 1000 / 60;
+
+      const blindLevels = tournament.blindLevels || [];
+      if (blindLevels.length === 0) {
+        setNextBlindTime('--:--');
+        return;
+      }
+
+      // Find current blind level
+      let currentLevelIndex = 0;
+      for (let i = 0; i < blindLevels.length; i++) {
+        const level = blindLevels[i];
+        if (level.duration === null) {
+          // Final level (infinite duration)
+          currentLevelIndex = i;
+          break;
+        }
+        if (elapsedMinutes <= level.duration) {
+          currentLevelIndex = i;
+          break;
+        }
+        elapsedMinutes -= level.duration;
+        // Account for break after level
+        if (level.breakAfter) {
+          elapsedMinutes -= level.breakAfter;
+        }
+      }
+
+      // Calculate time until next level
+      if (currentLevelIndex + 1 < blindLevels.length) {
+        const currentLevel = blindLevels[currentLevelIndex];
+        const levelDuration = currentLevel.duration || 0;
+        const breakDuration = currentLevel.breakAfter || 0;
+        const totalLevelTime = (levelDuration + breakDuration) * 60 * 1000; // Convert to ms
+        const timeIntoLevel = elapsedMinutes * 60 * 1000;
+        const timeUntilNext = totalLevelTime - timeIntoLevel;
+
+        if (timeUntilNext > 0) {
+          const minutes = Math.floor(timeUntilNext / 60000);
+          const seconds = Math.floor((timeUntilNext % 60000) / 1000);
+          setNextBlindTime(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+        } else {
+          setNextBlindTime('0:00');
+        }
+      } else {
+        // Final level
+        setNextBlindTime('∞');
+      }
+    };
+
+    calculateNextBlind();
+    const interval = setInterval(calculateNextBlind, 1000); // Update every second
+
+    return () => clearInterval(interval);
+  }, [tournament]);
 
   const handleAction = (action: string, amount: number) => {
     if (!id || !gameState || !user) return;
@@ -192,7 +263,7 @@ export function PokerGameView() {
           </div>
           <div className="flex flex-col">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">NEXT BLIND</span>
-            <span className="text-lg font-bold text-white">10:00</span>
+            <span className="text-lg font-bold text-white">{nextBlindTime}</span>
           </div>
           <div className="flex flex-col">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">TOTAL POT</span>
