@@ -236,9 +236,9 @@ export class TournamentService {
     try {
       return await prisma.tournamentRegistration.create({
         data: {
-          tournamentId,
-          userId,
-          status: "CONFIRMED"
+        tournamentId,
+        userId,
+        status: "CONFIRMED"
         }
       });
     } catch (error) {
@@ -248,8 +248,8 @@ export class TournamentService {
         return prisma.tournamentRegistration.findUnique({
           where: {
             tournamentId_userId: { tournamentId, userId }
-          }
-        });
+      }
+    });
       }
       throw error;
     }
