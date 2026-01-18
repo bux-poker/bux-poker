@@ -208,48 +208,48 @@
   :root {
     --scale-factor: 0.80;
     
-    --top-bar-label-size: 9px;
-    --top-bar-value-size: 14px;
-    --top-bar-padding-x: 14px;
-    --top-bar-padding-y: 7px;
-    --top-bar-gap: 14px;
+    --top-bar-label-size: 8px;
+    --top-bar-value-size: 10px;
+    --top-bar-padding-x: 10px;
+    --top-bar-padding-y: 6px;
+    --top-bar-gap: 10px;
     
-    --community-card-width: 64px;
-    --community-card-height: 90px;
+    --community-card-width: 67px;
+    --community-card-height: 94px;
     
-    --player-avatar-size: 51px;
-    --player-name-size: 11px;
-    --player-chips-size: 10px;
+    --player-avatar-size: 31px;
+    --player-name-size: 8px;
+    --player-chips-size: 7px;
     
-    --dealer-button-size: 26px;
-    --timer-text-size: 16px;
+    --dealer-button-size: 27px;
+    --timer-text-size: 17px;
     
-    --hole-card-width: 22px;
-    --hole-card-height: 31px;
+    --hole-card-width: 25px;
+    --hole-card-height: 32px;
     
-    --bet-chip-size: 19px;
+    --bet-chip-size: 21px;
     --bet-chip-text-size: 10px;
     
-    --table-padding: 26px;
+    --table-padding: 27px;
     
-    --action-button-width: 112px;
-    --action-button-height: 38px;
-    --action-button-text: 13px;
-    --action-button-padding-x: 16px;
-    --action-button-padding-y: 8px;
+    --action-button-width: 71px;
+    --action-button-height: 28px;
+    --action-button-text: 10px;
+    --action-button-padding-x: 9px;
+    --action-button-padding-y: 5px;
     
-    --preset-button-text: 11px;
-    --preset-button-padding-x: 9px;
-    --preset-button-padding-y: 6px;
+    --preset-button-text: 9px;
+    --preset-button-padding-x: 5px;
+    --preset-button-padding-y: 4px;
     
-    --amount-input-width: 102px;
-    --amount-input-height: 54px;
-    --amount-input-text: 14px;
+    --amount-input-width: 66px;
+    --amount-input-height: 39px;
+    --amount-input-text: 10px;
     
-    --input-button-size: 38px;
-    --input-button-text: 16px;
+    --input-button-size: 28px;
+    --input-button-text: 10px;
     
-    --chat-width: 256px;
+    --chat-width: 270px;
   }
 }
 
