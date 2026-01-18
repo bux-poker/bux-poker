@@ -82,22 +82,22 @@
     
     --table-padding: 30px;
     
-    --action-button-width: 133px;
-    --action-button-height: 46px;
-    --action-button-text: 15px;
-    --action-button-padding-x: 22px;
-    --action-button-padding-y: 11px;
+    --action-button-width: 110px;
+    --action-button-height: 40px;
+    --action-button-text: 13px;
+    --action-button-padding-x: 16px;
+    --action-button-padding-y: 8px;
     
-    --preset-button-text: 13px;
-    --preset-button-padding-x: 11px;
-    --preset-button-padding-y: 7px;
+    --preset-button-text: 11px;
+    --preset-button-padding-x: 8px;
+    --preset-button-padding-y: 6px;
     
-    --amount-input-width: 122px;
-    --amount-input-height: 65px;
-    --amount-input-text: 17px;
+    --amount-input-width: 105px;
+    --amount-input-height: 56px;
+    --amount-input-text: 15px;
     
-    --input-button-size: 46px;
-    --input-button-text: 19px;
+    --input-button-size: 40px;
+    --input-button-text: 16px;
     
     --chat-width: 304px;
   }
