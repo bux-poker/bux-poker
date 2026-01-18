@@ -318,12 +318,17 @@ export function PokerTable({
             ? ((seatIdx + 1) <= 5 ? 6 : -22) 
             : 0;
           
+          // Adjust horizontal position for smaller screens: seats 1,10 left, seats 5,6 right
+          const horizontalOffset = windowSize.width <= 900
+            ? ((seatIdx === 0 || seatIdx === 9) ? -12 : ((seatIdx === 4 || seatIdx === 5) ? 12 : 0))
+            : 0;
+          
           const elements = [
             <div
               key={`player-${player?.id || `seat-${seatIdx + 1}`}`}
               className="absolute z-20"
               style={{
-                left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}%)`,
+                left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${horizontalOffset}px)`,
                 top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}% + ${verticalOffset}px)`,
                 transform: 'translate(-50%, -50%)',
               }}
