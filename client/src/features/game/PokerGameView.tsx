@@ -75,8 +75,26 @@ export function PokerGameView() {
   const [error, setError] = useState<string | null>(null);
   const [turnTimer, setTurnTimer] = useState<{ userId: string; expiresAt: number; duration: number } | null>(null);
   const [nextBlindTime, setNextBlindTime] = useState<string>('--:--');
+  const [isPortrait, setIsPortrait] = useState(false);
   const { user } = useAuth();
   const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
+  
+  // Check screen orientation
+  useEffect(() => {
+    const checkOrientation = () => {
+      const isPortraitMode = window.innerHeight > window.innerWidth;
+      setIsPortrait(isPortraitMode);
+    };
+    
+    checkOrientation();
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+    
+    return () => {
+      window.removeEventListener('resize', checkOrientation);
+      window.removeEventListener('orientationchange', checkOrientation);
+    };
+  }, []);
   
   // Refetch tournament data when gameState changes to get updated status/startedAt
   useEffect(() => {
@@ -382,42 +400,57 @@ export function PokerGameView() {
   const myPosition = myPlayer ? activePlayers.findIndex(p => p.id === myPlayer.id) + 1 : null;
   const myContribution = myPlayer?.contribution || 0;
 
+  // Show landscape prompt if in portrait mode
+  if (isPortrait) {
+    return (
+      <div className="flex h-screen w-screen flex-col items-center justify-center bg-gradient-to-br from-slate-950 to-slate-900 p-6">
+        <div className="max-w-md text-center space-y-6">
+          <div className="text-6xl mb-4">📱</div>
+          <h2 className="text-2xl font-bold text-white">Please Rotate Your Device</h2>
+          <p className="text-slate-400">
+            The poker game is optimized for landscape mode. Please rotate your device to continue playing.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen w-screen flex-col bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden">
       {/* Top Bar - Game Info */}
-      <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900/90 px-6 py-3 backdrop-blur-sm flex-shrink-0">
+      <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900/90 px-3 sm:px-6 py-2 sm:py-3 backdrop-blur-sm flex-shrink-0 text-sm sm:text-base">
         <div className="flex items-center gap-6">
           <div className="flex flex-col">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">BLINDS</span>
-            <span className="text-lg font-bold text-white">{smallBlind}/{bigBlind}</span>
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wide">BLINDS</span>
+            <span className="text-base sm:text-lg font-bold text-white">{smallBlind}/{bigBlind}</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">NEXT BLIND</span>
-            <span className="text-lg font-bold text-white">{nextBlindTime}</span>
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wide">NEXT BLIND</span>
+            <span className="text-base sm:text-lg font-bold text-white">{nextBlindTime}</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">TOTAL POT</span>
-            <span className="text-lg font-bold text-white">{gameState.pot.toLocaleString()}</span>
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wide">TOTAL POT</span>
+            <span className="text-base sm:text-lg font-bold text-white">{gameState.pot.toLocaleString()}</span>
           </div>
         </div>
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3 sm:gap-6">
           <div className="flex flex-col text-right">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">PLAYERS</span>
-            <span className="text-lg font-bold text-white">{activePlayers.length}/{gameState.players.length}</span>
+            <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wide">PLAYERS</span>
+            <span className="text-base sm:text-lg font-bold text-white">{activePlayers.length}/{gameState.players.length}</span>
           </div>
           {myPosition && (
             <div className="flex flex-col text-right">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">POSITION</span>
-              <span className="text-lg font-bold text-white">{myPosition}</span>
+              <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wide">POSITION</span>
+              <span className="text-base sm:text-lg font-bold text-white">{myPosition}</span>
             </div>
           )}
         </div>
       </div>
 
       {/* Main game area - full screen layout */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden min-h-0">
         {/* Left side - Table and controls */}
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex flex-1 flex-col overflow-hidden min-w-0">
           {/* Table area - takes most of the space */}
           <div className="relative flex-1 overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900 min-h-0">
             <PokerTable
@@ -448,7 +481,7 @@ export function PokerGameView() {
           </div>
 
           {/* Betting controls - fixed at bottom */}
-          <div className="border-t border-slate-800 bg-slate-900/95 p-4 backdrop-blur-sm relative">
+          <div className="border-t border-slate-800 bg-slate-900/95 p-2 sm:p-4 backdrop-blur-sm relative">
             {/* Player's own cards - bottom left, aligned with action buttons */}
             {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
               <div className={`absolute top-4 bottom-4 left-4 z-50 flex gap-2 items-center ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ visibility: 'visible' }}>
@@ -495,7 +528,7 @@ export function PokerGameView() {
 
         {/* Right side - Chat */}
         {user && (
-          <div className="w-80 border-l border-slate-800 flex-shrink-0">
+          <div className="w-64 lg:w-80 border-l border-slate-800 flex-shrink-0">
             <Chat
               gameId={gameState.id}
               userId={user.id}

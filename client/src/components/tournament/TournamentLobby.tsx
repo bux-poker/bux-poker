@@ -107,6 +107,22 @@ export function TournamentLobby() {
     fetchMyTable();
   }, [tournament, user, id]);
 
+  // Auto-navigate to game table when tournament status is SEATED or RUNNING and myGameId is set
+  useEffect(() => {
+    if (!myGameId || !tournament || !navigate) return;
+    
+    const shouldAutoNavigate = tournament.status === 'SEATED' || tournament.status === 'RUNNING';
+    
+    if (shouldAutoNavigate && myGameId) {
+      // Only navigate if we're not already on the game page
+      const currentPath = window.location.pathname;
+      if (!currentPath.includes(`/game/${myGameId}`)) {
+        console.log(`[TOURNAMENT] Auto-navigating to game table: ${myGameId}`);
+        navigate(`/game/${myGameId}`);
+      }
+    }
+  }, [myGameId, tournament?.status, navigate]);
+
   // Calculate running tournament stats
   useEffect(() => {
     if (!tournament || (tournament.status !== 'RUNNING' && tournament.status !== 'ACTIVE')) {
