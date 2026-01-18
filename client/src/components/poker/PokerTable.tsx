@@ -336,7 +336,7 @@ export function PokerTable({
               <div 
                 className="flex flex-col items-center"
                 style={{
-                  flexDirection: (windowSize.width <= 900 && (seatIdx + 1) >= 6 && (seatIdx + 1) <= 10) ? 'column-reverse' : 'column'
+                  flexDirection: ((seatIdx + 1) >= 6 && (seatIdx + 1) <= 10) ? 'column-reverse' : 'column'
                 }}
               >
                   {/* Player Avatar or Empty Seat */}
