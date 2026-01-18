@@ -214,19 +214,45 @@ export class TournamentService {
   }
 
   async registerForTournament({ tournamentId, userId }) {
-    return prisma.tournamentRegistration.upsert({
+    // Check if already registered first to avoid race conditions
+    const existing = await prisma.tournamentRegistration.findUnique({
       where: {
         tournamentId_userId: { tournamentId, userId }
-      },
-      create: {
-        tournamentId,
-        userId,
-        status: "CONFIRMED"
-      },
-      update: {
-        status: "CONFIRMED"
       }
     });
+
+    if (existing) {
+      // Return existing registration with CONFIRMED status
+      if (existing.status !== "CONFIRMED") {
+        return prisma.tournamentRegistration.update({
+          where: { id: existing.id },
+          data: { status: "CONFIRMED" }
+        });
+      }
+      return existing;
+    }
+
+    // Create new registration
+    try {
+      return await prisma.tournamentRegistration.create({
+        data: {
+          tournamentId,
+          userId,
+          status: "CONFIRMED"
+        }
+      });
+    } catch (error) {
+      // Handle race condition where registration was created between check and create
+      if (error.code === 'P2002' && error.meta?.target?.includes('tournamentId_userId')) {
+        // Registration was created by another request, return it
+        return prisma.tournamentRegistration.findUnique({
+          where: {
+            tournamentId_userId: { tournamentId, userId }
+          }
+        });
+      }
+      throw error;
+    }
   }
 }
 
