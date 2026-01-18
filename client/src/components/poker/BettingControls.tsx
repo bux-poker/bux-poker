@@ -241,7 +241,7 @@ export function BettingControls({
                 paddingRight: `var(--preset-button-padding-x, 12px)`,
                 paddingTop: `var(--preset-button-padding-y, 8px)`,
                 paddingBottom: `var(--preset-button-padding-y, 8px)`,
-                fontSize: `var(--preset-button-text, 14px)`,
+                fontSize: `var(--allin-button-text, var(--preset-button-text, 14px))`,
                 height: `var(--preset-button-height, auto)`
               }}
             >
