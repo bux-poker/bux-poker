@@ -58,11 +58,11 @@
   :root {
     --scale-factor: 0.95;
     
-    --top-bar-label-size: 11px;
-    --top-bar-value-size: 17px;
-    --top-bar-padding-x: 20px;
-    --top-bar-padding-y: 10px;
-    --top-bar-gap: 20px;
+    --top-bar-label-size: 9px;
+    --top-bar-value-size: 14px;
+    --top-bar-padding-x: 16px;
+    --top-bar-padding-y: 8px;
+    --top-bar-gap: 16px;
     
     --community-card-width: 76px;
     --community-card-height: 106px;
@@ -82,22 +82,22 @@
     
     --table-padding: 30px;
     
-    --action-button-width: 110px;
-    --action-button-height: 40px;
-    --action-button-text: 13px;
-    --action-button-padding-x: 16px;
-    --action-button-padding-y: 8px;
+    --action-button-width: 95px;
+    --action-button-height: 36px;
+    --action-button-text: 12px;
+    --action-button-padding-x: 12px;
+    --action-button-padding-y: 6px;
     
-    --preset-button-text: 11px;
-    --preset-button-padding-x: 8px;
-    --preset-button-padding-y: 6px;
+    --preset-button-text: 10px;
+    --preset-button-padding-x: 6px;
+    --preset-button-padding-y: 5px;
     
-    --amount-input-width: 105px;
-    --amount-input-height: 56px;
-    --amount-input-text: 15px;
+    --amount-input-width: 90px;
+    --amount-input-height: 50px;
+    --amount-input-text: 13px;
     
-    --input-button-size: 40px;
-    --input-button-text: 16px;
+    --input-button-size: 36px;
+    --input-button-text: 14px;
     
     --chat-width: 304px;
   }
