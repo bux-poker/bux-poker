@@ -1,10 +1,60 @@
 /* Game Table Responsive Sizing
- * Breakpoints: 851-900px, 801-850px, 751-800px, 701-750px, 651-700px, 
+ * Breakpoints: 901-1000px, 851-900px, 801-850px, 751-800px, 701-750px, 651-700px, 
  *              601-650px, 551-600px, 501-550px, 451-500px, 401-450px, 351-400px
- * Starting from 851-900px and working down
+ * Starting from 901-1000px and working down
  */
 
-/* Default base sizes (for screens > 900px) */
+/* 901-1000px */
+@media (min-width: 901px) and (max-width: 1000px) {
+  :root {
+    --scale-factor: 1.0;
+    
+    --top-bar-label-size: 8px;
+    --top-bar-value-size: 13px;
+    --top-bar-padding-x: 13px;
+    --top-bar-padding-y: 6px;
+    --top-bar-gap: 13px;
+    
+    --community-card-width: 80px;
+    --community-card-height: 111px;
+    
+    --player-avatar-size: 38px;
+    --player-name-size: 8px;
+    --player-chips-size: 7px;
+    
+    --dealer-button-size: 32px;
+    --timer-text-size: 20px;
+    
+    --hole-card-width: 28px;
+    --hole-card-height: 39px;
+    
+    --bet-chip-size: 24px;
+    --bet-chip-text-size: 12px;
+    
+    --table-padding: 32px;
+    
+    --action-button-width: 86px;
+    --action-button-height: 34px;
+    --action-button-text: 12px;
+    --action-button-padding-x: 11px;
+    --action-button-padding-y: 5px;
+    
+    --preset-button-text: 9px;
+    --preset-button-padding-x: 5px;
+    --preset-button-padding-y: 4px;
+    
+    --amount-input-width: 79px;
+    --amount-input-height: 46px;
+    --amount-input-text: 13px;
+    
+    --input-button-size: 34px;
+    --input-button-text: 13px;
+    
+    --chat-width: 319px;
+  }
+}
+
+/* Default base sizes (for screens > 1000px) */
 :root {
   --top-bar-label-size: 12px;
   --top-bar-value-size: 18px;
