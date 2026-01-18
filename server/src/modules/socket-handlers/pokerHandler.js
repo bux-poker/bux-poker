@@ -711,7 +711,71 @@ async function handleTestPlayerAction(gameId, userId, io) {
     console.log(`[TEST PLAYER] Betting complete? ${bettingComplete}`);
     
     if (bettingComplete) {
-      // Advance to next street
+      // Check if only 1 player remains - award pot immediately without dealing cards
+      const activePlayersAfterAction = newState.players.filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
+      if (activePlayersAfterAction.length === 1) {
+        // Only one player remaining - award pot and end hand (same logic as regular player action)
+        const winner = activePlayersAfterAction[0];
+        const collectedPot = newState.bettingRound.getTotalPot();
+        const totalPot = newState.pot + collectedPot;
+        
+        winner.chips += totalPot;
+        newState.pot = 0;
+        
+        console.log(`[TEST PLAYER] Single player remaining - awarding pot of ${totalPot} to ${winner.name || winner.userId}`);
+        
+        // Update winner chips in database (async)
+        prisma.player.update({
+          where: { id: winner.id },
+          data: { chips: winner.chips }
+        }).catch(err => console.error('[TEST PLAYER] Error updating winner chips:', err));
+        
+        // Update game pot in database (async)
+        prisma.game.update({
+          where: { id: gameId },
+          data: { pot: 0 }
+        }).catch(err => console.error('[TEST PLAYER] Error updating game pot:', err));
+        
+        // Clear hand state
+        const savedPlayers = [...newState.players];
+        tableState.delete(gameId);
+        
+        // Reset player statuses (async)
+        setTimeout(() => {
+          savedPlayers.forEach(p => {
+            prisma.player.update({
+              where: { id: p.id },
+              data: { 
+                status: 'ACTIVE',
+                holeCards: "",
+                lastAction: null
+              }
+            }).catch(err => console.error(`[TEST PLAYER] Error resetting player ${p.id}:`, err));
+          });
+        }, 2000);
+        
+        // Emit updated state
+        const updatedGameFromState = {
+          id: gameId,
+          pot: 0,
+          players: newState.players.map(p => ({
+            id: p.id,
+            userId: p.userId,
+            name: p.name,
+            chips: p.chips,
+            seatNumber: p.seatNumber,
+            status: p.status,
+            holeCards: p.holeCards,
+            avatarUrl: p.avatarUrl || p.user?.avatarUrl,
+            user: p.user
+          }))
+        };
+        const payload = buildClientGameState(updatedGameFromState, newState);
+        if (io) io.to(`game:${gameId}`).emit("game-state", payload);
+        return; // Don't advance to next street
+      }
+      
+      // Multiple players remaining - advance to next street
       await advanceToNextStreet(gameId, io);
       // Get updated state after advancing street
       const updatedGame = await prisma.game.findUnique({
@@ -720,8 +784,26 @@ async function handleTestPlayerAction(gameId, userId, io) {
       });
       if (updatedGame) {
         const updatedState = tableState.get(gameId);
-        const payload = buildClientGameState(updatedGame, updatedState);
-        if (io) io.to(`game:${gameId}`).emit("game-state", payload);
+        if (updatedState) {
+          const updatedGameFromState = {
+            id: gameId,
+            pot: updatedState.pot,
+            communityCards: updatedState.communityCards,
+            players: updatedState.players.map(p => ({
+              id: p.id,
+              userId: p.userId,
+              name: p.name,
+              chips: p.chips,
+              seatNumber: p.seatNumber,
+              status: p.status,
+              holeCards: p.holeCards,
+              avatarUrl: p.avatarUrl || p.user?.avatarUrl,
+              user: p.user
+            }))
+          };
+          const payload = buildClientGameState(updatedGameFromState, updatedState);
+          if (io) io.to(`game:${gameId}`).emit("game-state", payload);
+        }
       }
     } else {
       // Move to next player in current betting round
