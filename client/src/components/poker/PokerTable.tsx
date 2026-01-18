@@ -314,9 +314,12 @@ export function PokerTable({
           const cardOffset = cardsOnRight ? 80 : -80; // Offset cards to right or left of avatar
 
           // Adjust vertical position for smaller screens: seats 1-5 down, 6-10 up
-          const verticalOffset = windowSize.width <= 900 
-            ? ((seatIdx + 1) <= 5 ? 6 : -22) 
-            : 0;
+          let verticalOffset = 0;
+          if (windowSize.width <= 900) {
+            verticalOffset = (seatIdx + 1) <= 5 ? 6 : -22;
+          } else if (windowSize.width >= 901 && windowSize.width <= 1000) {
+            verticalOffset = (seatIdx + 1) <= 5 ? 5 : -20;
+          }
           
           // Adjust horizontal position for smaller screens: seats 1,10 left, seats 5,6 right
           const horizontalOffset = windowSize.width <= 900
