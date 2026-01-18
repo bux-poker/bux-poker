@@ -539,7 +539,7 @@ export function PokerGameView() {
           </div>
 
           {/* Betting controls - fixed at bottom */}
-          <div className="border-t border-slate-800 bg-slate-900/95 p-2 sm:p-4 backdrop-blur-sm relative">
+          <div className="border-t border-slate-800 bg-slate-900/95 px-2 sm:px-4 py-1 sm:py-2 backdrop-blur-sm relative">
             {/* Player's own cards - bottom left, aligned with action buttons */}
             {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
               <div className={`absolute top-4 bottom-4 left-4 z-50 flex gap-2 items-center ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ visibility: 'visible' }}>
