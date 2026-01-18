@@ -1,5 +1,7 @@
 /* Import mobile-specific styles */
 @import './mobile.css';
+/* Import game table responsive styles */
+@import './game-table-responsive.css';
 
 @tailwind base;
 @tailwind components;

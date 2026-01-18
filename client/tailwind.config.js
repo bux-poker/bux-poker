@@ -7,6 +7,19 @@ export default {
   ],
   theme: {
     extend: {
+      screens: {
+        'game-351': '351px',
+        'game-401': '401px',
+        'game-451': '451px',
+        'game-501': '501px',
+        'game-551': '551px',
+        'game-601': '601px',
+        'game-651': '651px',
+        'game-701': '701px',
+        'game-751': '751px',
+        'game-801': '801px',
+        'game-851': '851px',
+      },
       colors: {
         primary: {
           50: "#f0f9ff",

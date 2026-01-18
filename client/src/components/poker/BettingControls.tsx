@@ -80,8 +80,13 @@ export function BettingControls({
   };
 
   // Calculate button width to match main action buttons - wider to prevent text wrapping
-  const buttonWidth = '140px'; // Wider to prevent text wrapping
-  const buttonHeight = '48px'; // Same height for all main buttons
+  // Using CSS variables for responsive sizing
+  const buttonWidth = typeof window !== 'undefined'
+    ? getComputedStyle(document.documentElement).getPropertyValue('--action-button-width') || '140px'
+    : '140px';
+  const buttonHeight = typeof window !== 'undefined'
+    ? getComputedStyle(document.documentElement).getPropertyValue('--action-button-height') || '48px'
+    : '48px';
 
   // Determine which buttons to show
   const showCheck = !isPreflop || (isPreflop && isBigBlind && !hasRaises && currentBet === bigBlind);
@@ -96,8 +101,16 @@ export function BettingControls({
         <button
           onClick={handleFold}
           disabled={!isMyTurn}
-          className="rounded-lg bg-red-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-red-700 transition-colors flex-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ minWidth: buttonWidth, height: buttonHeight }}
+          className="rounded-lg bg-red-600 font-bold text-white shadow-lg hover:bg-red-700 transition-colors flex-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ 
+            minWidth: `var(--action-button-width, 140px)`, 
+            height: `var(--action-button-height, 48px)`,
+            paddingLeft: `var(--action-button-padding-x, 24px)`,
+            paddingRight: `var(--action-button-padding-x, 24px)`,
+            paddingTop: `var(--action-button-padding-y, 12px)`,
+            paddingBottom: `var(--action-button-padding-y, 12px)`,
+            fontSize: `var(--action-button-text, 16px)`
+          }}
         >
           FOLD
         </button>
@@ -105,8 +118,16 @@ export function BettingControls({
           <button
             onClick={() => onAction("CHECK", 0)}
             disabled={!isMyTurn}
-            className="rounded-lg bg-blue-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-blue-700 transition-colors flex-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ minWidth: buttonWidth, height: buttonHeight }}
+            className="rounded-lg bg-blue-600 font-bold text-white shadow-lg hover:bg-blue-700 transition-colors flex-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ 
+              minWidth: `var(--action-button-width, 140px)`, 
+              height: `var(--action-button-height, 48px)`,
+              paddingLeft: `var(--action-button-padding-x, 24px)`,
+              paddingRight: `var(--action-button-padding-x, 24px)`,
+              paddingTop: `var(--action-button-padding-y, 12px)`,
+              paddingBottom: `var(--action-button-padding-y, 12px)`,
+              fontSize: `var(--action-button-text, 16px)`
+            }}
           >
             CHECK
           </button>
@@ -114,8 +135,16 @@ export function BettingControls({
           <button
             onClick={() => onAction("CALL", callAmount)}
             disabled={!isMyTurn}
-            className="rounded-lg bg-blue-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-blue-700 transition-colors flex-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ minWidth: buttonWidth, height: buttonHeight }}
+            className="rounded-lg bg-blue-600 font-bold text-white shadow-lg hover:bg-blue-700 transition-colors flex-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ 
+              minWidth: `var(--action-button-width, 140px)`, 
+              height: `var(--action-button-height, 48px)`,
+              paddingLeft: `var(--action-button-padding-x, 24px)`,
+              paddingRight: `var(--action-button-padding-x, 24px)`,
+              paddingTop: `var(--action-button-padding-y, 12px)`,
+              paddingBottom: `var(--action-button-padding-y, 12px)`,
+              fontSize: `var(--action-button-text, 16px)`
+            }}
           >
             CALL {callAmount}
           </button>
@@ -123,8 +152,16 @@ export function BettingControls({
         <button
           onClick={() => onAction(actionLabel, actionAmount)}
           disabled={!isMyTurn}
-          className="rounded-lg bg-emerald-600 px-6 py-3 text-base font-bold text-white shadow-lg hover:bg-emerald-700 transition-colors flex-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ minWidth: buttonWidth, height: buttonHeight }}
+          className="rounded-lg bg-emerald-600 font-bold text-white shadow-lg hover:bg-emerald-700 transition-colors flex-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ 
+            minWidth: `var(--action-button-width, 140px)`, 
+            height: `var(--action-button-height, 48px)`,
+            paddingLeft: `var(--action-button-padding-x, 24px)`,
+            paddingRight: `var(--action-button-padding-x, 24px)`,
+            paddingTop: `var(--action-button-padding-y, 12px)`,
+            paddingBottom: `var(--action-button-padding-y, 12px)`,
+            fontSize: `var(--action-button-text, 16px)`
+          }}
         >
           {actionLabel} {actionAmount}
         </button>
@@ -139,14 +176,28 @@ export function BettingControls({
             <button
               onClick={() => handlePreset('half')}
               disabled={!isMyTurn}
-              className="rounded bg-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="rounded bg-slate-700 font-medium text-slate-200 hover:bg-slate-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                paddingLeft: `var(--preset-button-padding-x, 12px)`,
+                paddingRight: `var(--preset-button-padding-x, 12px)`,
+                paddingTop: `var(--preset-button-padding-y, 8px)`,
+                paddingBottom: `var(--preset-button-padding-y, 8px)`,
+                fontSize: `var(--preset-button-text, 14px)`
+              }}
             >
               1/2
             </button>
             <button
               onClick={() => handlePreset('pot')}
               disabled={!isMyTurn}
-              className="rounded bg-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="rounded bg-slate-700 font-medium text-slate-200 hover:bg-slate-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                paddingLeft: `var(--preset-button-padding-x, 12px)`,
+                paddingRight: `var(--preset-button-padding-x, 12px)`,
+                paddingTop: `var(--preset-button-padding-y, 8px)`,
+                paddingBottom: `var(--preset-button-padding-y, 8px)`,
+                fontSize: `var(--preset-button-text, 14px)`
+              }}
             >
               POT
             </button>
@@ -156,14 +207,28 @@ export function BettingControls({
             <button
               onClick={() => handlePreset('twothirds')}
               disabled={!isMyTurn}
-              className="rounded bg-slate-700 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="rounded bg-slate-700 font-medium text-slate-200 hover:bg-slate-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                paddingLeft: `var(--preset-button-padding-x, 12px)`,
+                paddingRight: `var(--preset-button-padding-x, 12px)`,
+                paddingTop: `var(--preset-button-padding-y, 8px)`,
+                paddingBottom: `var(--preset-button-padding-y, 8px)`,
+                fontSize: `var(--preset-button-text, 14px)`
+              }}
             >
               2/3
             </button>
             <button
               onClick={() => handlePreset('allin')}
               disabled={!isMyTurn}
-              className="rounded bg-red-700 px-3 py-2 text-sm font-medium text-white hover:bg-red-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="rounded bg-red-700 font-medium text-white hover:bg-red-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                paddingLeft: `var(--preset-button-padding-x, 12px)`,
+                paddingRight: `var(--preset-button-padding-x, 12px)`,
+                paddingTop: `var(--preset-button-padding-y, 8px)`,
+                paddingBottom: `var(--preset-button-padding-y, 8px)`,
+                fontSize: `var(--preset-button-text, 14px)`
+              }}
             >
               ALL IN
             </button>
@@ -178,15 +243,25 @@ export function BettingControls({
                 setRaiseAmount(Math.max(minAmount, raiseAmount - minimumRaise));
               }}
               disabled={!isMyTurn}
-              className="flex h-[68px] w-12 items-center justify-center rounded-full bg-slate-700 text-xl font-bold text-white hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center justify-center rounded-full bg-slate-700 font-bold text-white hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                width: `var(--input-button-size, 48px)`,
+                height: `var(--amount-input-height, 68px)`,
+                fontSize: `var(--input-button-text, 20px)`
+              }}
             >
               −
             </button>
           <input
             type="number"
             disabled={!isMyTurn}
-            className="h-[68px] w-32 rounded-lg border-2 border-slate-600 bg-slate-800 px-4 text-center text-lg font-bold text-white focus:border-emerald-500 focus:outline-none no-spinner disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded-lg border-2 border-slate-600 bg-slate-800 text-center font-bold text-white focus:border-emerald-500 focus:outline-none no-spinner disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ 
+              width: `var(--amount-input-width, 128px)`,
+              height: `var(--amount-input-height, 68px)`,
+              paddingLeft: 'var(--amount-input-padding, 16px)',
+              paddingRight: 'var(--amount-input-padding, 16px)',
+              fontSize: `var(--amount-input-text, 18px)`,
               WebkitAppearance: 'none',
               MozAppearance: 'textfield',
               appearance: 'textfield'
@@ -204,7 +279,12 @@ export function BettingControls({
           <button
             onClick={() => setRaiseAmount(Math.min(myChips, raiseAmount + minimumRaise))}
             disabled={!isMyTurn}
-            className="flex h-[68px] w-12 items-center justify-center rounded-full bg-slate-700 text-xl font-bold text-white hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center justify-center rounded-full bg-slate-700 font-bold text-white hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              width: `var(--input-button-size, 48px)`,
+              height: `var(--amount-input-height, 68px)`,
+              fontSize: `var(--input-button-text, 20px)`
+            }}
           >
             +
           </button>

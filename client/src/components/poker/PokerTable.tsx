@@ -32,10 +32,14 @@ function BetChip({ value }: { value: number }) {
   const chipColor = getChipColor(value);
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center" style={{ gap: 'var(--hole-card-gap, 4px)' }}>
       <div
-        className="w-6 h-6 rounded-full shadow-lg flex items-center justify-center relative overflow-hidden"
-        style={{ backgroundColor: chipColor }}
+        className="rounded-full shadow-lg flex items-center justify-center relative overflow-hidden"
+        style={{ 
+          backgroundColor: chipColor,
+          width: 'var(--bet-chip-size, 24px)',
+          height: 'var(--bet-chip-size, 24px)'
+        }}
       >
         <img
           src="/poker-chip.svg"
@@ -44,7 +48,10 @@ function BetChip({ value }: { value: number }) {
           style={{ filter: 'brightness(0) invert(1)' }}
         />
       </div>
-      <span className="text-xs font-semibold text-white drop-shadow-lg">
+      <span 
+        className="font-semibold text-white drop-shadow-lg"
+        style={{ fontSize: 'var(--bet-chip-text-size, 12px)' }}
+      >
         {value.toLocaleString()}
       </span>
     </div>
@@ -232,24 +239,45 @@ export function PokerTable({
   }, [turnTimer]);
 
   return (
-    <div className="relative flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden p-8">
+    <div 
+      className="relative flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden"
+      style={{ padding: 'var(--table-padding, 32px)' }}
+    >
       {/* Oval/Circular Table */}
-      <div className="relative h-full w-full max-h-[calc(85vh-4rem)] max-w-[calc(90vw-4rem)] rounded-[50%] border-8 border-amber-600/40 bg-gradient-to-br from-emerald-900/60 to-slate-900/80 shadow-2xl" style={{ aspectRatio: '3/2' }}>
+      <div 
+        className="relative h-full w-full max-h-[calc(85vh-4rem)] max-w-[calc(90vw-4rem)] rounded-[50%] border-amber-600/40 bg-gradient-to-br from-emerald-900/60 to-slate-900/80 shadow-2xl" 
+        style={{ 
+          aspectRatio: '3/2',
+          borderWidth: 'var(--table-border-width, 32px)'
+        }}
+      >
         
 
 
         {/* Community Cards - Center of table */}
         {communityCards.length > 0 && (
-          <div className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 gap-2">
-            {communityCards.map((card, idx) => (
-              <PokerCardImage
-                key={idx}
-                card={card}
-                width={80}
-                height={112}
-                className="shadow-xl"
-              />
-            ))}
+          <div 
+            className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2"
+            style={{ gap: 'var(--community-card-gap, 8px)' }}
+          >
+            {communityCards.map((card, idx) => {
+              // Read CSS variables for responsive sizing
+              const cardWidth = typeof window !== 'undefined' 
+                ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--community-card-width')) || 80
+                : 80;
+              const cardHeight = typeof window !== 'undefined'
+                ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--community-card-height')) || 112
+                : 112;
+              return (
+                <PokerCardImage
+                  key={idx}
+                  card={card}
+                  width={cardWidth}
+                  height={cardHeight}
+                  className="shadow-xl"
+                />
+              );
+            })}
           </div>
         )}
 
@@ -288,7 +316,13 @@ export function PokerTable({
                   {player ? (
                     <>
                       <div className={`relative mb-2 ${hasActiveTimer ? 'animate-pulse' : ''} ${hasActiveTimer ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-900 rounded-full' : (isCurrentTurn ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-900 rounded-full' : '')}`}>
-                        <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-slate-700 bg-slate-800 relative">
+                        <div 
+                          className="overflow-hidden rounded-full border-2 border-slate-700 bg-slate-800 relative"
+                          style={{ 
+                            width: 'var(--player-avatar-size, 64px)',
+                            height: 'var(--player-avatar-size, 64px)'
+                          }}
+                        >
                           {(() => {
                             // Use Discord avatar for real players (not test players)
                             const isTestPlayer = player.name.toLowerCase().startsWith('test player');
@@ -315,7 +349,10 @@ export function PokerTable({
                           {/* Timer Overlay */}
                           {hasActiveTimer && timerRemaining !== null && (
                             <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full">
-                              <span className="text-xl font-bold text-yellow-400 drop-shadow-lg">
+                              <span 
+                                className="font-bold text-yellow-400 drop-shadow-lg"
+                                style={{ fontSize: 'var(--timer-text-size, 20px)' }}
+                              >
                                 {timerRemaining}
                               </span>
                             </div>
@@ -324,21 +361,41 @@ export function PokerTable({
                       
                         {/* Dealer Button */}
                         {player.isDealer && (
-                          <div className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-yellow-500 border-2 border-white shadow-lg">
-                            <span className="text-xs font-bold text-yellow-900">D</span>
+                          <div 
+                            className="absolute -right-2 -top-2 flex items-center justify-center rounded-full bg-yellow-500 border-2 border-white shadow-lg"
+                            style={{ 
+                              width: 'var(--dealer-button-size, 32px)',
+                              height: 'var(--dealer-button-size, 32px)'
+                            }}
+                          >
+                            <span 
+                              className="font-bold text-yellow-900"
+                              style={{ fontSize: 'calc(var(--dealer-button-size, 32px) * 0.375)' }}
+                            >
+                              D
+                            </span>
                           </div>
                         )}
                       </div>
 
                       {/* Player Name and Chips - In containers, no wrapping */}
-                      <div className="flex flex-col items-center gap-1 min-w-0 max-w-[120px]">
+                      <div 
+                        className="flex flex-col items-center gap-1 min-w-0"
+                        style={{ maxWidth: 'var(--player-name-max-width, 120px)' }}
+                      >
                         <div className="w-full px-2 py-1 rounded bg-slate-900/80 border border-slate-700/50">
-                          <div className="text-sm font-semibold text-white drop-shadow-lg truncate text-center whitespace-nowrap">
+                          <div 
+                            className="font-semibold text-white drop-shadow-lg truncate text-center whitespace-nowrap"
+                            style={{ fontSize: 'var(--player-name-size, 14px)' }}
+                          >
                             {player.name}
                           </div>
                         </div>
                         <div className="w-full px-2 py-1 rounded bg-slate-900/80 border border-slate-700/50">
-                          <div className="text-xs font-medium text-emerald-300 text-center whitespace-nowrap">
+                          <div 
+                            className="font-medium text-emerald-300 text-center whitespace-nowrap"
+                            style={{ fontSize: 'var(--player-chips-size, 12px)' }}
+                          >
                             {player.chips.toLocaleString()}
                           </div>
                         </div>
@@ -347,9 +404,20 @@ export function PokerTable({
                   ) : (
                     /* Empty Seat Indicator */
                     <div className="relative mb-2 opacity-30">
-                      <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-dashed border-slate-600 bg-slate-800/50">
+                      <div 
+                        className="overflow-hidden rounded-full border-2 border-dashed border-slate-600 bg-slate-800/50"
+                        style={{ 
+                          width: 'var(--player-avatar-size, 64px)',
+                          height: 'var(--player-avatar-size, 64px)'
+                        }}
+                      >
                         <div className="flex h-full w-full items-center justify-center">
-                          <span className="text-xs text-slate-500">{seatIdx + 1}</span>
+                          <span 
+                            className="text-slate-500"
+                            style={{ fontSize: 'var(--player-chips-size, 12px)' }}
+                          >
+                            {seatIdx + 1}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -374,17 +442,25 @@ export function PokerTable({
                 {(player.contribution ?? 0) > 0 && (seatIdx + 1 <= 5) && (
                   <BetChip value={player.contribution!} />
                 )}
-                <div className="flex gap-1">
-                  {player.holeCards.map((_, cardIdx) => (
-                    <PokerCardImage
-                      key={cardIdx}
-                      card={player.holeCards![cardIdx]}
-                      width={28}
-                      height={39}
-                      className="shadow-md"
-                      faceDown={!isMyPlayer}
-                    />
-                  ))}
+                <div className="flex" style={{ gap: 'var(--hole-card-gap, 4px)' }}>
+                  {player.holeCards.map((_, cardIdx) => {
+                    const holeWidth = typeof window !== 'undefined'
+                      ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hole-card-width')) || 28
+                      : 28;
+                    const holeHeight = typeof window !== 'undefined'
+                      ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hole-card-height')) || 39
+                      : 39;
+                    return (
+                      <PokerCardImage
+                        key={cardIdx}
+                        card={player.holeCards![cardIdx]}
+                        width={holeWidth}
+                        height={holeHeight}
+                        className="shadow-md"
+                        faceDown={!isMyPlayer}
+                      />
+                    );
+                  })}
                 </div>
                 {/* Bet chip below cards for seats 6-10 */}
                 {(player.contribution ?? 0) > 0 && (seatIdx + 1 > 5) && (

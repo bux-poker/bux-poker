@@ -418,30 +418,88 @@ export function PokerGameView() {
   return (
     <div className="flex h-screen w-screen flex-col bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden">
       {/* Top Bar - Game Info */}
-      <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900/90 px-3 sm:px-6 py-2 sm:py-3 backdrop-blur-sm flex-shrink-0 text-sm sm:text-base">
-        <div className="flex items-center gap-6">
+      <div 
+        className="flex items-center justify-between border-b border-slate-800 bg-slate-900/90 backdrop-blur-sm flex-shrink-0"
+        style={{
+          paddingLeft: 'var(--top-bar-padding-x, 24px)',
+          paddingRight: 'var(--top-bar-padding-x, 24px)',
+          paddingTop: 'var(--top-bar-padding-y, 12px)',
+          paddingBottom: 'var(--top-bar-padding-y, 12px)'
+        }}
+      >
+        <div className="flex items-center" style={{ gap: 'var(--top-bar-gap, 24px)' }}>
           <div className="flex flex-col">
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wide">BLINDS</span>
-            <span className="text-base sm:text-lg font-bold text-white">{smallBlind}/{bigBlind}</span>
+            <span 
+              className="font-semibold text-slate-400 uppercase tracking-wide"
+              style={{ fontSize: 'var(--top-bar-label-size, 12px)' }}
+            >
+              BLINDS
+            </span>
+            <span 
+              className="font-bold text-white"
+              style={{ fontSize: 'var(--top-bar-value-size, 18px)' }}
+            >
+              {smallBlind}/{bigBlind}
+            </span>
           </div>
           <div className="flex flex-col">
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wide">NEXT BLIND</span>
-            <span className="text-base sm:text-lg font-bold text-white">{nextBlindTime}</span>
+            <span 
+              className="font-semibold text-slate-400 uppercase tracking-wide"
+              style={{ fontSize: 'var(--top-bar-label-size, 12px)' }}
+            >
+              NEXT BLIND
+            </span>
+            <span 
+              className="font-bold text-white"
+              style={{ fontSize: 'var(--top-bar-value-size, 18px)' }}
+            >
+              {nextBlindTime}
+            </span>
           </div>
           <div className="flex flex-col">
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wide">TOTAL POT</span>
-            <span className="text-base sm:text-lg font-bold text-white">{gameState.pot.toLocaleString()}</span>
+            <span 
+              className="font-semibold text-slate-400 uppercase tracking-wide"
+              style={{ fontSize: 'var(--top-bar-label-size, 12px)' }}
+            >
+              TOTAL POT
+            </span>
+            <span 
+              className="font-bold text-white"
+              style={{ fontSize: 'var(--top-bar-value-size, 18px)' }}
+            >
+              {gameState.pot.toLocaleString()}
+            </span>
           </div>
         </div>
-        <div className="flex items-center gap-3 sm:gap-6">
+        <div className="flex items-center" style={{ gap: 'var(--top-bar-gap, 24px)' }}>
           <div className="flex flex-col text-right">
-            <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wide">PLAYERS</span>
-            <span className="text-base sm:text-lg font-bold text-white">{activePlayers.length}/{gameState.players.length}</span>
+            <span 
+              className="font-semibold text-slate-400 uppercase tracking-wide"
+              style={{ fontSize: 'var(--top-bar-label-size, 12px)' }}
+            >
+              PLAYERS
+            </span>
+            <span 
+              className="font-bold text-white"
+              style={{ fontSize: 'var(--top-bar-value-size, 18px)' }}
+            >
+              {activePlayers.length}/{gameState.players.length}
+            </span>
           </div>
           {myPosition && (
             <div className="flex flex-col text-right">
-              <span className="text-[10px] sm:text-xs font-semibold text-slate-400 uppercase tracking-wide">POSITION</span>
-              <span className="text-base sm:text-lg font-bold text-white">{myPosition}</span>
+              <span 
+                className="font-semibold text-slate-400 uppercase tracking-wide"
+                style={{ fontSize: 'var(--top-bar-label-size, 12px)' }}
+              >
+                POSITION
+              </span>
+              <span 
+                className="font-bold text-white"
+                style={{ fontSize: 'var(--top-bar-value-size, 18px)' }}
+              >
+                {myPosition}
+              </span>
             </div>
           )}
         </div>
@@ -528,7 +586,10 @@ export function PokerGameView() {
 
         {/* Right side - Chat */}
         {user && (
-          <div className="w-64 lg:w-80 border-l border-slate-800 flex-shrink-0">
+          <div 
+            className="border-l border-slate-800 flex-shrink-0"
+            style={{ width: 'var(--chat-width, 320px)' }}
+          >
             <Chat
               gameId={gameState.id}
               userId={user.id}
