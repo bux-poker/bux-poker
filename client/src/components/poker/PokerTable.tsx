@@ -327,7 +327,7 @@ export function PokerTable({
                   {/* Player Avatar or Empty Seat */}
                   {player ? (
                     <>
-                      <div className={`relative mb-2 ${hasActiveTimer ? 'animate-pulse' : ''} ${hasActiveTimer ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-900 rounded-full' : (isCurrentTurn ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-900 rounded-full' : '')}`}>
+                      <div className={`relative ${hasActiveTimer ? 'animate-pulse' : ''} ${hasActiveTimer ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-900 rounded-full' : (isCurrentTurn ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-900 rounded-full' : '')}`}>
                         <div 
                           className="overflow-hidden rounded-full border-2 border-slate-700 bg-slate-800 relative"
                           style={{ 
@@ -392,7 +392,7 @@ export function PokerTable({
 
                       {/* Player Name and Chips - In containers, no wrapping */}
                       <div 
-                        className="flex flex-col items-center gap-1 min-w-0"
+                        className="flex flex-col items-center min-w-0"
                         style={{ maxWidth: 'var(--player-name-max-width, 120px)' }}
                       >
                         <div className="w-full px-2 py-1 rounded bg-slate-900/80 border border-slate-700/50">
