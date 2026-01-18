@@ -313,13 +313,18 @@ export function PokerTable({
           const cardsOnRight = [1, 2, 3, 9, 10].includes(seatIdx + 1);
           const cardOffset = cardsOnRight ? 80 : -80; // Offset cards to right or left of avatar
 
+          // Adjust vertical position for smaller screens: seats 1-5 down, 6-10 up
+          const verticalOffset = windowSize.width <= 900 
+            ? ((seatIdx + 1) <= 5 ? 28 : -28) 
+            : 0;
+          
           const elements = [
             <div
               key={`player-${player?.id || `seat-${seatIdx + 1}`}`}
               className="absolute z-20"
               style={{
                 left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}%)`,
-                top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}%)`,
+                top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}% + ${verticalOffset}px)`,
                 transform: 'translate(-50%, -50%)',
               }}
             >
