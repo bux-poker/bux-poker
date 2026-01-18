@@ -258,48 +258,48 @@
   :root {
     --scale-factor: 0.75;
     
-    --top-bar-label-size: 9px;
-    --top-bar-value-size: 14px;
-    --top-bar-padding-x: 12px;
+    --top-bar-label-size: 8px;
+    --top-bar-value-size: 9px;
+    --top-bar-padding-x: 9px;
     --top-bar-padding-y: 6px;
-    --top-bar-gap: 12px;
+    --top-bar-gap: 9px;
     
-    --community-card-width: 60px;
-    --community-card-height: 84px;
+    --community-card-width: 62px;
+    --community-card-height: 86px;
     
-    --player-avatar-size: 48px;
-    --player-name-size: 11px;
-    --player-chips-size: 9px;
+    --player-avatar-size: 29px;
+    --player-name-size: 8px;
+    --player-chips-size: 7px;
     
-    --dealer-button-size: 24px;
+    --dealer-button-size: 26px;
     --timer-text-size: 15px;
     
-    --hole-card-width: 21px;
+    --hole-card-width: 23px;
     --hole-card-height: 29px;
     
-    --bet-chip-size: 18px;
-    --bet-chip-text-size: 9px;
+    --bet-chip-size: 19px;
+    --bet-chip-text-size: 10px;
     
-    --table-padding: 24px;
+    --table-padding: 26px;
     
-    --action-button-width: 107px;
-    --action-button-height: 36px;
-    --action-button-text: 12px;
-    --action-button-padding-x: 14px;
-    --action-button-padding-y: 7px;
+    --action-button-width: 68px;
+    --action-button-height: 27px;
+    --action-button-text: 10px;
+    --action-button-padding-x: 9px;
+    --action-button-padding-y: 5px;
     
-    --preset-button-text: 11px;
-    --preset-button-padding-x: 8px;
-    --preset-button-padding-y: 5px;
+    --preset-button-text: 9px;
+    --preset-button-padding-x: 5px;
+    --preset-button-padding-y: 4px;
     
-    --amount-input-width: 96px;
-    --amount-input-height: 51px;
-    --amount-input-text: 14px;
+    --amount-input-width: 61px;
+    --amount-input-height: 36px;
+    --amount-input-text: 10px;
     
-    --input-button-size: 36px;
-    --input-button-text: 15px;
+    --input-button-size: 27px;
+    --input-button-text: 10px;
     
-    --chat-width: 240px;
+    --chat-width: 248px;
   }
 }
 
