@@ -315,7 +315,7 @@ export function PokerTable({
 
           // Adjust vertical position for smaller screens: seats 1-5 down, 6-10 up
           const verticalOffset = windowSize.width <= 900 
-            ? ((seatIdx + 1) <= 5 ? 20 : -20) 
+            ? ((seatIdx + 1) <= 5 ? 12 : -20) 
             : 0;
           
           const elements = [
