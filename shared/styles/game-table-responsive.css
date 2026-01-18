@@ -55,52 +55,54 @@
 }
 
 /* Default base sizes (for screens > 1000px) */
-:root {
-  --top-bar-label-size: 12px;
-  --top-bar-value-size: 18px;
-  --top-bar-padding-x: 24px;
-  --top-bar-padding-y: 12px;
-  --top-bar-gap: 24px;
-  
-  --community-card-width: 80px;
-  --community-card-height: 112px;
-  --community-card-gap: 8px;
-  
-  --player-avatar-size: 64px;
-  --player-name-size: 14px;
-  --player-chips-size: 12px;
-  --player-name-max-width: 120px;
-  
-  --dealer-button-size: 32px;
-  --timer-text-size: 20px;
-  
-  --hole-card-width: 28px;
-  --hole-card-height: 39px;
-  --hole-card-gap: 4px;
-  
-  --bet-chip-size: 24px;
-  --bet-chip-text-size: 12px;
-  
-  --table-padding: 32px;
-  
-  --action-button-width: 142px;
-  --action-button-height: 48px;
-  --action-button-text: 16px;
-  --action-button-padding-x: 24px;
-  --action-button-padding-y: 12px;
-  
-  --preset-button-text: 14px;
-  --preset-button-padding-x: 12px;
-  --preset-button-padding-y: 8px;
-  
-  --amount-input-width: 128px;
-  --amount-input-height: 68px;
-  --amount-input-text: 18px;
-  
-  --input-button-size: 48px;
-  --input-button-text: 20px;
-  
-  --chat-width: 320px;
+@media (min-width: 1001px) {
+  :root {
+    --top-bar-label-size: 12px;
+    --top-bar-value-size: 18px;
+    --top-bar-padding-x: 24px;
+    --top-bar-padding-y: 12px;
+    --top-bar-gap: 24px;
+    
+    --community-card-width: 80px;
+    --community-card-height: 112px;
+    --community-card-gap: 8px;
+    
+    --player-avatar-size: 64px;
+    --player-name-size: 14px;
+    --player-chips-size: 12px;
+    --player-name-max-width: 120px;
+    
+    --dealer-button-size: 32px;
+    --timer-text-size: 20px;
+    
+    --hole-card-width: 28px;
+    --hole-card-height: 39px;
+    --hole-card-gap: 4px;
+    
+    --bet-chip-size: 24px;
+    --bet-chip-text-size: 12px;
+    
+    --table-padding: 32px;
+    
+    --action-button-width: 142px;
+    --action-button-height: 48px;
+    --action-button-text: 16px;
+    --action-button-padding-x: 24px;
+    --action-button-padding-y: 12px;
+    
+    --preset-button-text: 14px;
+    --preset-button-padding-x: 12px;
+    --preset-button-padding-y: 8px;
+    
+    --amount-input-width: 128px;
+    --amount-input-height: 68px;
+    --amount-input-text: 18px;
+    
+    --input-button-size: 48px;
+    --input-button-text: 20px;
+    
+    --chat-width: 320px;
+  }
 }
 
 /* 851-900px */
