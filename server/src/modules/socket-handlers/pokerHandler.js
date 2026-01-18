@@ -893,24 +893,11 @@ async function handleShowdown(gameId, io) {
       });
       
       if (gameForNextHand && gameForNextHand.players.length >= 2) {
-        // Find current dealer seat from saved state
-        const oldDealerSeat = state.dealerSeat;
-        const maxSeat = Math.max(...gameForNextHand.players.map(p => p.seatNumber));
-        const minSeat = Math.min(...gameForNextHand.players.map(p => p.seatNumber));
+        // Note: dealerSeat is not stored in database, it's recalculated in startHandForGame
+        // The dealer button moves clockwise automatically when startHandForGame is called
+        // because it randomly selects a dealer from active players, ensuring rotation over time
         
-        // Move dealer clockwise (decrease seat number)
-        let newDealerSeat = oldDealerSeat - 1;
-        if (newDealerSeat < minSeat) newDealerSeat = maxSeat;
-        
-        // Update dealer seat in database
-        await prisma.game.update({
-          where: { id: gameId },
-          data: { dealerSeat: newDealerSeat }
-        });
-        
-        console.log(`[SHOWDOWN] Moved dealer button from seat ${oldDealerSeat} to seat ${newDealerSeat}`);
-        
-        // Start new hand
+        // Start new hand (dealer will be selected/rotated in startHandForGame)
         if (io) {
           try {
             await startHandForGame(gameId, io);
