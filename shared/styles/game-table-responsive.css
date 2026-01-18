@@ -31,7 +31,6 @@
   --bet-chip-size: 24px;
   --bet-chip-text-size: 12px;
   
-  --table-border-width: 32px;
   --table-padding: 32px;
   
   --action-button-width: 140px;
@@ -81,7 +80,6 @@
     --bet-chip-size: 23px;
     --bet-chip-text-size: 11px;
     
-    --table-border-width: 30px;
     --table-padding: 30px;
     
     --action-button-width: 133px;
@@ -132,7 +130,6 @@
     --bet-chip-size: 22px;
     --bet-chip-text-size: 11px;
     
-    --table-border-width: 29px;
     --table-padding: 29px;
     
     --action-button-width: 126px;
@@ -183,7 +180,6 @@
     --bet-chip-size: 20px;
     --bet-chip-text-size: 10px;
     
-    --table-border-width: 27px;
     --table-padding: 27px;
     
     --action-button-width: 119px;
@@ -234,7 +230,6 @@
     --bet-chip-size: 19px;
     --bet-chip-text-size: 10px;
     
-    --table-border-width: 26px;
     --table-padding: 26px;
     
     --action-button-width: 112px;
@@ -285,7 +280,6 @@
     --bet-chip-size: 18px;
     --bet-chip-text-size: 9px;
     
-    --table-border-width: 24px;
     --table-padding: 24px;
     
     --action-button-width: 105px;
@@ -336,7 +330,6 @@
     --bet-chip-size: 17px;
     --bet-chip-text-size: 8px;
     
-    --table-border-width: 22px;
     --table-padding: 22px;
     
     --action-button-width: 98px;
@@ -387,7 +380,6 @@
     --bet-chip-size: 16px;
     --bet-chip-text-size: 8px;
     
-    --table-border-width: 21px;
     --table-padding: 21px;
     
     --action-button-width: 91px;
@@ -438,7 +430,6 @@
     --bet-chip-size: 14px;
     --bet-chip-text-size: 7px;
     
-    --table-border-width: 19px;
     --table-padding: 19px;
     
     --action-button-width: 84px;
@@ -489,7 +480,6 @@
     --bet-chip-size: 13px;
     --bet-chip-text-size: 7px;
     
-    --table-border-width: 18px;
     --table-padding: 18px;
     
     --action-button-width: 77px;
@@ -540,7 +530,6 @@
     --bet-chip-size: 12px;
     --bet-chip-text-size: 6px;
     
-    --table-border-width: 16px;
     --table-padding: 16px;
     
     --action-button-width: 70px;
@@ -591,7 +580,6 @@
     --bet-chip-size: 11px;
     --bet-chip-text-size: 5px;
     
-    --table-border-width: 14px;
     --table-padding: 14px;
     
     --action-button-width: 63px;

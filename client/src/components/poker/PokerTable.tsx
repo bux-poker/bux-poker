@@ -228,6 +228,9 @@ export function PokerTable({
   // Timer state for countdown
   const [currentTime, setCurrentTime] = useState(Date.now());
   
+  // Window size state to trigger re-renders when CSS variables change
+  const [windowSize, setWindowSize] = useState({ width: typeof window !== 'undefined' ? window.innerWidth : 1400 });
+  
   // Update timer every second
   useEffect(() => {
     if (turnTimer) {
@@ -237,6 +240,15 @@ export function PokerTable({
       return () => clearInterval(interval);
     }
   }, [turnTimer]);
+  
+  // Listen for window resize to trigger re-render for CSS variable recalculation
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowSize({ width: window.innerWidth });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   return (
     <div 
@@ -245,10 +257,9 @@ export function PokerTable({
     >
       {/* Oval/Circular Table */}
       <div 
-        className="relative h-full w-full max-h-[calc(85vh-4rem)] max-w-[calc(90vw-4rem)] rounded-[50%] border-amber-600/40 bg-gradient-to-br from-emerald-900/60 to-slate-900/80 shadow-2xl" 
+        className="relative h-full w-full max-h-[calc(85vh-4rem)] max-w-[calc(90vw-4rem)] rounded-[50%] border-8 border-amber-600/40 bg-gradient-to-br from-emerald-900/60 to-slate-900/80 shadow-2xl" 
         style={{ 
-          aspectRatio: '3/2',
-          borderWidth: 'var(--table-border-width, 32px)'
+          aspectRatio: '3/2'
         }}
       >
         
@@ -261,16 +272,17 @@ export function PokerTable({
             style={{ gap: 'var(--community-card-gap, 8px)' }}
           >
             {communityCards.map((card, idx) => {
-              // Read CSS variables for responsive sizing
+              // Read CSS variables for responsive sizing - recalculate when window size changes
               const cardWidth = typeof window !== 'undefined' 
                 ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--community-card-width')) || 80
                 : 80;
               const cardHeight = typeof window !== 'undefined'
                 ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--community-card-height')) || 112
                 : 112;
+              // Use windowSize to trigger recalculation
               return (
                 <PokerCardImage
-                  key={idx}
+                  key={`${idx}-${windowSize.width}`}
                   card={card}
                   width={cardWidth}
                   height={cardHeight}
@@ -444,6 +456,7 @@ export function PokerTable({
                 )}
                 <div className="flex" style={{ gap: 'var(--hole-card-gap, 4px)' }}>
                   {player.holeCards.map((_, cardIdx) => {
+                    // Recalculate when window size changes
                     const holeWidth = typeof window !== 'undefined'
                       ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hole-card-width')) || 28
                       : 28;
@@ -452,7 +465,7 @@ export function PokerTable({
                       : 39;
                     return (
                       <PokerCardImage
-                        key={cardIdx}
+                        key={`${player.id}-${cardIdx}-${windowSize.width}`}
                         card={player.holeCards![cardIdx]}
                         width={holeWidth}
                         height={holeHeight}

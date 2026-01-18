@@ -79,14 +79,25 @@ export function BettingControls({
     }
   };
 
-  // Calculate button width to match main action buttons - wider to prevent text wrapping
-  // Using CSS variables for responsive sizing
-  const buttonWidth = typeof window !== 'undefined'
-    ? getComputedStyle(document.documentElement).getPropertyValue('--action-button-width') || '140px'
-    : '140px';
-  const buttonHeight = typeof window !== 'undefined'
-    ? getComputedStyle(document.documentElement).getPropertyValue('--action-button-height') || '48px'
-    : '48px';
+  // Window size state to trigger re-renders when CSS variables change
+  const [windowSize, setWindowSize] = useState({ width: typeof window !== 'undefined' ? window.innerWidth : 1400 });
+  
+  // Listen for window resize to update CSS variable calculations
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowSize({ width: window.innerWidth });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  
+  // Calculate button width - using CSS variables directly in styles, but need container width
+  // Calculate container width using CSS variables (trigger recalculation on resize)
+  const containerWidth = typeof window !== 'undefined'
+    ? `calc(${getComputedStyle(document.documentElement).getPropertyValue('--action-button-width') || '140px'} * 3 + 0.75rem * 2)`
+    : 'calc(140px * 3 + 0.75rem * 2)';
+  // Use windowSize to force recalculation
+  void windowSize.width;
 
   // Determine which buttons to show
   const showCheck = !isPreflop || (isPreflop && isBigBlind && !hasRaises && currentBet === bigBlind);
@@ -97,7 +108,7 @@ export function BettingControls({
   return (
     <div className="flex flex-col items-end gap-3">
       {/* Main Action Buttons - Right justified, same size, wider to prevent wrapping */}
-      <div className="flex items-center gap-3" style={{ width: `calc(${buttonWidth} * 3 + 0.75rem * 2)` }}>
+      <div className="flex items-center gap-3" style={{ width: containerWidth }}>
         <button
           onClick={handleFold}
           disabled={!isMyTurn}
@@ -168,7 +179,7 @@ export function BettingControls({
       </div>
 
       {/* Preset Buttons and Input - Right justified, input to the right */}
-      <div className="flex items-center gap-3" style={{ width: `calc(${buttonWidth} * 3 + 0.75rem * 2)` }}>
+      <div className="flex items-center gap-3" style={{ width: containerWidth }}>
         {/* Left side: Preset buttons in 2 columns */}
         <div className="flex flex-col gap-2 flex-1">
           {/* Top row: 1/2 and POT */}
