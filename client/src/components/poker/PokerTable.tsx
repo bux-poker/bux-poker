@@ -315,7 +315,7 @@ export function PokerTable({
 
           // Adjust vertical position for smaller screens: seats 1-5 down, 6-10 up
           const verticalOffset = windowSize.width <= 900 
-            ? ((seatIdx + 1) <= 5 ? 28 : -28) 
+            ? ((seatIdx + 1) <= 5 ? 20 : -20) 
             : 0;
           
           const elements = [
@@ -403,7 +403,10 @@ export function PokerTable({
                       {/* Player Name and Chips - In containers, no wrapping */}
                       <div 
                         className="flex flex-col items-center min-w-0"
-                        style={{ maxWidth: 'var(--player-name-max-width, 120px)' }}
+                        style={{ 
+                          maxWidth: 'var(--player-name-max-width, 120px)',
+                          zIndex: 50
+                        }}
                       >
                         <div className="w-full px-2 py-1 rounded bg-slate-900/80 border border-slate-700/50">
                           <div 
