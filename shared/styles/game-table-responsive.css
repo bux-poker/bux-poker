@@ -208,48 +208,48 @@
   :root {
     --scale-factor: 0.80;
     
-    --top-bar-label-size: 9px;
-    --top-bar-value-size: 14px;
-    --top-bar-padding-x: 14px;
-    --top-bar-padding-y: 7px;
-    --top-bar-gap: 14px;
+    --top-bar-label-size: 8px;
+    --top-bar-value-size: 9px;
+    --top-bar-padding-x: 9px;
+    --top-bar-padding-y: 6px;
+    --top-bar-gap: 9px;
     
-    --community-card-width: 64px;
-    --community-card-height: 90px;
+    --community-card-width: 65px;
+    --community-card-height: 91px;
     
-    --player-avatar-size: 51px;
-    --player-name-size: 11px;
-    --player-chips-size: 10px;
+    --player-avatar-size: 30px;
+    --player-name-size: 8px;
+    --player-chips-size: 7px;
     
-    --dealer-button-size: 26px;
+    --dealer-button-size: 27px;
     --timer-text-size: 16px;
     
-    --hole-card-width: 22px;
+    --hole-card-width: 24px;
     --hole-card-height: 31px;
     
-    --bet-chip-size: 19px;
+    --bet-chip-size: 20px;
     --bet-chip-text-size: 10px;
     
-    --table-padding: 26px;
+    --table-padding: 27px;
     
-    --action-button-width: 112px;
-    --action-button-height: 38px;
-    --action-button-text: 13px;
-    --action-button-padding-x: 16px;
-    --action-button-padding-y: 8px;
+    --action-button-width: 68px;
+    --action-button-height: 28px;
+    --action-button-text: 10px;
+    --action-button-padding-x: 9px;
+    --action-button-padding-y: 5px;
     
-    --preset-button-text: 11px;
-    --preset-button-padding-x: 9px;
-    --preset-button-padding-y: 6px;
+    --preset-button-text: 9px;
+    --preset-button-padding-x: 5px;
+    --preset-button-padding-y: 4px;
     
-    --amount-input-width: 102px;
-    --amount-input-height: 54px;
-    --amount-input-text: 14px;
+    --amount-input-width: 64px;
+    --amount-input-height: 38px;
+    --amount-input-text: 10px;
     
-    --input-button-size: 38px;
-    --input-button-text: 16px;
+    --input-button-size: 28px;
+    --input-button-text: 10px;
     
-    --chat-width: 256px;
+    --chat-width: 261px;
   }
 }
 
@@ -259,47 +259,47 @@
     --scale-factor: 0.75;
     
     --top-bar-label-size: 9px;
-    --top-bar-value-size: 13px;
-    --top-bar-padding-x: 13px;
-    --top-bar-padding-y: 7px;
-    --top-bar-gap: 13px;
+    --top-bar-value-size: 14px;
+    --top-bar-padding-x: 12px;
+    --top-bar-padding-y: 6px;
+    --top-bar-gap: 12px;
     
-    --community-card-width: 61px;
-    --community-card-height: 86px;
+    --community-card-width: 60px;
+    --community-card-height: 84px;
     
     --player-avatar-size: 48px;
-    --player-name-size: 10px;
-    --player-chips-size: 10px;
+    --player-name-size: 11px;
+    --player-chips-size: 9px;
     
-    --dealer-button-size: 25px;
+    --dealer-button-size: 24px;
     --timer-text-size: 15px;
     
     --hole-card-width: 21px;
     --hole-card-height: 29px;
     
     --bet-chip-size: 18px;
-    --bet-chip-text-size: 10px;
+    --bet-chip-text-size: 9px;
     
-    --table-padding: 25px;
+    --table-padding: 24px;
     
-    --action-button-width: 106px;
+    --action-button-width: 105px;
     --action-button-height: 36px;
     --action-button-text: 12px;
-    --action-button-padding-x: 15px;
-    --action-button-padding-y: 8px;
+    --action-button-padding-x: 14px;
+    --action-button-padding-y: 7px;
     
-    --preset-button-text: 10px;
-    --preset-button-padding-x: 9px;
-    --preset-button-padding-y: 6px;
+    --preset-button-text: 11px;
+    --preset-button-padding-x: 8px;
+    --preset-button-padding-y: 5px;
     
-    --amount-input-width: 97px;
+    --amount-input-width: 96px;
     --amount-input-height: 51px;
-    --amount-input-text: 13px;
+    --amount-input-text: 14px;
     
     --input-button-size: 36px;
     --input-button-text: 15px;
     
-    --chat-width: 243px;
+    --chat-width: 240px;
   }
 }
 
