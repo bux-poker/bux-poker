@@ -193,7 +193,8 @@ export function BettingControls({
                 paddingRight: `var(--preset-button-padding-x, 12px)`,
                 paddingTop: `var(--preset-button-padding-y, 8px)`,
                 paddingBottom: `var(--preset-button-padding-y, 8px)`,
-                fontSize: `var(--preset-button-text, 14px)`
+                fontSize: `var(--preset-button-text, 14px)`,
+                height: `var(--preset-button-height, auto)`
               }}
             >
               1/2
@@ -207,7 +208,8 @@ export function BettingControls({
                 paddingRight: `var(--preset-button-padding-x, 12px)`,
                 paddingTop: `var(--preset-button-padding-y, 8px)`,
                 paddingBottom: `var(--preset-button-padding-y, 8px)`,
-                fontSize: `var(--preset-button-text, 14px)`
+                fontSize: `var(--preset-button-text, 14px)`,
+                height: `var(--preset-button-height, auto)`
               }}
             >
               POT
@@ -224,7 +226,8 @@ export function BettingControls({
                 paddingRight: `var(--preset-button-padding-x, 12px)`,
                 paddingTop: `var(--preset-button-padding-y, 8px)`,
                 paddingBottom: `var(--preset-button-padding-y, 8px)`,
-                fontSize: `var(--preset-button-text, 14px)`
+                fontSize: `var(--preset-button-text, 14px)`,
+                height: `var(--preset-button-height, auto)`
               }}
             >
               2/3
@@ -238,7 +241,8 @@ export function BettingControls({
                 paddingRight: `var(--preset-button-padding-x, 12px)`,
                 paddingTop: `var(--preset-button-padding-y, 8px)`,
                 paddingBottom: `var(--preset-button-padding-y, 8px)`,
-                fontSize: `var(--preset-button-text, 14px)`
+                fontSize: `var(--preset-button-text, 14px)`,
+                height: `var(--preset-button-height, auto)`
               }}
             >
               ALL IN

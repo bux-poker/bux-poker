@@ -42,6 +42,7 @@
   --preset-button-text: 14px;
   --preset-button-padding-x: 12px;
   --preset-button-padding-y: 8px;
+  --preset-button-height: auto;
   
   --amount-input-width: 128px;
   --amount-input-height: 68px;
@@ -238,7 +239,7 @@
     --action-button-padding-x: 9px;
     --action-button-padding-y: 5px;
     
-    --preset-button-text: 9px;
+    --preset-button-text: 8px;
     --preset-button-padding-x: 5px;
     --preset-button-padding-y: 2px;
     
