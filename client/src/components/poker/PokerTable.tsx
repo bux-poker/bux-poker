@@ -318,7 +318,20 @@ export function PokerTable({
           if (windowSize.width <= 900) {
             verticalOffset = (seatIdx + 1) <= 5 ? 6 : -22;
           } else if (windowSize.width >= 901 && windowSize.width <= 1000) {
-            verticalOffset = (seatIdx + 1) <= 5 ? 5 : -20;
+            const seatNumber = seatIdx + 1;
+            if (seatNumber === 1 || seatNumber === 5) {
+              // Seats 1 and 5: down 5px + 8px = 13px
+              verticalOffset = 13;
+            } else if (seatNumber === 6 || seatNumber === 10) {
+              // Seats 6 and 10: up 20px + 8px = 28px
+              verticalOffset = -28;
+            } else if (seatNumber <= 5) {
+              // Other seats 2-4: down 5px
+              verticalOffset = 5;
+            } else {
+              // Other seats 7-9: up 20px
+              verticalOffset = -20;
+            }
           }
           
           // Adjust horizontal position for smaller screens: seats 1,10 left, seats 5,6 right
