@@ -949,37 +949,170 @@ async function handleShowdown(gameId, io) {
     console.log(`[SHOWDOWN]   Winner: ${w.player.name || w.player.userId} (seat ${w.player.seatNumber}) - ${w.hand.category}`);
   });
 
-  // Post dealer message about winners
-  if (io) {
-    const winnerNames = winners.map(w => w.player.name || w.player.user?.username || `Player ${w.player.seatNumber}`).join(' and ');
-    const handDesc = winners[0].hand.category;
-    if (winners.length === 1) {
-      postDealerMessage(gameId, io, `${winnerNames} wins ${state.pot.toLocaleString()} with ${handDesc}!`);
+  // Post dealer message about winners (will be updated after side pot calculation)
+
+  // Calculate side pots based on all-in contributions
+  // Track total contributions per player across entire hand (all streets)
+  const totalContributions = new Map();
+  
+  // Initialize with current betting round contributions
+  activePlayers.forEach(player => {
+    const currentContribution = state.bettingRound.getPlayerContribution(player.id);
+    // Also check player.contributions (which tracks blinds from start of hand)
+    const handContribution = player.contributions || 0;
+    totalContributions.set(player.id, handContribution + currentContribution);
+  });
+  
+  // Include folded players who contributed (for accurate side pot calculation)
+  const allPlayersWhoContributed = state.players.filter(p => {
+    const contribution = (p.contributions || 0) + (state.bettingRound.getPlayerContribution(p.id) || 0);
+    return contribution > 0;
+  });
+  
+  // Build complete contribution map including folded players
+  allPlayersWhoContributed.forEach(player => {
+    const handContribution = player.contributions || 0;
+    const currentContribution = state.bettingRound.getPlayerContribution(player.id) || 0;
+    totalContributions.set(player.id, handContribution + currentContribution);
+  });
+  
+  // Get unique contribution amounts (sorted ascending)
+  const contributionAmounts = Array.from(new Set(totalContributions.values())).sort((a, b) => a - b);
+  
+  console.log(`[SHOWDOWN] Total contributions:`, Array.from(totalContributions.entries()).map(([id, amount]) => {
+    const player = activePlayers.find(p => p.id === id);
+    return `${player?.name || player?.userId || id}: ${amount}`;
+  }));
+  console.log(`[SHOWDOWN] Unique contribution levels:`, contributionAmounts);
+  
+  // Calculate side pots correctly
+  // Side pot logic: For each contribution level, create a pot with players who contributed at least that amount
+  const sidePots = [];
+  let previousLevel = 0;
+  
+  for (let i = 0; i < contributionAmounts.length; i++) {
+    const currentLevel = contributionAmounts[i];
+    
+    // Find all players who contributed at least this amount (eligible for this side pot)
+    const eligiblePlayerIds = Array.from(totalContributions.entries())
+      .filter(([id, contribution]) => contribution >= currentLevel)
+      .map(([id]) => id);
+    
+    if (eligiblePlayerIds.length === 0) continue;
+    
+    // Calculate pot amount: each eligible player contributes (currentLevel - previousLevel)
+    const potAmount = (currentLevel - previousLevel) * eligiblePlayerIds.length;
+    
+    if (potAmount > 0) {
+      sidePots.push({
+        level: currentLevel,
+        amount: potAmount,
+        eligiblePlayerIds: eligiblePlayerIds
+      });
+      console.log(`[SHOWDOWN] Side pot ${i + 1}: ${potAmount} chips (level ${currentLevel}), ${eligiblePlayerIds.length} eligible players`);
+    }
+    
+    previousLevel = currentLevel;
+  }
+  
+  // Calculate total pot amount from side pots
+  const calculatedPotTotal = sidePots.reduce((sum, pot) => sum + pot.amount, 0);
+  
+  // If calculated total doesn't match actual pot, use actual pot and adjust
+  // (This can happen due to rounding or if we're missing some street contributions)
+  const actualPot = state.pot;
+  if (calculatedPotTotal !== actualPot) {
+    console.log(`[SHOWDOWN] Pot mismatch: calculated=${calculatedPotTotal}, actual=${actualPot}, adjusting...`);
+    // Adjust the last side pot to make up the difference
+    if (sidePots.length > 0) {
+      sidePots[sidePots.length - 1].amount += (actualPot - calculatedPotTotal);
     } else {
-      postDealerMessage(gameId, io, `${winnerNames} tie with ${handDesc}! Pot split ${winners.length} ways.`);
+      // No side pots calculated, create one main pot
+      sidePots.push({
+        level: contributionAmounts[contributionAmounts.length - 1] || 0,
+        amount: actualPot,
+        eligiblePlayerIds: activePlayers.map(p => p.id)
+      });
     }
   }
-
-  // Distribute pot among winners (split evenly)
-  const potPerWinner = Math.floor(state.pot / winners.length);
-  const remainder = state.pot % winners.length; // Extra chips go to first winner
-
-  // TODO: Implement side pot logic here for all-in scenarios
-  // For now, distribute pot evenly among winners
-  // NOTE: This is incorrect if some players went all-in with different amounts
-  // Side pots will be implemented in next iteration
   
-  winners.forEach((winner, index) => {
-    const amount = potPerWinner + (index === 0 ? remainder : 0);
-    winner.player.chips += amount;
-    console.log(`[SHOWDOWN] Distributing ${amount} chips to ${winner.player.name || winner.player.userId} (seat ${winner.player.seatNumber})`);
-    
-    // Update player chips in database (async)
-    prisma.player.update({
-      where: { id: winner.player.id },
-      data: { chips: winner.player.chips }
-    }).catch(err => console.error(`[SHOWDOWN] Error updating chips for player ${winner.player.id}:`, err));
+  // Distribute each side pot
+  const totalWon = new Map();
+  activePlayers.forEach(player => {
+    totalWon.set(player.id, 0);
   });
+  
+  for (const pot of sidePots) {
+    // Filter hand results to only eligible players
+    const eligibleHandResults = handResults.filter(r => 
+      pot.eligiblePlayerIds.includes(r.player.id)
+    );
+    
+    if (eligibleHandResults.length === 0) continue;
+    
+    // Find best hand among eligible players
+    const maxStrength = Math.max(...eligibleHandResults.map(r => r.strength));
+    const potWinners = eligibleHandResults.filter(r => r.strength === maxStrength);
+    
+    // Split pot among winners
+    const potPerWinner = Math.floor(pot.amount / potWinners.length);
+    const remainder = pot.amount % potWinners.length;
+    
+    console.log(`[SHOWDOWN] Side pot ${pot.level}: ${potWinners.length} winner(s) for ${pot.amount} chips`);
+    
+    potWinners.forEach((winner, index) => {
+      const amount = potPerWinner + (index === 0 ? remainder : 0);
+      const currentWon = totalWon.get(winner.player.id) || 0;
+      totalWon.set(winner.player.id, currentWon + amount);
+      
+      winner.player.chips += amount;
+      console.log(`[SHOWDOWN]   Distributing ${amount} chips to ${winner.player.name || winner.player.userId} (seat ${winner.player.seatNumber}) from side pot level ${pot.level}`);
+    });
+  }
+  
+  // Update player chips in database (async)
+  activePlayers.forEach(player => {
+    const won = totalWon.get(player.id) || 0;
+    if (won > 0) {
+      prisma.player.update({
+        where: { id: player.id },
+        data: { chips: player.chips }
+      }).catch(err => console.error(`[SHOWDOWN] Error updating chips for player ${player.id}:`, err));
+    }
+  });
+  
+  // Build updated winners list with total winnings for display
+  const finalWinners = Array.from(totalWon.entries())
+    .filter(([id, amount]) => amount > 0)
+    .map(([id, amount]) => {
+      const handResult = handResults.find(r => r.player.id === id);
+      return {
+        player: handResult.player,
+        hand: handResult.hand,
+        strength: handResult.strength,
+        potWon: amount
+      };
+    })
+    .sort((a, b) => b.potWon - a.potWon); // Sort by amount won
+  
+  // Update winners for dealer message
+  const updatedWinners = finalWinners;
+  
+  // Post dealer message about winners
+  if (io) {
+    const winnerMessages = updatedWinners.map(w => {
+      const name = w.player.name || w.player.user?.username || `Player ${w.player.seatNumber}`;
+      return `${name} wins ${w.potWon.toLocaleString()} with ${w.hand.category}`;
+    });
+    
+    if (updatedWinners.length === 1) {
+      postDealerMessage(gameId, io, winnerMessages[0] + '!');
+    } else if (sidePots.length > 1) {
+      postDealerMessage(gameId, io, `Side pots: ${winnerMessages.join(', ')}`);
+    } else {
+      postDealerMessage(gameId, io, `${updatedWinners.map(w => w.player.name || w.player.user?.username || `Player ${w.player.seatNumber}`).join(' and ')} tie! Pot split ${updatedWinners.length} ways.`);
+    }
+  }
 
   // Check for player elimination after distributing pot
   const { TournamentEngine } = await import("../../services/TournamentEngine.js");
@@ -1024,13 +1157,13 @@ async function handleShowdown(gameId, io) {
 
   // Build result payload for clients - include winning card information
   const showdownResults = {
-    winners: winners.map(w => ({
+    winners: updatedWinners.map(w => ({
       playerId: w.player.id,
       userId: w.player.userId,
       name: w.player.name || w.player.user?.username || `Player ${w.player.seatNumber}`,
       seatNumber: w.player.seatNumber,
       handCategory: w.hand.category,
-      potWon: potPerWinner + (winners.indexOf(w) === 0 ? remainder : 0),
+      potWon: w.potWon,
       hand: w.hand // Include full hand evaluation for highlighting
     })),
     allHands: handResults.map(r => ({
