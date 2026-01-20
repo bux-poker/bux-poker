@@ -39,6 +39,8 @@ interface GameStatePayload {
   street?: string;
   currentBet?: number;
   minimumRaise?: number;
+  showdownActive?: boolean;
+  showdownResults?: any;
 }
 
 function parseCommunityCards(encoded: string): Card[] {
@@ -76,6 +78,9 @@ export function PokerGameView() {
   const [turnTimer, setTurnTimer] = useState<{ userId: string; expiresAt: number; duration: number } | null>(null);
   const [nextBlindTime, setNextBlindTime] = useState<string>('--:--');
   const [isPortrait, setIsPortrait] = useState(false);
+  const [showdownResults, setShowdownResults] = useState<any>(null);
+  const [potWinner, setPotWinner] = useState<any>(null);
+  const [showDealerMessages, setShowDealerMessages] = useState(true);
   const { user } = useAuth();
   const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
   
@@ -172,6 +177,22 @@ export function PokerGameView() {
       }
     });
 
+    socket.on("showdown", (payload: { gameId: string; results: any }) => {
+      if (payload.gameId === id) {
+        setShowdownResults(payload.results);
+        // Clear after 8 seconds
+        setTimeout(() => setShowdownResults(null), 8000);
+      }
+    });
+
+    socket.on("pot-winner", (payload: { gameId: string; winner: any }) => {
+      if (payload.gameId === id) {
+        setPotWinner(payload.winner);
+        // Clear after 5 seconds
+        setTimeout(() => setPotWinner(null), 5000);
+      }
+    });
+
     // Update timer every second to keep it synced
     const timerInterval = setInterval(() => {
       setTurnTimer((prev) => {
@@ -191,6 +212,8 @@ export function PokerGameView() {
       socket.off("connect");
       socket.off("game_message");
       socket.off("turn-timer-start");
+      socket.off("showdown");
+      socket.off("pot-winner");
       clearInterval(timerInterval);
     };
   }, [id, turnTimer]);
@@ -527,6 +550,7 @@ export function PokerGameView() {
                 avatarUrl: p.avatarUrl,
                 userId: p.userId,
                 contribution: p.contribution || 0,
+                status: p.status,
               }))}
               communityCards={communityCards}
               pot={gameState.pot}
@@ -535,7 +559,34 @@ export function PokerGameView() {
               smallBlind={smallBlind}
               bigBlind={bigBlind}
               myUserId={user?.id}
+              showdownActive={gameState.showdownActive || false}
+              showdownResults={showdownResults || gameState.showdownResults}
             />
+            
+            {/* Winner Display Overlay */}
+            {(potWinner || showdownResults) && (
+              <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+                <div className="bg-slate-900 rounded-lg p-8 border-2 border-yellow-500 shadow-2xl max-w-md">
+                  {potWinner ? (
+                    <div className="text-center">
+                      <h2 className="text-3xl font-bold text-yellow-400 mb-4">Winner!</h2>
+                      <p className="text-xl text-white mb-2">{potWinner.name}</p>
+                      <p className="text-lg text-emerald-400">Wins {potWinner.potWon?.toLocaleString() || gameState.pot.toLocaleString()} chips</p>
+                    </div>
+                  ) : showdownResults && showdownResults.winners?.length > 0 ? (
+                    <div className="text-center">
+                      <h2 className="text-3xl font-bold text-yellow-400 mb-4">Showdown!</h2>
+                      {showdownResults.winners.map((winner: any, idx: number) => (
+                        <div key={idx} className="mb-3">
+                          <p className="text-xl text-white font-semibold">{winner.name}</p>
+                          <p className="text-lg text-emerald-400">Wins {winner.potWon?.toLocaleString()} with {winner.handCategory}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Betting controls - fixed at bottom */}
@@ -590,18 +641,48 @@ export function PokerGameView() {
             className="border-l border-slate-800 flex-shrink-0"
             style={{ width: 'var(--chat-width, 320px)' }}
           >
-            <Chat
-              gameId={gameState.id}
-              userId={user.id}
-              userName={user.username || 'Player'}
-              players={chatPlayers}
-              spectators={[]}
-              userAvatar={user.avatarUrl}
-              showPlayerListTab={false}
-              chatType="game"
-              isSpectator={false}
-              PlayerStatsModal={PlayerStatsModal}
-            />
+            <div className="flex flex-col h-full">
+              {/* Dealer Message Toggle */}
+              <div className="px-2 py-1 border-b border-slate-700 flex items-center justify-between bg-slate-800/50">
+                <span className="text-xs text-slate-300">Dealer Messages</span>
+                <button
+                  onClick={() => setShowDealerMessages(!showDealerMessages)}
+                  className={`relative inline-flex items-center rounded-full transition-colors ${
+                    showDealerMessages ? 'bg-blue-600' : 'bg-slate-600'
+                  }`}
+                  style={{
+                    height: '20px',
+                    width: '36px'
+                  }}
+                >
+                  <span
+                    className={`inline-block rounded-full bg-white transition-transform ${
+                      showDealerMessages ? 'translate-x-4' : 'translate-x-0'
+                    }`}
+                    style={{
+                      height: '16px',
+                      width: '16px',
+                      marginLeft: '2px'
+                    }}
+                  />
+                </button>
+              </div>
+              <div className="flex-1 min-h-0">
+                <Chat
+                  gameId={gameState.id}
+                  userId={user.id}
+                  userName={user.username || 'Player'}
+                  players={chatPlayers}
+                  spectators={[]}
+                  userAvatar={user.avatarUrl}
+                  showPlayerListTab={false}
+                  chatType="game"
+                  isSpectator={false}
+                  PlayerStatsModal={PlayerStatsModal}
+                  showDealerMessages={showDealerMessages}
+                />
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -139,6 +139,7 @@ interface PokerTableProps {
     avatarUrl?: string;
     userId?: string;
     contribution?: number;
+    status?: string;
   }>;
   communityCards: Card[];
   pot: number;
@@ -147,6 +148,8 @@ interface PokerTableProps {
   smallBlind?: number;
   bigBlind?: number;
   myUserId?: string;
+  showdownActive?: boolean;
+  showdownResults?: any;
 }
 
 // Player positions around the table (10-seat layout, evenly spaced)
@@ -174,6 +177,8 @@ export function PokerTable({
   smallBlind = 10,
   bigBlind = 20,
   myUserId,
+  showdownActive = false,
+  showdownResults,
 }: PokerTableProps) {
   // Create array with 10 seats (empty seats if needed)
   const allSeats = Array.from({ length: 10 }, (_, idx) => {
@@ -233,21 +238,34 @@ export function PokerTable({
           >
             {communityCards.map((card, idx) => {
               // Read CSS variables for responsive sizing - recalculate when window size changes
-              const cardWidth = typeof window !== 'undefined' 
+              let cardWidth = typeof window !== 'undefined' 
                 ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--community-card-width')) || 80
                 : 80;
-              const cardHeight = typeof window !== 'undefined'
+              let cardHeight = typeof window !== 'undefined'
                 ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--community-card-height')) || 112
                 : 112;
+              
+              // Enlarge community cards 2x during showdown
+              if (showdownActive) {
+                cardWidth *= 2;
+                cardHeight *= 2;
+              }
+              
+              // Check if this card is part of winning hand
+              const isWinningCard = showdownResults?.winners?.some((w: any) => {
+                const winningCards = w.hand?.cards || [];
+                return winningCards.some((wc: Card) => wc.rank === card.rank && wc.suit === card.suit);
+              });
+              
               // Use windowSize to trigger recalculation
               return (
-              <PokerCardImage
+                <PokerCardImage
                   key={`${idx}-${windowSize.width}`}
-                card={card}
+                  card={card}
                   width={cardWidth}
                   height={cardHeight}
-                className="shadow-xl"
-              />
+                  className={`shadow-xl transition-all duration-300 ${isWinningCard ? 'ring-4 ring-yellow-400' : ''}`}
+                />
               );
             })}
           </div>
@@ -439,14 +457,38 @@ export function PokerTable({
           // Add cards as separate element if player has cards (including own player)
           if (player && player.holeCards && player.holeCards.length > 0) {
             const isFolded = player.status === 'FOLDED';
+            const isShowdownActive = showdownActive || false;
+            // During showdown, turn all active players' cards face up
+            const showFaceUp = isMyPlayer || isShowdownActive;
+            
+            // Get winner information for highlighting
+            const isWinner = showdownResults?.winners?.some((w: any) => w.playerId === player.id || w.userId === player.userId);
+            const winnerHand = isWinner ? showdownResults?.winners?.find((w: any) => w.playerId === player.id || w.userId === player.userId)?.hand : null;
+            
+            // Determine winning cards for this player
+            const winningCards: Card[] = winnerHand?.cards || [];
+            const isWinningCard = (card: Card) => {
+              return winningCards.some(wc => wc.rank === card.rank && wc.suit === card.suit);
+            };
+            
+            // Enlarge cards 2x during showdown if player is active
+            const showdownScale = isShowdownActive && !isFolded ? 2 : 1;
+            const holeWidth = typeof window !== 'undefined'
+              ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hole-card-width')) || 28
+              : 28;
+            const holeHeight = typeof window !== 'undefined'
+              ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hole-card-height')) || 39
+              : 39;
+            
             elements.push(
               <div
                 key={`cards-${player.id}`}
-                className={`absolute z-20 flex flex-col items-center gap-1 ${isFolded ? 'opacity-50' : ''}`}
+                className={`absolute z-20 flex flex-col items-center gap-1 ${isFolded ? 'opacity-50' : ''} ${isWinner ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-900 rounded-lg' : ''}`}
                 style={{
-                  left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset}px)`,
+                  left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset * showdownScale}px)`,
                   top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}%)`,
-                  transform: 'translate(-50%, -50%)',
+                  transform: `translate(-50%, -50%) scale(${showdownScale})`,
+                  transition: 'transform 0.3s ease-in-out',
                 }}
               >
                 {/* Bet chip above cards for seats 1-5 */}
@@ -454,23 +496,17 @@ export function PokerTable({
                   <BetChip value={player.contribution!} />
                 )}
                 <div className="flex" style={{ gap: 'var(--hole-card-gap, 4px)' }}>
-                  {player.holeCards.map((_, cardIdx) => {
-                    // Recalculate when window size changes
-                    const holeWidth = typeof window !== 'undefined'
-                      ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hole-card-width')) || 28
-                      : 28;
-                    const holeHeight = typeof window !== 'undefined'
-                      ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hole-card-height')) || 39
-                      : 39;
+                  {player.holeCards.map((card, cardIdx) => {
                     return (
-                    <PokerCardImage
-                        key={`${player.id}-${cardIdx}-${windowSize.width}`}
-                      card={player.holeCards![cardIdx]}
-                        width={holeWidth}
-                        height={holeHeight}
-                      className="shadow-md"
-                      faceDown={!isMyPlayer}
-                    />
+                      <div key={`${player.id}-${cardIdx}-${windowSize.width}`} className="relative">
+                        <PokerCardImage
+                          card={card}
+                          width={holeWidth}
+                          height={holeHeight}
+                          className={`shadow-md ${isWinningCard(card) ? 'ring-2 ring-yellow-400' : ''}`}
+                          faceDown={!showFaceUp}
+                        />
+                      </div>
                     );
                   })}
                 </div>

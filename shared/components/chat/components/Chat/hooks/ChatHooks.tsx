@@ -48,8 +48,9 @@ export const useChatHooks = ({
   lobbyMessages = [],
   gameMessages = {},
   chatType,
-  onToggleChatType
-}: ChatHooksProps) => {
+  onToggleChatType,
+  showDealerMessages = true
+}: ChatHooksProps & { showDealerMessages?: boolean }) => {
   const { socket, isAuthenticated, isConnected, isReady } = useSocket();
   const { user } = useAuth();
   
@@ -151,6 +152,10 @@ export const useChatHooks = ({
       const { gameId: evtGameId, message } = event.detail || {};
       if (!evtGameId || evtGameId !== gameId || !message) return;
       if (message && message.userId !== 'system') {
+        // Filter dealer messages if toggle is off
+        if (!showDealerMessages && message.isDealerMessage) {
+          return;
+        }
         setMessages(prev => {
           // Check if message already exists to prevent duplicates
           const exists = prev.some(m => m.id === message.id);
@@ -184,6 +189,10 @@ export const useChatHooks = ({
     // Listen for game messages directly from socket
     const handleGameMessage = (data: any) => {
       if (data && data.gameId === gameId && data.message && data.message.userId !== 'system') {
+        // Filter dealer messages if toggle is off
+        if (!showDealerMessages && data.message.isDealerMessage) {
+          return;
+        }
         setMessages(prev => {
           const exists = prev.some(m => m.id === data.message.id);
           if (exists) return prev;
@@ -205,16 +214,28 @@ export const useChatHooks = ({
     };
   }, [socket, gameId]);
 
-  // Load initial messages
+  // Load initial messages and filter dealer messages
   useEffect(() => {
     if (chatType === 'game' && Object.keys(gameMessages).length > 0) {
       setMessages(prev => {
-        const newMessages = Object.values(gameMessages);
+        const newMessages = Object.values(gameMessages).filter((msg: any) => {
+          // Filter dealer messages if toggle is off
+          if (!showDealerMessages && msg.isDealerMessage) {
+            return false;
+          }
+          return true;
+        });
         // Only update if we don't have messages yet or if the game messages are actually new
         if (prev.length === 0) {
           return newMessages;
         }
-        return prev;
+        // Filter existing messages when toggle changes
+        return prev.filter((msg: any) => {
+          if (!showDealerMessages && msg.isDealerMessage) {
+            return false;
+          }
+          return true;
+        });
       });
     } else if (chatType === 'lobby' && lobbyMessages.length > 0) {
       setMessages(prev => {
@@ -224,8 +245,18 @@ export const useChatHooks = ({
         }
         return prev;
       });
+    } else {
+      // Filter existing messages when toggle changes
+      setMessages(prev => {
+        return prev.filter((msg: any) => {
+          if (!showDealerMessages && msg.isDealerMessage) {
+            return false;
+          }
+          return true;
+        });
+      });
     }
-  }, [chatType, gameMessages, lobbyMessages]);
+  }, [chatType, gameMessages, lobbyMessages, showDealerMessages]);
 
   // Message sending
   const sendMessage = async (messageText: string) => {

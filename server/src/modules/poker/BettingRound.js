@@ -72,6 +72,21 @@ export class BettingRound {
   }
 
   /**
+   * Check if all active players are all-in (have zero chips remaining)
+   * @param {string[]} activePlayerIds - IDs of active players
+   * @param {Array} allPlayers - All players with their chips and userIds
+   * @returns {boolean} True if all active players have zero chips
+   */
+  areAllPlayersAllIn(activePlayerIds, allPlayers) {
+    if (activePlayerIds.length === 0) return false;
+    
+    return activePlayerIds.every(id => {
+      const player = allPlayers.find(p => p.id === id);
+      return player && player.chips === 0;
+    });
+  }
+
+  /**
    * Check if betting round is complete
    * Round is complete when all active players have contributed equally (or are all-in/folded)
    * and there are no pending actions (no one has raised and is waiting for others to act)

@@ -48,6 +48,8 @@ function buildClientGameState(game, state) {
     smallBlindSeat: state?.smallBlindSeat ?? game.smallBlindSeat,
     bigBlindSeat: state?.bigBlindSeat ?? game.bigBlindSeat,
     currentTurnUserId: state?.currentTurnUserId,
+    showdownActive: state?.showdownActive || false,
+    showdownResults: state?.showdownResults || null,
     players: (state?.players ?? game.players).map((p) => ({
       id: p.id,
       userId: p.userId,
@@ -133,7 +135,7 @@ async function ensureHandState(gameId) {
   return state;
 }
 
-async function applyPlayerAction({ gameId, userId, action, amount }) {
+async function applyPlayerAction({ gameId, userId, action, amount, io = null }) {
   const state = await ensureHandState(gameId);
   
   // Initialize actedPlayersInRound if not exists (for new betting rounds)
@@ -172,6 +174,13 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
       const newContribution = state.bettingRound.getPlayerContribution(player.id);
       console.log(`[ACTION] After ${action}: currentBet=${newBet}, playerContribution=${newContribution}, lastRaiseUserId=${state.lastRaiseUserId}`);
       
+      // Post dealer message
+      if (io && action === "BET") {
+        postDealerMessage(gameId, io, `${playerName} bets ${amount.toLocaleString()}`);
+      } else if (io && action === "RAISE") {
+        postDealerMessage(gameId, io, `${playerName} raises to ${newBet.toLocaleString()}`);
+      }
+      
       // Note: We don't set next player here - moveToNextPlayer will handle it
       // The raise logic above was trying to set next player, but moveToNextPlayer does this correctly
       break;
@@ -185,6 +194,11 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
       console.log(`[ACTION] After CALL: playerContribution=${newContribution}, spent=${spent}`);
       // Mark player as acted in this betting round
       state.actedPlayersInRound.add(userId);
+      
+      // Post dealer message
+      if (io) {
+        postDealerMessage(gameId, io, `${playerName} calls ${spent.toLocaleString()}`);
+      }
       break;
     }
     case "CHECK": {
@@ -192,6 +206,11 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
       console.log(`[ACTION] After CHECK: no change to contributions`);
       // Mark player as acted in this betting round
       state.actedPlayersInRound.add(userId);
+      
+      // Post dealer message
+      if (io) {
+        postDealerMessage(gameId, io, `${playerName} checks`);
+      }
       break;
     }
     case "FOLD": {
@@ -200,6 +219,11 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
       // The client will handle the visual fade effect
       // Don't clear holeCards or update database - keep them for display
       console.log(`[ACTION] After FOLD: player status=FOLDED, holeCards kept for display`);
+      
+      // Post dealer message
+      if (io) {
+        postDealerMessage(gameId, io, `${playerName} folds`);
+      }
       break;
     }
     case "ALL_IN": {
@@ -221,6 +245,11 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
       // state.pot should only change when collecting from betting round
       // Mark player as having acted (they went all-in)
       state.actedPlayersInRound.add(userId);
+      
+      // Post dealer message
+      if (io) {
+        postDealerMessage(gameId, io, `${playerName} goes ALL IN with ${allInAmount.toLocaleString()}`);
+      }
       break;
     }
     default:
@@ -576,7 +605,8 @@ async function autoFoldPlayer(gameId, userId, io) {
       gameId,
       userId,
       action: "FOLD",
-      amount: 0
+      amount: 0,
+      io
     });
 
     const game = await prisma.game.findUnique({
@@ -675,7 +705,8 @@ async function handleTestPlayerAction(gameId, userId, io) {
       gameId,
       userId,
       action,
-      amount
+      amount,
+      io
     });
 
     const game = await prisma.game.findUnique({
@@ -798,7 +829,7 @@ async function handleTestPlayerAction(gameId, userId, io) {
             }))
           };
           const payload = buildClientGameState(updatedGameFromState, updatedState);
-          if (io) io.to(`game:${gameId}`).emit("game-state", payload);
+        if (io) io.to(`game:${gameId}`).emit("game-state", payload);
         }
       }
     } else {
@@ -837,6 +868,11 @@ async function handleShowdown(gameId, io) {
   console.log(`[SHOWDOWN] Community cards:`, state.communityCards);
   console.log(`[SHOWDOWN] Total pot: ${state.pot} (old: ${oldPot}, collected: ${collectedPot})`);
 
+  // Post dealer message about showdown
+  if (io) {
+    postDealerMessage(gameId, io, "Showdown! Turning over cards...");
+  }
+
   // Evaluate all active players' hands
   const handResults = activePlayers.map(player => {
     if (!player.holeCards || !Array.isArray(player.holeCards) || player.holeCards.length !== 2) {
@@ -869,6 +905,17 @@ async function handleShowdown(gameId, io) {
   winners.forEach(w => {
     console.log(`[SHOWDOWN]   Winner: ${w.player.name || w.player.userId} (seat ${w.player.seatNumber}) - ${w.hand.category}`);
   });
+
+  // Post dealer message about winners
+  if (io) {
+    const winnerNames = winners.map(w => w.player.name || w.player.user?.username || `Player ${w.player.seatNumber}`).join(' and ');
+    const handDesc = winners[0].hand.category;
+    if (winners.length === 1) {
+      postDealerMessage(gameId, io, `${winnerNames} wins ${state.pot.toLocaleString()} with ${handDesc}!`);
+    } else {
+      postDealerMessage(gameId, io, `${winnerNames} tie with ${handDesc}! Pot split ${winners.length} ways.`);
+    }
+  }
 
   // Distribute pot among winners (split evenly)
   const potPerWinner = Math.floor(state.pot / winners.length);
@@ -907,7 +954,7 @@ async function handleShowdown(gameId, io) {
 
   if (!game) return;
 
-  // Build result payload for clients
+  // Build result payload for clients - include winning card information
   const showdownResults = {
     winners: winners.map(w => ({
       playerId: w.player.id,
@@ -915,7 +962,8 @@ async function handleShowdown(gameId, io) {
       name: w.player.name || w.player.user?.username || `Player ${w.player.seatNumber}`,
       seatNumber: w.player.seatNumber,
       handCategory: w.hand.category,
-      potWon: potPerWinner + (winners.indexOf(w) === 0 ? remainder : 0)
+      potWon: potPerWinner + (winners.indexOf(w) === 0 ? remainder : 0),
+      hand: w.hand // Include full hand evaluation for highlighting
     })),
     allHands: handResults.map(r => ({
       playerId: r.player.id,
@@ -923,9 +971,15 @@ async function handleShowdown(gameId, io) {
       name: r.player.name || r.player.user?.username || `Player ${r.player.seatNumber}`,
       seatNumber: r.player.seatNumber,
       handCategory: r.hand.category,
-      strength: r.strength
-    }))
+      strength: r.strength,
+      hand: r.hand // Include full hand evaluation
+    })),
+    showdownActive: true // Flag to indicate showdown is active
   };
+  
+  // Mark all active players' cards as face-up for showdown
+  state.showdownActive = true;
+  state.showdownResults = showdownResults;
 
   // Emit showdown results
   if (io) {
@@ -966,11 +1020,17 @@ async function handleShowdown(gameId, io) {
         include: {
           players: {
             include: { user: true }
-          }
+          },
+          tournament: true
         }
       });
       
       if (gameForNextHand && gameForNextHand.players.length >= 2) {
+        // Check if blind level should advance (for tournaments)
+        if (gameForNextHand.tournament && gameForNextHand.tournament.status === 'RUNNING') {
+          await checkAndAdvanceBlindLevel(gameForNextHand.tournament.id, gameId, io);
+        }
+        
         // Note: dealerSeat is not stored in database, it's recalculated in startHandForGame
         // The dealer button moves clockwise automatically when startHandForGame is called
         // because it randomly selects a dealer from active players, ensuring rotation over time
@@ -987,6 +1047,111 @@ async function handleShowdown(gameId, io) {
       }
     });
   }, 5000); // 5 second delay to show results
+}
+
+/**
+ * Post dealer message to chat
+ */
+function postDealerMessage(gameId, io, message) {
+  if (!io) return;
+  
+  const dealerMessage = {
+    id: `dealer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    userId: 'DEALER',
+    userName: 'Dealer',
+    message: message,
+    timestamp: Date.now(),
+    isGameMessage: true,
+    isDealerMessage: true
+  };
+  
+  io.to(`game:${gameId}`).emit("game_message", { gameId, message: dealerMessage });
+}
+
+/**
+ * Check if blind level should advance based on tournament elapsed time and advance if needed
+ */
+async function checkAndAdvanceBlindLevel(tournamentId, gameId, io) {
+  try {
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId }
+    });
+
+    if (!tournament || tournament.status !== 'RUNNING' || !tournament.startedAt) {
+      return;
+    }
+
+    // Parse blind levels
+    let blindLevels = [];
+    try {
+      blindLevels = tournament.blindLevelsJson ? JSON.parse(tournament.blindLevelsJson) : [];
+    } catch (e) {
+      console.error(`[POKER] Failed to parse blind levels for tournament ${tournamentId}:`, e);
+      return;
+    }
+
+    if (blindLevels.length === 0) return;
+
+    // Calculate elapsed time since tournament started
+    const now = new Date();
+    const startedAt = new Date(tournament.startedAt);
+    const elapsedMs = now.getTime() - startedAt.getTime();
+    let elapsedMinutes = elapsedMs / 1000 / 60;
+
+    // Determine current blind level based on elapsed time
+    let currentLevelIndex = 0;
+    for (let i = 0; i < blindLevels.length; i++) {
+      const level = blindLevels[i];
+      if (level.duration === null) {
+        // Final level (infinite duration)
+        currentLevelIndex = i;
+        break;
+      }
+      if (elapsedMinutes <= level.duration) {
+        currentLevelIndex = i;
+        break;
+      }
+      elapsedMinutes -= level.duration;
+      // Account for break after level
+      if (level.breakAfter) {
+        elapsedMinutes -= level.breakAfter;
+      }
+    }
+
+    // Get current level from game
+    const game = await prisma.game.findUnique({
+      where: { id: gameId }
+    });
+
+    if (!game) return;
+
+    const gameLevel = game.currentBlindLevel || 0;
+    
+    // Check if we need to advance to next level
+    if (currentLevelIndex > gameLevel) {
+      console.log(`[POKER] Advancing blind level for game ${gameId} from ${gameLevel} to ${currentLevelIndex}`);
+      
+      const newLevel = blindLevels[currentLevelIndex];
+      if (newLevel) {
+        // Update game blinds and level
+        await prisma.game.update({
+          where: { id: gameId },
+          data: {
+            currentBlindLevel: currentLevelIndex,
+            smallBlind: newLevel.smallBlind,
+            bigBlind: newLevel.bigBlind
+          }
+        });
+
+        // Post dealer message
+        if (io) {
+          postDealerMessage(gameId, io, `Blinds increase to ${newLevel.smallBlind.toLocaleString()}/${newLevel.bigBlind.toLocaleString()}`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`[POKER] Error checking blind level advancement:`, err);
+  }
 }
 
 /**
@@ -1013,6 +1178,11 @@ async function advanceToNextStreet(gameId, io) {
   // Reset acted players tracking for new betting round
   state.actedPlayersInRound = new Set();
 
+  // Check if all active players are all-in
+  const activePlayers = state.players.filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
+  const activePlayerIds = activePlayers.map(p => p.id);
+  const allPlayersAllIn = state.bettingRound.areAllPlayersAllIn(activePlayerIds, state.players);
+
   // Deal community cards based on current street
   if (state.street === "PREFLOP") {
     // Deal flop
@@ -1020,26 +1190,58 @@ async function advanceToNextStreet(gameId, io) {
     state.deck = newDeck;
     state.communityCards = flopCards;
     state.street = "FLOP";
+    postDealerMessage(gameId, io, "Dealing the flop...");
   } else if (state.street === "FLOP") {
     // Deal turn
     const { deck: newDeck, card: turnCard } = engine.dealTurnOrRiver(state.deck);
     state.deck = newDeck;
     state.communityCards = [...state.communityCards, turnCard];
     state.street = "TURN";
+    postDealerMessage(gameId, io, "Dealing the turn...");
   } else if (state.street === "TURN") {
     // Deal river
     const { deck: newDeck, card: riverCard } = engine.dealTurnOrRiver(state.deck);
     state.deck = newDeck;
     state.communityCards = [...state.communityCards, riverCard];
     state.street = "RIVER";
+    postDealerMessage(gameId, io, "Dealing the river...");
   } else if (state.street === "RIVER") {
     // Hand complete - showdown
     await handleShowdown(gameId, io);
     return;
   }
 
+  // If all players are all-in, deal remaining community cards immediately and go to showdown
+  if (allPlayersAllIn) {
+    console.log(`[POKER] All players are all-in, dealing remaining community cards immediately`);
+    postDealerMessage(gameId, io, "All players are all-in! Dealing remaining community cards...");
+    
+    // Deal remaining cards based on current street
+    if (state.street === "FLOP") {
+      // Deal turn and river
+      const { deck: newDeck1, card: turnCard } = engine.dealTurnOrRiver(state.deck);
+      state.deck = newDeck1;
+      state.communityCards = [...state.communityCards, turnCard];
+      state.street = "TURN";
+      
+      const { deck: newDeck2, card: riverCard } = engine.dealTurnOrRiver(state.deck);
+      state.deck = newDeck2;
+      state.communityCards = [...state.communityCards, riverCard];
+      state.street = "RIVER";
+    } else if (state.street === "TURN") {
+      // Deal river
+      const { deck: newDeck, card: riverCard } = engine.dealTurnOrRiver(state.deck);
+      state.deck = newDeck;
+      state.communityCards = [...state.communityCards, riverCard];
+      state.street = "RIVER";
+    }
+    
+    // Go to showdown immediately
+    await handleShowdown(gameId, io);
+    return;
+  }
+
   // Start new betting round - first player to act is first active player after dealer
-  const activePlayers = state.players.filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
   if (activePlayers.length > 1) {
     // Find first active player after dealer (clockwise)
     const dealerSeat = state.dealerSeat;
@@ -1154,8 +1356,8 @@ async function moveToNextPlayer(gameId, io) {
     console.log(`[TURN ORDER] Falling back to first active player`);
     const sortedPlayers = [...activePlayers].sort((a, b) => a.seatNumber - b.seatNumber);
     if (sortedPlayers.length > 0) {
-      state.currentTurnUserId = sortedPlayers[0].userId;
-      startTurnTimer(gameId, state.currentTurnUserId, io);
+    state.currentTurnUserId = sortedPlayers[0].userId;
+    startTurnTimer(gameId, state.currentTurnUserId, io);
       console.log(`[TURN ORDER] Set turn to first active player: seat ${sortedPlayers[0].seatNumber} (${sortedPlayers[0].name || sortedPlayers[0].userId})`);
     } else {
       console.log(`[TURN ORDER] No active players found, setting currentTurnUserId to null`);
@@ -1371,7 +1573,8 @@ export function registerPokerHandlers(io) {
           gameId,
           userId,
           action,
-          amount: Number(amount) || 0
+          amount: Number(amount) || 0,
+          io
         });
 
         // Build game state from in-memory state (fast - no DB query)
@@ -1431,10 +1634,31 @@ export function registerPokerHandlers(io) {
             const collectedPot = state.bettingRound.getTotalPot();
             const totalPot = state.pot + collectedPot;
             
+            const winnerName = winner.name || winner.user?.username || `Player ${winner.seatNumber}`;
+            
             winner.chips += totalPot;
             state.pot = 0;
             
-            console.log(`[POKER] Single player remaining - awarding pot of ${totalPot} to ${winner.name || winner.userId}`);
+            console.log(`[POKER] Single player remaining - awarding pot of ${totalPot} to ${winnerName}`);
+            
+            // Post dealer message
+            if (io) {
+              postDealerMessage(gameId, io, `${winnerName} wins ${totalPot.toLocaleString()} (all other players folded)`);
+            }
+            
+            // Emit winner event for UI
+            if (io) {
+              io.to(`game:${gameId}`).emit("pot-winner", {
+                gameId,
+                winner: {
+                  playerId: winner.id,
+                  userId: winner.userId,
+                  name: winnerName,
+                  seatNumber: winner.seatNumber,
+                  potWon: totalPot
+                }
+              });
+            }
             
             // Update winner chips in database (async)
             prisma.player.update({
@@ -1444,16 +1668,16 @@ export function registerPokerHandlers(io) {
             
             // Update game pot in database (async)
             prisma.game.update({
-              where: { id: gameId },
+            where: { id: gameId },
               data: { pot: 0 }
             }).catch(err => console.error('[POKER] Error updating game pot:', err));
             
-            // Clear hand state
+            // Clear hand state after delay
             const savedPlayers = [...state.players];
-            tableState.delete(gameId);
-            
-            // Reset player statuses (async)
             setTimeout(() => {
+              tableState.delete(gameId);
+              
+              // Reset player statuses (async)
               savedPlayers.forEach(p => {
                 prisma.player.update({
                   where: { id: p.id },
@@ -1464,7 +1688,25 @@ export function registerPokerHandlers(io) {
                   }
                 }).catch(err => console.error(`[POKER] Error resetting player ${p.id}:`, err));
               });
-            }, 2000);
+              
+              // Advance blind level and start new hand if tournament
+              const game = await prisma.game.findUnique({
+                where: { id: gameId },
+                include: { tournament: true }
+              });
+              
+              if (game && game.tournament && game.tournament.status === 'RUNNING') {
+                // Check if blind level should advance
+                await checkAndAdvanceBlindLevel(game.tournament.id, gameId, io);
+                
+                // Start new hand
+                try {
+                  await startHandForGame(gameId, io);
+                } catch (err) {
+                  console.error(`[POKER] Error starting new hand:`, err);
+                }
+              }
+            }, 3000); // 3 second delay to show winner
             
             // Emit updated state
             const updatedGameFromState = {
@@ -1491,7 +1733,7 @@ export function registerPokerHandlers(io) {
           // Multiple players remaining - advance to next street
           await advanceToNextStreet(gameId, io);
           // Emit updated state immediately from in-memory state (no DB query needed)
-          const updatedState = tableState.get(gameId);
+            const updatedState = tableState.get(gameId);
           if (updatedState) {
             const updatedGameFromState = {
               id: gameId,
@@ -1534,7 +1776,7 @@ export function registerPokerHandlers(io) {
               }))
             };
             const payload = buildClientGameState(updatedGameFromState, updatedState);
-            io.to(`game:${gameId}`).emit("game-state", payload);
+          io.to(`game:${gameId}`).emit("game-state", payload);
           }
         }
       } catch (err) {

@@ -43,6 +43,7 @@ interface ChatProps {
   isSpectator?: boolean;
   onPlayerClick?: (player: Player) => void;
   PlayerStatsModal?: React.ComponentType<PlayerStatsModalProps>; // Make it an optional prop
+  showDealerMessages?: boolean; // Toggle to show/hide dealer messages
 }
 
 export default function Chat({
@@ -59,7 +60,8 @@ export default function Chat({
   gameMessages = {},
   isSpectator = false,
   onPlayerClick,
-  PlayerStatsModal // Destructure the prop
+  PlayerStatsModal, // Destructure the prop
+  showDealerMessages = true // Default to showing dealer messages
 }: ChatProps) {
   
   // Use the chat hooks for all state management and event handling
@@ -106,7 +108,8 @@ export default function Chat({
     lobbyMessages,
     gameMessages,
     chatType,
-    onToggleChatType
+    onToggleChatType,
+    showDealerMessages
   });
 
   return (

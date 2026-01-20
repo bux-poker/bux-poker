@@ -48,7 +48,8 @@ export default function ChatModular({
   gameMessages = {},
   isSpectator = false,
   onPlayerClick,
-  PlayerStatsModal
+  PlayerStatsModal,
+  showDealerMessages = true
 }: ChatModularProps) {
   
   // Use the chat hooks for all state management and event handling
@@ -95,7 +96,8 @@ export default function ChatModular({
     lobbyMessages,
     gameMessages,
     chatType,
-    onToggleChatType
+    onToggleChatType,
+    showDealerMessages
   });
 
   return (
