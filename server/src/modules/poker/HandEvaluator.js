@@ -123,7 +123,7 @@ function evaluateFiveCardHand(cards) {
     tiebreak = [straightHigh];
   } else if (firstCount === 4) {
     // Four of a kind
-    category = "FOUR_OF_ACADEMY";
+    category = "FOUR_OF_A_KIND";
     const kicker = values.find((v) => v !== firstVal) || 0;
     tiebreak = [firstVal, kicker];
   } else if (firstCount === 3 && secondCount >= 2) {

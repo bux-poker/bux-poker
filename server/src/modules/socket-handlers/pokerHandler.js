@@ -331,12 +331,48 @@ export async function startHandForGame(gameId, io) {
     bigBlind 
   });
 
-  // Randomly assign dealer (pick random player)
-  const dealerIndex = Math.floor(Math.random() * game.players.length);
-  const dealerPlayer = game.players[dealerIndex];
+  // Rotate dealer clockwise (or assign randomly if no previous dealer)
+  // Get previous dealer seat from last hand state if it exists
+  let dealerPlayer;
+  let dealerSeat;
+  const previousState = tableState.get(gameId);
+  if (previousState && previousState.dealerSeat !== undefined) {
+    // Rotate dealer clockwise (decrease seat number, wrap if needed)
+    const maxSeat = Math.max(...game.players.map(p => p.seatNumber));
+    const minSeat = Math.min(...game.players.map(p => p.seatNumber));
+    let nextDealerSeat = previousState.dealerSeat - 1;
+    if (nextDealerSeat < minSeat) nextDealerSeat = maxSeat;
+    
+    // Find player at next dealer seat
+    dealerPlayer = game.players.find(p => p.seatNumber === nextDealerSeat);
+    
+    // If player at that seat is eliminated, find next active player clockwise
+    if (!dealerPlayer || dealerPlayer.status === 'ELIMINATED') {
+      let attempts = 0;
+      while ((!dealerPlayer || dealerPlayer.status === 'ELIMINATED') && attempts < game.players.length) {
+        nextDealerSeat = nextDealerSeat - 1;
+        if (nextDealerSeat < minSeat) nextDealerSeat = maxSeat;
+        dealerPlayer = game.players.find(p => p.seatNumber === nextDealerSeat);
+        attempts++;
+      }
+    }
+    
+    if (!dealerPlayer) {
+      // Fallback to random if rotation failed
+      const dealerIndex = Math.floor(Math.random() * game.players.length);
+      dealerPlayer = game.players[dealerIndex];
+    }
+    dealerSeat = dealerPlayer.seatNumber;
+    console.log(`[POKER] Rotated dealer clockwise from seat ${previousState.dealerSeat} to seat ${dealerSeat}`);
+  } else {
+    // First hand or no previous state - randomly assign dealer
+    const dealerIndex = Math.floor(Math.random() * game.players.length);
+    dealerPlayer = game.players[dealerIndex];
+    dealerSeat = dealerPlayer.seatNumber;
+    console.log(`[POKER] First hand - randomly assigned dealer at seat ${dealerSeat}`);
+  }
   
   // Seats are numbered ANTICLOCKWISE, so CLOCKWISE movement = DECREASING seat numbers
-  const dealerSeat = dealerPlayer.seatNumber;
   const maxSeat = Math.max(...game.players.map(p => p.seatNumber));
   const minSeat = Math.min(...game.players.map(p => p.seatNumber));
   
@@ -928,6 +964,11 @@ async function handleShowdown(gameId, io) {
   const potPerWinner = Math.floor(state.pot / winners.length);
   const remainder = state.pot % winners.length; // Extra chips go to first winner
 
+  // TODO: Implement side pot logic here for all-in scenarios
+  // For now, distribute pot evenly among winners
+  // NOTE: This is incorrect if some players went all-in with different amounts
+  // Side pots will be implemented in next iteration
+  
   winners.forEach((winner, index) => {
     const amount = potPerWinner + (index === 0 ? remainder : 0);
     winner.player.chips += amount;
@@ -939,6 +980,26 @@ async function handleShowdown(gameId, io) {
       data: { chips: winner.player.chips }
     }).catch(err => console.error(`[SHOWDOWN] Error updating chips for player ${winner.player.id}:`, err));
   });
+
+  // Check for player elimination after distributing pot
+  const { TournamentEngine } = await import("../../services/TournamentEngine.js");
+  const tournamentEngine = new TournamentEngine();
+  
+  for (const handResult of handResults) {
+    if (handResult.player.chips <= 0 && handResult.player.status === 'ACTIVE') {
+      console.log(`[SHOWDOWN] Player ${handResult.player.name || handResult.player.userId} eliminated with 0 chips`);
+      // Eliminate player
+      if (game.tournament) {
+        await tournamentEngine.onPlayerBust(game.tournament.id, handResult.player.id);
+      }
+      // Update status in state
+      handResult.player.status = 'ELIMINATED';
+      await prisma.player.update({
+        where: { id: handResult.player.id },
+        data: { status: 'ELIMINATED' }
+      });
+    }
+  }
 
   // Reset pot
   state.pot = 0;
@@ -1672,6 +1733,22 @@ export function registerPokerHandlers(io) {
               where: { id: winner.id },
               data: { chips: winner.chips }
             }).catch(err => console.error('[POKER] Error updating winner chips:', err));
+
+            // Check for player elimination (though unlikely with folded players, check anyway)
+            const { TournamentEngine } = await import("../../services/TournamentEngine.js");
+            const tournamentEngine = new TournamentEngine();
+            const game = await prisma.game.findUnique({
+              where: { id: gameId },
+              include: { tournament: true }
+            });
+            if (game?.tournament && winner.chips <= 0 && winner.status === 'ACTIVE') {
+              await tournamentEngine.onPlayerBust(game.tournament.id, winner.id);
+              winner.status = 'ELIMINATED';
+              await prisma.player.update({
+                where: { id: winner.id },
+                data: { status: 'ELIMINATED' }
+              });
+            }
             
             // Update game pot in database (async)
             prisma.game.update({
