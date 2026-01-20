@@ -1371,8 +1371,15 @@ async function advanceToNextStreet(gameId, io) {
   const collectedPot = state.bettingRound.getTotalPot();
   const oldPot = state.pot || 0;
   state.pot = oldPot + collectedPot;
-
-  // Clear betting round contributions
+  
+  // Update player contributions for side pot calculation
+  // Track total contributions across all streets by adding current street to existing contributions
+  state.players.forEach(player => {
+    const currentContribution = state.bettingRound.getPlayerContribution(player.id);
+    player.contributions = (player.contributions || 0) + currentContribution;
+  });
+  
+  // Clear betting round contributions for next street
   state.bettingRound.playerBets.clear();
   state.bettingRound.currentBet = 0;
   state.lastRaiseUserId = null;
