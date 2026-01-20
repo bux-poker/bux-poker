@@ -1681,7 +1681,7 @@ export function registerPokerHandlers(io) {
             
             // Clear hand state after delay
             const savedPlayers = [...state.players];
-            setTimeout(() => {
+            setTimeout(async () => {
               tableState.delete(gameId);
               
               // Reset player statuses (async)
