@@ -271,7 +271,10 @@ export function PokerTable({
           // Seats 1, 2, 3, 9, 10: cards to the RIGHT of avatar (positive offset)
           // Seats 4, 5, 6, 7, 8: cards to the LEFT of avatar (negative offset)
           const cardsOnRight = [1, 2, 3, 9, 10].includes(seatIdx + 1);
-          const cardOffset = cardsOnRight ? 80 : -80; // Offset cards to right or left of avatar
+          // Reduce horizontal offset on smaller screens so cards sit closer to the name/chips block
+          const baseCardOffset = 80;
+          const offsetScale = windowSize.width < 1000 ? 0.5 : 1; // 50% closer for all screens < 1000px
+          const cardOffset = cardsOnRight ? baseCardOffset * offsetScale : -baseCardOffset * offsetScale;
 
           // Adjust vertical position for smaller screens: seats 1-5 down, 6-10 up
           let verticalOffset = 0;

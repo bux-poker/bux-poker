@@ -661,3 +661,15 @@
     --chat-width: 248px;
   }
 }
+
+/* Global card scaling override for all screens up to 1000px wide
+ * Ensure player table hand cards and community cards are ~50% of the desktop size
+ */
+@media (max-width: 1000px) {
+  :root {
+    --community-card-width: 40px;
+    --community-card-height: 56px;
+    --hole-card-width: 14px;
+    --hole-card-height: 20px;
+  }
+}
