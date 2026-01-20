@@ -120,7 +120,19 @@ export function TournamentLobby() {
       
       if (!openedWindowsArray.includes(myGameId)) {
         console.log(`[TOURNAMENT] Auto-opening game table in new window: ${myGameId}`);
-        window.open(`/game/${myGameId}`, '_blank', 'width=1400,height=900');
+        const gameWindow = window.open(`/game/${myGameId}`, '_blank', 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
+        // Request fullscreen when window loads (in browser that support it)
+        if (gameWindow) {
+          gameWindow.addEventListener('load', () => {
+            setTimeout(() => {
+              if (gameWindow.document.documentElement.requestFullscreen) {
+                gameWindow.document.documentElement.requestFullscreen().catch(() => {
+                  // User denied fullscreen or not supported
+                });
+              }
+            }, 500);
+          });
+        }
         openedWindowsArray.push(myGameId);
         localStorage.setItem('openedGameWindows', JSON.stringify(openedWindowsArray));
       }
@@ -724,14 +736,38 @@ export function TournamentLobby() {
                         <div className="flex gap-2">
                           {isMyTable ? (
                             <button
-                              onClick={() => window.open(`/game/${table.id}`, '_blank', 'width=1400,height=900')}
+                              onClick={() => {
+                                const gameWindow = window.open(`/game/${table.id}`, '_blank', 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
+                                // Request fullscreen when window loads
+                                if (gameWindow) {
+                                  gameWindow.addEventListener('load', () => {
+                                    setTimeout(() => {
+                                      if (gameWindow.document.documentElement.requestFullscreen) {
+                                        gameWindow.document.documentElement.requestFullscreen().catch(() => {});
+                                      }
+                                    }, 500);
+                                  });
+                                }
+                              }}
                               className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
                             >
                               Join Table
                             </button>
                           ) : (
                             <button
-                              onClick={() => window.open(`/game/${table.id}`, '_blank', 'width=1400,height=900')}
+                              onClick={() => {
+                                const gameWindow = window.open(`/game/${table.id}`, '_blank', 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
+                                // Request fullscreen when window loads
+                                if (gameWindow) {
+                                  gameWindow.addEventListener('load', () => {
+                                    setTimeout(() => {
+                                      if (gameWindow.document.documentElement.requestFullscreen) {
+                                        gameWindow.document.documentElement.requestFullscreen().catch(() => {});
+                                      }
+                                    }, 500);
+                                  });
+                                }
+                              }}
                               className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                             >
                               Watch

@@ -84,6 +84,43 @@ export function PokerGameView() {
   const { user } = useAuth();
   const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
   
+  // Request fullscreen on load to hide browser bar
+  useEffect(() => {
+    const requestFullscreen = async () => {
+      try {
+        // Check if we're in a popup window (opened from tournament lobby)
+        const isPopup = window.opener !== null;
+        
+        if (isPopup) {
+          // Wait a bit for window to fully load
+          setTimeout(async () => {
+            try {
+              if (document.documentElement.requestFullscreen) {
+                await document.documentElement.requestFullscreen();
+              } else if ((document.documentElement as any).webkitRequestFullscreen) {
+                // Safari
+                await (document.documentElement as any).webkitRequestFullscreen();
+              } else if ((document.documentElement as any).mozRequestFullScreen) {
+                // Firefox
+                await (document.documentElement as any).mozRequestFullScreen();
+              } else if ((document.documentElement as any).msRequestFullscreen) {
+                // IE/Edge
+                await (document.documentElement as any).msRequestFullscreen();
+              }
+            } catch (err) {
+              // User denied fullscreen or not supported - that's ok
+              console.log('[FULLSCREEN] Fullscreen request denied or not supported');
+            }
+          }, 1000);
+        }
+      } catch (err) {
+        // Ignore errors
+      }
+    };
+
+    requestFullscreen();
+  }, []);
+
   // Check screen orientation
   useEffect(() => {
     const checkOrientation = () => {
