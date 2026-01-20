@@ -371,7 +371,8 @@ export function PokerTable({
                             className="absolute -right-2 -top-2 flex items-center justify-center rounded-full bg-yellow-500 border-2 border-white shadow-lg"
                             style={{ 
                               width: 'var(--dealer-button-size, 32px)',
-                              height: 'var(--dealer-button-size, 32px)'
+                              height: 'var(--dealer-button-size, 32px)',
+                              zIndex: 60
                             }}
                           >
                             <span 
