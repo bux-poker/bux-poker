@@ -196,14 +196,10 @@ async function applyPlayerAction({ gameId, userId, action, amount }) {
     }
     case "FOLD": {
       player.status = "FOLDED";
-      // Clear hole cards when player folds (hide them from view)
-      player.holeCards = [];
-      // Also clear in database (async - don't block)
-      prisma.player.update({
-        where: { id: player.id },
-        data: { holeCards: "" }
-      }).catch(err => console.error('[ACTION] Error clearing hole cards in DB:', err));
-      console.log(`[ACTION] After FOLD: player status=FOLDED, holeCards cleared`);
+      // Keep hole cards when player folds - they should remain visible but faded
+      // The client will handle the visual fade effect
+      // Don't clear holeCards or update database - keep them for display
+      console.log(`[ACTION] After FOLD: player status=FOLDED, holeCards kept for display`);
       break;
     }
     case "ALL_IN": {

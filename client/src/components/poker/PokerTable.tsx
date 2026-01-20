@@ -90,7 +90,7 @@ function PokerCardImage({
     );
   }
 
-  // Get card image filename
+  // Get card image filename - always use PNG images
   const getCardImage = (card: Card): string => {
     const suitMap: Record<string, string> = {
       "SPADES": "S", "HEARTS": "H", "DIAMONDS": "D", "CLUBS": "C"
@@ -101,65 +101,25 @@ function PokerCardImage({
     return `${rank}${suit}.png`;
   };
 
-  const isLargeScreen = window.innerWidth >= 900 && window.innerHeight > 449;
-  
-    if (isLargeScreen) {
-      return (
-        <img
-          src={`/cards/${getCardImage(card)}`}
-          alt={`${card.rank}${card.suit}`}
-          className={className}
-          style={{ 
-            width: width - 2, 
-            height, 
-            objectFit: 'contain', 
-            padding: 0, 
-            margin: 0, 
-            borderRadius: '8px'
-          }}
-          onError={(e) => {
-            // Fallback to CSS card if image not found
-            const target = e.target as HTMLImageElement;
-            target.style.display = 'none';
-            const parent = target.parentElement;
-            if (parent) {
-              parent.innerHTML = `
-                <div class="bg-white rounded-lg border-2 border-black" style="width: ${width - 2}px; height: ${height}px; display: flex; flex-direction: column; justify-content: space-between; padding: 4px;">
-                  <div class="text-black text-sm font-bold">${card.rank}</div>
-                  <div class="text-black text-lg self-center">${card.suit === 'HEARTS' ? '♥' : card.suit === 'DIAMONDS' ? '♦' : card.suit === 'CLUBS' ? '♣' : '♠'}</div>
-                  <div class="text-black text-sm font-bold rotate-180">${card.rank}</div>
-                </div>
-              `;
-            }
-          }}
-        />
-      );
-    }
-
-  // CSS-based card for small screens
-  const suitSymbol = card.suit === 'HEARTS' ? '♥' : card.suit === 'DIAMONDS' ? '♦' : card.suit === 'CLUBS' ? '♣' : '♠';
-  const suitColor = (card.suit === 'HEARTS' || card.suit === 'DIAMONDS') ? 'text-red-600' : 'text-black';
-
   return (
-    <div
-      className={`${className} bg-white rounded-lg border-2 border-black relative overflow-hidden ${suitColor}`}
-      style={{ width, height }}
-    >
-      {/* Top left corner */}
-      <div className="absolute top-1 left-1 text-sm font-bold">
-        <div>{card.rank}</div>
-        <div className="text-xs">{suitSymbol}</div>
-      </div>
-      {/* Center large suit */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="text-3xl font-bold">{suitSymbol}</div>
-      </div>
-      {/* Bottom right corner (rotated) */}
-      <div className="absolute bottom-1 right-1 text-sm font-bold rotate-180">
-        <div>{card.rank}</div>
-        <div className="text-xs">{suitSymbol}</div>
-      </div>
-    </div>
+    <img
+      src={`/cards/${getCardImage(card)}`}
+      alt={`${card.rank}${card.suit}`}
+      className={className}
+      style={{ 
+        width: width - 2, 
+        height, 
+        objectFit: 'contain', 
+        padding: 0, 
+        margin: 0, 
+        borderRadius: '8px'
+      }}
+      onError={(e) => {
+        console.error('Card image failed to load:', getCardImage(card));
+        const target = e.target as HTMLImageElement;
+        target.style.display = 'none';
+      }}
+    />
   );
 }
 
@@ -474,10 +434,11 @@ export function PokerTable({
 
           // Add cards as separate element if player has cards (including own player)
           if (player && player.holeCards && player.holeCards.length > 0) {
+            const isFolded = player.status === 'FOLDED';
             elements.push(
               <div
                 key={`cards-${player.id}`}
-                className="absolute z-20 flex flex-col items-center gap-1"
+                className={`absolute z-20 flex flex-col items-center gap-1 ${isFolded ? 'opacity-50' : ''}`}
                 style={{
                   left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset}px)`,
                   top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}%)`,
