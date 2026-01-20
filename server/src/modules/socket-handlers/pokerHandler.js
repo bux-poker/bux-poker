@@ -27,6 +27,13 @@ export function getIO() {
   return ioInstance;
 }
 
+/**
+ * Check if a game has an active hand in progress
+ */
+export function hasActiveHand(gameId) {
+  return tableState.has(gameId) && tableState.get(gameId) !== null;
+}
+
 function buildClientGameState(game, state) {
   // Calculate total pot: state.pot (accumulated from previous streets) + current betting round
   const totalPot = state 

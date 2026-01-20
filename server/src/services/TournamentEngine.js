@@ -265,7 +265,8 @@ export class TournamentEngine {
   }
 
   /**
-   * Seat registered players into tables based on seatsPerTable.
+   * Seat registered players into tables with balanced distribution.
+   * All tables must be within 1 player of each other.
    */
   async seatPlayers(tournamentId) {
     const tournament = await prisma.tournament.findUnique({
@@ -284,15 +285,39 @@ export class TournamentEngine {
     const { seatsPerTable } = tournament;
     const registrations = tournament.registrations;
 
-    const shuffled = [...registrations].sort(
-      () => Math.random() - 0.5
-    );
+    if (registrations.length === 0) {
+      throw new Error("No registered players to seat");
+    }
 
+    // Shuffle players randomly
+    const shuffled = [...registrations].sort(() => Math.random() - 0.5);
+
+    // Calculate number of tables needed
+    const totalPlayers = shuffled.length;
+    const numTables = Math.ceil(totalPlayers / seatsPerTable);
+    
+    // Calculate balanced distribution
+    // Each table should have either floor(players/tables) or ceil(players/tables) players
+    const basePlayersPerTable = Math.floor(totalPlayers / numTables);
+    const extraPlayers = totalPlayers % numTables;
+    
+    // Create tables with balanced distribution
     const tables = [];
-    let tableNumber = 1;
+    let playerIndex = 0;
+    
+    for (let tableNumber = 1; tableNumber <= numTables; tableNumber++) {
+      // First 'extraPlayers' tables get one extra player
+      const playersForThisTable = tableNumber <= extraPlayers 
+        ? basePlayersPerTable + 1 
+        : basePlayersPerTable;
+      
+      const tablePlayers = shuffled.slice(playerIndex, playerIndex + playersForThisTable);
+      playerIndex += playersForThisTable;
 
-    while (shuffled.length > 0) {
-      const tablePlayers = shuffled.splice(0, seatsPerTable);
+      if (tablePlayers.length === 0) {
+        // Skip empty tables
+        continue;
+      }
 
       const game = await prisma.game.create({
         data: {
@@ -319,26 +344,190 @@ export class TournamentEngine {
       }
 
       tables.push(game);
-      tableNumber += 1;
     }
+
+    console.log(`[TOURNAMENT] Seated ${totalPlayers} players into ${tables.length} balanced tables`);
+    tables.forEach((table, idx) => {
+      console.log(`[TOURNAMENT]   Table ${table.tableNumber}: ${table.players?.length || 'unknown'} players`);
+    });
 
     return tables;
   }
 
   /**
-   * Basic consolidation stub: in a real engine this would:
-   * - find short-handed tables
-   * - move players to balance seats
-   * For now, we only expose a placeholder.
+   * Check if a game has an active hand in progress
+   */
+  async hasActiveHand(gameId) {
+    try {
+      const { hasActiveHand } = await import("../modules/socket-handlers/pokerHandler.js");
+      return hasActiveHand(gameId);
+    } catch (e) {
+      console.error(`[TOURNAMENT] Error checking active hand for game ${gameId}:`, e);
+      return false;
+    }
+  }
+
+  /**
+   * Wait for all tables to finish their current hands before rebalancing
+   */
+  async waitForAllTablesToFinishHands(tournamentId, maxWaitMs = 300000) {
+    const startTime = Date.now();
+    const checkInterval = 2000; // Check every 2 seconds
+    
+    return new Promise((resolve) => {
+      const checkHands = async () => {
+        const games = await prisma.game.findMany({
+          where: { tournamentId, status: "ACTIVE" },
+          include: { players: true }
+        });
+
+        // Check if any table has an active hand
+        let allHandsFinished = true;
+        for (const game of games) {
+          const hasHand = await this.hasActiveHand(game.id);
+          if (hasHand) {
+            allHandsFinished = false;
+            console.log(`[TOURNAMENT] Table ${game.tableNumber} still has active hand, waiting...`);
+            break;
+          }
+        }
+
+        if (allHandsFinished) {
+          console.log(`[TOURNAMENT] All tables have finished their hands, proceeding with rebalancing`);
+          resolve(true);
+          return;
+        }
+
+        // Check if we've exceeded max wait time
+        if (Date.now() - startTime > maxWaitMs) {
+          console.log(`[TOURNAMENT] Max wait time exceeded, proceeding with rebalancing anyway`);
+          resolve(false);
+          return;
+        }
+
+        // Check again after interval
+        setTimeout(checkHands, checkInterval);
+      };
+
+      checkHands();
+    });
+  }
+
+  /**
+   * Rebalance tables: move players to ensure all tables are within 1 player of each other.
+   * Waits for all tables to finish current hands before rebalancing.
    */
   async consolidateTables(tournamentId) {
-    // TODO: implement real consolidation logic.
+    console.log(`[TOURNAMENT] Starting table consolidation for tournament ${tournamentId}`);
+    
+    // Wait for all tables to finish their current hands
+    await this.waitForAllTablesToFinishHands(tournamentId);
+    
     const games = await prisma.game.findMany({
       where: { tournamentId, status: "ACTIVE" },
-      include: { players: true }
+      include: { 
+        players: {
+          where: { status: "ACTIVE" },
+          include: { user: true }
+        }
+      }
     });
 
-    return games;
+    if (games.length <= 1) {
+      console.log(`[TOURNAMENT] Only ${games.length} table(s), no rebalancing needed`);
+      return games;
+    }
+
+    // Collect all active players
+    const allPlayers = [];
+    for (const game of games) {
+      for (const player of game.players) {
+        allPlayers.push({
+          playerId: player.id,
+          gameId: game.id,
+          userId: player.userId,
+          chips: player.chips,
+          seatNumber: player.seatNumber,
+          player
+        });
+      }
+    }
+
+    const totalPlayers = allPlayers.length;
+    const numTables = games.length;
+    
+    // Calculate balanced distribution
+    const basePlayersPerTable = Math.floor(totalPlayers / numTables);
+    const extraPlayers = totalPlayers % numTables;
+    
+    console.log(`[TOURNAMENT] Rebalancing ${totalPlayers} players across ${numTables} tables`);
+    console.log(`[TOURNAMENT] Target: ${basePlayersPerTable}-${basePlayersPerTable + 1} players per table`);
+
+    // Shuffle players to redistribute fairly
+    const shuffled = [...allPlayers].sort(() => Math.random() - 0.5);
+    
+    // Build target assignment: which players should be at which tables
+    const tableAssignments = [];
+    let playerIndex = 0;
+    for (let i = 0; i < games.length; i++) {
+      const game = games[i];
+      const targetPlayers = i < extraPlayers ? basePlayersPerTable + 1 : basePlayersPerTable;
+      const playersForThisTable = shuffled.slice(playerIndex, playerIndex + targetPlayers);
+      playerIndex += targetPlayers;
+      
+      tableAssignments.push({
+        gameId: game.id,
+        tableNumber: game.tableNumber,
+        players: playersForThisTable
+      });
+    }
+
+    // Step 1: Remove all players from their current tables (we'll recreate them)
+    for (const player of allPlayers) {
+      await prisma.player.delete({
+        where: { id: player.playerId }
+      });
+    }
+
+    // Step 2: Recreate players at their new tables with balanced distribution
+    for (const assignment of tableAssignments) {
+      for (let seatIndex = 0; seatIndex < assignment.players.length; seatIndex++) {
+        const { player } = assignment.players[seatIndex];
+        await prisma.player.create({
+          data: {
+            gameId: assignment.gameId,
+            userId: player.userId,
+            seatNumber: seatIndex + 1,
+            chips: player.chips,
+            holeCards: "",
+            status: "ACTIVE"
+          }
+        });
+      }
+    }
+
+    // Verify balance
+    const updatedGames = await prisma.game.findMany({
+      where: { tournamentId, status: "ACTIVE" },
+      include: { 
+        players: {
+          where: { status: "ACTIVE" }
+        }
+      }
+    });
+
+    const playerCounts = updatedGames.map(g => g.players.length);
+    const minPlayers = Math.min(...playerCounts);
+    const maxPlayers = Math.max(...playerCounts);
+    
+    console.log(`[TOURNAMENT] Rebalancing complete. Player counts per table:`, playerCounts);
+    console.log(`[TOURNAMENT] Min: ${minPlayers}, Max: ${maxPlayers}, Difference: ${maxPlayers - minPlayers}`);
+    
+    if (maxPlayers - minPlayers > 1) {
+      console.warn(`[TOURNAMENT] WARNING: Tables are not balanced! Max difference is ${maxPlayers - minPlayers}`);
+    }
+
+    return updatedGames;
   }
 
   /**
