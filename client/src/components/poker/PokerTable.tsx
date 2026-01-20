@@ -101,23 +101,23 @@ function PokerCardImage({
     return `${rank}${suit}.png`;
   };
 
-  return (
-    <img
-      src={`/cards/${getCardImage(card)}`}
-      alt={`${card.rank}${card.suit}`}
-      className={className}
-      style={{ 
-        width: width - 2, 
-        height, 
-        objectFit: 'contain', 
-        padding: 0, 
-        margin: 0, 
-        borderRadius: '8px'
-      }}
-      onError={(e) => {
+      return (
+        <img
+          src={`/cards/${getCardImage(card)}`}
+          alt={`${card.rank}${card.suit}`}
+          className={className}
+          style={{ 
+            width: width - 2, 
+            height, 
+            objectFit: 'contain', 
+            padding: 0, 
+            margin: 0, 
+            borderRadius: '1px'
+          }}
+          onError={(e) => {
         console.error('Card image failed to load:', getCardImage(card));
-        const target = e.target as HTMLImageElement;
-        target.style.display = 'none';
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
       }}
     />
   );
@@ -241,13 +241,13 @@ export function PokerTable({
                 : 112;
               // Use windowSize to trigger recalculation
               return (
-                <PokerCardImage
+              <PokerCardImage
                   key={`${idx}-${windowSize.width}`}
-                  card={card}
+                card={card}
                   width={cardWidth}
                   height={cardHeight}
-                  className="shadow-xl"
-                />
+                className="shadow-xl"
+              />
               );
             })}
           </div>
@@ -301,7 +301,7 @@ export function PokerTable({
           const horizontalOffset = windowSize.width <= 900
             ? ((seatIdx === 0 || seatIdx === 9) ? -12 : ((seatIdx === 4 || seatIdx === 5) ? 12 : 0))
             : 0;
-          
+
           const elements = [
             <div
               key={`player-${player?.id || `seat-${seatIdx + 1}`}`}
@@ -462,14 +462,14 @@ export function PokerTable({
                       ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hole-card-height')) || 39
                       : 39;
                     return (
-                      <PokerCardImage
+                    <PokerCardImage
                         key={`${player.id}-${cardIdx}-${windowSize.width}`}
-                        card={player.holeCards![cardIdx]}
+                      card={player.holeCards![cardIdx]}
                         width={holeWidth}
                         height={holeHeight}
-                        className="shadow-md"
-                        faceDown={!isMyPlayer}
-                      />
+                      className="shadow-md"
+                      faceDown={!isMyPlayer}
+                    />
                     );
                   })}
                 </div>

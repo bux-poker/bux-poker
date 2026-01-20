@@ -22,13 +22,13 @@
     --player-name-size: 8px;
     --player-chips-size: 7px;
     
-    --dealer-button-size: 32px;
+    --dealer-button-size: 12.8px;
     --timer-text-size: 20px;
     
     --hole-card-width: 22px;
     --hole-card-height: 31px;
     
-    --bet-chip-size: 20px;
+    --bet-chip-size: 12px;
     --bet-chip-text-size: 10px;
     
     --table-padding: 32px;
@@ -72,14 +72,14 @@
     --player-chips-size: 12px;
     --player-name-max-width: 120px;
     
-    --dealer-button-size: 32px;
+    --dealer-button-size: 12.8px;
     --timer-text-size: 20px;
     
     --hole-card-width: 28px;
     --hole-card-height: 39px;
     --hole-card-gap: 4px;
     
-    --bet-chip-size: 24px;
+    --bet-chip-size: 14.4px;
     --bet-chip-text-size: 12px;
     
     --table-padding: 32px;
@@ -123,13 +123,13 @@
     --player-name-size: 8px;
     --player-chips-size: 7px;
     
-    --dealer-button-size: 30px;
+    --dealer-button-size: 12px;
     --timer-text-size: 19px;
     
     --hole-card-width: 20px;
     --hole-card-height: 28px;
     
-    --bet-chip-size: 18px;
+    --bet-chip-size: 10.8px;
     --bet-chip-text-size: 9px;
     
     --table-padding: 30px;
@@ -173,13 +173,13 @@
     --player-name-size: 8px;
     --player-chips-size: 7px;
     
-    --dealer-button-size: 29px;
+    --dealer-button-size: 11.6px;
     --timer-text-size: 18px;
     
     --hole-card-width: 18px;
     --hole-card-height: 25px;
     
-    --bet-chip-size: 16px;
+    --bet-chip-size: 9.6px;
     --bet-chip-text-size: 8px;
     
     --table-padding: 29px;
@@ -223,13 +223,13 @@
     --player-name-size: 8px;
     --player-chips-size: 7px;
     
-    --dealer-button-size: 28px;
+    --dealer-button-size: 11.2px;
     --timer-text-size: 17px;
     
     --hole-card-width: 16px;
     --hole-card-height: 22px;
     
-    --bet-chip-size: 15px;
+    --bet-chip-size: 9px;
     --bet-chip-text-size: 8px;
     
     --table-padding: 28px;
@@ -273,13 +273,13 @@
     --player-name-size: 8px;
     --player-chips-size: 7px;
     
-    --dealer-button-size: 27px;
+    --dealer-button-size: 10.8px;
     --timer-text-size: 16px;
     
     --hole-card-width: 15px;
     --hole-card-height: 21px;
     
-    --bet-chip-size: 14px;
+    --bet-chip-size: 8.4px;
     --bet-chip-text-size: 7px;
     
     --table-padding: 27px;
@@ -323,13 +323,13 @@
     --player-name-size: 8px;
     --player-chips-size: 7px;
     
-    --dealer-button-size: 26px;
+    --dealer-button-size: 10.4px;
     --timer-text-size: 15px;
     
     --hole-card-width: 14px;
     --hole-card-height: 20px;
     
-    --bet-chip-size: 13px;
+    --bet-chip-size: 7.8px;
     --bet-chip-text-size: 7px;
     
     --table-padding: 26px;
@@ -374,13 +374,13 @@
     --player-name-size: 8px;
     --player-chips-size: 7px;
     
-    --dealer-button-size: 26px;
+    --dealer-button-size: 10.4px;
     --timer-text-size: 15px;
     
     --hole-card-width: 13px;
     --hole-card-height: 18px;
     
-    --bet-chip-size: 12px;
+    --bet-chip-size: 7.2px;
     --bet-chip-text-size: 6px;
     
     --table-padding: 26px;
@@ -425,13 +425,13 @@
     --player-name-size: 8px;
     --player-chips-size: 7px;
     
-    --dealer-button-size: 26px;
+    --dealer-button-size: 10.4px;
     --timer-text-size: 15px;
     
     --hole-card-width: 12px;
     --hole-card-height: 17px;
     
-    --bet-chip-size: 11px;
+    --bet-chip-size: 6.6px;
     --bet-chip-text-size: 6px;
     
     --table-padding: 26px;
@@ -476,13 +476,13 @@
     --player-name-size: 8px;
     --player-chips-size: 7px;
     
-    --dealer-button-size: 26px;
+    --dealer-button-size: 10.4px;
     --timer-text-size: 15px;
     
     --hole-card-width: 11px;
     --hole-card-height: 15px;
     
-    --bet-chip-size: 10px;
+    --bet-chip-size: 6px;
     --bet-chip-text-size: 5px;
     
     --table-padding: 26px;
@@ -527,13 +527,13 @@
     --player-name-size: 8px;
     --player-chips-size: 7px;
     
-    --dealer-button-size: 26px;
+    --dealer-button-size: 10.4px;
     --timer-text-size: 15px;
     
     --hole-card-width: 10px;
     --hole-card-height: 14px;
     
-    --bet-chip-size: 9px;
+    --bet-chip-size: 5.4px;
     --bet-chip-text-size: 5px;
     
     --table-padding: 26px;
@@ -578,13 +578,13 @@
     --player-name-size: 8px;
     --player-chips-size: 7px;
     
-    --dealer-button-size: 26px;
+    --dealer-button-size: 10.4px;
     --timer-text-size: 15px;
     
     --hole-card-width: 9px;
     --hole-card-height: 13px;
     
-    --bet-chip-size: 8px;
+    --bet-chip-size: 4.8px;
     --bet-chip-text-size: 4px;
     
     --table-padding: 26px;
@@ -629,13 +629,13 @@
     --player-name-size: 8px;
     --player-chips-size: 7px;
     
-    --dealer-button-size: 26px;
+    --dealer-button-size: 10.4px;
     --timer-text-size: 15px;
     
     --hole-card-width: 8px;
     --hole-card-height: 11px;
     
-    --bet-chip-size: 7px;
+    --bet-chip-size: 4.2px;
     --bet-chip-text-size: 4px;
     
     --table-padding: 26px;
