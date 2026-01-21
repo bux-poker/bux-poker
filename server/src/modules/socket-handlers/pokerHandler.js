@@ -499,8 +499,13 @@ export async function startHandForGame(gameId, io) {
   }
 
   // Deal hole cards ONLY to active players (eliminated players should not receive cards)
+  // IMPORTANT: We must keep a consistent ordering between the players we deal to
+  // and the players we later persist holeCards for. We use seatNumber ordering
+  // for both dealing and mapping so that cards are assigned to the correct seats.
   const deck = tournamentEngine.createShuffledDeck();
-  const activeDealtPlayers = game.players.filter(p => p.status === 'ACTIVE');
+  const activeDealtPlayers = game.players
+    .filter(p => p.status === 'ACTIVE')
+    .sort((a, b) => a.seatNumber - b.seatNumber);
   const { deck: remainingDeck, players: dealtHands } = tournamentEngine.dealHoleCards(
     deck,
     activeDealtPlayers.length
@@ -519,10 +524,10 @@ export async function startHandForGame(gameId, io) {
         });
       }
 
-      // Map dealt hands to active players in seat order for deterministic dealing
-      const activeIndex = activeDealtPlayers
-        .sort((a, b) => a.seatNumber - b.seatNumber)
-        .findIndex(ap => ap.id === p.id);
+      // Map dealt hands to active players using the SAME ordered list we used
+      // when dealing (activeDealtPlayers). Do NOT re-sort here, otherwise we
+      // will misalign hands and give players the wrong cards.
+      const activeIndex = activeDealtPlayers.findIndex(ap => ap.id === p.id);
 
       const holeCards = activeIndex >= 0 ? JSON.stringify(dealtHands[activeIndex]) : "";
 
