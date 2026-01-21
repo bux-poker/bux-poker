@@ -467,7 +467,7 @@ async function buildTournamentEmbed(tournament, discordUserId = null) {
       { name: 'Start Time', value: `<t:${Math.floor(startTime.getTime() / 1000)}:F>`, inline: true },
       { name: 'Players', value: `${registrationCount} / ${tournament.maxPlayers}`, inline: true },
       { name: 'Starting Chips', value: tournament.startingChips.toLocaleString(), inline: true },
-      { name: 'Prize Places', value: tournament.prizePlaces.toString(), inline: true },
+      { name: 'Prize Places', value: Math.floor(registrationCount / 4).toString(), inline: true },
     )
     .setColor(tournament.status === 'SEATED' ? 0xFFD700 : (tournament.status === 'RUNNING' || tournament.status === 'ACTIVE' ? 0x00FF00 : 0x00AE86))
     .setTimestamp();

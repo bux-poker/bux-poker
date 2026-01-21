@@ -129,9 +129,13 @@ router.post("/tournaments", async (req, res, next) => {
       seatsPerTable = 9,
       startingChips = 10000,
       blindLevelsJson,
-      prizePlaces = 3,
       serverIds = [], // Array of Discord server IDs to post to
     } = req.body;
+
+    // Calculate prize places: 1 place per 4 registered players
+    // Initially set to 0 since no one is registered yet
+    // Will be calculated dynamically when registration closes based on actual registrations
+    const prizePlaces = 0;
 
     if (!name || !startTime) {
       return res.status(400).json({ error: "Name and startTime are required" });

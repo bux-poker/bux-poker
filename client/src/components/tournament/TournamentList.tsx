@@ -378,7 +378,7 @@ export function TournamentList() {
           maxPlayers: response.data.maxPlayers?.toString() || '100',
           seatsPerTable: response.data.seatsPerTable?.toString() || '9',
           startingChips: response.data.startingChips?.toString() || '10000',
-          prizePlaces: response.data.prizePlaces?.toString() || '3',
+          // Prize places no longer needed - calculated automatically as 1 per 4 registered players
           blindLevels: JSON.stringify(response.data.blindLevels || []),
         });
         navigate(`/admin?${params.toString()}`);

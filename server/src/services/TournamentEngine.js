@@ -29,14 +29,27 @@ export class TournamentEngine {
       throw new Error("Players are already seated");
     }
 
+    // Get registered players count to calculate prize places
+    const registeredCount = await prisma.tournamentRegistration.count({
+      where: {
+        tournamentId,
+        status: "CONFIRMED"
+      }
+    });
+
+    // Calculate prize places: 1 place per 4 registered players
+    const prizePlaces = Math.floor(registeredCount / 4);
+    console.log(`[TOURNAMENT] Calculated prize places: ${prizePlaces} (from ${registeredCount} registered players)`);
+
     // Seat players
     const games = await this.seatPlayers(tournamentId);
 
-    // Update status to SEATED
+    // Update status to SEATED and prize places
     const updatedTournament = await prisma.tournament.update({
       where: { id: tournamentId },
       data: {
-        status: "SEATED"
+        status: "SEATED",
+        prizePlaces: prizePlaces
       }
     });
 

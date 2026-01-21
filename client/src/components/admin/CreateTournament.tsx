@@ -37,8 +37,6 @@ export function CreateTournament() {
     const maxPlayers = parseInt(searchParams.get('maxPlayers') || '100');
     const seatsPerTable = parseInt(searchParams.get('seatsPerTable') || '9');
     const startingChips = parseInt(searchParams.get('startingChips') || '10000');
-    const prizePlaces = parseInt(searchParams.get('prizePlaces') || '3');
-    
     return {
       name,
       description,
@@ -46,7 +44,6 @@ export function CreateTournament() {
       maxPlayers,
       seatsPerTable,
       startingChips,
-      prizePlaces,
     };
   };
 
@@ -189,7 +186,6 @@ export function CreateTournament() {
           maxPlayers: 100,
           seatsPerTable: 9,
           startingChips: 10000,
-          prizePlaces: 3,
         });
         setTimeout(() => setSuccess(false), 3000);
       }
@@ -365,20 +361,7 @@ export function CreateTournament() {
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-300">
-                Prize Places
-              </label>
-              <input
-                type="number"
-                min="1"
-                value={formData.prizePlaces}
-                onChange={(e) =>
-                  setFormData({ ...formData, prizePlaces: parseInt(e.target.value) })
-                }
-                className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
-              />
-            </div>
+            {/* Prize Places: Automatically calculated as 1 place per 4 registered players */}
           </div>
         </div>
 
