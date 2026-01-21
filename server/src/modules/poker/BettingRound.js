@@ -107,17 +107,33 @@ export class BettingRound {
     if (activePlayerIds.length <= 1) return true; // Only one or zero active players
     
     // Get contributions for all active players
-    const contributions = activePlayerIds.map(id => this.getPlayerContribution(id));
-    const maxContribution = Math.max(...contributions);
+    const contributions = activePlayerIds.map(id => {
+      const player = allPlayers.find(p => p.id === id);
+      return {
+        id,
+        contribution: this.getPlayerContribution(id),
+        chips: player?.chips || 0,
+        isAllIn: (player?.chips || 0) === 0
+      };
+    });
+    const maxContribution = Math.max(...contributions.map(c => c.contribution));
     
-    // All active players must have contributed the max amount (or be all-in/folded)
-    const allContributed = activePlayerIds.every(id => {
-      const contribution = this.getPlayerContribution(id);
-      return contribution === maxContribution;
+    // All active players must have contributed the max amount they CAN contribute
+    // This means either:
+    // 1. They match the max contribution (contribution === maxContribution), OR
+    // 2. They're all-in and have contributed their maximum possible amount
+    const allContributed = contributions.every(c => {
+      // If player is all-in, they've contributed all they can - they're done
+      if (c.isAllIn) {
+        return true; // All-in players have contributed their maximum
+      }
+      // If player is not all-in, they must match the max contribution
+      return c.contribution === maxContribution;
     });
     
     if (!allContributed) {
-      console.log(`[BETTING] Not complete: contributions not equal. Max: ${maxContribution}, contributions:`, contributions);
+      const contribStrings = contributions.map(c => `${c.isAllIn ? 'ALL-IN' : c.contribution}`);
+      console.log(`[BETTING] Not complete: contributions not equal. Max: ${maxContribution}, contributions: [${contribStrings.join(', ')}]`);
       return false; // Can't be complete if contributions aren't equal
     }
     

@@ -1986,8 +1986,15 @@ async function moveToNextPlayer(gameId, io) {
       const hasActed = state.actedPlayersInRound.has(playerAtSeat.userId);
       const isLastRaiser = state.lastRaiseUserId === playerAtSeat.userId;
       
+      // Check if player is all-in (has 0 chips remaining)
+      const isAllIn = playerAtSeat.chips === 0;
+      
       let needsToAct = false;
-      if (currentBet === 0) {
+      if (isAllIn) {
+        // All-in players can't act - they've already committed all their chips
+        needsToAct = false;
+        console.log(`[TURN ORDER] Checking seat ${nextSeat} (${playerAtSeat.name || playerAtSeat.userId}): ALL-IN (0 chips), contribution=${contribution}, currentBet=${currentBet}, needsToAct=false`);
+      } else if (currentBet === 0) {
         // When currentBet === 0, player needs to act if they haven't acted yet this round
         needsToAct = !hasActed;
         console.log(`[TURN ORDER] Checking seat ${nextSeat} (${playerAtSeat.name || playerAtSeat.userId}): currentBet=0, hasActed=${hasActed}, needsToAct=${needsToAct}`);
@@ -1997,7 +2004,7 @@ async function moveToNextPlayer(gameId, io) {
         // 2. They haven't acted yet this round (even if contribution equals current bet - like big blind)
         // This ensures the big blind gets a chance to act voluntarily even if no one raised
         needsToAct = contribution < currentBet || !hasActed;
-        console.log(`[TURN ORDER] Checking seat ${nextSeat} (${playerAtSeat.name || playerAtSeat.userId}): contribution=${contribution}, currentBet=${currentBet}, hasActed=${hasActed}, isLastRaiser=${isLastRaiser}, needsToAct=${needsToAct}`);
+        console.log(`[TURN ORDER] Checking seat ${nextSeat} (${playerAtSeat.name || playerAtSeat.userId}): contribution=${contribution}, currentBet=${currentBet}, chips=${playerAtSeat.chips}, hasActed=${hasActed}, isLastRaiser=${isLastRaiser}, needsToAct=${needsToAct}`);
       }
       
       if (needsToAct) {
