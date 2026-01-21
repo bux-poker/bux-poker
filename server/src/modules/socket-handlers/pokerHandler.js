@@ -1808,8 +1808,7 @@ async function advanceToNextStreet(gameId, io) {
   // Reset acted players tracking for new betting round
   state.actedPlayersInRound = new Set();
 
-  // Check if all active players are all-in
-  const activePlayers = state.players.filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
+  // Check if all active players are all-in (activePlayers already declared above)
   const activePlayerIds = activePlayers.map(p => p.id);
   const allPlayersAllIn = state.bettingRound.areAllPlayersAllIn(activePlayerIds, state.players);
 
