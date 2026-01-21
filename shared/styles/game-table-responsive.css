@@ -51,6 +51,12 @@
     --input-button-text: 13px;
     
     --chat-width: 319px;
+    
+    --countdown-title-size: 10px;
+    --countdown-time-size: 18px;
+    --countdown-padding-x: 12px;
+    --countdown-padding-y: 8px;
+    --countdown-border-width: 2px;
   }
 }
 
@@ -102,6 +108,12 @@
     --input-button-text: 20px;
     
     --chat-width: 320px;
+    
+    --countdown-title-size: 14px;
+    --countdown-time-size: 28px;
+    --countdown-padding-x: 16px;
+    --countdown-padding-y: 12px;
+    --countdown-border-width: 2px;
   }
 }
 
@@ -152,6 +164,12 @@
     --input-button-text: 12px;
     
     --chat-width: 304px;
+    
+    --countdown-title-size: 9px;
+    --countdown-time-size: 16px;
+    --countdown-padding-x: 10px;
+    --countdown-padding-y: 6px;
+    --countdown-border-width: 2px;
   }
 }
 
@@ -202,6 +220,12 @@
     --input-button-text: 11px;
     
     --chat-width: 289px;
+    
+    --countdown-title-size: 8px;
+    --countdown-time-size: 15px;
+    --countdown-padding-x: 9px;
+    --countdown-padding-y: 5px;
+    --countdown-border-width: 2px;
   }
 }
 
@@ -252,6 +276,12 @@
     --input-button-text: 10px;
     
     --chat-width: 275px;
+    
+    --countdown-title-size: 8px;
+    --countdown-time-size: 14px;
+    --countdown-padding-x: 8px;
+    --countdown-padding-y: 5px;
+    --countdown-border-width: 2px;
   }
 }
 
@@ -302,6 +332,12 @@
     --input-button-text: 10px;
     
     --chat-width: 261px;
+    
+    --countdown-title-size: 7px;
+    --countdown-time-size: 13px;
+    --countdown-padding-x: 7px;
+    --countdown-padding-y: 4px;
+    --countdown-border-width: 2px;
   }
 }
 
@@ -353,6 +389,12 @@
     --input-button-text: 10px;
     
     --chat-width: 248px;
+    
+    --countdown-title-size: 7px;
+    --countdown-time-size: 12px;
+    --countdown-padding-x: 6px;
+    --countdown-padding-y: 4px;
+    --countdown-border-width: 2px;
   }
 }
 
@@ -404,6 +446,12 @@
     --input-button-text: 10px;
     
     --chat-width: 248px;
+    
+    --countdown-title-size: 7px;
+    --countdown-time-size: 12px;
+    --countdown-padding-x: 6px;
+    --countdown-padding-y: 4px;
+    --countdown-border-width: 2px;
   }
 }
 
@@ -455,6 +503,12 @@
     --input-button-text: 10px;
     
     --chat-width: 248px;
+    
+    --countdown-title-size: 7px;
+    --countdown-time-size: 12px;
+    --countdown-padding-x: 6px;
+    --countdown-padding-y: 4px;
+    --countdown-border-width: 2px;
   }
 }
 
@@ -506,6 +560,12 @@
     --input-button-text: 10px;
     
     --chat-width: 248px;
+    
+    --countdown-title-size: 7px;
+    --countdown-time-size: 12px;
+    --countdown-padding-x: 6px;
+    --countdown-padding-y: 4px;
+    --countdown-border-width: 2px;
   }
 }
 
@@ -557,6 +617,12 @@
     --input-button-text: 10px;
     
     --chat-width: 248px;
+    
+    --countdown-title-size: 7px;
+    --countdown-time-size: 12px;
+    --countdown-padding-x: 6px;
+    --countdown-padding-y: 4px;
+    --countdown-border-width: 2px;
   }
 }
 
@@ -608,6 +674,12 @@
     --input-button-text: 10px;
     
     --chat-width: 248px;
+    
+    --countdown-title-size: 7px;
+    --countdown-time-size: 12px;
+    --countdown-padding-x: 6px;
+    --countdown-padding-y: 4px;
+    --countdown-border-width: 2px;
   }
 }
 
@@ -659,6 +731,12 @@
     --input-button-text: 10px;
     
     --chat-width: 248px;
+    
+    --countdown-title-size: 7px;
+    --countdown-time-size: 12px;
+    --countdown-padding-x: 6px;
+    --countdown-padding-y: 4px;
+    --countdown-border-width: 2px;
   }
 }
 

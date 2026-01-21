@@ -308,9 +308,26 @@ export function PokerTable({
           <div 
             className="absolute left-1/2 top-1/2 z-20 flex flex-col items-center justify-center -translate-x-1/2 -translate-y-1/2"
           >
-            <div className="bg-slate-900/95 rounded-lg px-4 py-3 border-2 border-yellow-500 shadow-2xl text-center backdrop-blur-sm">
-              <p className="text-sm sm:text-base font-semibold text-yellow-400 mb-1">Game Starting Soon</p>
-              <div className="text-2xl sm:text-3xl font-bold text-emerald-400">
+            <div 
+              className="bg-slate-900/95 rounded-lg border-yellow-500 shadow-2xl text-center backdrop-blur-sm"
+              style={{
+                paddingLeft: 'var(--countdown-padding-x, 16px)',
+                paddingRight: 'var(--countdown-padding-x, 16px)',
+                paddingTop: 'var(--countdown-padding-y, 12px)',
+                paddingBottom: 'var(--countdown-padding-y, 12px)',
+                borderWidth: 'var(--countdown-border-width, 2px)'
+              }}
+            >
+              <p 
+                className="font-semibold text-yellow-400 mb-1"
+                style={{ fontSize: 'var(--countdown-title-size, 14px)' }}
+              >
+                Game Starting Soon
+              </p>
+              <div 
+                className="font-bold text-emerald-400"
+                style={{ fontSize: 'var(--countdown-time-size, 28px)' }}
+              >
                 {Math.floor(tournamentCountdown.seconds / 60)}:{(tournamentCountdown.seconds % 60).toString().padStart(2, '0')}
               </div>
             </div>

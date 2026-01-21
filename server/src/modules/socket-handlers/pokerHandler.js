@@ -164,22 +164,60 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
   console.log(`[ACTION] Before: currentBet=${currentBetBefore}, playerContribution=${playerContributionBefore}, lastRaiseUserId=${state.lastRaiseUserId || 'null'}`);
 
   // Basic action handling. This is intentionally simplified:
+  //
+  // IMPORTANT: For heads-up pots (exactly 2 active players), we cap the
+  // effective bet size to the smaller stack so we never create a bet that
+  // cannot be fully matched.
+  const activeNonFoldedPlayers = state.players.filter(
+    (p) => p.status !== "FOLDED" && p.status !== "ELIMINATED"
+  );
+  const isHeadsUpPot = activeNonFoldedPlayers.length === 2;
+  const opponent =
+    isHeadsUpPot && activeNonFoldedPlayers[0].userId === userId
+      ? activeNonFoldedPlayers[1]
+      : isHeadsUpPot && activeNonFoldedPlayers[1].userId === userId
+      ? activeNonFoldedPlayers[0]
+      : null;
+
   switch (action) {
     case "BET":
     case "RAISE": {
-      // Validate player has enough chips
+      // Clamp bet/raise amount to available chips so we can never overspend
       if (amount > player.chips) {
-        throw new Error(`Insufficient chips: trying to bet ${amount} but only have ${player.chips}`);
+        amount = player.chips;
+      }
+
+      // In heads-up pots, also cap the bet/raise so that the player's total
+      // contribution cannot exceed the opponent's effective stack.
+      if (opponent) {
+        const myContribution = state.bettingRound.getPlayerContribution(player.id);
+        const oppContribution = state.bettingRound.getPlayerContribution(opponent.id);
+        const myEffectiveMax = myContribution + player.chips;
+        const oppEffectiveMax = oppContribution + opponent.chips;
+        const effectiveCap = Math.min(myEffectiveMax, oppEffectiveMax);
+        const desiredNewContribution = myContribution + amount;
+        if (desiredNewContribution > effectiveCap) {
+          const cappedAmount = Math.max(0, effectiveCap - myContribution);
+          if (cappedAmount < amount) {
+            console.log(
+              `[ACTION] Capping ${action} amount for ${playerName} from ${amount} to ${cappedAmount} based on effective stack (heads-up pot)`
+            );
+            amount = cappedAmount;
+          }
+        }
       }
       
-      // Validate amount is positive
+      // Validate amount is positive after clamping / capping
       if (amount <= 0) {
         throw new Error(`Invalid bet amount: ${amount}`);
       }
       
-      const wasRaise = state.lastRaiseUserId !== null;
       state.bettingRound.bet(player.id, amount);
       player.chips -= amount;
+      if (player.chips < 0) {
+        console.error(`[ACTION] WARNING: player ${playerName} chips went negative after ${action}. Clamping to 0.`, player.chips);
+        player.chips = 0;
+      }
       // Don't update state.pot here - it's accumulated when advancing streets
       // state.pot should only change when collecting from betting round
       state.lastRaiseUserId = player.userId; // Track who raised
@@ -212,6 +250,10 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
     case "CALL": {
       const spent = state.bettingRound.call(player.id, player.chips);
       player.chips -= spent;
+      if (player.chips < 0) {
+        console.error(`[ACTION] WARNING: player ${playerName} chips went negative after CALL. Clamping to 0.`, player.chips);
+        player.chips = 0;
+      }
       // Don't update state.pot here - it's accumulated when advancing streets
       // state.pot should only change when collecting from betting round
       const newContribution = state.bettingRound.getPlayerContribution(player.id);
@@ -268,6 +310,10 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
         if (actualCall > 0) {
           state.bettingRound.call(player.id, allInAmount);
           player.chips -= actualCall;
+          if (player.chips < 0) {
+            console.error(`[ACTION] WARNING: player ${playerName} chips went negative after ALL_IN-call path. Clamping to 0.`, player.chips);
+            player.chips = 0;
+          }
         } else {
           // Already called, just mark as acted
           state.actedPlayersInRound.add(userId);
@@ -2470,13 +2516,18 @@ export function registerPokerHandlers(io) {
               where: { id: gameId },
               include: { tournament: true }
             });
-            if (game?.tournament && winner.chips <= 0 && winner.status === 'ACTIVE') {
-              await tournamentEngine.onPlayerBust(game.tournament.id, winner.id);
-              winner.status = 'ELIMINATED';
-              await prisma.player.update({
-                where: { id: winner.id },
-                data: { status: 'ELIMINATED' }
-              });
+            if (game?.tournament) {
+              // Eliminate ANY players who have 0 chips after this pot is awarded
+              const bustedPlayers = state.players.filter(p => p.chips <= 0 && p.status === 'ACTIVE');
+              for (const busted of bustedPlayers) {
+                console.log(`[POKER] Player ${busted.name || busted.userId} busted with 0 chips after pot award`);
+                await tournamentEngine.onPlayerBust(game.tournament.id, busted.id);
+                busted.status = 'ELIMINATED';
+                await prisma.player.update({
+                  where: { id: busted.id },
+                  data: { status: 'ELIMINATED' }
+                });
+              }
             }
             
             // Update game pot in database (async)
@@ -2490,12 +2541,13 @@ export function registerPokerHandlers(io) {
             setTimeout(async () => {
               tableState.delete(gameId);
               
-              // Reset player statuses (async)
+              // Reset player statuses (async) - keep ELIMINATED players eliminated
               savedPlayers.forEach(p => {
+                const isEliminated = p.status === 'ELIMINATED';
                 prisma.player.update({
                   where: { id: p.id },
                   data: { 
-                    status: 'ACTIVE',
+                    status: isEliminated ? 'ELIMINATED' : 'ACTIVE',
                     holeCards: "",
                     lastAction: null
                   }
