@@ -229,25 +229,7 @@ async function handleRegisterButton(interaction, tournamentId) {
       return;
     }
 
-    // Check if already registered
-    const existingRegistration = await prisma.tournamentRegistration.findUnique({
-      where: {
-        tournamentId_userId: {
-          tournamentId: tournamentId,
-          userId: user.id,
-        },
-      },
-    });
-
-    if (existingRegistration) {
-      await interaction.reply({
-        content: '✅ You are already registered for this tournament!',
-        ephemeral: true,
-      });
-      return;
-    }
-
-    // Check if tournament is full
+    // Check if tournament is full (before attempting registration)
     const registrationCount = await prisma.tournamentRegistration.count({
       where: {
         tournamentId: tournamentId,
@@ -263,14 +245,51 @@ async function handleRegisterButton(interaction, tournamentId) {
       return;
     }
 
-    // Register user
-    await prisma.tournamentRegistration.create({
-      data: {
-        tournamentId: tournamentId,
-        userId: user.id,
-        status: 'CONFIRMED',
+    // Check if already registered
+    const existingRegistration = await prisma.tournamentRegistration.findUnique({
+      where: {
+        tournamentId_userId: {
+          tournamentId: tournamentId,
+          userId: user.id,
+        },
       },
     });
+
+    if (existingRegistration) {
+      // Update status to CONFIRMED if it's not already
+      if (existingRegistration.status !== 'CONFIRMED') {
+        await prisma.tournamentRegistration.update({
+          where: { id: existingRegistration.id },
+          data: { status: 'CONFIRMED' },
+        });
+      }
+      
+      await interaction.reply({
+        content: '✅ You are already registered for this tournament!',
+        ephemeral: true,
+      });
+      return;
+    }
+
+    // Register user using upsert to handle race conditions
+    try {
+      await prisma.tournamentRegistration.create({
+        data: {
+          tournamentId: tournamentId,
+          userId: user.id,
+          status: 'CONFIRMED',
+        },
+      });
+    } catch (error) {
+      // Handle race condition where registration was created between check and create
+      if (error.code === 'P2002' && error.meta?.target?.includes('tournamentId_userId')) {
+        // Registration was created by another request, just return success
+        // The embed update below will handle the state correctly
+        console.log('[DISCORD BOT] Race condition: registration already exists, continuing...');
+      } else {
+        throw error; // Re-throw if it's a different error
+      }
+    }
 
     // Update the embed message with new button states
     try {
