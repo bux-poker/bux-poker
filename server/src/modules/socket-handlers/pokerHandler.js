@@ -437,6 +437,25 @@ export async function startHandForGame(gameId, io) {
   const sbAmount = Math.min(smallBlind, sbPlayer.chips);
   const bbAmount = Math.min(bigBlind, bbPlayer.chips);
   
+  // Post dealer messages for blind posting
+  if (io && sbAmount > 0) {
+    const sbPlayerName = sbPlayer.name || sbPlayer.user?.username || `Player ${sbPlayer.seatNumber}`;
+    if (sbAmount < smallBlind) {
+      postDealerMessage(gameId, io, `${sbPlayerName} posts small blind (all-in): ${sbAmount.toLocaleString()}`);
+    } else {
+      postDealerMessage(gameId, io, `${sbPlayerName} posts small blind: ${sbAmount.toLocaleString()}`);
+    }
+  }
+  
+  if (io && bbAmount > 0) {
+    const bbPlayerName = bbPlayer.name || bbPlayer.user?.username || `Player ${bbPlayer.seatNumber}`;
+    if (bbAmount < bigBlind) {
+      postDealerMessage(gameId, io, `${bbPlayerName} posts big blind (all-in): ${bbAmount.toLocaleString()}`);
+    } else {
+      postDealerMessage(gameId, io, `${bbPlayerName} posts big blind: ${bbAmount.toLocaleString()}`);
+    }
+  }
+  
   if (sbAmount > 0 && bbAmount > 0) {
     bettingRound.postBlinds(sbPlayer.id, bbPlayer.id, sbAmount, bbAmount);
     
@@ -821,10 +840,17 @@ async function handleTestPlayerAction(gameId, userId, io) {
         const collectedPot = newState.bettingRound.getTotalPot();
         const totalPot = newState.pot + collectedPot;
         
+        const winnerName = winner.name || winner.user?.username || `Player ${winner.seatNumber}`;
+        
         winner.chips += totalPot;
         newState.pot = 0;
         
-        console.log(`[TEST PLAYER] Single player remaining - awarding pot of ${totalPot} to ${winner.name || winner.userId}`);
+        console.log(`[TEST PLAYER] Single player remaining - awarding pot of ${totalPot} to ${winnerName}`);
+        
+        // Post dealer message for chip winner
+        if (io) {
+          postDealerMessage(gameId, io, `${winnerName} wins ${totalPot.toLocaleString()} (all other players folded)`);
+        }
         
         // Update winner chips in database (async)
         prisma.player.update({
