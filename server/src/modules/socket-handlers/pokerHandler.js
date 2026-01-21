@@ -705,7 +705,36 @@ function startTurnTimer(gameId, userId, io) {
       
       // Verify it's still this player's turn (state may have changed - street advanced, different hand, etc.)
       if (currentState.currentTurnUserId !== userId) {
-        console.log(`[POKER] Timer fired for test player ${playerName} but it's no longer their turn (currentTurn=${currentState.currentTurnUserId}). Timer was likely from previous street/hand. Ignoring.`);
+        console.log(`[POKER] Timer fired for test player ${playerName} but it's no longer their turn (currentTurn=${currentState.currentTurnUserId}). Timer was likely from previous street/hand.`);
+        
+        // If it's someone else's turn, don't interfere - their timer will handle it
+        // But if currentTurnUserId is null, betting might be stuck - check and advance
+        if (!currentState.currentTurnUserId) {
+          console.log(`[POKER] No current turn - checking if betting is complete and advancing if needed`);
+          const activePlayerIds = currentState.players
+            .filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED')
+            .map(p => p.id);
+          
+          const bettingComplete = currentState.bettingRound?.isBettingComplete(
+            activePlayerIds,
+            currentState.lastRaiseUserId,
+            currentState.currentTurnUserId,
+            currentState.players,
+            currentState.actedPlayersInRound || new Set()
+          );
+          
+          if (bettingComplete && currentState.street) {
+            if (currentState.street === 'RIVER') {
+              await handleShowdown(gameId, io);
+            } else {
+              await advanceToNextStreet(gameId, io);
+            }
+          } else if (!bettingComplete) {
+            // Betting not complete but no turn - try to find next player
+            await moveToNextPlayer(gameId, io);
+          }
+        }
+        
         turnTimers.delete(gameId);
         return;
       }
@@ -844,7 +873,7 @@ async function handleTestPlayerAction(gameId, userId, io) {
 
     const player = state.players.find((p) => p.userId === userId);
     if (!player) {
-      console.log(`[POKER] Player not found in state for userId: ${userId}`);
+      console.log(`[POKER] Player not found in state for userId: ${userId} - they may have been eliminated`);
       // Clear timer and try to move to next player
       const existingTimer = turnTimers.get(gameId);
       if (existingTimer) {
@@ -854,11 +883,15 @@ async function handleTestPlayerAction(gameId, userId, io) {
         }
         turnTimers.delete(gameId);
       }
-      await moveToNextPlayer(gameId, io);
+      try {
+        await moveToNextPlayer(gameId, io);
+      } catch (err) {
+        console.error(`[POKER] Error moving to next player after player not found:`, err);
+      }
       return;
     }
-    if (player.status === 'FOLDED') {
-      console.log(`[POKER] Player ${player.name || userId} is already FOLDED, skipping action`);
+    if (player.status === 'FOLDED' || player.status === 'ELIMINATED') {
+      console.log(`[POKER] Player ${player.name || userId} is already ${player.status}, skipping action`);
       // Clear timer and move to next player
       const existingTimer = turnTimers.get(gameId);
       if (existingTimer) {
@@ -868,7 +901,11 @@ async function handleTestPlayerAction(gameId, userId, io) {
         }
         turnTimers.delete(gameId);
       }
-      await moveToNextPlayer(gameId, io);
+      try {
+        await moveToNextPlayer(gameId, io);
+      } catch (err) {
+        console.error(`[POKER] Error moving to next player after ${player.status} player:`, err);
+      }
       return;
     }
     
