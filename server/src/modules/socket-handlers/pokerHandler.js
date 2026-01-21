@@ -670,9 +670,19 @@ function startTurnTimer(gameId, userId, io) {
     
     console.log(`[POKER] Starting 3-second timer for test player ${playerName}, will call handleTestPlayerAction`);
     
-    const timerId = setTimeout(() => {
+    const timerId = setTimeout(async () => {
       console.log(`[POKER] Timer expired for test player ${playerName}, calling handleTestPlayerAction`);
-      handleTestPlayerAction(gameId, userId, io);
+      try {
+        await handleTestPlayerAction(gameId, userId, io);
+      } catch (err) {
+        console.error(`[POKER] Error in handleTestPlayerAction for test player ${playerName}:`, err);
+        // Try to move to next player if action failed
+        try {
+          await moveToNextPlayer(gameId, io);
+        } catch (moveErr) {
+          console.error(`[POKER] Error moving to next player after test player action failure:`, moveErr);
+        }
+      }
     }, timeoutMs);
 
     turnTimers.set(gameId, { timerId, userId, expiresAt, duration: timeoutMs });
@@ -767,16 +777,45 @@ async function handleTestPlayerAction(gameId, userId, io) {
     const state = tableState.get(gameId);
     if (!state) {
       console.log(`[POKER] No state found for gameId: ${gameId}`);
+      // Clear timer and try to move to next player
+      const existingTimer = turnTimers.get(gameId);
+      if (existingTimer) {
+        clearTimeout(existingTimer.timerId);
+        if (existingTimer.graceTimerId) {
+          clearTimeout(existingTimer.graceTimerId);
+        }
+        turnTimers.delete(gameId);
+      }
       return;
     }
 
     const player = state.players.find((p) => p.userId === userId);
     if (!player) {
       console.log(`[POKER] Player not found in state for userId: ${userId}`);
+      // Clear timer and try to move to next player
+      const existingTimer = turnTimers.get(gameId);
+      if (existingTimer) {
+        clearTimeout(existingTimer.timerId);
+        if (existingTimer.graceTimerId) {
+          clearTimeout(existingTimer.graceTimerId);
+        }
+        turnTimers.delete(gameId);
+      }
+      await moveToNextPlayer(gameId, io);
       return;
     }
     if (player.status === 'FOLDED') {
       console.log(`[POKER] Player ${player.name || userId} is already FOLDED, skipping action`);
+      // Clear timer and move to next player
+      const existingTimer = turnTimers.get(gameId);
+      if (existingTimer) {
+        clearTimeout(existingTimer.timerId);
+        if (existingTimer.graceTimerId) {
+          clearTimeout(existingTimer.graceTimerId);
+        }
+        turnTimers.delete(gameId);
+      }
+      await moveToNextPlayer(gameId, io);
       return;
     }
     
