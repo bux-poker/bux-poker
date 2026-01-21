@@ -437,24 +437,12 @@ export function PokerTable({
                             );
                           })()}
                           
-                          {/* Timer Overlay */}
-                          {hasActiveTimer && timerRemaining !== null && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full">
-                              <span 
-                                className="font-bold text-yellow-400 drop-shadow-lg"
-                                style={{ fontSize: 'var(--timer-text-size, 20px)' }}
-                              >
-                                {timerRemaining}
-                              </span>
-                            </div>
-                          )}
-                          
-                          {/* Action Overlay - shows when player acts (only when timer is not active) */}
+                          {/* Action Overlay - shows when player acts (takes priority over timer) */}
                           {(() => {
                             const playerId = player.id || player.userId || '';
                             const overlay = actionOverlays[playerId];
-                            // Show action overlay if player acted and timer is NOT active
-                            if (overlay && !hasActiveTimer) {
+                            // Show action overlay if player acted - takes priority over timer
+                            if (overlay) {
                               const actionInfo = getActionInfo(overlay.action);
                               const age = Date.now() - overlay.timestamp;
                               const opacity = Math.max(0, 1 - (age / 3000)); // Fade out over 3 seconds
@@ -467,7 +455,7 @@ export function PokerTable({
                                       opacity: opacity,
                                       transition: 'opacity 0.1s ease-out',
                                       pointerEvents: 'none',
-                                      zIndex: 10
+                                      zIndex: 15 // Higher than timer overlay
                                     }}
                                   >
                                     <span 
@@ -483,6 +471,26 @@ export function PokerTable({
                                   </div>
                                 );
                               }
+                            }
+                            return null;
+                          })()}
+                          
+                          {/* Timer Overlay - only shows when player hasn't acted yet */}
+                          {(() => {
+                            const playerId = player.id || player.userId || '';
+                            const hasActionOverlay = actionOverlays[playerId] && (Date.now() - actionOverlays[playerId].timestamp < 3000);
+                            // Only show timer if player hasn't acted recently
+                            if (hasActiveTimer && timerRemaining !== null && !hasActionOverlay) {
+                              return (
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full" style={{ zIndex: 10 }}>
+                                  <span 
+                                    className="font-bold text-yellow-400 drop-shadow-lg"
+                                    style={{ fontSize: 'var(--timer-text-size, 20px)' }}
+                                  >
+                                    {timerRemaining}
+                                  </span>
+                                </div>
+                              );
                             }
                             return null;
                           })()}
