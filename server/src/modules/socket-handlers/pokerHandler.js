@@ -1628,9 +1628,22 @@ async function handleShowdown(gameId, io) {
       });
       
       if (gameForNextHand && gameForNextHand.players.length >= 2) {
+        // Count active (non-eliminated) players
+        const activePlayerCount = gameForNextHand.players.filter(p => p.status === 'ACTIVE').length;
+        
+        if (activePlayerCount < 2) {
+          console.log(`[SHOWDOWN] Not enough active players (${activePlayerCount}) to start new hand`);
+          return;
+        }
+        
         // Check if blind level should advance (for tournaments)
         if (gameForNextHand.tournament && gameForNextHand.tournament.status === 'RUNNING') {
-          await checkAndAdvanceBlindLevel(gameForNextHand.tournament.id, gameId, io);
+          try {
+            await checkAndAdvanceBlindLevel(gameForNextHand.tournament.id, gameId, io);
+          } catch (err) {
+            console.error(`[SHOWDOWN] Error advancing blind level:`, err);
+            // Continue anyway - don't block hand start
+          }
         }
         
         // Note: dealerSeat is not stored in database, it's recalculated in startHandForGame
@@ -1640,12 +1653,22 @@ async function handleShowdown(gameId, io) {
         // Start new hand (dealer will be selected/rotated in startHandForGame)
         if (io) {
           try {
+            console.log(`[SHOWDOWN] Starting new hand with ${activePlayerCount} active players...`);
             await startHandForGame(gameId, io);
-            console.log(`[SHOWDOWN] Started new hand after showdown`);
+            console.log(`[SHOWDOWN] Successfully started new hand after showdown`);
           } catch (err) {
-            console.error(`[SHOWDOWN] Error starting new hand:`, err);
+            console.error(`[SHOWDOWN] CRITICAL ERROR starting new hand:`, err);
+            console.error(`[SHOWDOWN] Error stack:`, err.stack);
+            // Try to recover by emitting an error state to clients
+            if (io) {
+              io.to(`game:${gameId}`).emit("error", { 
+                message: "Error starting new hand. Please refresh the page." 
+              });
+            }
           }
         }
+      } else {
+        console.log(`[SHOWDOWN] Cannot start new hand: game not found or not enough players (found: ${gameForNextHand?.players?.length || 0})`);
       }
     });
   }, 5000); // 5 second delay to show results
@@ -1906,7 +1929,24 @@ async function advanceToNextStreet(gameId, io) {
       state.currentTurnUserId = firstToActPlayer.userId;
       state.lastRaiseUserId = null; // Reset last raise for new street
       startTurnTimer(gameId, firstToActPlayer.userId, io);
+    } else {
+      console.error(`[POKER] ERROR in advanceToNextStreet: Could not find first player to act! Active players: ${activePlayers.length}`);
+      // Fallback: if we can't find a player, use the first active player
+      if (activePlayers.length > 0) {
+        const fallbackPlayer = activePlayers[0];
+        console.log(`[POKER] Using fallback player: seat ${fallbackPlayer.seatNumber} (${fallbackPlayer.name || fallbackPlayer.userId})`);
+        state.currentTurnUserId = fallbackPlayer.userId;
+        state.lastRaiseUserId = null;
+        startTurnTimer(gameId, fallbackPlayer.userId, io);
+      } else {
+        console.error(`[POKER] CRITICAL ERROR: No active players found in advanceToNextStreet!`);
+        // Should not happen, but if it does, we need to handle it
+        state.currentTurnUserId = null;
+      }
     }
+  } else {
+    console.log(`[POKER] advanceToNextStreet: Only 1 active player remaining, skipping betting round start`);
+    state.currentTurnUserId = null;
   }
 
   // Update community cards in database (async - don't block)
@@ -1918,7 +1958,33 @@ async function advanceToNextStreet(gameId, io) {
     }
   }).catch(err => console.error('[ADVANCE STREET] Error updating game in DB:', err));
 
+  // Save updated state
   tableState.set(gameId, state);
+  
+  // Emit game state to all clients (critical - ensures clients see the new street)
+  if (io) {
+    // Fetch game from database for complete data
+    const game = await prisma.game.findUnique({
+      where: { id: gameId },
+      include: {
+        players: {
+          include: { user: true }
+        },
+        tournament: true
+      }
+    }).catch(err => {
+      console.error('[ADVANCE STREET] Error fetching game for emit:', err);
+      return null;
+    });
+    
+    if (game) {
+      const payload = buildClientGameState(game, state);
+      io.to(`game:${gameId}`).emit("game-state", payload);
+      console.log(`[POKER] advanceToNextStreet: Emitted game state for street ${state.street}`);
+    } else {
+      console.error(`[POKER] ERROR: Could not emit game state in advanceToNextStreet - game not found`);
+    }
+  }
 }
 
 /**
