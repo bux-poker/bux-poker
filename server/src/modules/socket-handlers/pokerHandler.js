@@ -1367,6 +1367,17 @@ async function handleShowdown(gameId, io) {
     }
 
     const sevenCards = [...state.communityCards, ...player.holeCards];
+
+    // Debug logging: show full 7-card hand for each player at showdown so we
+    // can verify the server is evaluating the same cards you see on screen.
+    console.log(
+      `[SHOWDOWN] Evaluating 7 cards for ${player.name || player.userId} (seat ${player.seatNumber}):`,
+      {
+        holeCards: player.holeCards,
+        community: state.communityCards,
+      }
+    );
+
     const hand = evaluator.evaluateBestHand(sevenCards);
     
     console.log(`[SHOWDOWN] Player ${player.name || player.userId} (seat ${player.seatNumber}): ${hand.category}, strength=${hand.strength}`);
