@@ -703,6 +703,13 @@ function startTurnTimer(gameId, userId, io) {
         return;
       }
       
+      // Verify it's still this player's turn (state may have changed - street advanced, different hand, etc.)
+      if (currentState.currentTurnUserId !== userId) {
+        console.log(`[POKER] Timer fired for test player ${playerName} but it's no longer their turn (currentTurn=${currentState.currentTurnUserId}). Timer was likely from previous street/hand. Ignoring.`);
+        turnTimers.delete(gameId);
+        return;
+      }
+      
       // Verify player still exists in state
       const currentPlayer = currentState.players.find((p) => p.userId === userId);
       if (!currentPlayer) {
