@@ -101,8 +101,9 @@ export function BettingControls({
 
   // Determine which buttons to show
   // You can CHECK when your contribution equals the current bet (no bet to call)
+  // Special case: Big blind can check in pre-flop when no one has raised (currentBet === bigBlind)
   // Otherwise, you must CALL the difference
-  const showCheck = currentBet === myContribution;
+  const showCheck = currentBet === myContribution || (isPreflop && isBigBlind && currentBet === bigBlind && !hasRaises);
   const actionLabel = isPreflop && currentBet === 0 ? 'RAISE' : (currentBet > 0 ? 'RAISE' : 'BET');
   // RAISE button shows total bet amount to raise TO (currentBet + minimumRaise)
   const actionAmount = raiseAmount;

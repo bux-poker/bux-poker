@@ -79,7 +79,6 @@ export function PokerGameView() {
   const [nextBlindTime, setNextBlindTime] = useState<string>('--:--');
   const [isPortrait, setIsPortrait] = useState(false);
   const [showdownResults, setShowdownResults] = useState<any>(null);
-  const [potWinner, setPotWinner] = useState<any>(null);
   const [showDealerMessages, setShowDealerMessages] = useState(true);
   const { user } = useAuth();
   const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
@@ -226,13 +225,6 @@ export function PokerGameView() {
       }
     });
 
-    socket.on("pot-winner", (payload: { gameId: string; winner: any }) => {
-      if (payload.gameId === id) {
-        setPotWinner(payload.winner);
-        // Clear after 5 seconds
-        setTimeout(() => setPotWinner(null), 5000);
-      }
-    });
 
     // Update timer every second to keep it synced
     const timerInterval = setInterval(() => {
@@ -254,7 +246,6 @@ export function PokerGameView() {
       socket.off("game_message");
       socket.off("turn-timer-start");
       socket.off("showdown");
-      socket.off("pot-winner");
       clearInterval(timerInterval);
     };
   }, [id, turnTimer]);
@@ -604,30 +595,6 @@ export function PokerGameView() {
               showdownResults={showdownResults || gameState.showdownResults}
             />
             
-            {/* Winner Display Overlay */}
-            {(potWinner || showdownResults) && (
-              <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-                <div className="bg-slate-900 rounded-lg p-8 border-2 border-yellow-500 shadow-2xl max-w-md">
-                  {potWinner ? (
-                    <div className="text-center">
-                      <h2 className="text-3xl font-bold text-yellow-400 mb-4">Winner!</h2>
-                      <p className="text-xl text-white mb-2">{potWinner.name}</p>
-                      <p className="text-lg text-emerald-400">Wins {potWinner.potWon?.toLocaleString() || gameState.pot.toLocaleString()} chips</p>
-                    </div>
-                  ) : showdownResults && showdownResults.winners?.length > 0 ? (
-                    <div className="text-center">
-                      <h2 className="text-3xl font-bold text-yellow-400 mb-4">Showdown!</h2>
-                      {showdownResults.winners.map((winner: any, idx: number) => (
-                        <div key={idx} className="mb-3">
-                          <p className="text-xl text-white font-semibold">{winner.name}</p>
-                          <p className="text-lg text-emerald-400">Wins {winner.potWon?.toLocaleString()} with {winner.handCategory}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Betting controls - fixed at bottom */}
