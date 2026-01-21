@@ -376,13 +376,29 @@ export async function startHandForGame(gameId, io) {
   const maxSeat = Math.max(...game.players.map(p => p.seatNumber));
   const minSeat = Math.min(...game.players.map(p => p.seatNumber));
   
-  // Calculate SB and BB seat numbers (clockwise = DECREASING seat numbers, wrapping)
-  const sbSeat = dealerSeat - 1 < minSeat ? maxSeat : dealerSeat - 1;
-  const bbSeat = sbSeat - 1 < minSeat ? maxSeat : sbSeat - 1;
+  // Handle heads-up (2 players) special blind rules
+  // In heads-up: dealer posts small blind, other player posts big blind
+  const activePlayers = game.players.filter(p => p.status === 'ACTIVE');
+  const isHeadsUp = activePlayers.length === 2;
   
-  // Find players at those seat numbers
-  const sbPlayer = game.players.find(p => p.seatNumber === sbSeat);
-  const bbPlayer = game.players.find(p => p.seatNumber === bbSeat);
+  let sbSeat, bbSeat, sbPlayer, bbPlayer;
+  
+  if (isHeadsUp) {
+    // Heads-up rules: Dealer posts small blind, other player posts big blind
+    sbPlayer = dealerPlayer;
+    sbSeat = dealerSeat;
+    bbPlayer = activePlayers.find(p => p.id !== dealerPlayer.id);
+    bbSeat = bbPlayer?.seatNumber;
+    console.log(`[POKER] Heads-up game: Dealer (seat ${sbSeat}) posts small blind, Other player (seat ${bbSeat}) posts big blind`);
+  } else {
+    // Standard rules: SB and BB are clockwise from dealer
+    sbSeat = dealerSeat - 1 < minSeat ? maxSeat : dealerSeat - 1;
+    bbSeat = sbSeat - 1 < minSeat ? maxSeat : sbSeat - 1;
+    
+    // Find players at those seat numbers
+    sbPlayer = game.players.find(p => p.seatNumber === sbSeat);
+    bbPlayer = game.players.find(p => p.seatNumber === bbSeat);
+  }
   
   if (!sbPlayer || !bbPlayer) {
     throw new Error(`Could not find SB or BB players. Dealer seat: ${dealerSeat}, SB seat: ${sbSeat}, BB seat: ${bbSeat}`);
@@ -417,23 +433,39 @@ export async function startHandForGame(gameId, io) {
   });
 
   // Post blinds using postBlinds method (doesn't require minimum raise validation)
-  if (sbPlayer.chips >= smallBlind && bbPlayer.chips >= bigBlind) {
-    bettingRound.postBlinds(sbPlayer.id, bbPlayer.id);
+  // Handle insufficient chips: player posts what they have
+  const sbAmount = Math.min(smallBlind, sbPlayer.chips);
+  const bbAmount = Math.min(bigBlind, bbPlayer.chips);
+  
+  if (sbAmount > 0 && bbAmount > 0) {
+    bettingRound.postBlinds(sbPlayer.id, bbPlayer.id, sbAmount, bbAmount);
     
     // Deduct chips from players in database
-    await prisma.player.update({
-      where: { id: sbPlayer.id },
-      data: { chips: sbPlayer.chips - smallBlind }
-    });
+    if (sbAmount > 0) {
+      await prisma.player.update({
+        where: { id: sbPlayer.id },
+        data: { chips: sbPlayer.chips - sbAmount }
+      });
+      
+      // Update chips in memory for state
+      sbPlayer.chips -= sbAmount;
+    }
     
-    await prisma.player.update({
-      where: { id: bbPlayer.id },
-      data: { chips: bbPlayer.chips - bigBlind }
-    });
+    if (bbAmount > 0) {
+      await prisma.player.update({
+        where: { id: bbPlayer.id },
+        data: { chips: bbPlayer.chips - bbAmount }
+      });
+      
+      // Update chips in memory for state
+      bbPlayer.chips -= bbAmount;
+    }
     
-    // Update chips in memory for state
-    sbPlayer.chips -= smallBlind;
-    bbPlayer.chips -= bigBlind;
+    // Adjust current bet if blinds couldn't be posted fully
+    if (bbAmount < bigBlind) {
+      bettingRound.currentBet = bbAmount;
+      console.log(`[POKER] Big blind adjusted to ${bbAmount} (player has insufficient chips)`);
+    }
   }
 
   // Calculate UTG (first to act after BB) - continue clockwise (DECREASING seat numbers)
@@ -1834,8 +1866,13 @@ export function registerPokerHandlers(io) {
         console.log(`[BETTING] Betting complete? ${bettingComplete}`);
         
         if (bettingComplete) {
-          // Check if only 1 player remains - award pot immediately without dealing cards
+          // Check for uncalled bet (bet/raise with no calls) - bettor wins immediately
           const activePlayersAfterAction = state.players.filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
+          const currentBet = state.bettingRound.currentBet || 0;
+          const lastRaiserUserId = state.lastRaiseUserId;
+          
+          // Check if there's a last raiser and only one active player remains
+          // OR if someone bet/raised and everyone else folded (uncalled bet)
           if (activePlayersAfterAction.length === 1) {
             // Only one player remaining - award pot and end hand
             const winner = activePlayersAfterAction[0];
@@ -1844,14 +1881,24 @@ export function registerPokerHandlers(io) {
             
             const winnerName = winner.name || winner.user?.username || `Player ${winner.seatNumber}`;
             
+            // Check if this is an uncalled bet (bet/raise that wasn't called)
+            const isUncalledBet = lastRaiserUserId && lastRaiserUserId === winner.userId && currentBet > 0;
+            
             winner.chips += totalPot;
             state.pot = 0;
             
             console.log(`[POKER] Single player remaining - awarding pot of ${totalPot} to ${winnerName}`);
+            if (isUncalledBet) {
+              console.log(`[POKER] Uncalled bet - ${winnerName} wins without showdown`);
+            }
             
             // Post dealer message
             if (io) {
-              postDealerMessage(gameId, io, `${winnerName} wins ${totalPot.toLocaleString()} (all other players folded)`);
+              if (isUncalledBet) {
+                postDealerMessage(gameId, io, `${winnerName} wins ${totalPot.toLocaleString()} (uncalled bet)`);
+              } else {
+                postDealerMessage(gameId, io, `${winnerName} wins ${totalPot.toLocaleString()} (all other players folded)`);
+              }
             }
             
             // Emit winner event for UI

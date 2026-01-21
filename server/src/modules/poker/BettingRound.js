@@ -64,11 +64,17 @@ export class BettingRound {
   /**
    * Post blinds - directly set player contributions without raise validation
    * This is used at the start of a hand to post small blind and big blind
+   * @param {string} smallBlindPlayerId - Player ID posting small blind
+   * @param {string} bigBlindPlayerId - Player ID posting big blind
+   * @param {number} smallBlindAmount - Actual small blind amount (may be less if player has insufficient chips)
+   * @param {number} bigBlindAmount - Actual big blind amount (may be less if player has insufficient chips)
    */
-  postBlinds(smallBlindPlayerId, bigBlindPlayerId) {
-    this.playerBets.set(smallBlindPlayerId, this.smallBlind);
-    this.playerBets.set(bigBlindPlayerId, this.bigBlind);
-    this.currentBet = this.bigBlind; // Big blind is the current bet to call
+  postBlinds(smallBlindPlayerId, bigBlindPlayerId, smallBlindAmount = null, bigBlindAmount = null) {
+    const sbAmount = smallBlindAmount !== null ? smallBlindAmount : this.smallBlind;
+    const bbAmount = bigBlindAmount !== null ? bigBlindAmount : this.bigBlind;
+    this.playerBets.set(smallBlindPlayerId, sbAmount);
+    this.playerBets.set(bigBlindPlayerId, bbAmount);
+    this.currentBet = bbAmount; // Big blind is the current bet to call (may be adjusted if insufficient chips)
   }
 
   /**
