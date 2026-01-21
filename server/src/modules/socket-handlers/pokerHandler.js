@@ -1105,6 +1105,8 @@ async function handleTestPlayerAction(gameId, userId, io) {
     if (bettingComplete) {
       // Check if only 1 player remains - award pot immediately without dealing cards
       const activePlayersAfterAction = newState.players.filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
+      console.log(`[TEST PLAYER] Active players after action: ${activePlayersAfterAction.length}`);
+      
       if (activePlayersAfterAction.length === 1) {
         // Only one player remaining - award pot and end hand (same logic as regular player action)
         const winner = activePlayersAfterAction[0];
@@ -1206,15 +1208,31 @@ async function handleTestPlayerAction(gameId, userId, io) {
       }
       
       // Multiple players remaining - advance to next street
-      await advanceToNextStreet(gameId, io);
-      // Get updated state after advancing street
-      const updatedGame = await prisma.game.findUnique({
-        where: { id: gameId },
-        include: { players: { include: { user: true } } }
-      });
-      if (updatedGame) {
+      console.log(`[TEST PLAYER] Multiple players remaining, advancing to next street or showdown...`);
+      console.log(`[TEST PLAYER] Current street: ${newState.street || 'PREFLOP'}`);
+      
+      try {
+        if (newState.street === 'RIVER') {
+          console.log(`[TEST PLAYER] On RIVER - going to showdown`);
+          await handleShowdown(gameId, io);
+        } else {
+          console.log(`[TEST PLAYER] Advancing from ${newState.street || 'PREFLOP'} to next street`);
+          await advanceToNextStreet(gameId, io);
+        }
+        
+        // Get updated state after advancing street
         const updatedState = tableState.get(gameId);
-        if (updatedState) {
+        if (!updatedState) {
+          console.error(`[TEST PLAYER] ERROR: State missing after advancing street!`);
+          return;
+        }
+        
+        const updatedGame = await prisma.game.findUnique({
+          where: { id: gameId },
+          include: { players: { include: { user: true } } }
+        });
+        
+        if (updatedGame && updatedState) {
           const updatedGameFromState = {
             id: gameId,
             pot: updatedState.pot,
@@ -1232,7 +1250,21 @@ async function handleTestPlayerAction(gameId, userId, io) {
             }))
           };
           const payload = buildClientGameState(updatedGameFromState, updatedState);
-        if (io) io.to(`game:${gameId}`).emit("game-state", payload);
+          if (io) {
+            io.to(`game:${gameId}`).emit("game-state", payload);
+            console.log(`[TEST PLAYER] Emitted game state after advancing street/showdown`);
+          }
+        } else {
+          console.error(`[TEST PLAYER] ERROR: Could not fetch game or state after advancing street!`);
+        }
+      } catch (advanceError) {
+        console.error(`[TEST PLAYER] ERROR advancing to next street/showdown:`, advanceError);
+        console.error(`[TEST PLAYER] Error stack:`, advanceError.stack);
+        // Try to recover by moving to next player
+        try {
+          await moveToNextPlayer(gameId, io);
+        } catch (moveError) {
+          console.error(`[TEST PLAYER] ERROR in recovery moveToNextPlayer:`, moveError);
         }
       }
     } else {
@@ -1728,8 +1760,29 @@ async function checkAndAdvanceBlindLevel(tournamentId, gameId, io) {
  * Advance to next street (deal community cards) when betting round completes
  */
 async function advanceToNextStreet(gameId, io) {
+  console.log(`[POKER] advanceToNextStreet called for gameId: ${gameId}`);
   const state = tableState.get(gameId);
-  if (!state) return;
+  if (!state) {
+    console.error(`[POKER] ERROR: No state found for gameId ${gameId} in advanceToNextStreet`);
+    return;
+  }
+  
+  const activePlayers = state.players.filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
+  console.log(`[POKER] advanceToNextStreet: Current street: ${state.street || 'PREFLOP'}, active players: ${activePlayers.length}`);
+  
+  // Clear current turn before advancing street (betting is complete)
+  state.currentTurnUserId = null;
+  
+  // Clear any existing turn timer
+  const existingTimer = turnTimers.get(gameId);
+  if (existingTimer) {
+    clearTimeout(existingTimer.timerId);
+    if (existingTimer.graceTimerId) {
+      clearTimeout(existingTimer.graceTimerId);
+    }
+    turnTimers.delete(gameId);
+    console.log(`[POKER] advanceToNextStreet: Cleared existing turn timer`);
+  }
 
   const { TexasHoldem } = await import("../poker/TexasHoldem.js");
   const smallBlind = state.bettingRound?.smallBlind || 10;

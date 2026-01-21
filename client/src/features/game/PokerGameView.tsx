@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { getSocket } from "../../services/socket";
 import { PokerTable } from "../../components/poker/PokerTable";
@@ -81,6 +81,9 @@ export function PokerGameView() {
   const [showdownResults, setShowdownResults] = useState<any>(null);
   const [showDealerMessages, setShowDealerMessages] = useState(true);
   const [tournamentCountdown, setTournamentCountdown] = useState<{ startTime: string; seconds: number } | null>(null);
+  // Track whether we've already created a local fallback countdown to avoid
+  // recreating it (which previously caused the timer to reset back to 2 mins)
+  const fallbackCountdownCreatedRef = useRef(false);
   const { user } = useAuth();
   const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
   
@@ -309,6 +312,28 @@ export function PokerGameView() {
 
     return () => clearInterval(interval);
   }, [tournamentCountdown]);
+
+  // Fallback countdown for clients (especially mobile) that might miss the
+  // \"tournament-starting\" socket event. This creates a one-time, local
+  // 2-minute countdown while the tournament is SEATED and not yet started.
+  //
+  // We guard with fallbackCountdownCreatedRef so that once cleared (e.g. when
+  // the game actually starts and we receive \"tournament-started\"), we don't
+  // recreate the countdown and accidentally reset it back to 2 minutes.
+  useEffect(() => {
+    if (!tournament) return;
+    if (tournamentCountdown) return;
+    if (fallbackCountdownCreatedRef.current) return;
+
+    if (tournament.status === "SEATED" && !tournament.startedAt) {
+      const startTime = new Date(Date.now() + 2 * 60 * 1000).toISOString();
+      setTournamentCountdown({
+        startTime,
+        seconds: 120,
+      });
+      fallbackCountdownCreatedRef.current = true;
+    }
+  }, [tournament, tournamentCountdown]);
 
   // Calculate next blind timer based on tournament startedAt
   useEffect(() => {
