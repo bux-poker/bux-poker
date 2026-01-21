@@ -316,11 +316,7 @@ export function PokerTable({
                 ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--community-card-height')) || 112
                 : 112;
               
-              // Enlarge community cards 2x during showdown
-              if (showdownActive) {
-                cardWidth *= 2;
-                cardHeight *= 2;
-              }
+              // Do NOT enlarge community cards during showdown - only player hole cards should be enlarged
               
               // Check if this card is part of winning hand
               const isWinningCard = showdownResults?.winners?.some((w: any) => {

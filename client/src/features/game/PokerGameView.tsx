@@ -205,9 +205,11 @@ export function PokerGameView() {
       socket.emit("join-table", { gameId: id });
     });
 
-    socket.on("game_message", (message) => {
+    socket.on("game_message", (data: { gameId: string; message: any }) => {
+      // Ensure we have the correct structure
+      const messageData = data.message || data;
       // Dispatch a custom event to be caught by ChatHooks
-      window.dispatchEvent(new CustomEvent('gameMessage', { detail: { gameId: id, message } }));
+      window.dispatchEvent(new CustomEvent('gameMessage', { detail: { gameId: id, message: messageData } }));
     });
 
     socket.on("turn-timer-start", (payload: { gameId: string; userId: string; expiresAt: number; duration: number }) => {
