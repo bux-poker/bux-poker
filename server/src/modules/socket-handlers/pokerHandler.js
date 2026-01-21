@@ -1456,6 +1456,22 @@ async function handleShowdown(gameId, io) {
     }
   }
 
+  // Fetch game from database for tournament info and player data
+  const game = await prisma.game.findUnique({
+    where: { id: gameId },
+    include: {
+      players: {
+        include: { user: true }
+      },
+      tournament: true
+    }
+  });
+
+  if (!game) {
+    console.error(`[SHOWDOWN] Game not found for gameId: ${gameId}`);
+    return;
+  }
+
   // Check for player elimination after distributing pot
   const { TournamentEngine } = await import("../../services/TournamentEngine.js");
   const tournamentEngine = new TournamentEngine();
@@ -1484,16 +1500,6 @@ async function handleShowdown(gameId, io) {
     where: { id: gameId },
     data: { pot: 0 }
   }).catch(err => console.error(`[SHOWDOWN] Error updating game pot:`, err));
-
-  // Build game state with showdown results
-  const game = await prisma.game.findUnique({
-    where: { id: gameId },
-    include: {
-      players: {
-        include: { user: true }
-      }
-    }
-  });
 
   if (!game) return;
 
