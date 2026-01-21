@@ -662,6 +662,12 @@ function startTurnTimer(gameId, userId, io) {
   const isTestPlayer = playerName.toLowerCase().startsWith('test player');
   
   console.log(`[POKER] startTurnTimer for player ${playerName} (userId: ${userId}): isTestPlayer=${isTestPlayer}`);
+  
+  // Ensure io is available
+  if (!io) {
+    console.error(`[POKER] Cannot start turn timer: io is null for gameId ${gameId}`);
+    return;
+  }
 
   if (isTestPlayer) {
     // Test players: 3 seconds total, auto-act after
@@ -671,16 +677,40 @@ function startTurnTimer(gameId, userId, io) {
     console.log(`[POKER] Starting 3-second timer for test player ${playerName}, will call handleTestPlayerAction`);
     
     const timerId = setTimeout(async () => {
-      console.log(`[POKER] Timer expired for test player ${playerName}, calling handleTestPlayerAction`);
+      console.log(`[POKER] Timer expired for test player ${playerName} (userId: ${userId}), calling handleTestPlayerAction at ${new Date().toISOString()}`);
+      
+      // Verify state still exists before proceeding
+      const currentState = tableState.get(gameId);
+      if (!currentState) {
+        console.error(`[POKER] State missing when timer fired for test player ${playerName}, gameId: ${gameId}`);
+        turnTimers.delete(gameId);
+        return;
+      }
+      
+      // Verify player still exists in state
+      const currentPlayer = currentState.players.find((p) => p.userId === userId);
+      if (!currentPlayer) {
+        console.error(`[POKER] Player not found in state when timer fired for userId: ${userId}`);
+        turnTimers.delete(gameId);
+        try {
+          await moveToNextPlayer(gameId, io);
+        } catch (moveErr) {
+          console.error(`[POKER] Error moving to next player after player not found:`, moveErr);
+        }
+        return;
+      }
+      
       try {
         await handleTestPlayerAction(gameId, userId, io);
       } catch (err) {
         console.error(`[POKER] Error in handleTestPlayerAction for test player ${playerName}:`, err);
+        console.error(`[POKER] Error stack:`, err.stack);
         // Try to move to next player if action failed
         try {
           await moveToNextPlayer(gameId, io);
         } catch (moveErr) {
           console.error(`[POKER] Error moving to next player after test player action failure:`, moveErr);
+          console.error(`[POKER] Move error stack:`, moveErr.stack);
         }
       }
     }, timeoutMs);
@@ -829,45 +859,65 @@ async function handleTestPlayerAction(gameId, userId, io) {
     const canCheck = amountToCall === 0;
 
     // Simple random logic
+    // Test players should NOT fold if they can check
     const rand = Math.random();
     
     let action, amount;
     
-    if (rand < 0.3) {
-      // 30% fold
-      action = "FOLD";
-      amount = 0;
-      console.log(`[POKER] Test player ${player.name || userId} decided to FOLD (rand=${rand.toFixed(2)})`);
-    } else if (rand < 0.7 || canCheck) {
-      // 40% call/check (or check if no bet)
-      if (canCheck) {
+    if (canCheck) {
+      // Can check - never fold, choose between check or bet/raise
+      if (rand < 0.6) {
+        // 60% check
         action = "CHECK";
         amount = 0;
         console.log(`[POKER] Test player ${player.name || userId} decided to CHECK (rand=${rand.toFixed(2)})`);
       } else {
+        // 40% bet/raise
+        const minRaiseAmount = currentBet + (state.bettingRound?.minimumRaise || bigBlind);
+        const halfPot = Math.floor((state.pot || 0) / 2);
+        const totalBetAmount = Math.max(minRaiseAmount, halfPot);
+        
+        // For RAISE/BET, we need the additional amount to add, not total
+        const additionalAmount = totalBetAmount - myContribution;
+        amount = Math.min(Math.max(additionalAmount, 0), myChips);
+        
+        if (currentBet === 0) {
+          action = "BET";
+          console.log(`[POKER] Test player ${player.name || userId} decided to BET ${amount} (rand=${rand.toFixed(2)})`);
+        } else {
+          action = "RAISE";
+          console.log(`[POKER] Test player ${player.name || userId} decided to RAISE ${amount} (total bet would be ${myContribution + amount}) (rand=${rand.toFixed(2)})`);
+        }
+      }
+    } else {
+      // Cannot check - must fold, call, or raise
+      if (rand < 0.3) {
+        // 30% fold
+        action = "FOLD";
+        amount = 0;
+        console.log(`[POKER] Test player ${player.name || userId} decided to FOLD (rand=${rand.toFixed(2)})`);
+      } else if (rand < 0.7) {
+        // 40% call
         action = "CALL";
         amount = Math.min(amountToCall, myChips);
         console.log(`[POKER] Test player ${player.name || userId} decided to CALL ${amount} (rand=${rand.toFixed(2)})`);
-      }
-    } else {
-      // 30% bet/raise (minimum raise or half pot)
-      // For RAISE, amount is the TOTAL bet amount (not additional)
-      // Calculate: currentBet + minimumRaise = total bet needed
-      const minRaiseAmount = currentBet + (state.bettingRound?.minimumRaise || bigBlind);
-      const halfPot = Math.floor((state.pot || 0) / 2);
-      const totalBetAmount = Math.max(minRaiseAmount, halfPot);
-      
-      // For RAISE/BET, we need the additional amount to add, not total
-      // amount = totalBetAmount - myContribution
-      const additionalAmount = totalBetAmount - myContribution;
-      amount = Math.min(Math.max(additionalAmount, 0), myChips);
-      
-      if (currentBet === 0) {
-        action = "BET";
-        console.log(`[POKER] Test player ${player.name || userId} decided to BET ${amount} (rand=${rand.toFixed(2)})`);
       } else {
-        action = "RAISE";
-        console.log(`[POKER] Test player ${player.name || userId} decided to RAISE ${amount} (total bet would be ${myContribution + amount}) (rand=${rand.toFixed(2)})`);
+        // 30% bet/raise
+        const minRaiseAmount = currentBet + (state.bettingRound?.minimumRaise || bigBlind);
+        const halfPot = Math.floor((state.pot || 0) / 2);
+        const totalBetAmount = Math.max(minRaiseAmount, halfPot);
+        
+        // For RAISE/BET, we need the additional amount to add, not total
+        const additionalAmount = totalBetAmount - myContribution;
+        amount = Math.min(Math.max(additionalAmount, 0), myChips);
+        
+        if (currentBet === 0) {
+          action = "BET";
+          console.log(`[POKER] Test player ${player.name || userId} decided to BET ${amount} (rand=${rand.toFixed(2)})`);
+        } else {
+          action = "RAISE";
+          console.log(`[POKER] Test player ${player.name || userId} decided to RAISE ${amount} (total bet would be ${myContribution + amount}) (rand=${rand.toFixed(2)})`);
+        }
       }
     }
 
