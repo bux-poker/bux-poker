@@ -466,7 +466,7 @@ export function TournamentLobby() {
             <div>
               <span className="text-xs text-slate-400">Remaining Players</span>
               <p className="mt-1 text-lg font-semibold text-slate-200">
-                {remainingPlayers} / {tournament.maxPlayers}
+                {remainingPlayers} / {registeredCount}
               </p>
             </div>
             {currentPosition && (

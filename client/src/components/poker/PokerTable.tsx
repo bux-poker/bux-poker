@@ -596,12 +596,13 @@ export function PokerTable({
             elements.push(
               <div
                 key={`cards-${player.id}`}
-                className={`absolute z-20 flex flex-col items-center gap-1 ${isFolded ? 'opacity-50' : ''} ${isWinner ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-900 rounded-lg' : ''}`}
+                className={`absolute flex flex-col items-center gap-1 ${isFolded ? 'opacity-50' : ''} ${isWinner ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-900 rounded-lg' : ''}`}
                 style={{
                   left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset * showdownScale}px)`,
                   top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}%)`,
                   transform: `translate(-50%, -50%) scale(${showdownScale})`,
                   transition: 'transform 0.3s ease-in-out',
+                  zIndex: 70, // Higher than names/chips (50) but below dealer button (60)
                 }}
               >
                 {/* Bet chip above cards for seats 1-5 */}

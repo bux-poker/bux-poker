@@ -243,26 +243,6 @@ export function PokerGameView() {
       }
     });
 
-    // Update countdown timer every second
-    useEffect(() => {
-      if (!tournamentCountdown) return;
-
-      const interval = setInterval(() => {
-        const now = new Date();
-        const startTime = new Date(tournamentCountdown.startTime);
-        const remaining = Math.max(0, Math.floor((startTime.getTime() - now.getTime()) / 1000));
-
-        if (remaining <= 0) {
-          setTournamentCountdown(null);
-          clearInterval(interval);
-        } else {
-          setTournamentCountdown(prev => prev ? { ...prev, seconds: remaining } : null);
-        }
-      }, 100);
-
-      return () => clearInterval(interval);
-    }, [tournamentCountdown]);
-
     // Update timer every second to keep it synced
     const timerInterval = setInterval(() => {
       setTurnTimer((prev) => {
@@ -285,7 +265,27 @@ export function PokerGameView() {
       socket.off("showdown");
       clearInterval(timerInterval);
     };
-  }, [id, turnTimer]);
+  }, [id, turnTimer, gameState?.tournamentId]);
+
+  // Update countdown timer every second (separate from socket setup)
+  useEffect(() => {
+    if (!tournamentCountdown) return;
+
+    const interval = setInterval(() => {
+      const now = new Date();
+      const startTime = new Date(tournamentCountdown.startTime);
+      const remaining = Math.max(0, Math.floor((startTime.getTime() - now.getTime()) / 1000));
+
+      if (remaining <= 0) {
+        setTournamentCountdown(null);
+        clearInterval(interval);
+      } else {
+        setTournamentCountdown(prev => prev ? { ...prev, seconds: remaining } : null);
+      }
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [tournamentCountdown]);
 
   // Calculate next blind timer based on tournament startedAt
   useEffect(() => {
