@@ -65,6 +65,7 @@ function buildClientGameState(game, state) {
       seatNumber: p.seatNumber,
       status: p.status,
       avatarUrl: p.user?.avatarUrl || null,
+      lastAction: p.lastAction || null, // Include last action for overlay
       holeCards: (() => {
         if (!p.holeCards) return null;
         // If already an object, return as-is

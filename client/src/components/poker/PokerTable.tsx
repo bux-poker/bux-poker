@@ -140,6 +140,7 @@ interface PokerTableProps {
     userId?: string;
     contribution?: number;
     status?: string;
+    lastAction?: string;
   }>;
   communityCards: Card[];
   pot: number;
@@ -195,6 +196,76 @@ export function PokerTable({
   
   // Window size state to trigger re-renders when CSS variables change
   const [windowSize, setWindowSize] = useState({ width: typeof window !== 'undefined' ? window.innerWidth : 1400 });
+  
+  // Track visible action overlays: { playerId: { action: string, timestamp: number } }
+  const [actionOverlays, setActionOverlays] = useState<Record<string, { action: string; timestamp: number }>>({});
+  
+  // Helper function to get action text and color
+  const getActionInfo = (action: string): { text: string; color: string } => {
+    switch (action.toUpperCase()) {
+      case 'FOLD':
+        return { text: 'FOLD', color: '#dc2626' }; // red-600
+      case 'CHECK':
+        return { text: 'CHECK', color: '#2563eb' }; // blue-600
+      case 'CALL':
+        return { text: 'CALL', color: '#2563eb' }; // blue-600
+      case 'BET':
+        return { text: 'BET', color: '#059669' }; // emerald-600
+      case 'RAISE':
+        return { text: 'RAISE', color: '#059669' }; // emerald-600
+      case 'ALL_IN':
+      case 'ALLIN':
+        return { text: 'ALL IN', color: '#b91c1c' }; // red-700
+      default:
+        return { text: action, color: '#64748b' }; // slate-500
+    }
+  };
+  
+  // Track player actions and show overlays
+  useEffect(() => {
+    const now = Date.now();
+    const newOverlays: Record<string, { action: string; timestamp: number }> = {};
+    
+    players.forEach(player => {
+      if (player.lastAction && player.lastAction !== '') {
+        const playerId = player.id || player.userId || '';
+        // Check if this is a new action (player's lastAction changed)
+        const existingOverlay = actionOverlays[playerId];
+        if (!existingOverlay || existingOverlay.action !== player.lastAction) {
+          // New action - show overlay
+          newOverlays[playerId] = {
+            action: player.lastAction,
+            timestamp: now
+          };
+        } else {
+          // Keep existing overlay if it's still fresh (less than 3 seconds old)
+          if (now - existingOverlay.timestamp < 3000) {
+            newOverlays[playerId] = existingOverlay;
+          }
+        }
+      }
+    });
+    
+    setActionOverlays(newOverlays);
+  }, [players.map(p => p.lastAction).join(',')]); // Only track lastAction changes
+  
+  // Clean up old overlays after fade duration
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setActionOverlays(prev => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach(playerId => {
+          if (now - updated[playerId].timestamp >= 3000) {
+            delete updated[playerId];
+          }
+        });
+        return updated;
+      });
+    }, 100);
+    
+    return () => clearInterval(interval);
+  }, []);
   
   // Update timer every second
   useEffect(() => {
@@ -381,6 +452,44 @@ export function PokerTable({
                               </span>
                             </div>
                           )}
+                          
+                          {/* Action Overlay - shows when player acts (only when timer is not active) */}
+                          {(() => {
+                            const playerId = player.id || player.userId || '';
+                            const overlay = actionOverlays[playerId];
+                            // Show action overlay if player acted and timer is NOT active
+                            if (overlay && !hasActiveTimer) {
+                              const actionInfo = getActionInfo(overlay.action);
+                              const age = Date.now() - overlay.timestamp;
+                              const opacity = Math.max(0, 1 - (age / 3000)); // Fade out over 3 seconds
+                              if (opacity > 0) {
+                                return (
+                                  <div 
+                                    className="absolute inset-0 flex items-center justify-center rounded-full"
+                                    style={{
+                                      background: `linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.6) 100%)`,
+                                      opacity: opacity,
+                                      transition: 'opacity 0.1s ease-out',
+                                      pointerEvents: 'none',
+                                      zIndex: 10
+                                    }}
+                                  >
+                                    <span 
+                                      className="font-bold drop-shadow-lg text-center px-1"
+                                      style={{ 
+                                        color: actionInfo.color,
+                                        fontSize: 'var(--player-name-size, 14px)',
+                                        textShadow: '0 2px 4px rgba(0,0,0,0.8)'
+                                      }}
+                                    >
+                                      {actionInfo.text}
+                                    </span>
+                                  </div>
+                                );
+                              }
+                            }
+                            return null;
+                          })()}
                         </div>
                       
                         {/* Dealer Button */}
