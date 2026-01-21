@@ -100,7 +100,9 @@ export function BettingControls({
   void windowSize.width;
 
   // Determine which buttons to show
-  const showCheck = !isPreflop || (isPreflop && isBigBlind && !hasRaises && currentBet === bigBlind);
+  // You can CHECK when your contribution equals the current bet (no bet to call)
+  // Otherwise, you must CALL the difference
+  const showCheck = currentBet === myContribution;
   const actionLabel = isPreflop && currentBet === 0 ? 'RAISE' : (currentBet > 0 ? 'RAISE' : 'BET');
   // RAISE button shows total bet amount to raise TO (currentBet + minimumRaise)
   const actionAmount = raiseAmount;
