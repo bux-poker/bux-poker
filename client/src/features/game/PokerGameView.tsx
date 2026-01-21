@@ -509,7 +509,11 @@ export function PokerGameView() {
   const bigBlind = gameState.bigBlind || 20;
   const activePlayers = gameState.players.filter(p => p.status !== 'ELIMINATED');
   const myPlayer = gameState.players.find(p => p.userId === user?.id || p.id === user?.id);
-  const myPosition = myPlayer ? activePlayers.findIndex(p => p.id === myPlayer.id) + 1 : null;
+  
+  // For tournaments, show tournament-wide stats, not table-specific
+  const tournamentRemainingPlayers = tournament?.remainingPlayers || activePlayers.length;
+  const tournamentTotalPlayers = tournament?.registeredCount || gameState.players.length;
+  const myPosition = tournament ? tournamentRemainingPlayers : (myPlayer ? activePlayers.findIndex(p => p.id === myPlayer.id) + 1 : null);
   const myContribution = myPlayer?.contribution || 0;
 
   // Show landscape prompt if in portrait mode
@@ -595,7 +599,7 @@ export function PokerGameView() {
               className="font-bold text-white"
               style={{ fontSize: 'var(--top-bar-value-size, 18px)' }}
             >
-              {activePlayers.length}/{gameState.players.length}
+              {tournament ? `${tournamentRemainingPlayers}/${tournamentTotalPlayers}` : `${activePlayers.length}/${gameState.players.length}`}
             </span>
           </div>
           {myPosition && (

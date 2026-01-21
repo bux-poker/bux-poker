@@ -1951,9 +1951,74 @@ async function moveToNextPlayer(gameId, io) {
   
   if (nextPlayer) {
     const nextContribution = state.bettingRound?.getPlayerContribution(nextPlayer.id) || 0;
+    const hasActed = state.actedPlayersInRound?.has(nextPlayer.userId) || false;
+    // Re-check needsToAct to verify before starting timer
+    const actuallyNeedsToAct = currentBet === 0 ? !hasActed : (nextContribution < currentBet || !hasActed);
+    
     console.log(`[POKER] Turn rotation: seat ${currentSeat} → seat ${nextPlayer.seatNumber} (${nextPlayer.name || nextPlayer.userId})`);
-    console.log(`[POKER] Next player contribution=${nextContribution}, currentBet=${currentBet}, needsToAct=${nextContribution < currentBet}`);
+    console.log(`[POKER] Next player contribution=${nextContribution}, currentBet=${currentBet}, hasActed=${hasActed}, needsToAct=${actuallyNeedsToAct}`);
     console.log(`[POKER] Checked seats in order: ${checkedSeats.join(' → ')}`);
+    
+    if (!actuallyNeedsToAct) {
+      console.log(`[POKER] WARNING: Player selected but doesn't need to act. Betting round may be complete.`);
+      // Don't start timer if player doesn't need to act - check if betting is complete and advance
+      state.currentTurnUserId = null;
+      
+      // Check if betting is complete and advance if needed
+      const activePlayerIds = state.players
+        .filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED')
+        .map(p => p.id);
+      
+      const bettingComplete = state.bettingRound.isBettingComplete(
+        activePlayerIds,
+        state.lastRaiseUserId,
+        state.currentTurnUserId,
+        state.players,
+        state.actedPlayersInRound || new Set()
+      );
+      
+      if (bettingComplete) {
+        console.log(`[POKER] Betting complete - advancing to next street or showdown`);
+        // Advance to next street or showdown
+        if (state.street === 'RIVER') {
+          // Last street - go to showdown
+          await handleShowdown(gameId, io);
+        } else {
+          // Advance to next street
+          await advanceToNextStreet(gameId, io);
+        }
+      } else {
+        // Betting not complete but no player needs to act - this shouldn't happen
+        console.error(`[POKER] ERROR: Betting not complete but no player needs to act. This may indicate a bug.`);
+        // Try to find any player who needs to act
+        const playerNeedingAction = activePlayers.find(p => {
+          const contrib = state.bettingRound?.getPlayerContribution(p.id) || 0;
+          const hasActed = state.actedPlayersInRound?.has(p.userId) || false;
+          return contrib < currentBet || !hasActed;
+        });
+        
+        if (playerNeedingAction) {
+          console.log(`[POKER] Found player needing action: ${playerNeedingAction.name || playerNeedingAction.userId}`);
+          state.currentTurnUserId = playerNeedingAction.userId;
+          startTurnTimer(gameId, playerNeedingAction.userId, io);
+        }
+      }
+      
+      // Emit game state
+      const game = await prisma.game.findUnique({
+        where: { id: gameId },
+        include: {
+          players: { include: { user: true } },
+          tournament: true
+        }
+      });
+      if (game && io) {
+        const payload = buildClientGameState(game, state);
+        io.to(`game:${gameId}`).emit("game-state", payload);
+      }
+      return;
+    }
+    
     state.currentTurnUserId = nextPlayer.userId;
     startTurnTimer(gameId, state.currentTurnUserId, io);
   } else {
