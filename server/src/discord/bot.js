@@ -670,6 +670,85 @@ export async function updateTournamentEmbeds(tournamentId) {
   }
 }
 
+/**
+ * Post a "Game starting in 2 minutes" notification to all Discord servers
+ */
+export async function postTournamentStartingEmbed(tournament) {
+  if (!discordClient) {
+    console.warn('[DISCORD BOT] Cannot post starting embed - bot not initialized');
+    return [];
+  }
+
+  try {
+    // Get tournament with posts
+    const tournamentWithPosts = await prisma.tournament.findUnique({
+      where: { id: tournament.id },
+      include: {
+        posts: {
+          include: {
+            server: true
+          }
+        }
+      }
+    });
+
+    if (!tournamentWithPosts || !tournamentWithPosts.posts || tournamentWithPosts.posts.length === 0) {
+      console.log(`[DISCORD BOT] No posts found for tournament ${tournament.id}, skipping starting notification`);
+      return [];
+    }
+
+    const clientUrl = process.env.CLIENT_URL || 'https://bux-poker.pro';
+    const logoUrl = `${clientUrl}/images/bux-poker.png`;
+    const tournamentUrl = `${clientUrl}/tournaments/${tournament.id}`;
+
+    // Create starting notification embed
+    const embed = new EmbedBuilder()
+      .setTitle('🎮 Game Starting Soon!')
+      .setDescription(`**${tournament.name}** is starting in **2 minutes**!\n\n🎯 **Take your seats now!**\n\n[Join Tournament](${tournamentUrl})`)
+      .setThumbnail(logoUrl)
+      .setColor(0xFFD700) // Gold color
+      .setTimestamp(new Date(Date.now() + 2 * 60 * 1000));
+
+    const posts = [];
+
+    // Post to each server that has a post for this tournament
+    for (const post of tournamentWithPosts.posts) {
+      if (!post.server || !post.server.announcementChannelId) continue;
+
+      try {
+        const guild = await discordClient.guilds.fetch(post.server.serverId);
+        const channel = await guild.channels.fetch(post.server.announcementChannelId);
+
+        if (!channel || !channel.isTextBased()) {
+          console.warn(`[DISCORD BOT] Invalid channel for server ${post.server.serverName}`);
+          continue;
+        }
+
+        // Check bot permissions
+        const permissions = channel.permissionsFor(guild.members.me);
+        if (!permissions.has('SendMessages') || !permissions.has('EmbedLinks')) {
+          console.error(`[DISCORD BOT] Bot lacks permissions in channel ${channel.name} for server ${post.server.serverName}`);
+          continue;
+        }
+
+        const message = await channel.send({
+          embeds: [embed],
+        });
+
+        console.log(`[DISCORD BOT] Successfully posted starting notification to ${post.server.serverName}, message ID: ${message.id}`);
+        posts.push({ serverId: post.server.serverId, messageId: message.id });
+      } catch (error) {
+        console.error(`[DISCORD BOT] Error posting starting notification to server ${post.server.serverName}:`, error.message || error);
+      }
+    }
+
+    return posts;
+  } catch (error) {
+    console.error(`[DISCORD BOT] Error posting tournament starting embed:`, error);
+    return [];
+  }
+}
+
 export function getDiscordClient() {
   return discordClient;
 }

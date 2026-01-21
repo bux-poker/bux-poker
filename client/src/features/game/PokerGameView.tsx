@@ -80,6 +80,7 @@ export function PokerGameView() {
   const [isPortrait, setIsPortrait] = useState(false);
   const [showdownResults, setShowdownResults] = useState<any>(null);
   const [showDealerMessages, setShowDealerMessages] = useState(true);
+  const [tournamentCountdown, setTournamentCountdown] = useState<{ startTime: string; seconds: number } | null>(null);
   const { user } = useAuth();
   const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
   
@@ -225,6 +226,42 @@ export function PokerGameView() {
       }
     });
 
+    // Listen for tournament starting countdown
+    socket.on("tournament-starting", (payload: { tournamentId: string; startTime: string; countdownSeconds: number }) => {
+      if (payload.tournamentId === gameState?.tournamentId) {
+        setTournamentCountdown({
+          startTime: payload.startTime,
+          seconds: payload.countdownSeconds
+        });
+      }
+    });
+
+    // Listen for tournament started (clear countdown)
+    socket.on("tournament-started", (payload: { tournamentId: string }) => {
+      if (payload.tournamentId === gameState?.tournamentId) {
+        setTournamentCountdown(null);
+      }
+    });
+
+    // Update countdown timer every second
+    useEffect(() => {
+      if (!tournamentCountdown) return;
+
+      const interval = setInterval(() => {
+        const now = new Date();
+        const startTime = new Date(tournamentCountdown.startTime);
+        const remaining = Math.max(0, Math.floor((startTime.getTime() - now.getTime()) / 1000));
+
+        if (remaining <= 0) {
+          setTournamentCountdown(null);
+          clearInterval(interval);
+        } else {
+          setTournamentCountdown(prev => prev ? { ...prev, seconds: remaining } : null);
+        }
+      }, 100);
+
+      return () => clearInterval(interval);
+    }, [tournamentCountdown]);
 
     // Update timer every second to keep it synced
     const timerInterval = setInterval(() => {
@@ -595,6 +632,18 @@ export function PokerGameView() {
               showdownResults={showdownResults || gameState.showdownResults}
             />
             
+            {/* Tournament Starting Countdown Overlay */}
+            {tournamentCountdown && tournamentCountdown.seconds > 0 && (
+              <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className="bg-slate-900 rounded-lg p-8 border-2 border-yellow-500 shadow-2xl text-center max-w-md">
+                  <h2 className="text-4xl font-bold text-yellow-400 mb-4">Game Starting Soon!</h2>
+                  <p className="text-2xl text-white mb-6">Take your seats</p>
+                  <div className="text-6xl font-bold text-emerald-400">
+                    {Math.floor(tournamentCountdown.seconds / 60)}:{(tournamentCountdown.seconds % 60).toString().padStart(2, '0')}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Betting controls - fixed at bottom */}

@@ -100,55 +100,85 @@ export class TournamentEngine {
       throw new Error("No games found - players must be seated first");
     }
 
-    // Mark as RUNNING and record actual start time
-    const startedAt = new Date();
-    await prisma.tournament.update({
-      where: { id: tournamentId },
-      data: {
-        status: "RUNNING",
-        startedAt: startedAt // Record actual start time
-      }
-    });
-
-    // Start a hand for each game
-    const { startHandForGame, getIO } = await import("../modules/socket-handlers/pokerHandler.js");
-    // Use provided io or get from pokerHandler
+    // Get Socket.IO instance
+    const { getIO } = await import("../modules/socket-handlers/pokerHandler.js");
     const socketIO = io || getIO();
-    
-    // Broadcast tournament started event to all clients so they can refetch tournament data
-    if (socketIO) {
-      socketIO.emit("tournament-started", {
-        tournamentId,
-        startedAt: startedAt.toISOString()
-      });
-      console.log(`[TOURNAMENT] Broadcasted tournament-started event for tournament ${tournamentId}`);
-    }
-    
-    if (socketIO) {
-      const games = await prisma.game.findMany({
-        where: { tournamentId },
-        include: {
-          players: {
-            include: { user: true }
-          },
-          tournament: true
-        }
-      });
 
-      for (const game of games) {
-        if (game.status === "ACTIVE" && game.players.length >= 2) {
-          try {
-            await startHandForGame(game.id, socketIO);
-          } catch (err) {
-            console.error(`[TOURNAMENT] Error starting hand for game ${game.id}:`, err);
+    // Send Discord embed notification: "Game starting in 2 mins - take your seats"
+    try {
+      const { postTournamentStartingEmbed } = await import("../discord/bot.js");
+      await postTournamentStartingEmbed(tournament);
+    } catch (err) {
+      console.error(`[TOURNAMENT] Error posting Discord starting notification:`, err);
+    }
+
+    // Calculate start time (2 minutes from now)
+    const startTime = new Date(Date.now() + 2 * 60 * 1000);
+    
+    // Broadcast tournament starting event with countdown to all clients
+    if (socketIO) {
+      socketIO.emit("tournament-starting", {
+        tournamentId,
+        startTime: startTime.toISOString(),
+        countdownSeconds: 120
+      });
+      console.log(`[TOURNAMENT] Broadcasted tournament-starting event for tournament ${tournamentId}, starting in 2 minutes`);
+    }
+
+    // Wait 2 minutes before actually starting the game
+    setTimeout(async () => {
+      try {
+        // Mark as RUNNING and record actual start time
+        const startedAt = new Date();
+        await prisma.tournament.update({
+          where: { id: tournamentId },
+          data: {
+            status: "RUNNING",
+            startedAt: startedAt // Record actual start time
+          }
+        });
+
+        // Start a hand for each game
+        const { startHandForGame } = await import("../modules/socket-handlers/pokerHandler.js");
+        
+        // Broadcast tournament started event to all clients so they can refetch tournament data
+        if (socketIO) {
+          socketIO.emit("tournament-started", {
+            tournamentId,
+            startedAt: startedAt.toISOString()
+          });
+          console.log(`[TOURNAMENT] Broadcasted tournament-started event for tournament ${tournamentId}`);
+        }
+        
+        if (socketIO) {
+          const games = await prisma.game.findMany({
+            where: { tournamentId },
+            include: {
+              players: {
+                include: { user: true }
+              },
+              tournament: true
+            }
+          });
+
+          for (const game of games) {
+            if (game.status === "ACTIVE" && game.players.length >= 2) {
+              try {
+                await startHandForGame(game.id, socketIO);
+              } catch (err) {
+                console.error(`[TOURNAMENT] Error starting hand for game ${game.id}:`, err);
+              }
+            }
           }
         }
-      }
-    }
 
-    // Start blind level timer
-    console.log(`[TOURNAMENT] Starting blind level timer for tournament ${tournamentId}`);
-    this.startBlindLevelTimer(tournamentId);
+        // Start blind level timer
+        console.log(`[TOURNAMENT] Starting blind level timer for tournament ${tournamentId}`);
+        this.startBlindLevelTimer(tournamentId);
+      } catch (err) {
+        console.error(`[TOURNAMENT] Error starting tournament after countdown:`, err);
+      }
+    }, 2 * 60 * 1000); // 2 minutes delay
 
     // Refresh games after starting hands
     const updatedTournament = await prisma.tournament.findUnique({
