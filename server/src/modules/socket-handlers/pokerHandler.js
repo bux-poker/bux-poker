@@ -953,7 +953,8 @@ async function handleTestPlayerAction(gameId, userId, io) {
       activePlayerIds, 
       newState.lastRaiseUserId,
       newState.currentTurnUserId,
-      newState.players
+      newState.players,
+      newState.actedPlayersInRound || new Set()
     );
     
     console.log(`[TEST PLAYER] Betting complete? ${bettingComplete}`);
@@ -1902,7 +1903,8 @@ async function moveToNextPlayer(gameId, io) {
       activePlayerIds,
       state.lastRaiseUserId,
       state.currentTurnUserId, // This is now null
-      state.players
+      state.players,
+      state.actedPlayersInRound || new Set()
     );
     
     if (bettingComplete && io) {
@@ -2044,7 +2046,8 @@ export function registerPokerHandlers(io) {
           activePlayerIds, 
           state.lastRaiseUserId,
           state.currentTurnUserId,
-          state.players
+          state.players,
+          state.actedPlayersInRound || new Set()
         );
         
         console.log(`[BETTING] Betting complete? ${bettingComplete}`);

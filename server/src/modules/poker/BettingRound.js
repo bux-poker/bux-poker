@@ -101,8 +101,9 @@ export class BettingRound {
    * @param {string|null} lastRaiseUserId - User ID of the last player who raised (null if no raises)
    * @param {string|null} currentTurnUserId - User ID of the player whose turn it currently is
    * @param {Array} allPlayers - All players with their userIds and seatNumbers (to determine turn order)
+   * @param {Set} actedPlayersInRound - Set of userIds who have acted in this betting round
    */
-  isBettingComplete(activePlayerIds, lastRaiseUserId, currentTurnUserId, allPlayers) {
+  isBettingComplete(activePlayerIds, lastRaiseUserId, currentTurnUserId, allPlayers, actedPlayersInRound = new Set()) {
     if (activePlayerIds.length <= 1) return true; // Only one or zero active players
     
     // Get contributions for all active players
@@ -122,17 +123,25 @@ export class BettingRound {
     
     // If no one has raised, betting is complete when:
     // 1. All have equal contributions (checked above)
-    // 2. AND there's no current turn (meaning action has gone around to all players)
-    // OR currentTurnUserId is null (no player needs to act)
+    // 2. AND all active players have acted at least once in this betting round
     if (!lastRaiseUserId) {
-      // No raise - betting is complete only if no player needs to act (currentTurnUserId is null)
-      // This means action has gone around to all players
-      if (!currentTurnUserId) {
-        console.log(`[BETTING] Complete: all contributed equally, no raises, no player needs to act`);
+      // No raise - betting is complete when all active players have acted once
+      // Get userIds for active players
+      const activeUserIds = activePlayerIds.map(id => {
+        const player = allPlayers.find(p => p.id === id);
+        return player?.userId || id;
+      });
+      
+      // Check if all active players have acted
+      const allHaveActed = activeUserIds.every(userId => actedPlayersInRound.has(userId));
+      
+      if (allHaveActed) {
+        console.log(`[BETTING] Complete: all contributed equally, no raises, all active players have acted`);
         return true;
       } else {
-        // Still have a current turn - players still need to act
-        console.log(`[BETTING] Not complete: all contributed equally, no raises, but currentTurnUserId is ${currentTurnUserId} - players still need to act`);
+        // Still have players who haven't acted - they still need to act
+        const notActed = activeUserIds.filter(userId => !actedPlayersInRound.has(userId));
+        console.log(`[BETTING] Not complete: all contributed equally, no raises, but players haven't acted: ${notActed.join(', ')}`);
         return false;
       }
     }
