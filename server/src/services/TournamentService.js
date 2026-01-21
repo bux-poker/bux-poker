@@ -171,13 +171,18 @@ export class TournamentService {
           blindLevels = [];
         }
 
+        // Calculate prize places dynamically: 1 place per 4 registered players
+        const registeredCount = tournament.registrations?.filter(
+          (r) => r.status === "CONFIRMED" || r.status === "PENDING"
+        ).length || 0;
+        const calculatedPrizePlaces = Math.floor(registeredCount / 4);
+        
         return {
           ...tournament,
           startedAt: tournament.startedAt, // Include startedAt for blind timer
           blindLevels: blindLevels, // Add parsed blind levels
-          registeredCount: tournament.registrations?.filter(
-            (r) => r.status === "CONFIRMED" || r.status === "PENDING"
-          ).length || 0,
+          registeredCount: registeredCount,
+          prizePlaces: calculatedPrizePlaces, // Calculate dynamically based on registrations
           servers: (tournament.posts || []).map((post) => {
             if (!post || !post.server) {
               return null;

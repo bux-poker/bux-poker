@@ -418,13 +418,14 @@ router.get("/tournaments/:id/duplicate", async (req, res, next) => {
     }
 
     // Return tournament data for pre-filling form
+    // Prize places are calculated automatically (1 per 4 registered players), so we don't include it
     res.json({
       name: `${tournament.name} (Copy)`,
       description: tournament.description || '',
       maxPlayers: tournament.maxPlayers,
       seatsPerTable: tournament.seatsPerTable,
       startingChips: tournament.startingChips,
-      prizePlaces: tournament.prizePlaces,
+      // prizePlaces removed - calculated automatically when registration closes
       blindLevels: blindLevels,
     });
   } catch (err) {
