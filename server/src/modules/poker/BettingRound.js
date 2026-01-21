@@ -165,8 +165,46 @@ export class BettingRound {
     // If someone raised, we need to ensure action has come back to them
     // This means the current turn should be the player AFTER the last raiser (clockwise)
     if (!currentTurnUserId) {
-      console.log(`[BETTING] Not complete: no current turn`);
-      return false; // No current turn means not complete
+      // No current turn - this could mean:
+      // 1. Betting is complete and everyone has acted, OR
+      // 2. All remaining players are all-in and can't act further
+      
+      // Find the last raiser
+      const lastRaiser = allPlayers.find(p => p.userId === lastRaiseUserId);
+      if (!lastRaiser) {
+        console.log(`[BETTING] Not complete: no current turn and last raiser not found`);
+        return false;
+      }
+      
+      // Check if the last raiser has acted (they should be in actedPlayersInRound)
+      const lastRaiserHasActed = actedPlayersInRound.has(lastRaiseUserId);
+      
+      // Check if all other active players (excluding the last raiser) are all-in or have acted
+      const otherActivePlayers = contributions.filter(c => {
+        const player = allPlayers.find(p => p.id === c.id);
+        return player && player.userId !== lastRaiseUserId;
+      });
+      
+      // All other active players must be either:
+      // 1. All-in (0 chips), OR
+      // 2. Have already acted in this round
+      const allOthersCantAct = otherActivePlayers.every(c => {
+        if (c.isAllIn) {
+          return true; // All-in players can't act further
+        }
+        const player = allPlayers.find(p => p.id === c.id);
+        return player && actedPlayersInRound.has(player.userId);
+      });
+      
+      // If the last raiser has acted AND all others can't act (all-in or already acted),
+      // then betting is complete even though currentTurnUserId is null
+      if (lastRaiserHasActed && allOthersCantAct) {
+        console.log(`[BETTING] Complete: no current turn, last raiser has acted, all others are all-in or have acted`);
+        return true;
+      }
+      
+      console.log(`[BETTING] Not complete: no current turn, lastRaiserHasActed=${lastRaiserHasActed}, allOthersCantAct=${allOthersCantAct}`);
+      return false; // No current turn and betting not complete
     }
     
     // Find the last raiser and current turn player

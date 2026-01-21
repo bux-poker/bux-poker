@@ -287,7 +287,10 @@ export function PokerGameView() {
     };
   }, [id, turnTimer, gameState?.tournamentId, tournament?.id]);
 
-  // Update countdown timer every second (separate from socket setup)
+  // Update countdown timer every second (separate from socket setup).
+  // IMPORTANT: Countdown is driven only by server \"tournament-starting\" /
+  // \"tournament-started\" events. We do NOT create local fallbacks here, to
+  // avoid the overlay reappearing after the game has begun.
   useEffect(() => {
     if (!tournamentCountdown) return;
 
@@ -302,36 +305,10 @@ export function PokerGameView() {
       } else {
         setTournamentCountdown(prev => prev ? { ...prev, seconds: remaining } : null);
       }
-    }, 100);
+    }, 1000); // update once per second
 
     return () => clearInterval(interval);
   }, [tournamentCountdown]);
-
-  /**
-   * Fallback: if for some reason we missed the "tournament-starting" socket event
-   * (e.g. late join on mobile, temporary socket drop), still show a generic
-   * "Game starting soon" overlay while the tournament is SEATED and has not
-   * actually started yet.
-   *
-   * This guarantees all devices (desktop + mobile) see an overlay, even if they
-   * didn't receive the original countdown event.
-   */
-  useEffect(() => {
-    if (!tournament) return;
-    if (tournamentCountdown) return; // real countdown already active
-
-    // If tournament is seated and not yet started, show a generic 2-minute countdown.
-    // We don't know the exact remaining time if we joined late, but this at least
-    // gives a clear "starting soon" indicator on all devices. The overlay will be
-    // cleared by the "tournament-started" socket event once the game actually begins.
-    if (tournament.status === "SEATED" && !tournament.startedAt) {
-      const startTime = new Date(Date.now() + 2 * 60 * 1000).toISOString();
-      setTournamentCountdown({
-        startTime,
-        seconds: 120,
-      });
-    }
-  }, [tournament, tournamentCountdown]);
 
   // Calculate next blind timer based on tournament startedAt
   useEffect(() => {
