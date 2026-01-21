@@ -906,9 +906,9 @@ async function handleTestPlayerAction(gameId, userId, io) {
         const savedPlayers = [...newState.players];
         tableState.delete(gameId);
         
-        // Reset player statuses (async)
-        setTimeout(() => {
-          savedPlayers.forEach(p => {
+        // Reset player statuses and start new hand (async)
+        setTimeout(async () => {
+          const resetPromises = savedPlayers.map(p =>
             prisma.player.update({
               where: { id: p.id },
               data: { 
@@ -916,8 +916,39 @@ async function handleTestPlayerAction(gameId, userId, io) {
                 holeCards: "",
                 lastAction: null
               }
-            }).catch(err => console.error(`[TEST PLAYER] Error resetting player ${p.id}:`, err));
+            }).catch(err => console.error(`[TEST PLAYER] Error resetting player ${p.id}:`, err))
+          );
+          
+          await Promise.all(resetPromises);
+          console.log(`[TEST PLAYER] All players reset for next hand`);
+          
+          // Start new hand after resetting players
+          const gameForNextHand = await prisma.game.findUnique({
+            where: { id: gameId },
+            include: {
+              players: {
+                include: { user: true }
+              },
+              tournament: true
+            }
           });
+          
+          if (gameForNextHand && gameForNextHand.players.length >= 2) {
+            // Check if blind level should advance (for tournaments)
+            if (gameForNextHand.tournament && gameForNextHand.tournament.status === 'RUNNING') {
+              await checkAndAdvanceBlindLevel(gameForNextHand.tournament.id, gameId, io);
+            }
+            
+            // Start new hand (dealer will be selected/rotated in startHandForGame)
+            if (io) {
+              try {
+                await startHandForGame(gameId, io);
+                console.log(`[TEST PLAYER] Started new hand after pot award`);
+              } catch (err) {
+                console.error(`[TEST PLAYER] Error starting new hand:`, err);
+              }
+            }
+          }
         }, 2000);
         
         // Emit updated state

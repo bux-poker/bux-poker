@@ -148,7 +148,7 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
                 {!isCurrentUser && (
                   <span className="font-medium opacity-80" style={{ fontSize: fontSizes.username }}>{message.userName}</span>
                 )}
-                <span className="opacity-75 ml-auto" style={{ fontSize: fontSizes.timestamp }}> {formatTimestamp(message.timestamp)}</span>
+                <span className="opacity-75 ml-auto" style={{ fontSize: fontSizes.timestamp }}> {formatTimestamp(messageTimestamp)}</span>
               </div>
               <p style={{ fontSize: fontSizes.messageText }}>{messageText}</p>
             </div>
