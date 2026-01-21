@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../services/api';
+import axios from 'axios';
 
 export interface TournamentServer {
   id: string;
@@ -98,8 +99,19 @@ export function useTournament(id: string | undefined) {
         setError(null);
       }
     } catch (err: any) {
-      // Ignore abort errors
-      if (err.name === 'AbortError' || err.code === 'ECONNABORTED') {
+      // Ignore cancelation errors (expected when aborting previous requests)
+      // Check multiple ways axios might indicate cancellation
+      const isCanceled = 
+        axios.isCancel && axios.isCancel(err) ||
+        err.name === 'AbortError' || 
+        err.name === 'CanceledError' ||
+        err.code === 'ECONNABORTED' || 
+        err.code === 'ERR_CANCELED' ||
+        err.message === 'canceled' ||
+        (err.message && err.message.toLowerCase() === 'canceled');
+      
+      if (isCanceled) {
+        // Silently ignore - this is expected when canceling previous requests
         return;
       }
       setError(err.response?.data?.error || 'Failed to fetch tournament');
