@@ -919,32 +919,72 @@ async function handleTestPlayerAction(gameId, userId, io) {
         console.log(`[POKER] Test player ${player.name || userId} decided to CALL ${amount} (rand=${rand.toFixed(2)})`);
       } else {
         // 30% bet/raise
-        const minRaiseAmount = currentBet + (state.bettingRound?.minimumRaise || bigBlind);
+        const minimumRaise = state.bettingRound?.minimumRaise || bigBlind;
+        const minRaiseAmount = currentBet + minimumRaise;
         const halfPot = Math.floor((state.pot || 0) / 2);
         const totalBetAmount = Math.max(minRaiseAmount, halfPot);
         
         // For RAISE/BET, we need the additional amount to add, not total
         const additionalAmount = totalBetAmount - myContribution;
-        amount = Math.min(Math.max(additionalAmount, 0), myChips);
         
-        if (currentBet === 0) {
-          action = "BET";
-          console.log(`[POKER] Test player ${player.name || userId} decided to BET ${amount} (rand=${rand.toFixed(2)})`);
+        // Check if player has enough chips for a valid raise
+        // A raise requires: newContribution > currentBet AND (newContribution - currentBet) >= minimumRaise
+        // So we need: (myContribution + amount) > currentBet AND amount >= minimumRaise
+        // Since amount = additionalAmount capped to myChips, we need to verify it meets minimum raise
+        const minAdditionalForRaise = currentBet > 0 ? Math.max(minimumRaise, currentBet + minimumRaise - myContribution) : minimumRaise;
+        
+        // If player doesn't have enough chips for a minimum raise, fall back to call
+        if (myChips < minAdditionalForRaise) {
+          // Can't raise - fall back to call
+          action = "CALL";
+          amount = Math.min(amountToCall, myChips);
+          console.log(`[POKER] Test player ${player.name || userId} doesn't have enough chips for raise, calling ${amount} instead (rand=${rand.toFixed(2)})`);
         } else {
-          action = "RAISE";
-          console.log(`[POKER] Test player ${player.name || userId} decided to RAISE ${amount} (total bet would be ${myContribution + amount}) (rand=${rand.toFixed(2)})`);
+          // Cap amount to available chips, ensuring it meets minimum raise requirement
+          amount = Math.min(Math.max(additionalAmount, minAdditionalForRaise), myChips);
+          
+          if (currentBet === 0) {
+            action = "BET";
+            console.log(`[POKER] Test player ${player.name || userId} decided to BET ${amount} (rand=${rand.toFixed(2)})`);
+          } else {
+            action = "RAISE";
+            console.log(`[POKER] Test player ${player.name || userId} decided to RAISE ${amount} (total bet would be ${myContribution + amount}, minRaise=${minimumRaise}, rand=${rand.toFixed(2)})`);
+          }
         }
       }
     }
 
-    // Apply the action
-    const newState = await applyPlayerAction({
-      gameId,
-      userId,
-      action,
-      amount,
-      io
-    });
+    // Apply the action - if raise fails due to minimum raise requirement, fall back to call
+    let newState;
+    try {
+      newState = await applyPlayerAction({
+        gameId,
+        userId,
+        action,
+        amount,
+        io
+      });
+    } catch (error) {
+      // If raise/bet fails due to minimum raise requirement or insufficient chips, fall back to call
+      if ((action === "RAISE" || action === "BET") && 
+          (error.message?.includes("Raise below minimum raise size") || 
+           error.message?.includes("Insufficient chips"))) {
+        console.log(`[TEST PLAYER] ${action} failed for ${player.name || userId}: ${error.message}. Falling back to CALL.`);
+        // Fall back to call
+        action = "CALL";
+        amount = Math.min(amountToCall, myChips);
+        newState = await applyPlayerAction({
+          gameId,
+          userId,
+          action,
+          amount,
+          io
+        });
+      } else {
+        // Re-throw other errors
+        throw error;
+      }
+    }
 
     const game = await prisma.game.findUnique({
       where: { id: gameId },
