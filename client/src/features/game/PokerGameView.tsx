@@ -683,12 +683,12 @@ export function PokerGameView() {
             />
             
             {/* Tournament Starting Countdown Overlay */}
-            {tournamentCountdown && tournamentCountdown.seconds > 0 && (
-              <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                <div className="bg-slate-900 rounded-lg p-8 border-2 border-yellow-500 shadow-2xl text-center max-w-md">
-                  <h2 className="text-4xl font-bold text-yellow-400 mb-4">Game Starting Soon!</h2>
-                  <p className="text-2xl text-white mb-6">Take your seats</p>
-                  <div className="text-6xl font-bold text-emerald-400">
+            {(tournamentCountdown && tournamentCountdown.seconds > 0) && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
+                <div className="bg-slate-900 rounded-lg p-6 sm:p-8 border-2 border-yellow-500 shadow-2xl text-center max-w-md mx-4">
+                  <h2 className="text-2xl sm:text-4xl font-bold text-yellow-400 mb-3 sm:mb-4">Game Starting Soon!</h2>
+                  <p className="text-xl sm:text-2xl text-white mb-4 sm:mb-6">Take your seats</p>
+                  <div className="text-5xl sm:text-6xl font-bold text-emerald-400">
                     {Math.floor(tournamentCountdown.seconds / 60)}:{(tournamentCountdown.seconds % 60).toString().padStart(2, '0')}
                   </div>
                 </div>
