@@ -107,6 +107,17 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
             ? String(message.message)
             : '';
         
+        // Ensure message.timestamp is valid - handle edge cases
+        let messageTimestamp = message.timestamp;
+        if (messageTimestamp && typeof messageTimestamp === 'object') {
+          // If timestamp is an object, try to extract a valid timestamp
+          messageTimestamp = messageTimestamp.timestamp || messageTimestamp.time || messageTimestamp.value || Date.now();
+        }
+        if (!messageTimestamp || (typeof messageTimestamp !== 'number' && typeof messageTimestamp !== 'string')) {
+          // Fallback to current time if timestamp is invalid
+          messageTimestamp = Date.now();
+        }
+        
         const isSystemMessage = message.userId === 'system' || message.userId === 'DEALER';
         const isCurrentUser = currentUserId ? message.userId === currentUserId : false;
         
