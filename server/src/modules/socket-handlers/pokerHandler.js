@@ -858,8 +858,8 @@ async function handleTestPlayerAction(gameId, userId, io) {
     console.log(`[POKER] handleTestPlayerAction called for userId: ${userId}`);
     const state = tableState.get(gameId);
     if (!state) {
-      console.log(`[POKER] No state found for gameId: ${gameId}`);
-      // Clear timer and try to move to next player
+      console.log(`[POKER] No state found for gameId: ${gameId} - game may have ended or new hand starting`);
+      // Clear timer - can't proceed without state
       const existingTimer = turnTimers.get(gameId);
       if (existingTimer) {
         clearTimeout(existingTimer.timerId);
@@ -867,6 +867,31 @@ async function handleTestPlayerAction(gameId, userId, io) {
           clearTimeout(existingTimer.graceTimerId);
         }
         turnTimers.delete(gameId);
+      }
+      return;
+    }
+    
+    // Verify it's still this player's turn before proceeding
+    if (state.currentTurnUserId !== userId) {
+      console.log(`[POKER] handleTestPlayerAction: It's no longer ${userId}'s turn (currentTurn=${state.currentTurnUserId}). State may have changed.`);
+      // Clear timer and try to find next player
+      const existingTimer = turnTimers.get(gameId);
+      if (existingTimer) {
+        clearTimeout(existingTimer.timerId);
+        if (existingTimer.graceTimerId) {
+          clearTimeout(existingTimer.graceTimerId);
+        }
+        turnTimers.delete(gameId);
+      }
+      
+      // If no current turn, try to find next player or check betting completion
+      if (!state.currentTurnUserId) {
+        console.log(`[POKER] No current turn - attempting to move to next player`);
+        try {
+          await moveToNextPlayer(gameId, io);
+        } catch (err) {
+          console.error(`[POKER] Error in moveToNextPlayer after stale timer:`, err);
+        }
       }
       return;
     }
