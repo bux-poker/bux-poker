@@ -147,14 +147,15 @@ export function PokerGameView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.tournamentId]); // refetchTournament is stable (memoized), so we can omit it
   
-  // Also refetch periodically if tournament hasn't started yet (fallback)
+  // Also refetch periodically if tournament is SEATED but hasn't started yet (waiting for 2-minute countdown)
   useEffect(() => {
-    if (gameState?.tournamentId && tournament && tournament.status !== 'RUNNING' && tournament.status !== 'COMPLETED' && !tournament.startedAt) {
-      // Refetch every 3 seconds if tournament hasn't started yet
+    // Only poll if tournament is SEATED (waiting to start) and hasn't started yet
+    if (gameState?.tournamentId && tournament?.status === 'SEATED' && !tournament.startedAt) {
+      // Refetch every 5 seconds if tournament is SEATED and hasn't started yet (during 2-minute countdown)
       const interval = setInterval(() => {
         console.log('[BLIND TIMER] Refetching tournament data to check for startedAt...');
         refetchTournament();
-      }, 3000);
+      }, 5000); // Increased to 5 seconds to reduce polling frequency
       return () => clearInterval(interval);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
