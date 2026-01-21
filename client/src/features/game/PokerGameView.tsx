@@ -281,9 +281,11 @@ export function PokerGameView() {
       socket.off("game_message");
       socket.off("turn-timer-start");
       socket.off("showdown");
+      socket.off("tournament-starting");
+      socket.off("tournament-started");
       clearInterval(timerInterval);
     };
-  }, [id, turnTimer, gameState?.tournamentId]);
+  }, [id, turnTimer, gameState?.tournamentId, tournament?.id]);
 
   // Update countdown timer every second (separate from socket setup)
   useEffect(() => {

@@ -167,6 +167,16 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
   switch (action) {
     case "BET":
     case "RAISE": {
+      // Validate player has enough chips
+      if (amount > player.chips) {
+        throw new Error(`Insufficient chips: trying to bet ${amount} but only have ${player.chips}`);
+      }
+      
+      // Validate amount is positive
+      if (amount <= 0) {
+        throw new Error(`Invalid bet amount: ${amount}`);
+      }
+      
       const wasRaise = state.lastRaiseUserId !== null;
       state.bettingRound.bet(player.id, amount);
       player.chips -= amount;
@@ -180,13 +190,19 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
       
       const newBet = state.bettingRound.currentBet;
       const newContribution = state.bettingRound.getPlayerContribution(player.id);
-      console.log(`[ACTION] After ${action}: currentBet=${newBet}, playerContribution=${newContribution}, lastRaiseUserId=${state.lastRaiseUserId}`);
+      console.log(`[ACTION] After ${action}: currentBet=${newBet}, playerContribution=${newContribution}, lastRaiseUserId=${state.lastRaiseUserId}, remainingChips=${player.chips}`);
       
       // Post dealer message
       if (io && action === "BET") {
-        postDealerMessage(gameId, io, `${playerName} bets ${amount.toLocaleString()}`);
+        const message = player.chips === 0 
+          ? `${playerName} bets ${amount.toLocaleString()} (all-in)`
+          : `${playerName} bets ${amount.toLocaleString()}`;
+        postDealerMessage(gameId, io, message);
       } else if (io && action === "RAISE") {
-        postDealerMessage(gameId, io, `${playerName} raises to ${newBet.toLocaleString()}`);
+        const message = player.chips === 0
+          ? `${playerName} raises to ${newBet.toLocaleString()} (all-in)`
+          : `${playerName} raises to ${newBet.toLocaleString()}`;
+        postDealerMessage(gameId, io, message);
       }
       
       // Note: We don't set next player here - moveToNextPlayer will handle it

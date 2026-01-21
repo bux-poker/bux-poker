@@ -115,8 +115,17 @@ export class TournamentEngine {
     // Calculate start time (2 minutes from now)
     const startTime = new Date(Date.now() + 2 * 60 * 1000);
     
-    // Broadcast tournament starting event with countdown to all clients
+    // Broadcast tournament starting event with countdown to all clients in tournament games
     if (socketIO) {
+      // Emit to all game rooms in this tournament
+      for (const game of tournament.games || []) {
+        socketIO.to(`game:${game.id}`).emit("tournament-starting", {
+          tournamentId,
+          startTime: startTime.toISOString(),
+          countdownSeconds: 120
+        });
+      }
+      // Also emit globally as fallback
       socketIO.emit("tournament-starting", {
         tournamentId,
         startTime: startTime.toISOString(),
