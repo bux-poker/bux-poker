@@ -229,17 +229,34 @@ export function PokerGameView() {
 
     // Listen for tournament starting countdown
     socket.on("tournament-starting", (payload: { tournamentId: string; startTime: string; countdownSeconds: number }) => {
-      if (payload.tournamentId === gameState?.tournamentId) {
+      console.log('[TOURNAMENT COUNTDOWN] Received tournament-starting event:', payload);
+      // Check if this tournament matches our game (check both gameState and tournament object)
+      const matchesGameState = payload.tournamentId === gameState?.tournamentId;
+      const matchesTournament = payload.tournamentId === tournament?.id;
+      
+      if (matchesGameState || matchesTournament) {
+        console.log('[TOURNAMENT COUNTDOWN] Setting countdown:', payload);
         setTournamentCountdown({
           startTime: payload.startTime,
           seconds: payload.countdownSeconds
+        });
+      } else {
+        console.log('[TOURNAMENT COUNTDOWN] Tournament ID mismatch:', {
+          payloadTournamentId: payload.tournamentId,
+          gameStateTournamentId: gameState?.tournamentId,
+          tournamentId: tournament?.id
         });
       }
     });
 
     // Listen for tournament started (clear countdown)
     socket.on("tournament-started", (payload: { tournamentId: string }) => {
-      if (payload.tournamentId === gameState?.tournamentId) {
+      // Check if this tournament matches our game (check both gameState and tournament object)
+      const matchesGameState = payload.tournamentId === gameState?.tournamentId;
+      const matchesTournament = payload.tournamentId === tournament?.id;
+      
+      if (matchesGameState || matchesTournament) {
+        console.log('[TOURNAMENT COUNTDOWN] Tournament started, clearing countdown');
         setTournamentCountdown(null);
       }
     });
