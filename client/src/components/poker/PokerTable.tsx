@@ -144,6 +144,7 @@ interface PokerTableProps {
   }>;
   communityCards: Card[];
   pot: number;
+  tournamentCountdown?: { startTime: string; seconds: number } | null;
   currentBet: number;
   currentPlayer?: string;
   smallBlind?: number;
@@ -180,6 +181,7 @@ export function PokerTable({
   myUserId,
   showdownActive = false,
   showdownResults,
+  tournamentCountdown,
 }: PokerTableProps) {
   // Create array with 10 seats (empty seats if needed)
   const allSeats = Array.from({ length: 10 }, (_, idx) => {
@@ -300,6 +302,20 @@ export function PokerTable({
       >
         
 
+
+        {/* Tournament Starting Countdown - Center of table */}
+        {tournamentCountdown && tournamentCountdown.seconds > 0 && (
+          <div 
+            className="absolute left-1/2 top-1/2 z-20 flex flex-col items-center justify-center -translate-x-1/2 -translate-y-1/2"
+          >
+            <div className="bg-slate-900/95 rounded-lg px-4 py-3 border-2 border-yellow-500 shadow-2xl text-center backdrop-blur-sm">
+              <p className="text-sm sm:text-base font-semibold text-yellow-400 mb-1">Game Starting Soon</p>
+              <div className="text-2xl sm:text-3xl font-bold text-emerald-400">
+                {Math.floor(tournamentCountdown.seconds / 60)}:{(tournamentCountdown.seconds % 60).toString().padStart(2, '0')}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Community Cards - Center of table */}
         {communityCards.length > 0 && (

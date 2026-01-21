@@ -452,23 +452,41 @@ export async function startHandForGame(gameId, io) {
     throw new Error(`Could not find SB or BB players. Dealer seat: ${dealerSeat}, SB seat: ${sbSeat}, BB seat: ${bbSeat}`);
   }
 
-  // Deal hole cards
+  // Deal hole cards ONLY to active players (eliminated players should not receive cards)
   const deck = tournamentEngine.createShuffledDeck();
+  const activeDealtPlayers = game.players.filter(p => p.status === 'ACTIVE');
   const { deck: remainingDeck, players: dealtHands } = tournamentEngine.dealHoleCards(
     deck,
-    game.players.length
+    activeDealtPlayers.length
   );
 
   // Persist hole cards
   await Promise.all(
-    game.players.map((p, index) =>
-      prisma.player.update({
+    game.players.map((p) => {
+      // Eliminated players keep no hole cards
+      if (p.status === 'ELIMINATED') {
+        return prisma.player.update({
+          where: { id: p.id },
+          data: {
+            holeCards: "",
+          },
+        });
+      }
+
+      // Map dealt hands to active players in seat order for deterministic dealing
+      const activeIndex = activeDealtPlayers
+        .sort((a, b) => a.seatNumber - b.seatNumber)
+        .findIndex(ap => ap.id === p.id);
+
+      const holeCards = activeIndex >= 0 ? JSON.stringify(dealtHands[activeIndex]) : "";
+
+      return prisma.player.update({
         where: { id: p.id },
         data: {
-          holeCards: JSON.stringify(dealtHands[index])
-        }
-      })
-    )
+          holeCards,
+        },
+      });
+    })
   );
 
   // Create betting round
@@ -1548,17 +1566,20 @@ async function handleShowdown(gameId, io) {
     const savedPlayers = [...state.players]; // Save players array before clearing state
     tableState.delete(gameId);
     
-    // Reset all players' statuses for next hand
-    const resetPromises = savedPlayers.map(p => 
-      prisma.player.update({
+    // Reset player state for next hand:
+    // - Players marked ELIMINATED stay eliminated (no new cards)
+    // - Active players are reset to ACTIVE with cleared hole cards / lastAction
+    const resetPromises = savedPlayers.map(p => {
+      const isEliminated = p.status === 'ELIMINATED';
+      return prisma.player.update({
         where: { id: p.id },
         data: { 
-          status: 'ACTIVE',
+          status: isEliminated ? 'ELIMINATED' : 'ACTIVE',
           holeCards: "",
           lastAction: null
         }
-      }).catch(err => console.error(`[SHOWDOWN] Error resetting player ${p.id}:`, err))
-    );
+      }).catch(err => console.error(`[SHOWDOWN] Error resetting player ${p.id}:`, err));
+    });
     
     Promise.all(resetPromises).then(async () => {
       console.log(`[SHOWDOWN] All players reset for next hand`);
