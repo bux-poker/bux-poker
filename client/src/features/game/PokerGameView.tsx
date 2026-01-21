@@ -144,7 +144,8 @@ export function PokerGameView() {
       // Refetch tournament data whenever gameState.tournamentId changes
       refetchTournament();
     }
-  }, [gameState?.tournamentId, refetchTournament]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState?.tournamentId]); // refetchTournament is stable (memoized), so we can omit it
   
   // Also refetch periodically if tournament hasn't started yet (fallback)
   useEffect(() => {
@@ -156,7 +157,8 @@ export function PokerGameView() {
       }, 3000);
       return () => clearInterval(interval);
     }
-  }, [gameState?.tournamentId, tournament?.status, tournament?.startedAt, refetchTournament]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState?.tournamentId, tournament?.status, tournament?.startedAt]); // refetchTournament is stable (memoized), so we can omit it
 
   useEffect(() => {
     if (!id) return;

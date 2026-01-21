@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../services/api';
 
 export interface TournamentServer {
@@ -69,29 +69,58 @@ export function useTournament(id: string | undefined) {
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  const fetchTournament = async () => {
+  const fetchTournament = useCallback(async () => {
     if (!id) {
       setLoading(false);
       return;
     }
 
+    // Cancel previous request if it exists
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new AbortController for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     try {
       setLoading(true);
-      const response = await api.get(`/api/tournaments/${id}`);
-      setTournament(response.data);
-      setError(null);
+      const response = await api.get(`/api/tournaments/${id}`, {
+        signal: abortController.signal,
+      });
+      
+      // Only update state if request wasn't aborted
+      if (!abortController.signal.aborted) {
+        setTournament(response.data);
+        setError(null);
+      }
     } catch (err: any) {
+      // Ignore abort errors
+      if (err.name === 'AbortError' || err.code === 'ECONNABORTED') {
+        return;
+      }
       setError(err.response?.data?.error || 'Failed to fetch tournament');
       console.error('Error fetching tournament:', err);
     } finally {
-      setLoading(false);
+      if (!abortController.signal.aborted) {
+        setLoading(false);
+      }
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     fetchTournament();
-  }, [id]);
+    
+    // Cleanup: abort request on unmount or id change
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [fetchTournament]);
 
   const register = async () => {
     if (!id) return;
