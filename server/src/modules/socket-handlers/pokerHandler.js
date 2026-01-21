@@ -1743,6 +1743,17 @@ async function advanceToNextStreet(gameId, io) {
     }
     
     if (firstToActPlayer) {
+      // Clear any existing turn timer before starting new betting round
+      const existingTimer = turnTimers.get(gameId);
+      if (existingTimer) {
+        clearTimeout(existingTimer.timerId);
+        if (existingTimer.graceTimerId) {
+          clearTimeout(existingTimer.graceTimerId);
+        }
+        turnTimers.delete(gameId);
+        console.log(`[POKER] advanceToNextStreet: Cleared existing turn timer before starting new street`);
+      }
+      
       console.log(`[POKER] advanceToNextStreet: Starting new betting round on ${state.street}, first to act: seat ${firstToActPlayer.seatNumber} (${firstToActPlayer.name || firstToActPlayer.userId})`);
       state.currentTurnUserId = firstToActPlayer.userId;
       state.lastRaiseUserId = null; // Reset last raise for new street
