@@ -1850,9 +1850,11 @@ async function moveToNextPlayer(gameId, io) {
         needsToAct = !hasActed;
         console.log(`[TURN ORDER] Checking seat ${nextSeat} (${playerAtSeat.name || playerAtSeat.userId}): currentBet=0, hasActed=${hasActed}, needsToAct=${needsToAct}`);
       } else {
-        // When currentBet > 0, player needs to act if their contribution < currentBet
-        // (they haven't matched the bet yet)
-        needsToAct = contribution < currentBet;
+        // When currentBet > 0, player needs to act if:
+        // 1. Their contribution < currentBet (they haven't matched the bet yet), OR
+        // 2. They haven't acted yet this round (even if contribution equals current bet - like big blind)
+        // This ensures the big blind gets a chance to act voluntarily even if no one raised
+        needsToAct = contribution < currentBet || !hasActed;
         console.log(`[TURN ORDER] Checking seat ${nextSeat} (${playerAtSeat.name || playerAtSeat.userId}): contribution=${contribution}, currentBet=${currentBet}, hasActed=${hasActed}, isLastRaiser=${isLastRaiser}, needsToAct=${needsToAct}`);
       }
       
