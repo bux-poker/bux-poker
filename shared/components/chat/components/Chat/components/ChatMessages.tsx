@@ -84,7 +84,14 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
   return (
     <div className={`flex-1 overflow-y-auto flex flex-col p-4 ${isMobile ? 'gap-y-2' : 'gap-y-4'}`}>
       {messages.map((message, index) => {
-        const isSystemMessage = message.userId === 'system';
+        // Ensure message.message is a string, not an object
+        const messageText = typeof message.message === 'string' 
+          ? message.message 
+          : typeof message.message === 'object' && message.message !== null
+            ? String(message.message)
+            : '';
+        
+        const isSystemMessage = message.userId === 'system' || message.userId === 'DEALER';
         const isCurrentUser = currentUserId ? message.userId === currentUserId : false;
         
         if (isSystemMessage) {
@@ -94,8 +101,8 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
               className="w-full text-center my-2"
             >
               <span className="text-orange-400 italic flex items-center justify-center gap-1" style={{ fontSize: fontSizes.messageText }}>
-                {message.message.includes('spectating') && <EyeIcon />}
-                {message.message}
+                {messageText.includes('spectating') && <EyeIcon />}
+                {messageText}
               </span>
             </div>
           );
@@ -127,7 +134,7 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
                 )}
                 <span className="opacity-75 ml-auto" style={{ fontSize: fontSizes.timestamp }}> {formatTimestamp(message.timestamp)}</span>
               </div>
-              <p style={{ fontSize: fontSizes.messageText }}>{message.message}</p>
+              <p style={{ fontSize: fontSizes.messageText }}>{messageText}</p>
             </div>
             {isCurrentUser && (
               <div className={`${isMobile ? 'w-6 h-6 ml-1.5' : 'w-8 h-8 ml-2'} rounded-full overflow-hidden flex-shrink-0`}>
