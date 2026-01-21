@@ -151,15 +151,43 @@ export function PokerGameView() {
   }, [gameState?.tournamentId]); // refetchTournament is stable (memoized), so we can omit it
   
   // Also refetch periodically if tournament is SEATED but hasn't started yet (waiting for 2-minute countdown)
+  // Track polling state with a ref to prevent unnecessary refetches
+  const pollingActiveRef = useRef(false);
+  
   useEffect(() => {
     // Only poll if tournament is SEATED (waiting to start) and hasn't started yet
-    if (gameState?.tournamentId && tournament?.status === 'SEATED' && !tournament.startedAt) {
+    const shouldPoll = gameState?.tournamentId && tournament?.status === 'SEATED' && !tournament.startedAt;
+    
+    if (shouldPoll) {
+      pollingActiveRef.current = true;
+      
       // Refetch every 5 seconds if tournament is SEATED and hasn't started yet (during 2-minute countdown)
       const interval = setInterval(() => {
+        // Double-check condition before refetching (tournament might have started)
+        // This prevents unnecessary refetches if the tournament already started
+        if (!pollingActiveRef.current) {
+          return; // Polling was stopped, don't refetch
+        }
+        
         console.log('[BLIND TIMER] Refetching tournament data to check for startedAt...');
-        refetchTournament();
+        refetchTournament().then(() => {
+          // After refetch, the tournament object will be updated and this useEffect will re-run
+          // If tournament.startedAt is now set, the interval will be cleared
+        }).catch((err) => {
+          // Silently ignore refetch errors (they're expected during normal operation)
+          if (err.name !== 'CanceledError' && err.code !== 'ERR_CANCELED' && err.message !== 'Request aborted') {
+            console.error('[BLIND TIMER] Error refetching tournament:', err);
+          }
+        });
       }, 5000); // Increased to 5 seconds to reduce polling frequency
-      return () => clearInterval(interval);
+      
+      return () => {
+        pollingActiveRef.current = false;
+        clearInterval(interval);
+      };
+    } else {
+      // Tournament has started or status changed - stop polling
+      pollingActiveRef.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.tournamentId, tournament?.status, tournament?.startedAt]); // refetchTournament is stable (memoized), so we can omit it
@@ -171,8 +199,10 @@ export function PokerGameView() {
     
     // Listen for tournament-started socket event to refetch immediately
     const handleTournamentStarted = (data: { tournamentId: string; startedAt: string }) => {
-      if (data.tournamentId === gameState?.tournamentId) {
+      if (data.tournamentId === gameState?.tournamentId || data.tournamentId === tournament?.id) {
         console.log('[BLIND TIMER] Tournament started event received, refetching tournament data...');
+        // Stop polling immediately when tournament starts
+        pollingActiveRef.current = false;
         refetchTournament();
       }
     };
