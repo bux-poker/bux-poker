@@ -242,13 +242,44 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
       // All-in acts as a raise if it's more than current bet
       const currentContribution = state.bettingRound.getPlayerContribution(player.id);
       const allInContribution = currentContribution + allInAmount;
-      if (allInContribution > state.bettingRound.currentBet) {
-        state.lastRaiseUserId = player.userId; // Track who raised (all-in counts as raise)
-        // Reset acted players when someone raises - all players need to act again
-        state.actedPlayersInRound.clear();
+      
+      // Special handling for all-in: allow even if it doesn't meet minimum raise
+      // If all-in doesn't increase bet enough, treat it as a call
+      if (allInContribution <= state.bettingRound.currentBet) {
+        // All-in amount doesn't even cover the current bet - treat as call
+        const amountToCall = state.bettingRound.currentBet - currentContribution;
+        const actualCall = Math.min(amountToCall, allInAmount);
+        if (actualCall > 0) {
+          state.bettingRound.call(player.id, allInAmount);
+          player.chips -= actualCall;
+        } else {
+          // Already called, just mark as acted
+          state.actedPlayersInRound.add(userId);
+        }
+      } else {
+        // All-in is large enough to be a raise - use special all-in bet method
+        // Check if it meets minimum raise requirement
+        const raiseAmount = allInContribution - state.bettingRound.currentBet;
+        const minRaise = state.bettingRound.minimumRaise || state.bettingRound.bigBlind;
+        
+        if (raiseAmount >= minRaise) {
+          // Valid raise - use normal bet method
+          state.bettingRound.bet(player.id, allInAmount);
+          state.lastRaiseUserId = player.userId;
+          state.actedPlayersInRound.clear();
+        } else {
+          // All-in doesn't meet minimum raise, but we allow it anyway
+          // Manually update player contribution and current bet
+          state.bettingRound.playerBets.set(player.id, allInContribution);
+          // Don't update currentBet if it's not a full raise
+          // But we do allow the player to go all-in
+          if (allInContribution > state.bettingRound.currentBet) {
+            state.lastRaiseUserId = player.userId;
+            state.actedPlayersInRound.clear();
+          }
+        }
+        player.chips = 0;
       }
-      state.bettingRound.bet(player.id, allInAmount);
-      player.chips = 0;
       // Don't update state.pot here - it's accumulated when advancing streets
       // state.pot should only change when collecting from betting round
       // Mark player as having acted (they went all-in)
@@ -781,17 +812,23 @@ async function handleTestPlayerAction(gameId, userId, io) {
       }
     } else {
       // 30% bet/raise (minimum raise or half pot)
-      const minRaise = currentBet + (state.bettingRound?.minimumRaise || bigBlind);
+      // For RAISE, amount is the TOTAL bet amount (not additional)
+      // Calculate: currentBet + minimumRaise = total bet needed
+      const minRaiseAmount = currentBet + (state.bettingRound?.minimumRaise || bigBlind);
       const halfPot = Math.floor((state.pot || 0) / 2);
-      const betAmount = Math.max(minRaise, halfPot);
-      amount = Math.min(betAmount, myChips);
+      const totalBetAmount = Math.max(minRaiseAmount, halfPot);
+      
+      // For RAISE/BET, we need the additional amount to add, not total
+      // amount = totalBetAmount - myContribution
+      const additionalAmount = totalBetAmount - myContribution;
+      amount = Math.min(Math.max(additionalAmount, 0), myChips);
       
       if (currentBet === 0) {
         action = "BET";
         console.log(`[POKER] Test player ${player.name || userId} decided to BET ${amount} (rand=${rand.toFixed(2)})`);
       } else {
         action = "RAISE";
-        console.log(`[POKER] Test player ${player.name || userId} decided to RAISE ${amount} (rand=${rand.toFixed(2)})`);
+        console.log(`[POKER] Test player ${player.name || userId} decided to RAISE ${amount} (total bet would be ${myContribution + amount}) (rand=${rand.toFixed(2)})`);
       }
     }
 

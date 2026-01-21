@@ -62,16 +62,32 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
 
   const fontSizes = getFontSizes();
 
-  const formatTimestamp = (timestamp: number | string) => {
+  const formatTimestamp = (timestamp: number | string | any) => {
     // Handle both ISO strings (from server) and Unix timestamps (from client)
+    // Also handle edge cases where timestamp might be an object
     let date: Date;
     if (typeof timestamp === 'string') {
       // If it's an ISO string, parse it directly
       date = new Date(timestamp);
-    } else {
+    } else if (typeof timestamp === 'number') {
       // If it's a number, treat it as Unix timestamp
       date = new Date(timestamp);
+    } else if (timestamp && typeof timestamp === 'object') {
+      // If it's an object, try to extract a valid timestamp
+      // This handles edge cases where timestamp might be wrapped in an object
+      const ts = timestamp.timestamp || timestamp.time || timestamp.value || Date.now();
+      date = new Date(ts);
+    } else {
+      // Fallback to current time
+      date = new Date();
     }
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      // Invalid date, return current time
+      date = new Date();
+    }
+    
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
