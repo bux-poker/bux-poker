@@ -373,11 +373,12 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
           state.actedPlayersInRound.clear();
         } else {
           // All-in doesn't meet minimum raise, but we allow it anyway
-          // Manually update player contribution and current bet
+          // Manually update player contribution
           state.bettingRound.playerBets.set(player.id, allInContribution);
-          // Don't update currentBet if it's not a full raise
-          // But we do allow the player to go all-in
+          // Update currentBet if all-in amount is higher (even if not a full raise)
+          // This ensures other players know they need to match this amount
           if (allInContribution > state.bettingRound.currentBet) {
+            state.bettingRound.currentBet = allInContribution;
             state.lastRaiseUserId = player.userId;
             state.actedPlayersInRound.clear();
           }
