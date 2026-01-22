@@ -273,13 +273,13 @@ async function handleRegisterButton(interaction, tournamentId) {
 
     // Register user using upsert to handle race conditions
     try {
-      await prisma.tournamentRegistration.create({
-        data: {
-          tournamentId: tournamentId,
-          userId: user.id,
-          status: 'CONFIRMED',
-        },
-      });
+    await prisma.tournamentRegistration.create({
+      data: {
+        tournamentId: tournamentId,
+        userId: user.id,
+        status: 'CONFIRMED',
+      },
+    });
     } catch (error) {
       // Handle race condition where registration was created between check and create
       if (error.code === 'P2002' && error.meta?.target?.includes('tournamentId_userId')) {

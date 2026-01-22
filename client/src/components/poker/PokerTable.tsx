@@ -643,12 +643,17 @@ export function PokerTable({
               return allWinningCards.some(wc => wc.rank === card.rank && wc.suit === card.suit);
             };
             
-            const holeWidth = typeof window !== 'undefined'
+            // Base card dimensions from CSS variables
+            const baseHoleWidth = typeof window !== 'undefined'
               ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hole-card-width')) || 28
               : 28;
-            const holeHeight = typeof window !== 'undefined'
+            const baseHoleHeight = typeof window !== 'undefined'
               ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hole-card-height')) || 39
               : 39;
+            
+            // Double the size when cards are face up (showdown)
+            const holeWidth = showFaceUp ? baseHoleWidth * 2 : baseHoleWidth;
+            const holeHeight = showFaceUp ? baseHoleHeight * 2 : baseHoleHeight;
             
             elements.push(
               <div

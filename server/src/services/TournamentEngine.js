@@ -137,53 +137,53 @@ export class TournamentEngine {
     // Wait 2 minutes before actually starting the game
     setTimeout(async () => {
       try {
-        // Mark as RUNNING and record actual start time
-        const startedAt = new Date();
-        await prisma.tournament.update({
-          where: { id: tournamentId },
-          data: {
-            status: "RUNNING",
-            startedAt: startedAt // Record actual start time
-          }
-        });
+    // Mark as RUNNING and record actual start time
+    const startedAt = new Date();
+    await prisma.tournament.update({
+      where: { id: tournamentId },
+      data: {
+        status: "RUNNING",
+        startedAt: startedAt // Record actual start time
+      }
+    });
 
-        // Start a hand for each game
+    // Start a hand for each game
         const { startHandForGame } = await import("../modules/socket-handlers/pokerHandler.js");
-        
-        // Broadcast tournament started event to all clients so they can refetch tournament data
-        if (socketIO) {
-          socketIO.emit("tournament-started", {
-            tournamentId,
-            startedAt: startedAt.toISOString()
-          });
-          console.log(`[TOURNAMENT] Broadcasted tournament-started event for tournament ${tournamentId}`);
+    
+    // Broadcast tournament started event to all clients so they can refetch tournament data
+    if (socketIO) {
+      socketIO.emit("tournament-started", {
+        tournamentId,
+        startedAt: startedAt.toISOString()
+      });
+      console.log(`[TOURNAMENT] Broadcasted tournament-started event for tournament ${tournamentId}`);
+    }
+    
+    if (socketIO) {
+      const games = await prisma.game.findMany({
+        where: { tournamentId },
+        include: {
+          players: {
+            include: { user: true }
+          },
+          tournament: true
         }
-        
-        if (socketIO) {
-          const games = await prisma.game.findMany({
-            where: { tournamentId },
-            include: {
-              players: {
-                include: { user: true }
-              },
-              tournament: true
-            }
-          });
+      });
 
-          for (const game of games) {
-            if (game.status === "ACTIVE" && game.players.length >= 2) {
-              try {
-                await startHandForGame(game.id, socketIO);
-              } catch (err) {
-                console.error(`[TOURNAMENT] Error starting hand for game ${game.id}:`, err);
-              }
-            }
+      for (const game of games) {
+        if (game.status === "ACTIVE" && game.players.length >= 2) {
+          try {
+            await startHandForGame(game.id, socketIO);
+          } catch (err) {
+            console.error(`[TOURNAMENT] Error starting hand for game ${game.id}:`, err);
           }
         }
+      }
+    }
 
-        // Start blind level timer
-        console.log(`[TOURNAMENT] Starting blind level timer for tournament ${tournamentId}`);
-        this.startBlindLevelTimer(tournamentId);
+    // Start blind level timer
+    console.log(`[TOURNAMENT] Starting blind level timer for tournament ${tournamentId}`);
+    this.startBlindLevelTimer(tournamentId);
       } catch (err) {
         console.error(`[TOURNAMENT] Error starting tournament after countdown:`, err);
       }
@@ -487,7 +487,7 @@ export class TournamentEngine {
 
     if (games.length <= 1) {
       console.log(`[TOURNAMENT] Only ${games.length} table(s), no rebalancing needed`);
-      return games;
+    return games;
     }
 
     // Collect all active players

@@ -95,8 +95,8 @@ export function useTournament(id: string | undefined) {
       
       // Only update state if request wasn't aborted
       if (!abortController.signal.aborted) {
-        setTournament(response.data);
-        setError(null);
+      setTournament(response.data);
+      setError(null);
       }
     } catch (err: any) {
       // Ignore cancelation errors (expected when aborting previous requests)
@@ -118,7 +118,7 @@ export function useTournament(id: string | undefined) {
       console.error('Error fetching tournament:', err);
     } finally {
       if (!abortController.signal.aborted) {
-        setLoading(false);
+      setLoading(false);
       }
     }
   }, [id]);

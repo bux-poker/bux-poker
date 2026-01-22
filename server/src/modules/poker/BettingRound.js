@@ -139,24 +139,34 @@ export class BettingRound {
     
     // If no one has raised, betting is complete when:
     // 1. All have equal contributions (checked above)
-    // 2. AND all active players have acted at least once in this betting round
+    // 2. AND all active players have either acted OR are all-in (can't act)
     if (!lastRaiseUserId) {
-      // No raise - betting is complete when all active players have acted once
-      // Get userIds for active players
-      const activeUserIds = activePlayerIds.map(id => {
+      // No raise - betting is complete when all active players have acted once OR are all-in
+      // Get userIds and all-in status for active players
+      const activePlayerInfo = activePlayerIds.map(id => {
         const player = allPlayers.find(p => p.id === id);
-        return player?.userId || id;
+        return {
+          userId: player?.userId || id,
+          isAllIn: (player?.chips || 0) === 0
+        };
       });
       
-      // Check if all active players have acted
-      const allHaveActed = activeUserIds.every(userId => actedPlayersInRound.has(userId));
+      // Check if all active players have either acted OR are all-in
+      const allHaveActedOrAllIn = activePlayerInfo.every(({ userId, isAllIn }) => {
+        if (isAllIn) {
+          return true; // All-in players can't act, so they're considered "done"
+        }
+        return actedPlayersInRound.has(userId); // Non-all-in players must have acted
+      });
       
-      if (allHaveActed) {
-        console.log(`[BETTING] Complete: all contributed equally, no raises, all active players have acted`);
+      if (allHaveActedOrAllIn) {
+        console.log(`[BETTING] Complete: all contributed equally, no raises, all active players have acted or are all-in`);
         return true;
       } else {
-        // Still have players who haven't acted - they still need to act
-        const notActed = activeUserIds.filter(userId => !actedPlayersInRound.has(userId));
+        // Still have players who haven't acted and aren't all-in - they still need to act
+        const notActed = activePlayerInfo
+          .filter(({ userId, isAllIn }) => !isAllIn && !actedPlayersInRound.has(userId))
+          .map(({ userId }) => userId);
         console.log(`[BETTING] Not complete: all contributed equally, no raises, but players haven't acted: ${notActed.join(', ')}`);
         return false;
       }
