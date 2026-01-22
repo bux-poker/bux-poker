@@ -10,6 +10,7 @@ import type { Player } from "@shared/types/game";
 import PlayerStatsModal from "../../components/modals/PlayerStatsModal";
 import { api } from "../../services/api";
 import { useTournament } from "../../hooks/useTournaments";
+import { soundManager, type SoundName } from "../../utils/soundManager";
 
 interface PlayerViewModel {
   id: string;
@@ -56,17 +57,19 @@ function parseCommunityCards(encoded: string): Card[] {
   return [];
 }
 
-// Helper function to play sound effects
+// Helper function to play sound effects (deprecated - use soundManager directly)
+// Kept for backward compatibility during transition
 function playSound(soundFile: string, volume: number = 0.7) {
-  try {
-    const audio = new Audio(`/sounds/${soundFile}`);
-    audio.volume = volume;
-    audio.play().catch((err) => {
-      console.warn(`Failed to play sound ${soundFile}:`, err);
-    });
-  } catch (err) {
-    console.warn(`Error creating audio for ${soundFile}:`, err);
-  }
+  // Map old sound files to new sound names
+  const soundMap: Record<string, SoundName> = {
+    'turn.mp3': 'your-turn',
+    'fold.wav': 'fold',
+    'bet.wav': 'bet',
+    'check.wav': 'check',
+  };
+  
+  const soundName = soundMap[soundFile] || soundFile.replace(/\.(mp3|wav)$/, '') as SoundName;
+  soundManager.play(soundName, volume);
 }
 
 export function PokerGameView() {
@@ -255,8 +258,20 @@ export function PokerGameView() {
     socket.on("showdown", (payload: { gameId: string; results: any }) => {
       if (payload.gameId === id) {
         setShowdownResults(payload.results);
+        // Play showdown sound
+        soundManager.play('showdown');
         // Clear after 8 seconds
         setTimeout(() => setShowdownResults(null), 8000);
+      }
+    });
+
+    socket.on("winner", (payload: { gameId: string; winners: any[] }) => {
+      if (payload.gameId === id) {
+        // Check if current user won
+        const myPlayerWon = payload.winners.some((w: any) => w.userId === user?.id || w.playerId === user?.id);
+        if (myPlayerWon) {
+          soundManager.play('pot-win');
+        }
       }
     });
 
@@ -291,6 +306,7 @@ export function PokerGameView() {
       if (matchesGameState || matchesTournament) {
         console.log('[TOURNAMENT COUNTDOWN] Tournament started, clearing countdown');
         setTournamentCountdown(null);
+        soundManager.play('tournament-start');
       }
     });
 
@@ -463,32 +479,92 @@ export function PokerGameView() {
     const prevWasMyTurn = prevGameState.currentTurnUserId === user.id;
     const nowIsMyTurn = gameState.currentTurnUserId === user.id;
     if (!prevWasMyTurn && nowIsMyTurn) {
-      playSound('turn.mp3', 0.6);
+      soundManager.play('your-turn');
     }
 
-    // 2. Detect player actions by comparing previous and current state
+    // 2. Street changes (dealer actions)
+    const prevStreet = prevGameState.street || 'PREFLOP';
+    const currentStreet = gameState.street || 'PREFLOP';
+    if (prevStreet !== currentStreet) {
+      if (currentStreet === 'FLOP') {
+        soundManager.play('deal-flop');
+      } else if (currentStreet === 'TURN') {
+        soundManager.play('deal-turn');
+      } else if (currentStreet === 'RIVER') {
+        soundManager.play('deal-river');
+      }
+    }
+
+    // 3. Showdown
+    const prevShowdown = prevGameState.showdownActive || false;
+    const currentShowdown = gameState.showdownActive || false;
+    if (!prevShowdown && currentShowdown) {
+      soundManager.play('showdown');
+    }
+
+    // 4. New hand start (detected by street resetting to PREFLOP and pot resetting)
+    const prevPot = prevGameState.pot || 0;
+    const currentPot = gameState.pot || 0;
+    if (prevPot > 0 && currentPot === 0 && currentStreet === 'PREFLOP' && prevStreet !== 'PREFLOP') {
+      soundManager.play('hand-start');
+    }
+
+    // 5. Detect player actions by comparing previous and current state
     const prevPlayers = new Map(prevGameState.players.map(p => [p.id, p]));
     
     gameState.players.forEach(currentPlayer => {
       const prevPlayer = prevPlayers.get(currentPlayer.id);
       if (!prevPlayer) return;
 
+      // Skip if this is me (don't play sounds for my own actions)
+      const isMyPlayer = currentPlayer.userId === user.id || currentPlayer.id === user.id;
+
       // Fold sound: Player status changed to FOLDED
       if (prevPlayer.status !== 'FOLDED' && currentPlayer.status === 'FOLDED') {
-        playSound('fold.wav', 0.5);
+        if (!isMyPlayer) {
+          soundManager.play('fold');
+        }
         return;
       }
 
-      // Skip if this is me (don't play sounds for my own actions)
-      if (currentPlayer.userId === user.id || currentPlayer.id === user.id) {
-        return;
-      }
+      // Skip further checks if player folded
+      if (currentPlayer.status === 'FOLDED') return;
 
-      // Bet/Call/Raise sound: Contribution increased and player is still active
       const prevContribution = prevPlayer.contribution || 0;
       const currentContribution = currentPlayer.contribution || 0;
-      if (currentContribution > prevContribution && currentPlayer.status === 'ACTIVE') {
-        playSound('bet.wav', 0.5);
+      const prevChips = prevPlayer.chips || 0;
+      const currentChips = currentPlayer.chips || 0;
+      const contributionIncreased = currentContribution > prevContribution;
+      const wentAllIn = prevChips > 0 && currentChips === 0 && contributionIncreased;
+
+      // All-in sound (highest priority)
+      if (wentAllIn && !isMyPlayer) {
+        soundManager.play('allin');
+        return;
+      }
+
+      // Bet/Call/Raise detection
+      if (contributionIncreased && currentPlayer.status === 'ACTIVE' && !isMyPlayer) {
+        const prevBet = prevGameState.currentBet || 0;
+        const currentBet = gameState.currentBet || 0;
+        const wasCurrentTurn = prevGameState.currentTurnUserId === currentPlayer.userId || prevGameState.currentTurnUserId === currentPlayer.id;
+        
+        // Raise: Bet increased and this player was the one who raised
+        if (currentBet > prevBet && wasCurrentTurn) {
+          soundManager.play('raise');
+        }
+        // Call: Bet exists and player matched it
+        else if (currentBet > 0 && currentContribution === currentBet) {
+          soundManager.play('call');
+        }
+        // Bet: New bet placed (no previous bet)
+        else if (prevBet === 0 && currentBet > 0) {
+          soundManager.play('bet');
+        }
+        // Default to call if we can't determine
+        else {
+          soundManager.play('call');
+        }
         return;
       }
 
@@ -498,10 +574,21 @@ export function PokerGameView() {
       const contributionUnchanged = currentContribution === prevContribution;
       const noCurrentBet = (gameState.currentBet || 0) === 0;
       
-      if (wasCurrentTurn && isNotCurrentTurn && contributionUnchanged && noCurrentBet && currentPlayer.status === 'ACTIVE') {
-        playSound('check.wav', 0.5);
+      if (wasCurrentTurn && isNotCurrentTurn && contributionUnchanged && noCurrentBet && currentPlayer.status === 'ACTIVE' && !isMyPlayer) {
+        soundManager.play('check');
       }
     });
+
+    // 6. Pot win detection (showdown results)
+    const prevShowdownResults = prevGameState.showdownResults;
+    const currentShowdownResults = gameState.showdownResults;
+    if (!prevShowdownResults && currentShowdownResults) {
+      const winners = currentShowdownResults.winners || [];
+      const myPlayerWon = winners.some((w: any) => w.userId === user.id || w.playerId === user.id);
+      if (myPlayerWon) {
+        soundManager.play('pot-win');
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState, user]); // Only run when gameState changes, prevGameState is captured in closure
 
