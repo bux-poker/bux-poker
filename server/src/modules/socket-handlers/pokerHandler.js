@@ -538,13 +538,20 @@ export async function startHandForGame(gameId, io) {
   }
 
   // Deal hole cards ONLY to active players (eliminated players should not receive cards)
+  // IMPORTANT: Filter out eliminated players AND players with seatNumber -1 (removed from seats)
   // IMPORTANT: We must keep a consistent ordering between the players we deal to
   // and the players we later persist holeCards for. We use seatNumber ordering
   // for both dealing and mapping so that cards are assigned to the correct seats.
   const deck = tournamentEngine.createShuffledDeck();
   const activeDealtPlayers = game.players
-    .filter(p => p.status === 'ACTIVE')
+    .filter(p => p.status === 'ACTIVE' && p.seatNumber >= 0) // Only ACTIVE players with valid seats
     .sort((a, b) => a.seatNumber - b.seatNumber);
+  
+  if (activeDealtPlayers.length < 2) {
+    throw new Error(`Not enough active players to deal cards. Found ${activeDealtPlayers.length} active players with valid seats.`);
+  }
+  
+  console.log(`[POKER] Dealing cards to ${activeDealtPlayers.length} active players (filtered from ${game.players.length} total players)`);
   const { deck: remainingDeck, players: dealtHands } = tournamentEngine.dealHoleCards(
     deck,
     activeDealtPlayers.length
@@ -1827,11 +1834,9 @@ async function handleShowdown(gameId, io) {
           }
         }
         
-        // Note: dealerSeat is not stored in database, it's recalculated in startHandForGame
-        // The dealer button moves clockwise automatically when startHandForGame is called
-        // because it randomly selects a dealer from active players, ensuring rotation over time
+        // Dealer seat is now stored in database and will be rotated in startHandForGame
         
-        // Start new hand (dealer will be selected/rotated in startHandForGame)
+        // Start new hand (dealer will be rotated clockwise in startHandForGame)
         if (io) {
           try {
             console.log(`[SHOWDOWN] Starting new hand with ${activePlayerCount} active players...`);
