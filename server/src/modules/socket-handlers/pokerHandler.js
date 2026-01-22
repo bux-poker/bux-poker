@@ -1191,12 +1191,16 @@ async function handleTestPlayerAction(gameId, userId, io) {
     );
     
     for (const player of playersToEliminate) {
-      console.log(`[TEST PLAYER] Eliminating player ${player.name || player.userId} with ${player.chips} chips`);
+      console.log(`[TEST PLAYER] Eliminating player ${player.name || player.userId} with ${player.chips} chips and removing from seat ${player.seatNumber}`);
       player.status = 'ELIMINATED';
+      player.seatNumber = -1; // Remove from seat (use -1 to indicate no seat)
       
       await prisma.player.update({
         where: { id: player.id },
-        data: { status: 'ELIMINATED' }
+        data: { 
+          status: 'ELIMINATED',
+          seatNumber: -1 // Remove from seat
+        }
       }).catch(err => console.error(`[TEST PLAYER] Error eliminating player ${player.id}:`, err));
       
       if (game.tournament) {
@@ -1670,13 +1674,17 @@ async function handleShowdown(gameId, io) {
   
   for (const handResult of handResults) {
     if (handResult.player.chips <= 0 && handResult.player.status === 'ACTIVE') {
-      console.log(`[SHOWDOWN] Player ${handResult.player.name || handResult.player.userId} eliminated with 0 chips`);
+      console.log(`[SHOWDOWN] Player ${handResult.player.name || handResult.player.userId} eliminated with 0 chips and removing from seat ${handResult.player.seatNumber}`);
       // Update status in state first
       handResult.player.status = 'ELIMINATED';
+      handResult.player.seatNumber = -1; // Remove from seat
       // Update database
       await prisma.player.update({
         where: { id: handResult.player.id },
-        data: { status: 'ELIMINATED' }
+        data: { 
+          status: 'ELIMINATED',
+          seatNumber: -1 // Remove from seat
+        }
       });
       // Eliminate player (this may trigger table consolidation, but hand is already marked complete)
       if (game.tournament) {
@@ -2272,13 +2280,17 @@ async function moveToNextPlayer(gameId, io) {
   );
   
   for (const player of playersToEliminate) {
-    console.log(`[POKER] Eliminating player ${player.name || player.userId} with ${player.chips} chips`);
+    console.log(`[POKER] Eliminating player ${player.name || player.userId} with ${player.chips} chips and removing from seat ${player.seatNumber}`);
     player.status = 'ELIMINATED';
+    player.seatNumber = -1; // Remove from seat (use -1 to indicate no seat)
     
-    // Update database
+    // Update database - remove from seat and mark as eliminated
     await prisma.player.update({
       where: { id: player.id },
-      data: { status: 'ELIMINATED' }
+      data: { 
+        status: 'ELIMINATED',
+        seatNumber: -1 // Remove from seat
+      }
     }).catch(err => console.error(`[POKER] Error eliminating player ${player.id}:`, err));
     
     // Notify tournament engine if in tournament
