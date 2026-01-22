@@ -317,8 +317,8 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
       state.actedPlayersInRound.add(userId);
       
       const newBet = state.bettingRound.currentBet;
-      const newContribution = state.bettingRound.getPlayerContribution(player.id);
-      console.log(`[ACTION] After ${action}: currentBet=${newBet}, playerContribution=${newContribution}, lastRaiseUserId=${state.lastRaiseUserId}, remainingChips=${player.chips}`);
+      const finalContribution = state.bettingRound.getPlayerContribution(player.id);
+      console.log(`[ACTION] After ${action}: currentBet=${newBet}, playerContribution=${finalContribution}, lastRaiseUserId=${state.lastRaiseUserId}, remainingChips=${player.chips}`);
       
       // Post dealer message
       if (io && action === "BET") {
