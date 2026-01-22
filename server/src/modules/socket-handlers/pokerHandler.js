@@ -1624,7 +1624,10 @@ async function handleShowdown(gameId, io) {
       seatNumber: w.player.seatNumber,
       handCategory: w.hand.category,
       potWon: w.potWon,
-      hand: w.hand // Include full hand evaluation for highlighting
+      hand: {
+        ...w.hand,
+        cards: w.hand.bestFive || [] // Map bestFive to cards for client compatibility
+      }
     })),
     allHands: handResults.map(r => ({
       playerId: r.player.id,
@@ -1633,7 +1636,10 @@ async function handleShowdown(gameId, io) {
       seatNumber: r.player.seatNumber,
       handCategory: r.hand.category,
       strength: r.strength,
-      hand: r.hand // Include full hand evaluation
+      hand: {
+        ...r.hand,
+        cards: r.hand.bestFive || [] // Map bestFive to cards for client compatibility
+      }
     })),
     showdownActive: true // Flag to indicate showdown is active
   };
@@ -1654,7 +1660,7 @@ async function handleShowdown(gameId, io) {
     io.to(`game:${gameId}`).emit("game-state", payload);
   }
 
-  // Clear hand state after a short delay (allow clients to see results)
+  // Clear hand state after a delay (allow clients to see results clearly)
   setTimeout(() => {
     console.log(`[SHOWDOWN] Clearing hand state for next hand`);
     const savedPlayers = [...state.players]; // Save players array before clearing state
@@ -1733,7 +1739,7 @@ async function handleShowdown(gameId, io) {
         console.log(`[SHOWDOWN] Cannot start new hand: game not found or not enough players (found: ${gameForNextHand?.players?.length || 0})`);
       }
     });
-  }, 5000); // 5 second delay to show results
+  }, 8000); // 8 second delay to show results - gives everyone time to see winning cards
 }
 
 /**
@@ -1952,6 +1958,105 @@ async function advanceToNextStreet(gameId, io) {
     
     // Go to showdown immediately
     await handleShowdown(gameId, io);
+    return;
+  }
+
+  // Check if everyone folded - if so, award pot to last player who didn't fold and end hand
+  if (activePlayers.length === 0) {
+    console.log(`[POKER] advanceToNextStreet: All players folded - finding last player who didn't fold to award pot`);
+    
+    // Find the last player who was active (not folded) - this would be the last player to fold
+    // In practice, if everyone folded, we should award to the big blind (last to act preflop)
+    // But since we're already in advanceToNextStreet, the betting round completed, so we need to find who was last active
+    const allPlayers = state.players.filter(p => p.status !== 'ELIMINATED');
+    if (allPlayers.length > 0) {
+      // Award pot to the player with the highest contribution (they were last to act)
+      // Or if all contributions are equal, award to big blind
+      const bbPlayer = allPlayers.find(p => {
+        const contribution = state.bettingRound?.getPlayerContribution(p.id) || 0;
+        return contribution > 0; // Big blind has contribution
+      });
+      
+      if (bbPlayer) {
+        const collectedPot = state.bettingRound.getTotalPot();
+        const totalPot = state.pot;
+        bbPlayer.chips += totalPot;
+        state.pot = 0;
+        
+        const winnerName = bbPlayer.name || bbPlayer.user?.username || `Player ${bbPlayer.seatNumber}`;
+        console.log(`[POKER] All players folded - awarding pot of ${totalPot} to ${winnerName} (big blind)`);
+        
+        if (io) {
+          postDealerMessage(gameId, io, `${winnerName} wins ${totalPot.toLocaleString()} (all other players folded)`);
+          
+          // Emit winner event
+          io.to(`game:${gameId}`).emit("winner", {
+            gameId,
+            winners: [{
+              playerId: bbPlayer.id,
+              userId: bbPlayer.userId,
+              name: winnerName,
+              potWon: totalPot
+            }]
+          });
+        }
+        
+        // Update player chips in database
+        prisma.player.update({
+          where: { id: bbPlayer.id },
+          data: { chips: bbPlayer.chips }
+        }).catch(err => console.error(`[POKER] Error updating chips for player ${bbPlayer.id}:`, err));
+        
+        // Update game pot
+        prisma.game.update({
+          where: { id: gameId },
+          data: { pot: 0 }
+        }).catch(err => console.error(`[POKER] Error updating game pot:`, err));
+        
+        // Reset hand state after delay
+        setTimeout(() => {
+          const savedPlayers = [...state.players];
+          tableState.delete(gameId);
+          
+          const resetPromises = savedPlayers.map(p => {
+            const isEliminated = p.status === 'ELIMINATED';
+            return prisma.player.update({
+              where: { id: p.id },
+              data: { 
+                status: isEliminated ? 'ELIMINATED' : 'ACTIVE',
+                holeCards: "",
+                lastAction: null
+              }
+            }).catch(err => console.error(`[POKER] Error resetting player ${p.id}:`, err));
+          });
+          
+          Promise.all(resetPromises).then(async () => {
+            const gameForNextHand = await prisma.game.findUnique({
+              where: { id: gameId },
+              include: {
+                players: { include: { user: true } },
+                tournament: true
+              }
+            });
+            
+            if (gameForNextHand && gameForNextHand.players.filter(p => p.status === 'ACTIVE').length >= 2) {
+              if (io) {
+                try {
+                  await startHandForGame(gameId, io);
+                } catch (err) {
+                  console.error(`[POKER] Error starting new hand after all-fold:`, err);
+                }
+              }
+            }
+          });
+        }, 3000);
+        
+        return; // Don't continue with street advancement
+      }
+    }
+    
+    console.error(`[POKER] CRITICAL ERROR: All players folded but could not find player to award pot!`);
+    state.currentTurnUserId = null;
     return;
   }
 

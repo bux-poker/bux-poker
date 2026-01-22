@@ -349,23 +349,42 @@ export function PokerTable({
                 ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--community-card-height')) || 112
                 : 112;
               
-              // Do NOT enlarge community cards during showdown - only player hole cards should be enlarged
+              // Collect all winning cards from all winners
+              const allWinningCards: Card[] = [];
+              if (showdownResults?.winners) {
+                showdownResults.winners.forEach((w: any) => {
+                  const winningCards = w.hand?.cards || [];
+                  allWinningCards.push(...winningCards);
+                });
+              }
               
-              // Check if this card is part of winning hand
-              const isWinningCard = showdownResults?.winners?.some((w: any) => {
-                const winningCards = w.hand?.cards || [];
-                return winningCards.some((wc: Card) => wc.rank === card.rank && wc.suit === card.suit);
-              });
+              // Check if this card is part of any winning hand
+              const isWinningCard = allWinningCards.some((wc: Card) => wc.rank === card.rank && wc.suit === card.suit);
+              
+              // During showdown: make winning cards bigger, grey out losing cards
+              const showdownScale = showdownActive && isWinningCard ? 1.3 : 1;
+              const isLosingCard = showdownActive && !isWinningCard;
               
               // Use windowSize to trigger recalculation
               return (
-                <PokerCardImage
-                  key={`${idx}-${windowSize.width}`}
-                  card={card}
-                  width={cardWidth}
-                  height={cardHeight}
-                  className={`shadow-xl transition-all duration-300 ${isWinningCard ? 'ring-4 ring-yellow-400' : ''}`}
-                />
+                <div
+                  key={`community-${idx}-${windowSize.width}`}
+                  className="relative transition-all duration-500"
+                  style={{
+                    transform: `scale(${showdownScale})`,
+                  }}
+                >
+                  <PokerCardImage
+                    card={card}
+                    width={cardWidth}
+                    height={cardHeight}
+                    className={`shadow-xl transition-all duration-500 ${
+                      isWinningCard ? 'ring-4 ring-yellow-400' : ''
+                    } ${
+                      isLosingCard ? 'opacity-40 grayscale' : ''
+                    }`}
+                  />
+                </div>
               );
             })}
           </div>
@@ -609,16 +628,21 @@ export function PokerTable({
             
             // Get winner information for highlighting
             const isWinner = showdownResults?.winners?.some((w: any) => w.playerId === player.id || w.userId === player.userId);
-            const winnerHand = isWinner ? showdownResults?.winners?.find((w: any) => w.playerId === player.id || w.userId === player.userId)?.hand : null;
             
-            // Determine winning cards for this player
-            const winningCards: Card[] = winnerHand?.cards || [];
+            // Collect all winning cards from all winners (for highlighting)
+            const allWinningCards: Card[] = [];
+            if (showdownResults?.winners) {
+              showdownResults.winners.forEach((w: any) => {
+                const winningCards = w.hand?.cards || [];
+                allWinningCards.push(...winningCards);
+              });
+            }
+            
+            // Check if a specific card is part of any winning hand
             const isWinningCard = (card: Card) => {
-              return winningCards.some(wc => wc.rank === card.rank && wc.suit === card.suit);
+              return allWinningCards.some(wc => wc.rank === card.rank && wc.suit === card.suit);
             };
             
-            // Enlarge cards 2x during showdown if player is active
-            const showdownScale = isShowdownActive && !isFolded ? 2 : 1;
             const holeWidth = typeof window !== 'undefined'
               ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hole-card-width')) || 28
               : 28;
@@ -629,12 +653,12 @@ export function PokerTable({
             elements.push(
               <div
                 key={`cards-${player.id}`}
-                className={`absolute flex flex-col items-center gap-1 ${isFolded ? 'opacity-50' : ''} ${isWinner ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-900 rounded-lg' : ''}`}
+                className={`absolute flex flex-col items-center gap-1 ${isFolded ? 'opacity-50' : ''}`}
                 style={{
-                  left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset * showdownScale}px)`,
+                  left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset}px)`,
                   top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}%)`,
-                  transform: `translate(-50%, -50%) scale(${showdownScale})`,
-                  transition: 'transform 0.3s ease-in-out',
+                  transform: 'translate(-50%, -50%)',
+                  transition: 'transform 0.5s ease-in-out',
                   zIndex: 70, // Higher than names/chips (50) but below dealer button (60)
                 }}
               >
@@ -644,13 +668,28 @@ export function PokerTable({
                 )}
                 <div className="flex" style={{ gap: 'var(--hole-card-gap, 4px)' }}>
                   {player.holeCards.map((card, cardIdx) => {
+                    // During showdown: only scale up cards that are in winning hands
+                    const cardIsWinning = isShowdownActive && !isFolded && isWinningCard(card);
+                    const cardIsLosing = isShowdownActive && !isFolded && !isWinningCard(card);
+                    const cardScale = cardIsWinning ? 1.5 : 1;
+                    
                     return (
-                      <div key={`${player.id}-${cardIdx}-${windowSize.width}`} className="relative">
+                      <div 
+                        key={`${player.id}-${cardIdx}-${windowSize.width}`} 
+                        className="relative transition-all duration-500"
+                        style={{
+                          transform: `scale(${cardScale})`,
+                        }}
+                      >
                         <PokerCardImage
                           card={card}
                           width={holeWidth}
                           height={holeHeight}
-                          className={`shadow-md ${isWinningCard(card) ? 'ring-2 ring-yellow-400' : ''}`}
+                          className={`shadow-md transition-all duration-500 ${
+                            cardIsWinning ? 'ring-4 ring-yellow-400' : ''
+                          } ${
+                            cardIsLosing ? 'opacity-40 grayscale' : ''
+                          }`}
                           faceDown={!showFaceUp}
                         />
                       </div>
