@@ -1711,8 +1711,9 @@ async function handleShowdown(gameId, io) {
   const { TournamentEngine } = await import("../../services/TournamentEngine.js");
   const tournamentEngine = new TournamentEngine();
   
+  // Eliminate ALL players with 0 chips (including ALL_IN players, not just ACTIVE)
   for (const handResult of handResults) {
-    if (handResult.player.chips <= 0 && handResult.player.status === 'ACTIVE') {
+    if (handResult.player.chips <= 0 && handResult.player.status !== 'ELIMINATED') {
       console.log(`[SHOWDOWN] Player ${handResult.player.name || handResult.player.userId} eliminated with 0 chips and removing from seat ${handResult.player.seatNumber}`);
       // Update status in state first
       handResult.player.status = 'ELIMINATED';
@@ -1729,6 +1730,36 @@ async function handleShowdown(gameId, io) {
       if (game.tournament) {
         await tournamentEngine.onPlayerBust(game.tournament.id, handResult.player.id);
       }
+    }
+  }
+  
+  // Also eliminate any other players with 0 chips who weren't in the hand results
+  // (e.g., players who folded early but still have 0 chips)
+  const allPlayersWith0Chips = state.players.filter(
+    p => p.chips <= 0 && p.status !== 'ELIMINATED' && p.status !== 'FOLDED'
+  );
+  
+  for (const player of allPlayersWith0Chips) {
+    // Skip if already processed in handResults
+    const alreadyProcessed = handResults.some(hr => hr.player.id === player.id);
+    if (alreadyProcessed) continue;
+    
+    console.log(`[SHOWDOWN] Eliminating player ${player.name || player.userId} with ${player.chips} chips (not in hand results)`);
+    player.status = 'ELIMINATED';
+    player.seatNumber = -1;
+    
+    await prisma.player.update({
+      where: { id: player.id },
+      data: { 
+        status: 'ELIMINATED',
+        seatNumber: -1
+      }
+    }).catch(err => console.error(`[SHOWDOWN] Error eliminating player ${player.id}:`, err));
+    
+    if (game.tournament) {
+      await tournamentEngine.onPlayerBust(game.tournament.id, player.id).catch(err => {
+        console.error(`[SHOWDOWN] Error notifying tournament of player bust:`, err);
+      });
     }
   }
 
