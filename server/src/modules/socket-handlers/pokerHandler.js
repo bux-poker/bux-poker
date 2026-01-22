@@ -185,6 +185,19 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
     throw new Error("Player not at this table");
   }
 
+  // Reject actions from eliminated players or players with 0 chips (unless they're all-in in an active hand)
+  if (player.status === 'ELIMINATED') {
+    throw new Error("Eliminated players cannot act");
+  }
+  
+  // If player has 0 chips and is not in an active hand, they should be eliminated
+  // But if they're all-in in an active hand, they can't act anyway (handled below)
+  if (player.chips === 0 && player.status !== 'ALL_IN') {
+    // Player has 0 chips but isn't marked as ALL_IN - they should be eliminated
+    // This shouldn't happen, but if it does, reject the action
+    throw new Error("Player has no chips and cannot act");
+  }
+
   const playerName = player.name || player.user?.username || `Player ${player.seatNumber}`;
   const currentBetBefore = state.bettingRound?.currentBet || 0;
   const playerContributionBefore = state.bettingRound?.getPlayerContribution(player.id) || 0;
