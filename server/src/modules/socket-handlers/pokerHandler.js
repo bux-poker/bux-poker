@@ -402,7 +402,7 @@ export async function startHandForGame(gameId, io) {
     return;
   }
 
-  // Get tournament blind levels
+  // Get tournament blind levels - use current level from game, not always first level
   let smallBlind = 10;
   let bigBlind = 20;
   
@@ -410,13 +410,23 @@ export async function startHandForGame(gameId, io) {
     try {
       const blindLevels = JSON.parse(game.tournament.blindLevelsJson);
       if (blindLevels && blindLevels.length > 0) {
-        const firstLevel = blindLevels[0];
-        smallBlind = firstLevel.smallBlind || 10;
-        bigBlind = firstLevel.bigBlind || 20;
+        // Use currentBlindLevel from game (updated by checkAndAdvanceBlindLevel)
+        // If not set, default to first level (0)
+        const currentLevelIndex = game.currentBlindLevel ?? 0;
+        const currentLevel = blindLevels[currentLevelIndex] || blindLevels[0];
+        smallBlind = currentLevel.smallBlind || 10;
+        bigBlind = currentLevel.bigBlind || 20;
+        
+        console.log(`[POKER] Using blind level ${currentLevelIndex}: ${smallBlind}/${bigBlind}`);
       }
     } catch (e) {
       console.warn("Failed to parse blind levels, using defaults");
     }
+  } else if (game.smallBlind && game.bigBlind) {
+    // Fallback: use blinds from game record if tournament blind levels not available
+    smallBlind = game.smallBlind;
+    bigBlind = game.bigBlind;
+    console.log(`[POKER] Using blinds from game record: ${smallBlind}/${bigBlind}`);
   }
 
   // Create engine with tournament blind levels
@@ -1832,6 +1842,8 @@ async function checkAndAdvanceBlindLevel(tournamentId, gameId, io) {
     const gameLevel = game.currentBlindLevel || 0;
     
     // Check if we need to advance to next level
+    console.log(`[BLIND LEVEL] Tournament ${tournamentId}, game ${gameId}: elapsed=${(elapsedMs / 1000 / 60).toFixed(2)}min, calculatedLevel=${currentLevelIndex}, gameLevel=${gameLevel}`);
+    
     if (currentLevelIndex > gameLevel) {
       console.log(`[POKER] Advancing blind level for game ${gameId} from ${gameLevel} to ${currentLevelIndex}`);
       
@@ -1847,11 +1859,17 @@ async function checkAndAdvanceBlindLevel(tournamentId, gameId, io) {
           }
         });
 
+        console.log(`[BLIND LEVEL] Updated game ${gameId} to level ${currentLevelIndex}: ${newLevel.smallBlind}/${newLevel.bigBlind}`);
+
         // Post dealer message
         if (io) {
           postDealerMessage(gameId, io, `Blinds increase to ${newLevel.smallBlind.toLocaleString()}/${newLevel.bigBlind.toLocaleString()}`);
         }
+      } else {
+        console.warn(`[BLIND LEVEL] No level found at index ${currentLevelIndex} for tournament ${tournamentId}`);
       }
+    } else {
+      console.log(`[BLIND LEVEL] No advancement needed: currentLevelIndex=${currentLevelIndex} <= gameLevel=${gameLevel}`);
     }
   } catch (err) {
     console.error(`[POKER] Error checking blind level advancement:`, err);
