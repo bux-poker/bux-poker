@@ -512,29 +512,32 @@ export async function startHandForGame(gameId, io) {
   );
 
   // Persist hole cards
+  // CRITICAL: We must iterate over activeDealtPlayers in the SAME order we dealt cards,
+  // not over game.players, to ensure cards are assigned correctly.
   await Promise.all(
-    game.players.map((p) => {
-      // Eliminated players keep no hole cards
-      if (p.status === 'ELIMINATED') {
-        return prisma.player.update({
-          where: { id: p.id },
-          data: {
-            holeCards: "",
-          },
-        });
-      }
-
-      // Map dealt hands to active players using the SAME ordered list we used
-      // when dealing (activeDealtPlayers). Do NOT re-sort here, otherwise we
-      // will misalign hands and give players the wrong cards.
-      const activeIndex = activeDealtPlayers.findIndex(ap => ap.id === p.id);
-
-      const holeCards = activeIndex >= 0 ? JSON.stringify(dealtHands[activeIndex]) : "";
-
+    activeDealtPlayers.map((p, index) => {
+      const holeCards = JSON.stringify(dealtHands[index]);
+      
+      // Log card assignment for debugging
+      console.log(`[CARD DEAL] Assigning cards to ${p.name || p.userId} (seat ${p.seatNumber}, id: ${p.id}):`, dealtHands[index]);
+      
       return prisma.player.update({
         where: { id: p.id },
         data: {
           holeCards,
+        },
+      });
+    })
+  );
+  
+  // Also update eliminated players to have no cards
+  const eliminatedPlayers = game.players.filter(p => p.status === 'ELIMINATED');
+  await Promise.all(
+    eliminatedPlayers.map((p) => {
+      return prisma.player.update({
+        where: { id: p.id },
+        data: {
+          holeCards: "",
         },
       });
     })
@@ -647,12 +650,12 @@ export async function startHandForGame(gameId, io) {
     lastRaiseUserId: null, // Track who last raised (for betting completion check)
     actedPlayersInRound: new Set(), // Track which players have acted in current betting round
     players: await Promise.all(
-      game.players.map(async (p, index) => {
+      game.players.map(async (p) => {
         const updated = await prisma.player.findUnique({ where: { id: p.id } });
         // Parse hole cards from database (stored as JSON string)
         // If updated player has holeCards, use those (parsed if string)
         // Otherwise fall back to p.holeCards (parsed if string)
-        // If neither exists, use dealtHands from current hand
+        // If neither exists, find the correct index in activeDealtPlayers to get from dealtHands
         let holeCards = null;
         if (updated?.holeCards) {
           if (typeof updated.holeCards === 'object') {
@@ -662,7 +665,9 @@ export async function startHandForGame(gameId, io) {
               holeCards = JSON.parse(updated.holeCards);
             } catch (e) {
               console.warn(`[POKER] Failed to parse holeCards from database for player ${p.id}:`, e.message);
-              holeCards = dealtHands[index];
+              // Find correct index in activeDealtPlayers
+              const activeIndex = activeDealtPlayers.findIndex(ap => ap.id === p.id);
+              holeCards = activeIndex >= 0 ? dealtHands[activeIndex] : null;
             }
           }
         } else if (p.holeCards) {
@@ -673,11 +678,15 @@ export async function startHandForGame(gameId, io) {
               holeCards = JSON.parse(p.holeCards);
             } catch (e) {
               console.warn(`[POKER] Failed to parse holeCards from p for player ${p.id}:`, e.message);
-              holeCards = dealtHands[index];
+              // Find correct index in activeDealtPlayers
+              const activeIndex = activeDealtPlayers.findIndex(ap => ap.id === p.id);
+              holeCards = activeIndex >= 0 ? dealtHands[activeIndex] : null;
             }
           }
         } else {
-          holeCards = dealtHands[index];
+          // Find correct index in activeDealtPlayers (not using game.players index!)
+          const activeIndex = activeDealtPlayers.findIndex(ap => ap.id === p.id);
+          holeCards = activeIndex >= 0 ? dealtHands[activeIndex] : null;
         }
         return {
           ...p,
@@ -1370,17 +1379,19 @@ async function handleShowdown(gameId, io) {
 
     // Debug logging: show full 7-card hand for each player at showdown so we
     // can verify the server is evaluating the same cards you see on screen.
+    // Log full 7-card hand for debugging
     console.log(
-      `[SHOWDOWN] Evaluating 7 cards for ${player.name || player.userId} (seat ${player.seatNumber}):`,
+      `[SHOWDOWN] Evaluating 7 cards for ${player.name || player.userId} (seat ${player.seatNumber}, id: ${player.id}):`,
       {
         holeCards: player.holeCards,
         community: state.communityCards,
+        sevenCards: sevenCards
       }
     );
 
     const hand = evaluator.evaluateBestHand(sevenCards);
     
-    console.log(`[SHOWDOWN] Player ${player.name || player.userId} (seat ${player.seatNumber}): ${hand.category}, strength=${hand.strength}`);
+    console.log(`[SHOWDOWN] Player ${player.name || player.userId} (seat ${player.seatNumber}, id: ${player.id}): ${hand.category}, strength=${hand.strength}, bestFive=${JSON.stringify(hand.bestFive)}`);
     
     return {
       player,
