@@ -711,21 +711,57 @@ export async function startHandForGame(gameId, io) {
   let utgSeat = bbSeat - 1;
   if (utgSeat < minSeat) utgSeat = maxSeat;
   
-  // Skip SB and dealer if they're the next player (shouldn't happen in normal play, but handle edge cases)
-  // In normal play: Dealer -> SB -> BB -> UTG (clockwise)
-  // So UTG should be BB - 1, which should never be SB or dealer
-  // But if there are only 2-3 players, we need to ensure UTG is not SB or dealer
-  let attempts = 0;
-  while ((utgSeat === sbSeat || utgSeat === dealerSeat) && attempts < game.players.length) {
-    utgSeat = utgSeat - 1;
-    if (utgSeat < minSeat) utgSeat = maxSeat;
-    attempts++;
+  // Find UTG player - must be active and not BB, SB, or dealer
+  let utgPlayer = activePlayers.find(p => 
+    p.seatNumber === utgSeat && 
+    p.seatNumber >= 0 &&
+    p.id !== bbPlayer.id &&
+    p.id !== sbPlayer.id &&
+    p.id !== dealerPlayer.id
+  );
+  
+  // If no player found at calculated seat, search clockwise for next active player
+  if (!utgPlayer) {
+    let attempts = 0;
+    let searchSeat = utgSeat;
+    while (!utgPlayer && attempts < activePlayers.length) {
+      searchSeat = searchSeat - 1 < minSeat ? maxSeat : searchSeat - 1;
+      // Skip if this seat is BB, SB, or dealer
+      if (searchSeat === bbSeat || searchSeat === sbSeat || searchSeat === dealerSeat) {
+        attempts++;
+        continue;
+      }
+      utgPlayer = activePlayers.find(p => 
+        p.seatNumber === searchSeat && 
+        p.seatNumber >= 0 &&
+        p.id !== bbPlayer.id &&
+        p.id !== sbPlayer.id &&
+        p.id !== dealerPlayer.id
+      );
+      attempts++;
+    }
+    if (utgPlayer) {
+      utgSeat = utgPlayer.seatNumber;
+      console.log(`[POKER] UTG player not at calculated seat, found at seat ${utgSeat} clockwise`);
+    }
   }
   
-  const utgPlayer = game.players.find(p => p.seatNumber === utgSeat);
+  if (!utgPlayer) {
+    // Last resort: find any active player that's not BB, SB, or dealer
+    utgPlayer = activePlayers.find(p => 
+      p.seatNumber >= 0 &&
+      p.id !== bbPlayer.id &&
+      p.id !== sbPlayer.id &&
+      p.id !== dealerPlayer.id
+    );
+    if (utgPlayer) {
+      utgSeat = utgPlayer.seatNumber;
+      console.log(`[POKER] UTG fallback: using seat ${utgSeat} (${utgPlayer.user?.username || utgPlayer.userId})`);
+    }
+  }
   
   if (!utgPlayer) {
-    throw new Error(`Could not find UTG player. BB seat: ${bbSeat}, UTG seat: ${utgSeat}, SB seat: ${sbSeat}, Dealer seat: ${dealerSeat}`);
+    throw new Error(`Could not find UTG player. BB seat: ${bbSeat}, SB seat: ${sbSeat}, Dealer seat: ${dealerSeat}, Active players: ${activePlayers.length}`);
   }
   
   // CRITICAL: Ensure UTG is NOT the big blind
