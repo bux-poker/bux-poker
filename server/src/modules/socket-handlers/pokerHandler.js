@@ -475,11 +475,12 @@ export async function startHandForGame(gameId, io) {
   const activePlayersForDealer = game.players.filter(p => p.status === 'ACTIVE' && p.seatNumber >= 0);
   
   if (previousDealerSeat !== null && previousDealerSeat !== undefined && activePlayersForDealer.length > 0) {
-    // Rotate dealer clockwise (decrease seat number, wrap if needed)
+    // Rotate dealer clockwise (increase seat number, wrap if needed)
+    // Seats are numbered, and clockwise movement = increasing seat numbers
     const maxSeat = Math.max(...activePlayersForDealer.map(p => p.seatNumber));
     const minSeat = Math.min(...activePlayersForDealer.map(p => p.seatNumber));
-    let nextDealerSeat = previousDealerSeat - 1;
-    if (nextDealerSeat < minSeat) nextDealerSeat = maxSeat;
+    let nextDealerSeat = previousDealerSeat + 1;
+    if (nextDealerSeat > maxSeat) nextDealerSeat = minSeat;
     
     // Find active player at next dealer seat
     dealerPlayer = activePlayersForDealer.find(p => p.seatNumber === nextDealerSeat);
@@ -488,8 +489,8 @@ export async function startHandForGame(gameId, io) {
     if (!dealerPlayer) {
       let attempts = 0;
       while (!dealerPlayer && attempts < activePlayersForDealer.length) {
-        nextDealerSeat = nextDealerSeat - 1;
-        if (nextDealerSeat < minSeat) nextDealerSeat = maxSeat;
+        nextDealerSeat = nextDealerSeat + 1;
+        if (nextDealerSeat > maxSeat) nextDealerSeat = minSeat;
         dealerPlayer = activePlayersForDealer.find(p => p.seatNumber === nextDealerSeat);
         attempts++;
       }
