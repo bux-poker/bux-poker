@@ -74,6 +74,15 @@ model Game {
   pot            Int    @default(0)
   communityCards String @default("") // encoded representation
 
+  // Dealer and blind positions (stored to persist between hands)
+  dealerSeat     Int?
+  smallBlindSeat Int?
+  bigBlindSeat   Int?
+
+  // Current blind amounts (for non-tournament games or fallback)
+  smallBlind Int?
+  bigBlind   Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
