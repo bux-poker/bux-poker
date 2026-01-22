@@ -1183,32 +1183,48 @@ async function handleTestPlayerAction(gameId, userId, io) {
 
     if (!game) return;
 
-    // CRITICAL: Eliminate players with 0 chips before checking betting completion
-    // This prevents them from being included in betting checks
-    const { TournamentEngine } = await import("../../services/TournamentEngine.js");
-    const tournamentEngine = new TournamentEngine();
+    // CRITICAL: Only eliminate players with 0 chips if there's no active hand
+    // During an active hand, all-in players should stay until the hand completes
+    const hasActiveHandNow = hasActiveHand(gameId);
     
-    const playersToEliminate = newState.players.filter(
-      p => p.chips <= 0 && p.status === 'ACTIVE'
-    );
-    
-    for (const player of playersToEliminate) {
-      console.log(`[TEST PLAYER] Eliminating player ${player.name || player.userId} with ${player.chips} chips and removing from seat ${player.seatNumber}`);
-      player.status = 'ELIMINATED';
-      player.seatNumber = -1; // Remove from seat (use -1 to indicate no seat)
+    if (!hasActiveHandNow) {
+      // No active hand - safe to eliminate players with 0 chips
+      const { TournamentEngine } = await import("../../services/TournamentEngine.js");
+      const tournamentEngine = new TournamentEngine();
       
-      await prisma.player.update({
-        where: { id: player.id },
-        data: { 
-          status: 'ELIMINATED',
-          seatNumber: -1 // Remove from seat
+      const playersToEliminate = newState.players.filter(
+        p => p.chips <= 0 && p.status === 'ACTIVE'
+      );
+      
+      for (const player of playersToEliminate) {
+        console.log(`[TEST PLAYER] Eliminating player ${player.name || player.userId} with ${player.chips} chips and removing from seat ${player.seatNumber} (no active hand)`);
+        player.status = 'ELIMINATED';
+        player.seatNumber = -1; // Remove from seat (use -1 to indicate no seat)
+        
+        await prisma.player.update({
+          where: { id: player.id },
+          data: { 
+            status: 'ELIMINATED',
+            seatNumber: -1 // Remove from seat
+          }
+        }).catch(err => console.error(`[TEST PLAYER] Error eliminating player ${player.id}:`, err));
+        
+        if (game.tournament) {
+          await tournamentEngine.onPlayerBust(game.tournament.id, player.id).catch(err => {
+            console.error(`[TEST PLAYER] Error notifying tournament of player bust:`, err);
+          });
         }
-      }).catch(err => console.error(`[TEST PLAYER] Error eliminating player ${player.id}:`, err));
+      }
+    } else {
+      // Active hand in progress - don't eliminate all-in players yet
+      // Mark them as ALL_IN if they have 0 chips but are still in the hand
+      const allInPlayers = newState.players.filter(
+        p => p.chips <= 0 && p.status === 'ACTIVE'
+      );
       
-      if (game.tournament) {
-        await tournamentEngine.onPlayerBust(game.tournament.id, player.id).catch(err => {
-          console.error(`[TEST PLAYER] Error notifying tournament of player bust:`, err);
-        });
+      for (const player of allInPlayers) {
+        player.status = 'ALL_IN';
+        console.log(`[TEST PLAYER] Player ${player.name || player.userId} is all-in with ${player.chips} chips (keeping in hand until completion)`);
       }
     }
 
