@@ -1632,6 +1632,13 @@ async function handleShowdown(gameId, io) {
     return;
   }
 
+  // Mark hand as complete BEFORE elimination (which may trigger table consolidation)
+  // This ensures hasActiveHand() returns false immediately
+  state.currentTurnUserId = null;
+  state.street = null;
+  tableState.set(gameId, state);
+  console.log(`[SHOWDOWN] Marked hand as complete - hasActiveHand will now return false`);
+
   // Check for player elimination after distributing pot
   const { TournamentEngine } = await import("../../services/TournamentEngine.js");
   const tournamentEngine = new TournamentEngine();
@@ -1639,16 +1646,17 @@ async function handleShowdown(gameId, io) {
   for (const handResult of handResults) {
     if (handResult.player.chips <= 0 && handResult.player.status === 'ACTIVE') {
       console.log(`[SHOWDOWN] Player ${handResult.player.name || handResult.player.userId} eliminated with 0 chips`);
-      // Eliminate player
-      if (game.tournament) {
-        await tournamentEngine.onPlayerBust(game.tournament.id, handResult.player.id);
-      }
-      // Update status in state
+      // Update status in state first
       handResult.player.status = 'ELIMINATED';
+      // Update database
       await prisma.player.update({
         where: { id: handResult.player.id },
         data: { status: 'ELIMINATED' }
       });
+      // Eliminate player (this may trigger table consolidation, but hand is already marked complete)
+      if (game.tournament) {
+        await tournamentEngine.onPlayerBust(game.tournament.id, handResult.player.id);
+      }
     }
   }
 
