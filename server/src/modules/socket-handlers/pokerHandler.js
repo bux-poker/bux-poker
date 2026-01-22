@@ -1802,9 +1802,26 @@ async function handleShowdown(gameId, io) {
     
     // Reset player state for next hand:
     // - Players marked ELIMINATED stay eliminated (no new cards)
-    // - Active players are reset to ACTIVE with cleared hole cards / lastAction
+    // - Players with 0 chips should be eliminated (not reset to ACTIVE)
+    // - Active players with chips > 0 are reset to ACTIVE with cleared hole cards / lastAction
     const resetPromises = savedPlayers.map(p => {
       const isEliminated = p.status === 'ELIMINATED';
+      const hasNoChips = p.chips <= 0;
+      
+      // Eliminate players with 0 chips (they should have been eliminated already, but double-check)
+      if (hasNoChips && !isEliminated) {
+        console.log(`[SHOWDOWN] Eliminating player ${p.name || p.userId} with ${p.chips} chips during reset`);
+        return prisma.player.update({
+          where: { id: p.id },
+          data: { 
+            status: 'ELIMINATED',
+            seatNumber: -1, // Remove from seat
+            holeCards: "",
+            lastAction: null
+          }
+        }).catch(err => console.error(`[SHOWDOWN] Error eliminating player ${p.id}:`, err));
+      }
+      
       return prisma.player.update({
         where: { id: p.id },
         data: { 
