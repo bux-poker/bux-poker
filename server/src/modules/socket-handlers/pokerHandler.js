@@ -85,7 +85,7 @@ function buildClientGameState(game, state) {
     showdownActive: state?.showdownActive || false,
     showdownResults: state?.showdownResults || null,
     players: (state?.players ?? game.players)
-      .filter(p => p.seatNumber >= 0) // Only include players with valid seats (exclude eliminated players with seatNumber -1)
+      .filter(p => p.status !== 'ELIMINATED') // Only include non-eliminated players
       .map((p) => ({
       id: p.id,
       userId: p.userId,
@@ -604,13 +604,13 @@ export async function startHandForGame(gameId, io) {
   }
 
   // Deal hole cards ONLY to active players (eliminated players should not receive cards)
-  // IMPORTANT: Filter out eliminated players AND players with seatNumber -1 (removed from seats)
+  // IMPORTANT: Filter out eliminated players
   // IMPORTANT: We must keep a consistent ordering between the players we deal to
   // and the players we later persist holeCards for. We use seatNumber ordering
   // for both dealing and mapping so that cards are assigned to the correct seats.
   const deck = tournamentEngine.createShuffledDeck();
   const activeDealtPlayers = game.players
-    .filter(p => p.status === 'ACTIVE' && p.seatNumber >= 0) // Only ACTIVE players with valid seats
+    .filter(p => p.status === 'ACTIVE') // Only ACTIVE players (not ELIMINATED)
     .sort((a, b) => a.seatNumber - b.seatNumber);
   
   if (activeDealtPlayers.length < 2) {
@@ -1319,15 +1319,16 @@ async function handleTestPlayerAction(gameId, userId, io) {
       );
       
       for (const player of playersToEliminate) {
-        console.log(`[TEST PLAYER] Eliminating player ${player.name || player.userId} with ${player.chips} chips and removing from seat ${player.seatNumber} (no active hand)`);
+        console.log(`[TEST PLAYER] Eliminating player ${player.name || player.userId} with ${player.chips} chips (no active hand)`);
         player.status = 'ELIMINATED';
-        player.seatNumber = -1; // Remove from seat (use -1 to indicate no seat)
+        // Don't change seatNumber - keep it to avoid unique constraint violation
+        // ELIMINATED players are filtered out by status, not seatNumber
         
         await prisma.player.update({
           where: { id: player.id },
           data: { 
-            status: 'ELIMINATED',
-            seatNumber: -1 // Remove from seat
+            status: 'ELIMINATED'
+            // Keep seatNumber - eliminated players filtered by status
           }
         }).catch(err => console.error(`[TEST PLAYER] Error eliminating player ${player.id}:`, err));
         
@@ -1815,16 +1816,17 @@ async function handleShowdown(gameId, io) {
   // Eliminate ALL players with 0 chips (including ALL_IN players, not just ACTIVE)
   for (const handResult of handResults) {
     if (handResult.player.chips <= 0 && handResult.player.status !== 'ELIMINATED') {
-      console.log(`[SHOWDOWN] Player ${handResult.player.name || handResult.player.userId} eliminated with 0 chips and removing from seat ${handResult.player.seatNumber}`);
+      console.log(`[SHOWDOWN] Player ${handResult.player.name || handResult.player.userId} eliminated with 0 chips`);
       // Update status in state first
       handResult.player.status = 'ELIMINATED';
-      handResult.player.seatNumber = -1; // Remove from seat
+      // Don't change seatNumber - keep it to avoid unique constraint violation
+      // ELIMINATED players are filtered out by status, not seatNumber
       // Update database
       await prisma.player.update({
         where: { id: handResult.player.id },
         data: { 
-          status: 'ELIMINATED',
-          seatNumber: -1 // Remove from seat
+          status: 'ELIMINATED'
+          // Keep seatNumber - eliminated players filtered by status
         }
       });
       // Eliminate player (this may trigger table consolidation, but hand is already marked complete)
@@ -1847,13 +1849,14 @@ async function handleShowdown(gameId, io) {
     
     console.log(`[SHOWDOWN] Eliminating player ${player.name || player.userId} with ${player.chips} chips (not in hand results)`);
     player.status = 'ELIMINATED';
-    player.seatNumber = -1;
+    // Don't change seatNumber - keep it to avoid unique constraint violation
+    // ELIMINATED players are filtered out by status, not seatNumber
     
     await prisma.player.update({
       where: { id: player.id },
       data: { 
-        status: 'ELIMINATED',
-        seatNumber: -1
+        status: 'ELIMINATED'
+        // Keep seatNumber - eliminated players filtered by status
       }
     }).catch(err => console.error(`[SHOWDOWN] Error eliminating player ${player.id}:`, err));
     
@@ -1947,7 +1950,7 @@ async function handleShowdown(gameId, io) {
           where: { id: p.id },
           data: { 
             status: 'ELIMINATED',
-            seatNumber: -1, // Remove from seat
+            // Keep seatNumber - eliminated players filtered by status
             holeCards: "",
             lastAction: null
           }
@@ -2495,16 +2498,17 @@ async function moveToNextPlayer(gameId, io) {
     );
     
     for (const player of playersToEliminate) {
-      console.log(`[POKER] Eliminating player ${player.name || player.userId} with ${player.chips} chips and removing from seat ${player.seatNumber} (no active hand)`);
+      console.log(`[POKER] Eliminating player ${player.name || player.userId} with ${player.chips} chips (no active hand)`);
       player.status = 'ELIMINATED';
-      player.seatNumber = -1; // Remove from seat (use -1 to indicate no seat)
+      // Don't change seatNumber - keep it to avoid unique constraint violation
+      // ELIMINATED players are filtered out by status, not seatNumber
       
-      // Update database - remove from seat and mark as eliminated
+      // Update database - mark as eliminated
       await prisma.player.update({
         where: { id: player.id },
         data: { 
-          status: 'ELIMINATED',
-          seatNumber: -1 // Remove from seat
+          status: 'ELIMINATED'
+          // Keep seatNumber - eliminated players filtered by status
         }
       }).catch(err => console.error(`[POKER] Error eliminating player ${player.id}:`, err));
       
@@ -2647,12 +2651,20 @@ async function moveToNextPlayer(gameId, io) {
     const playerAtSeat = seatMap.get(nextSeat);
     
     if (playerAtSeat && playerAtSeat.userId !== state.currentTurnUserId) {
+      // Skip ELIMINATED players - they should not be in the seat map, but double-check
+      if (playerAtSeat.status === 'ELIMINATED') {
+        console.log(`[TURN ORDER] ✗ Skipped seat ${nextSeat}: player is ELIMINATED`);
+        nextSeat = nextSeat - 1 < minSeat ? maxSeat : nextSeat - 1;
+        attempts++;
+        continue;
+      }
+      
       const contribution = state.bettingRound?.getPlayerContribution(playerAtSeat.id) || 0;
       const hasActed = state.actedPlayersInRound.has(playerAtSeat.userId);
       const isLastRaiser = state.lastRaiseUserId === playerAtSeat.userId;
       
-      // Check if player is all-in (has 0 chips remaining)
-      const isAllIn = playerAtSeat.chips === 0;
+      // Check if player is all-in (has 0 chips remaining) or eliminated
+      const isAllIn = playerAtSeat.chips === 0 || playerAtSeat.status === 'ELIMINATED';
       
       let needsToAct = false;
       if (isAllIn) {
@@ -3000,15 +3012,16 @@ export function registerPokerHandlers(io) {
               // Eliminate ANY players who have 0 chips after this pot is awarded
               const bustedPlayers = state.players.filter(p => p.chips <= 0 && p.status === 'ACTIVE');
               for (const busted of bustedPlayers) {
-                console.log(`[POKER] Player ${busted.name || busted.userId} busted with 0 chips after pot award, removing from seat ${busted.seatNumber}`);
+                console.log(`[POKER] Player ${busted.name || busted.userId} busted with 0 chips after pot award`);
                 await tournamentEngine.onPlayerBust(game.tournament.id, busted.id);
                 busted.status = 'ELIMINATED';
-                busted.seatNumber = -1; // Remove from seat
+                // Don't change seatNumber - keep it to avoid unique constraint violation
+                // ELIMINATED players are filtered out by status, not seatNumber
                 await prisma.player.update({
                   where: { id: busted.id },
                   data: { 
-                    status: 'ELIMINATED',
-                    seatNumber: -1 // Remove from seat
+                    status: 'ELIMINATED'
+                    // Keep seatNumber - eliminated players filtered by status
                   }
                 });
               }
