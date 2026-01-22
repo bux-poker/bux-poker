@@ -2266,41 +2266,49 @@ async function moveToNextPlayer(gameId, io) {
   const state = tableState.get(gameId);
   if (!state) return;
 
-  // CRITICAL: Eliminate players with 0 chips immediately (they can't act)
-  // This prevents players with no chips from being prompted to act
-  const { TournamentEngine } = await import("../../services/TournamentEngine.js");
-  const tournamentEngine = new TournamentEngine();
+  // CRITICAL: Eliminate players with 0 chips, but ONLY if there's no active hand
+  // If a hand is active, players who are all-in should stay until the hand completes
+  const hasActiveHandNow = hasActiveHand(gameId);
   
-  const game = await prisma.game.findUnique({
-    where: { id: gameId },
-    include: { tournament: true }
-  });
-  
-  // Check for players with 0 chips who are still ACTIVE and eliminate them
-  const playersToEliminate = state.players.filter(
-    p => p.chips <= 0 && p.status === 'ACTIVE'
-  );
-  
-  for (const player of playersToEliminate) {
-    console.log(`[POKER] Eliminating player ${player.name || player.userId} with ${player.chips} chips and removing from seat ${player.seatNumber}`);
-    player.status = 'ELIMINATED';
-    player.seatNumber = -1; // Remove from seat (use -1 to indicate no seat)
+  if (!hasActiveHandNow) {
+    // No active hand - safe to eliminate players with 0 chips
+    const { TournamentEngine } = await import("../../services/TournamentEngine.js");
+    const tournamentEngine = new TournamentEngine();
     
-    // Update database - remove from seat and mark as eliminated
-    await prisma.player.update({
-      where: { id: player.id },
-      data: { 
-        status: 'ELIMINATED',
-        seatNumber: -1 // Remove from seat
+    const game = await prisma.game.findUnique({
+      where: { id: gameId },
+      include: { tournament: true }
+    });
+    
+    // Check for players with 0 chips who are still ACTIVE and eliminate them
+    const playersToEliminate = state.players.filter(
+      p => p.chips <= 0 && p.status === 'ACTIVE'
+    );
+    
+    for (const player of playersToEliminate) {
+      console.log(`[POKER] Eliminating player ${player.name || player.userId} with ${player.chips} chips and removing from seat ${player.seatNumber} (no active hand)`);
+      player.status = 'ELIMINATED';
+      player.seatNumber = -1; // Remove from seat (use -1 to indicate no seat)
+      
+      // Update database - remove from seat and mark as eliminated
+      await prisma.player.update({
+        where: { id: player.id },
+        data: { 
+          status: 'ELIMINATED',
+          seatNumber: -1 // Remove from seat
+        }
+      }).catch(err => console.error(`[POKER] Error eliminating player ${player.id}:`, err));
+      
+      // Notify tournament engine if in tournament
+      if (game?.tournament) {
+        await tournamentEngine.onPlayerBust(game.tournament.id, player.id).catch(err => {
+          console.error(`[POKER] Error notifying tournament of player bust:`, err);
+        });
       }
-    }).catch(err => console.error(`[POKER] Error eliminating player ${player.id}:`, err));
-    
-    // Notify tournament engine if in tournament
-    if (game?.tournament) {
-      await tournamentEngine.onPlayerBust(game.tournament.id, player.id).catch(err => {
-        console.error(`[POKER] Error notifying tournament of player bust:`, err);
-      });
     }
+  } else {
+    // Active hand in progress - don't eliminate all-in players yet, they need to see the hand through
+    console.log(`[POKER] Active hand in progress - skipping elimination of players with 0 chips until hand completes`);
   }
 
   const activePlayers = state.players.filter((p) => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
