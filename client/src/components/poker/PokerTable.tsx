@@ -361,9 +361,9 @@ export function PokerTable({
               // Check if this card is part of any winning hand
               const isWinningCard = allWinningCards.some((wc: Card) => wc.rank === card.rank && wc.suit === card.suit);
               
-              // During showdown: make winning cards bigger, grey out losing cards
-              const showdownScale = showdownActive && isWinningCard ? 1.3 : 1;
+              // During showdown: keep winning cards normal size with 2px border, make losing cards smaller
               const isLosingCard = showdownActive && !isWinningCard;
+              const showdownScale = isLosingCard ? 0.75 : 1; // Make losing cards 75% size
               
               // Use windowSize to trigger recalculation
               return (
@@ -379,7 +379,7 @@ export function PokerTable({
                     width={cardWidth}
                     height={cardHeight}
                     className={`shadow-xl transition-all duration-500 ${
-                      isWinningCard ? 'ring-4 ring-yellow-400' : ''
+                      isWinningCard ? 'ring-2 ring-yellow-400' : ''
                     } ${
                       isLosingCard ? 'opacity-40 grayscale' : ''
                     }`}
@@ -668,10 +668,10 @@ export function PokerTable({
                 )}
                 <div className="flex" style={{ gap: 'var(--hole-card-gap, 4px)' }}>
                   {player.holeCards.map((card, cardIdx) => {
-                    // During showdown: only scale up cards that are in winning hands
+                    // During showdown: keep winning cards normal size, make losing cards smaller
                     const cardIsWinning = isShowdownActive && !isFolded && isWinningCard(card);
                     const cardIsLosing = isShowdownActive && !isFolded && !isWinningCard(card);
-                    const cardScale = cardIsWinning ? 1.5 : 1;
+                    const cardScale = cardIsLosing ? 0.75 : 1; // Losing cards at 75% size
                     
                     return (
                       <div 
@@ -686,7 +686,7 @@ export function PokerTable({
                           width={holeWidth}
                           height={holeHeight}
                           className={`shadow-md transition-all duration-500 ${
-                            cardIsWinning ? 'ring-4 ring-yellow-400' : ''
+                            cardIsWinning ? 'ring-2 ring-yellow-400' : ''
                           } ${
                             cardIsLosing ? 'opacity-40 grayscale' : ''
                           }`}
