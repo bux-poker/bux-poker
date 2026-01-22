@@ -2781,12 +2781,16 @@ export function registerPokerHandlers(io) {
               // Eliminate ANY players who have 0 chips after this pot is awarded
               const bustedPlayers = state.players.filter(p => p.chips <= 0 && p.status === 'ACTIVE');
               for (const busted of bustedPlayers) {
-                console.log(`[POKER] Player ${busted.name || busted.userId} busted with 0 chips after pot award`);
+                console.log(`[POKER] Player ${busted.name || busted.userId} busted with 0 chips after pot award, removing from seat ${busted.seatNumber}`);
                 await tournamentEngine.onPlayerBust(game.tournament.id, busted.id);
                 busted.status = 'ELIMINATED';
+                busted.seatNumber = -1; // Remove from seat
                 await prisma.player.update({
                   where: { id: busted.id },
-                  data: { status: 'ELIMINATED' }
+                  data: { 
+                    status: 'ELIMINATED',
+                    seatNumber: -1 // Remove from seat
+                  }
                 });
               }
             }
