@@ -241,9 +241,16 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
         console.log(
           `[ACTION] ${action} amount is ${amount} after capping - converting to CHECK for ${playerName}`
         );
-        // Fall through to CHECK case
-        action = "CHECK";
-        break; // Exit BET/RAISE case, will be handled by CHECK case
+        // Execute CHECK logic directly (no chips moved)
+        console.log(`[ACTION] After CHECK: no change to contributions`);
+        // Mark player as acted in this betting round
+        state.actedPlayersInRound.add(userId);
+        
+        // Post dealer message
+        if (io) {
+          postDealerMessage(gameId, io, `${playerName} checks`);
+        }
+        break; // Exit BET/RAISE case, CHECK is complete
       }
       
       // Only proceed with BET/RAISE if amount is still positive
@@ -2186,6 +2193,9 @@ async function advanceToNextStreet(gameId, io) {
   // Check if all active players are all-in (activePlayers already declared above)
   const activePlayerIds = activePlayers.map(p => p.id);
   const allPlayersAllIn = state.bettingRound.areAllPlayersAllIn(activePlayerIds, state.players);
+  
+  // Check if one of two players is all-in (no more betting decisions possible)
+  const isHeadsUpWithAllIn = activePlayers.length === 2 && activePlayers.some(p => p.chips === 0);
 
   // Deal community cards based on current street
   if (state.street === "PREFLOP") {
@@ -2215,10 +2225,17 @@ async function advanceToNextStreet(gameId, io) {
     return;
   }
 
-  // If all players are all-in, deal remaining community cards immediately and go to showdown
-  if (allPlayersAllIn) {
-    console.log(`[POKER] All players are all-in, dealing remaining community cards immediately`);
-    postDealerMessage(gameId, io, "All players are all-in! Dealing remaining community cards...");
+  // If all players are all-in OR one of two players is all-in, deal remaining community cards immediately and go to showdown
+  if (allPlayersAllIn || isHeadsUpWithAllIn) {
+    if (allPlayersAllIn) {
+      console.log(`[POKER] All players are all-in, dealing remaining community cards immediately`);
+      postDealerMessage(gameId, io, "All players are all-in! Dealing remaining community cards...");
+    } else {
+      const allInPlayer = activePlayers.find(p => p.chips === 0);
+      const otherPlayer = activePlayers.find(p => p.chips > 0);
+      console.log(`[POKER] One player is all-in (${allInPlayer?.name || allInPlayer?.userId}), dealing remaining community cards immediately`);
+      postDealerMessage(gameId, io, `${allInPlayer?.name || 'Player'} is all-in! Dealing remaining community cards...`);
+    }
     
     // Deal remaining cards based on current street
     if (state.street === "FLOP") {
