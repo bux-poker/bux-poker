@@ -236,11 +236,17 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
         }
       }
       
-      // Validate amount is positive after clamping / capping
+      // If amount is 0 or negative after capping, convert BET/RAISE to CHECK
       if (amount <= 0) {
-        throw new Error(`Invalid bet amount: ${amount}`);
+        console.log(
+          `[ACTION] ${action} amount is ${amount} after capping - converting to CHECK for ${playerName}`
+        );
+        // Fall through to CHECK case
+        action = "CHECK";
+        break; // Exit BET/RAISE case, will be handled by CHECK case
       }
       
+      // Only proceed with BET/RAISE if amount is still positive
       state.bettingRound.bet(player.id, amount);
       player.chips -= amount;
       if (player.chips < 0) {
