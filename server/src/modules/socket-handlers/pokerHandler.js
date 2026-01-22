@@ -465,45 +465,59 @@ export async function startHandForGame(gameId, io) {
   });
 
   // Rotate dealer clockwise (or assign randomly if no previous dealer)
-  // Get previous dealer seat from last hand state if it exists
+  // Get previous dealer seat from last hand state if it exists, OR from game record
   let dealerPlayer;
   let dealerSeat;
   const previousState = tableState.get(gameId);
-  if (previousState && previousState.dealerSeat !== undefined) {
+  const previousDealerSeat = previousState?.dealerSeat ?? game.dealerSeat;
+  
+  // Get active players with valid seats for dealer selection
+  const activePlayersForDealer = game.players.filter(p => p.status === 'ACTIVE' && p.seatNumber >= 0);
+  
+  if (previousDealerSeat !== null && previousDealerSeat !== undefined && activePlayersForDealer.length > 0) {
     // Rotate dealer clockwise (decrease seat number, wrap if needed)
-    const maxSeat = Math.max(...game.players.map(p => p.seatNumber));
-    const minSeat = Math.min(...game.players.map(p => p.seatNumber));
-    let nextDealerSeat = previousState.dealerSeat - 1;
+    const maxSeat = Math.max(...activePlayersForDealer.map(p => p.seatNumber));
+    const minSeat = Math.min(...activePlayersForDealer.map(p => p.seatNumber));
+    let nextDealerSeat = previousDealerSeat - 1;
     if (nextDealerSeat < minSeat) nextDealerSeat = maxSeat;
     
-    // Find player at next dealer seat
-    dealerPlayer = game.players.find(p => p.seatNumber === nextDealerSeat);
+    // Find active player at next dealer seat
+    dealerPlayer = activePlayersForDealer.find(p => p.seatNumber === nextDealerSeat);
     
-    // If player at that seat is eliminated, find next active player clockwise
-    if (!dealerPlayer || dealerPlayer.status === 'ELIMINATED') {
+    // If no player at that seat, find next active player clockwise
+    if (!dealerPlayer) {
       let attempts = 0;
-      while ((!dealerPlayer || dealerPlayer.status === 'ELIMINATED') && attempts < game.players.length) {
+      while (!dealerPlayer && attempts < activePlayersForDealer.length) {
         nextDealerSeat = nextDealerSeat - 1;
         if (nextDealerSeat < minSeat) nextDealerSeat = maxSeat;
-        dealerPlayer = game.players.find(p => p.seatNumber === nextDealerSeat);
+        dealerPlayer = activePlayersForDealer.find(p => p.seatNumber === nextDealerSeat);
         attempts++;
       }
     }
     
-    if (!dealerPlayer) {
-      // Fallback to random if rotation failed
-      const dealerIndex = Math.floor(Math.random() * game.players.length);
-      dealerPlayer = game.players[dealerIndex];
+    if (dealerPlayer) {
+      dealerSeat = dealerPlayer.seatNumber;
+      console.log(`[POKER] Rotated dealer clockwise from seat ${previousDealerSeat} to seat ${dealerSeat}`);
     }
-    dealerSeat = dealerPlayer.seatNumber;
-    console.log(`[POKER] Rotated dealer clockwise from seat ${previousState.dealerSeat} to seat ${dealerSeat}`);
-  } else {
-    // First hand or no previous state - randomly assign dealer
-    const dealerIndex = Math.floor(Math.random() * game.players.length);
-    dealerPlayer = game.players[dealerIndex];
-    dealerSeat = dealerPlayer.seatNumber;
-    console.log(`[POKER] First hand - randomly assigned dealer at seat ${dealerSeat}`);
   }
+  
+  // Fallback: if no previous dealer or rotation failed, randomly assign from active players
+  if (!dealerPlayer && activePlayersForDealer.length > 0) {
+    const dealerIndex = Math.floor(Math.random() * activePlayersForDealer.length);
+    dealerPlayer = activePlayersForDealer[dealerIndex];
+    dealerSeat = dealerPlayer.seatNumber;
+    console.log(`[POKER] ${previousDealerSeat !== null && previousDealerSeat !== undefined ? 'Rotation failed, ' : ''}Randomly assigned dealer at seat ${dealerSeat}`);
+  }
+  
+  if (!dealerPlayer) {
+    throw new Error(`No active players available to assign dealer`);
+  }
+  
+  // Update game record with new dealer seat for next hand
+  await prisma.game.update({
+    where: { id: gameId },
+    data: { dealerSeat: dealerSeat }
+  }).catch(err => console.error(`[POKER] Error updating dealer seat:`, err));
   
   // Seats are numbered ANTICLOCKWISE, so CLOCKWISE movement = DECREASING seat numbers
   const maxSeat = Math.max(...game.players.map(p => p.seatNumber));
