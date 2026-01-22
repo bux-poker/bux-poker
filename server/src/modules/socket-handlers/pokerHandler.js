@@ -2231,6 +2231,39 @@ async function moveToNextPlayer(gameId, io) {
   const state = tableState.get(gameId);
   if (!state) return;
 
+  // CRITICAL: Eliminate players with 0 chips immediately (they can't act)
+  // This prevents players with no chips from being prompted to act
+  const { TournamentEngine } = await import("../../services/TournamentEngine.js");
+  const tournamentEngine = new TournamentEngine();
+  
+  const game = await prisma.game.findUnique({
+    where: { id: gameId },
+    include: { tournament: true }
+  });
+  
+  // Check for players with 0 chips who are still ACTIVE and eliminate them
+  const playersToEliminate = state.players.filter(
+    p => p.chips <= 0 && p.status === 'ACTIVE'
+  );
+  
+  for (const player of playersToEliminate) {
+    console.log(`[POKER] Eliminating player ${player.name || player.userId} with ${player.chips} chips`);
+    player.status = 'ELIMINATED';
+    
+    // Update database
+    await prisma.player.update({
+      where: { id: player.id },
+      data: { status: 'ELIMINATED' }
+    }).catch(err => console.error(`[POKER] Error eliminating player ${player.id}:`, err));
+    
+    // Notify tournament engine if in tournament
+    if (game?.tournament) {
+      await tournamentEngine.onPlayerBust(game.tournament.id, player.id).catch(err => {
+        console.error(`[POKER] Error notifying tournament of player bust:`, err);
+      });
+    }
+  }
+
   const activePlayers = state.players.filter((p) => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
   
   if (activePlayers.length === 0) {
