@@ -499,7 +499,12 @@ export async function startHandForGame(gameId, io) {
   const previousDealerSeat = previousState?.dealerSeat ?? game.dealerSeat;
   
   // Get active players with valid seats for dealer selection
-  const activePlayersForDealer = game.players.filter(p => p.status === 'ACTIVE' && p.seatNumber >= 0);
+  // Filter out eliminated players and players with 0 chips
+  const activePlayersForDealer = game.players.filter(p => 
+    p.status === 'ACTIVE' && 
+    p.seatNumber >= 0 && 
+    p.chips > 0 // Must have chips to be active
+  );
   
   if (previousDealerSeat !== null && previousDealerSeat !== undefined && activePlayersForDealer.length > 0) {
     // Rotate dealer clockwise (decrease seat number, wrap if needed)
@@ -561,7 +566,12 @@ export async function startHandForGame(gameId, io) {
   
   // Handle heads-up (2 players) special blind rules
   // In heads-up: dealer posts small blind, other player posts big blind
-  const activePlayers = game.players.filter(p => p.status === 'ACTIVE' && p.seatNumber >= 0);
+  // Filter out eliminated players and players with 0 chips
+  const activePlayers = game.players.filter(p => 
+    p.status === 'ACTIVE' && 
+    p.seatNumber >= 0 && 
+    p.chips > 0 // Must have chips to be active
+  );
   const isHeadsUp = activePlayers.length === 2;
   
   let sbSeat, bbSeat, sbPlayer, bbPlayer;
@@ -623,7 +633,7 @@ export async function startHandForGame(gameId, io) {
   // for both dealing and mapping so that cards are assigned to the correct seats.
   const deck = tournamentEngine.createShuffledDeck();
   const activeDealtPlayers = game.players
-    .filter(p => p.status === 'ACTIVE') // Only ACTIVE players (not ELIMINATED)
+    .filter(p => p.status === 'ACTIVE' && p.chips > 0) // Only ACTIVE players with chips (not ELIMINATED)
     .sort((a, b) => a.seatNumber - b.seatNumber);
   
   if (activeDealtPlayers.length < 2) {
@@ -1422,17 +1432,20 @@ async function handleTestPlayerAction(gameId, userId, io) {
         tableState.delete(gameId);
         
         // Reset player statuses and start new hand (async)
+        // IMPORTANT: Only reset players who are NOT eliminated
         setTimeout(async () => {
-          const resetPromises = savedPlayers.map(p =>
-            prisma.player.update({
-              where: { id: p.id },
-              data: { 
-                status: 'ACTIVE',
-                holeCards: "",
-                lastAction: null
-              }
-            }).catch(err => console.error(`[TEST PLAYER] Error resetting player ${p.id}:`, err))
-          );
+          const resetPromises = savedPlayers
+            .filter(p => p.status !== 'ELIMINATED' && p.chips > 0) // Only reset non-eliminated players with chips
+            .map(p =>
+              prisma.player.update({
+                where: { id: p.id },
+                data: { 
+                  status: 'ACTIVE',
+                  holeCards: "",
+                  lastAction: null
+                }
+              }).catch(err => console.error(`[TEST PLAYER] Error resetting player ${p.id}:`, err))
+            );
           
           await Promise.all(resetPromises);
           console.log(`[TEST PLAYER] All players reset for next hand`);
@@ -2348,17 +2361,19 @@ async function advanceToNextStreet(gameId, io) {
           const savedPlayers = [...state.players];
           tableState.delete(gameId);
           
-          const resetPromises = savedPlayers.map(p => {
-            const isEliminated = p.status === 'ELIMINATED';
-            return prisma.player.update({
-              where: { id: p.id },
-              data: { 
-                status: isEliminated ? 'ELIMINATED' : 'ACTIVE',
-                holeCards: "",
-                lastAction: null
-              }
-            }).catch(err => console.error(`[POKER] Error resetting player ${p.id}:`, err));
-          });
+          // Only reset players who are NOT eliminated and have chips
+          const resetPromises = savedPlayers
+            .filter(p => p.status !== 'ELIMINATED' && p.chips > 0)
+            .map(p => {
+              return prisma.player.update({
+                where: { id: p.id },
+                data: { 
+                  status: 'ACTIVE',
+                  holeCards: "",
+                  lastAction: null
+                }
+              }).catch(err => console.error(`[POKER] Error resetting player ${p.id}:`, err));
+            });
           
           Promise.all(resetPromises).then(async () => {
             const gameForNextHand = await prisma.game.findUnique({
