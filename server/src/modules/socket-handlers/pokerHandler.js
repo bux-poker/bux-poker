@@ -1181,6 +1181,31 @@ async function handleTestPlayerAction(gameId, userId, io) {
 
     if (!game) return;
 
+    // CRITICAL: Eliminate players with 0 chips before checking betting completion
+    // This prevents them from being included in betting checks
+    const { TournamentEngine } = await import("../../services/TournamentEngine.js");
+    const tournamentEngine = new TournamentEngine();
+    
+    const playersToEliminate = newState.players.filter(
+      p => p.chips <= 0 && p.status === 'ACTIVE'
+    );
+    
+    for (const player of playersToEliminate) {
+      console.log(`[TEST PLAYER] Eliminating player ${player.name || player.userId} with ${player.chips} chips`);
+      player.status = 'ELIMINATED';
+      
+      await prisma.player.update({
+        where: { id: player.id },
+        data: { status: 'ELIMINATED' }
+      }).catch(err => console.error(`[TEST PLAYER] Error eliminating player ${player.id}:`, err));
+      
+      if (game.tournament) {
+        await tournamentEngine.onPlayerBust(game.tournament.id, player.id).catch(err => {
+          console.error(`[TEST PLAYER] Error notifying tournament of player bust:`, err);
+        });
+      }
+    }
+
     // Check if betting round is complete (same logic as regular player action)
     const activePlayerIds = newState.players
       .filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED')
