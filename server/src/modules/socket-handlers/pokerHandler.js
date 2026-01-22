@@ -84,7 +84,9 @@ function buildClientGameState(game, state) {
     currentTurnUserId: state?.currentTurnUserId,
     showdownActive: state?.showdownActive || false,
     showdownResults: state?.showdownResults || null,
-    players: (state?.players ?? game.players).map((p) => ({
+    players: (state?.players ?? game.players)
+      .filter(p => p.seatNumber >= 0) // Only include players with valid seats (exclude eliminated players with seatNumber -1)
+      .map((p) => ({
       id: p.id,
       userId: p.userId,
       name: p.user?.username || "Player",
