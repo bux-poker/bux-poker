@@ -163,9 +163,19 @@ function evaluateFiveCardHand(cards) {
   const categoryRank = CATEGORY_ORDER.indexOf(category);
 
   // Encode category + tiebreak into a single numeric strength.
-  // Use base-15 to comfortably hold ranks 2..14.
+  // CRITICAL: Category rank must be the most significant part.
+  // Max tiebreak value is 14 (Ace), and we have at most 5 tiebreak values.
+  // We'll pad all tiebreaks to 5 values (pad with 0), then use base-15 encoding.
+  // This ensures category rank (0-9) always dominates tiebreak values (2-14).
+  // Structure: categoryRank * 15^6 + tiebreak[0] * 15^5 + ... + tiebreak[4] * 15^0
+  // But we pad tiebreaks to always have 5 values for consistent comparison.
+  const paddedTiebreak = [...tiebreak];
+  while (paddedTiebreak.length < 5) {
+    paddedTiebreak.push(0); // Pad with 0 for hands with fewer tiebreak values
+  }
+  
   let strength = categoryRank;
-  for (const v of tiebreak) {
+  for (const v of paddedTiebreak) {
     strength = strength * 15 + v;
   }
 
@@ -184,12 +194,25 @@ export class HandEvaluator {
 
     const combos = generateFiveCardCombos(sevenCards);
     let best = null;
+    let bestCombo = null;
 
     for (const combo of combos) {
       const result = evaluateFiveCardHand(combo);
       if (!best || result.strength > best.strength) {
         best = result;
+        bestCombo = combo; // Store the actual 5-card combination
       }
+    }
+
+    // Return the best result, but with the actual best 5-card combo, not just sorted
+    if (best && bestCombo) {
+      const finalResult = {
+        ...best,
+        bestFive: sortByValueDesc(bestCombo) // Sort the actual best combo
+      };
+      
+      
+      return finalResult;
     }
 
     return best;
