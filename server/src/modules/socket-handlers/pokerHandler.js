@@ -29,9 +29,36 @@ export function getIO() {
 
 /**
  * Check if a game has an active hand in progress
+ * A hand is considered active if:
+ * - State exists AND
+ * - Not in showdown (showdownActive is false or undefined) AND
+ * - Has a current turn OR is in a betting round (street is set)
+ * 
+ * After showdown completes, the hand is no longer "active" even though state exists
+ * (state is kept for a few seconds to show results, then cleared)
  */
 export function hasActiveHand(gameId) {
-  return tableState.has(gameId) && tableState.get(gameId) !== null;
+  const state = tableState.get(gameId);
+  if (!state) return false;
+  
+  // If showdown is active, the hand is complete (just showing results)
+  // Consolidation can proceed
+  if (state.showdownActive) {
+    return false;
+  }
+  
+  // If there's a current turn, hand is active
+  if (state.currentTurnUserId) {
+    return true;
+  }
+  
+  // If street is set and not null, hand is in progress
+  if (state.street && state.street !== null) {
+    return true;
+  }
+  
+  // No active hand
+  return false;
 }
 
 function buildClientGameState(game, state) {
@@ -1668,6 +1695,12 @@ async function handleShowdown(gameId, io) {
   // Mark all active players' cards as face-up for showdown
   state.showdownActive = true;
   state.showdownResults = showdownResults;
+  
+  // CRITICAL: Mark hand as complete BEFORE elimination triggers consolidation
+  // This ensures hasActiveHand() returns false immediately
+  state.currentTurnUserId = null; // Clear turn to mark hand as complete
+  state.street = null; // Clear street to mark hand as complete
+  tableState.set(gameId, state); // Save updated state
 
   // Emit showdown results
   if (io) {
