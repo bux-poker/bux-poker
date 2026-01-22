@@ -475,12 +475,12 @@ export async function startHandForGame(gameId, io) {
   const activePlayersForDealer = game.players.filter(p => p.status === 'ACTIVE' && p.seatNumber >= 0);
   
   if (previousDealerSeat !== null && previousDealerSeat !== undefined && activePlayersForDealer.length > 0) {
-    // Rotate dealer clockwise (increase seat number, wrap if needed)
-    // Seats are numbered, and clockwise movement = increasing seat numbers
+    // Rotate dealer clockwise (decrease seat number, wrap if needed)
+    // Seats are numbered ANTICLOCKWISE, so CLOCKWISE movement = DECREASING seat numbers
     const maxSeat = Math.max(...activePlayersForDealer.map(p => p.seatNumber));
     const minSeat = Math.min(...activePlayersForDealer.map(p => p.seatNumber));
-    let nextDealerSeat = previousDealerSeat + 1;
-    if (nextDealerSeat > maxSeat) nextDealerSeat = minSeat;
+    let nextDealerSeat = previousDealerSeat - 1;
+    if (nextDealerSeat < minSeat) nextDealerSeat = maxSeat;
     
     // Find active player at next dealer seat
     dealerPlayer = activePlayersForDealer.find(p => p.seatNumber === nextDealerSeat);
@@ -489,8 +489,8 @@ export async function startHandForGame(gameId, io) {
     if (!dealerPlayer) {
       let attempts = 0;
       while (!dealerPlayer && attempts < activePlayersForDealer.length) {
-        nextDealerSeat = nextDealerSeat + 1;
-        if (nextDealerSeat > maxSeat) nextDealerSeat = minSeat;
+        nextDealerSeat = nextDealerSeat - 1;
+        if (nextDealerSeat < minSeat) nextDealerSeat = maxSeat;
         dealerPlayer = activePlayersForDealer.find(p => p.seatNumber === nextDealerSeat);
         attempts++;
       }
@@ -534,7 +534,7 @@ export async function startHandForGame(gameId, io) {
   
   // Handle heads-up (2 players) special blind rules
   // In heads-up: dealer posts small blind, other player posts big blind
-  const activePlayers = game.players.filter(p => p.status === 'ACTIVE');
+  const activePlayers = game.players.filter(p => p.status === 'ACTIVE' && p.seatNumber >= 0);
   const isHeadsUp = activePlayers.length === 2;
   
   let sbSeat, bbSeat, sbPlayer, bbPlayer;
@@ -547,13 +547,42 @@ export async function startHandForGame(gameId, io) {
     bbSeat = bbPlayer?.seatNumber;
     console.log(`[POKER] Heads-up game: Dealer (seat ${sbSeat}) posts small blind, Other player (seat ${bbSeat}) posts big blind`);
   } else {
-    // Standard rules: SB and BB are clockwise from dealer
+    // Standard rules: SB and BB are clockwise from dealer (decreasing seat numbers)
     sbSeat = dealerSeat - 1 < minSeat ? maxSeat : dealerSeat - 1;
     bbSeat = sbSeat - 1 < minSeat ? maxSeat : sbSeat - 1;
     
-    // Find players at those seat numbers
-    sbPlayer = game.players.find(p => p.seatNumber === sbSeat);
-    bbPlayer = game.players.find(p => p.seatNumber === bbSeat);
+    // Find players at those seat numbers (must be active players with valid seats)
+    sbPlayer = activePlayers.find(p => p.seatNumber === sbSeat && p.seatNumber >= 0);
+    bbPlayer = activePlayers.find(p => p.seatNumber === bbSeat && p.seatNumber >= 0);
+    
+    // If no player found at calculated seat, find next active player clockwise (decreasing)
+    if (!sbPlayer) {
+      let attempts = 0;
+      let searchSeat = sbSeat;
+      while (!sbPlayer && attempts < activePlayers.length) {
+        searchSeat = searchSeat - 1 < minSeat ? maxSeat : searchSeat - 1;
+        sbPlayer = activePlayers.find(p => p.seatNumber === searchSeat && p.seatNumber >= 0);
+        attempts++;
+      }
+      if (sbPlayer) {
+        sbSeat = sbPlayer.seatNumber;
+        console.log(`[POKER] SB player not at calculated seat, found at seat ${sbSeat} clockwise`);
+      }
+    }
+    
+    if (!bbPlayer) {
+      let attempts = 0;
+      let searchSeat = bbSeat;
+      while (!bbPlayer && attempts < activePlayers.length) {
+        searchSeat = searchSeat - 1 < minSeat ? maxSeat : searchSeat - 1;
+        bbPlayer = activePlayers.find(p => p.seatNumber === searchSeat && p.seatNumber >= 0 && p.id !== sbPlayer?.id);
+        attempts++;
+      }
+      if (bbPlayer) {
+        bbSeat = bbPlayer.seatNumber;
+        console.log(`[POKER] BB player not at calculated seat, found at seat ${bbSeat} clockwise`);
+      }
+    }
   }
   
   if (!sbPlayer || !bbPlayer) {
@@ -678,6 +707,7 @@ export async function startHandForGame(gameId, io) {
 
   // Calculate UTG (first to act after BB) - continue clockwise (DECREASING seat numbers)
   // UTG is the first player clockwise after BB (not BB themselves, not SB, not dealer)
+  // Clockwise = decreasing seat numbers (seats numbered anticlockwise)
   let utgSeat = bbSeat - 1;
   if (utgSeat < minSeat) utgSeat = maxSeat;
   
