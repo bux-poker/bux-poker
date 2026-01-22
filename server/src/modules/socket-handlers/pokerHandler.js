@@ -515,10 +515,18 @@ export async function startHandForGame(gameId, io) {
   }
   
   // Update game record with new dealer seat for next hand
+  // Note: dealerSeat field may not exist in database yet if migration hasn't been run
   await prisma.game.update({
     where: { id: gameId },
     data: { dealerSeat: dealerSeat }
-  }).catch(err => console.error(`[POKER] Error updating dealer seat:`, err));
+  }).catch(err => {
+    // If field doesn't exist, log warning but don't fail
+    if (err.message && err.message.includes('Unknown argument')) {
+      console.warn(`[POKER] dealerSeat field not in database yet - migration needed. Error: ${err.message}`);
+    } else {
+      console.error(`[POKER] Error updating dealer seat:`, err);
+    }
+  });
   
   // Seats are numbered ANTICLOCKWISE, so CLOCKWISE movement = DECREASING seat numbers
   const maxSeat = Math.max(...game.players.map(p => p.seatNumber));
@@ -2010,12 +2018,27 @@ async function checkAndAdvanceBlindLevel(tournamentId, gameId, io) {
       const newLevel = blindLevels[currentLevelIndex];
       if (newLevel) {
         // Update game blinds and level
+        // Note: smallBlind/bigBlind fields may not exist in database yet if migration hasn't been run
         await prisma.game.update({
           where: { id: gameId },
           data: {
             currentBlindLevel: currentLevelIndex,
             smallBlind: newLevel.smallBlind,
             bigBlind: newLevel.bigBlind
+          }
+        }).catch(err => {
+          // If fields don't exist, log warning but don't fail
+          if (err.message && err.message.includes('Unknown argument')) {
+            console.warn(`[BLIND LEVEL] smallBlind/bigBlind fields not in database yet - migration needed. Error: ${err.message}`);
+            // Fallback: only update currentBlindLevel
+            return prisma.game.update({
+              where: { id: gameId },
+              data: { currentBlindLevel: currentLevelIndex }
+            }).catch(fallbackErr => {
+              console.error(`[BLIND LEVEL] Error updating currentBlindLevel:`, fallbackErr);
+            });
+          } else {
+            console.error(`[BLIND LEVEL] Error updating game blinds:`, err);
           }
         });
 

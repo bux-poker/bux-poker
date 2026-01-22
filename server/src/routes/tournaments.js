@@ -29,6 +29,10 @@ router.get("/:id", async (req, res, next) => {
     }
     res.json(tournament);
   } catch (err) {
+    console.error("[TOURNAMENTS ROUTE] Error getting tournament:", err);
+    console.error("[TOURNAMENTS ROUTE] Error name:", err.name);
+    console.error("[TOURNAMENTS ROUTE] Error message:", err.message);
+    console.error("[TOURNAMENTS ROUTE] Error stack:", err.stack);
     next(err);
   }
 });
