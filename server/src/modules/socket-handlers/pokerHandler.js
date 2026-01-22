@@ -266,7 +266,42 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
         break; // Exit BET/RAISE case, CHECK is complete
       }
       
-      // Only proceed with BET/RAISE if amount is still positive
+      // Check if the capped amount would actually be a raise or just a call
+      const myContribution = state.bettingRound.getPlayerContribution(player.id);
+      const currentBet = state.bettingRound.currentBet;
+      const newContribution = myContribution + amount;
+      
+      // If the new contribution doesn't exceed the current bet, convert to CALL
+      if (newContribution <= currentBet) {
+        console.log(
+          `[ACTION] ${action} amount ${amount} would result in contribution ${newContribution} which doesn't exceed current bet ${currentBet} - converting to CALL for ${playerName}`
+        );
+        // Convert to CALL
+        const toCall = currentBet - myContribution;
+        const callAmount = Math.min(toCall, player.chips);
+        if (callAmount > 0) {
+          state.bettingRound.call(player.id, player.chips);
+          player.chips -= callAmount;
+          if (player.chips < 0) {
+            console.error(`[ACTION] WARNING: player ${playerName} chips went negative after CALL. Clamping to 0.`, player.chips);
+            player.chips = 0;
+          }
+        }
+        // Mark player as acted
+        state.actedPlayersInRound.add(userId);
+        
+        // Post dealer message
+        if (io) {
+          if (player.chips === 0 && callAmount > 0) {
+            postDealerMessage(gameId, io, `${playerName} calls ${callAmount.toLocaleString()} (all-in)`);
+          } else {
+            postDealerMessage(gameId, io, `${playerName} calls ${callAmount.toLocaleString()}`);
+          }
+        }
+        break; // Exit BET/RAISE case, CALL is complete
+      }
+      
+      // Only proceed with BET/RAISE if amount is still positive and would be a raise
       state.bettingRound.bet(player.id, amount);
       player.chips -= amount;
       if (player.chips < 0) {
