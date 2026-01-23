@@ -381,7 +381,7 @@ export function PokerGameView() {
     }
   }, [tournament, tournamentCountdown]);
 
-  // Calculate next blind timer based on tournament startedAt
+  // Calculate next blind timer based on tournament.startedAt and blind level durations
   useEffect(() => {
     if (!tournament) {
       setNextBlindTime('--:--');
@@ -423,34 +423,31 @@ export function PokerGameView() {
         return;
       }
 
-      // Find current blind level
+      // Find current blind level and minutes into that level (ignore breaks for timer simplicity)
       let currentLevelIndex = 0;
+      let minutesIntoCurrentLevel = elapsedMinutes;
       for (let i = 0; i < blindLevels.length; i++) {
         const level = blindLevels[i];
         if (level.duration === null) {
           // Final level (infinite duration)
           currentLevelIndex = i;
+          minutesIntoCurrentLevel = 0;
           break;
         }
-        if (elapsedMinutes <= level.duration) {
+        const levelDuration = level.duration || 0;
+        if (minutesIntoCurrentLevel <= levelDuration) {
           currentLevelIndex = i;
           break;
         }
-        elapsedMinutes -= level.duration;
-        // Account for break after level
-        if (level.breakAfter) {
-          elapsedMinutes -= level.breakAfter;
-        }
+        minutesIntoCurrentLevel -= levelDuration;
       }
 
-      // Calculate time until next level
+      // Calculate time until next level (based only on level.duration)
       if (currentLevelIndex + 1 < blindLevels.length) {
         const currentLevel = blindLevels[currentLevelIndex];
         const levelDuration = currentLevel.duration || 0;
-        const breakDuration = currentLevel.breakAfter || 0;
-        const totalLevelTime = (levelDuration + breakDuration) * 60 * 1000; // Convert to ms
-        const timeIntoLevel = elapsedMinutes * 60 * 1000;
-        const timeUntilNext = totalLevelTime - timeIntoLevel;
+        const remainingMinutes = Math.max(0, levelDuration - minutesIntoCurrentLevel);
+        const timeUntilNext = remainingMinutes * 60 * 1000;
 
         if (timeUntilNext > 0) {
           const minutes = Math.floor(timeUntilNext / 60000);
@@ -655,10 +652,10 @@ export function PokerGameView() {
   const activePlayers = gameState.players.filter(p => p.status !== 'ELIMINATED');
   const myPlayer = gameState.players.find(p => p.userId === user?.id || p.id === user?.id);
   
-  // For tournaments, show tournament-wide stats, not table-specific
-  const tournamentRemainingPlayers = tournament?.remainingPlayers || activePlayers.length;
-  const tournamentTotalPlayers = tournament?.registeredCount || gameState.players.length;
-  const myPosition = tournament ? tournamentRemainingPlayers : (myPlayer ? activePlayers.findIndex(p => p.id === myPlayer.id) + 1 : null);
+  // For tournaments, header POSITION should reflect chip rank (1 = most chips at the table)
+  const sortedByChips = [...activePlayers].sort((a, b) => b.chips - a.chips);
+  const myChipRank = myPlayer ? sortedByChips.findIndex(p => p.id === myPlayer.id) + 1 : null;
+  const myPosition = myChipRank && myChipRank > 0 ? myChipRank : null;
   const myContribution = myPlayer?.contribution || 0;
 
   // Show landscape prompt if in portrait mode

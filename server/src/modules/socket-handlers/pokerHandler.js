@@ -2310,8 +2310,9 @@ async function advanceToNextStreet(gameId, io) {
   const activePlayerIds = activePlayers.map(p => p.id);
   const allPlayersAllIn = state.bettingRound.areAllPlayersAllIn(activePlayerIds, state.players);
   
-  // Check if one of two players is all-in (no more betting decisions possible)
-  const isHeadsUpWithAllIn = activePlayers.length === 2 && activePlayers.some(p => p.chips === 0);
+  // Determine how many active players still have chips left
+  // These are the players who can still make betting decisions on future streets
+  const playersWithChips = activePlayers.filter(p => p.chips > 0);
 
   // Deal community cards based on current street
   if (state.street === "PREFLOP") {
@@ -2341,16 +2342,28 @@ async function advanceToNextStreet(gameId, io) {
     return;
   }
 
-  // If all players are all-in OR one of two players is all-in, deal remaining community cards immediately and go to showdown
-  if (allPlayersAllIn || isHeadsUpWithAllIn) {
+  // Decide whether to auto-deal remaining cards and go to showdown
+  //
+  // Rules (from user):
+  // - If ALL active players are all-in          → auto-showdown
+  // - If ONLY ONE active player has chips left  → auto-showdown
+  //   (this covers both heads-up and multi-way where one player still has chips)
+  // - If 2+ active players still have chips     → continue betting, skip ALL_IN players
+  const shouldAutoShowdown =
+    allPlayersAllIn || playersWithChips.length === 1;
+
+  if (shouldAutoShowdown) {
     if (allPlayersAllIn) {
-      console.log(`[POKER] All players are all-in, dealing remaining community cards immediately`);
+      console.log(`[POKER] All active players are all-in, dealing remaining community cards immediately`);
       postDealerMessage(gameId, io, "All players are all-in! Dealing remaining community cards...");
     } else {
-      const allInPlayer = activePlayers.find(p => p.chips === 0);
-      const otherPlayer = activePlayers.find(p => p.chips > 0);
-      console.log(`[POKER] One player is all-in (${allInPlayer?.name || allInPlayer?.userId}), dealing remaining community cards immediately`);
-      postDealerMessage(gameId, io, `${allInPlayer?.name || 'Player'} is all-in! Dealing remaining community cards...`);
+      const chipLeader = playersWithChips[0];
+      console.log(`[POKER] Only one active player has chips (${chipLeader?.name || chipLeader?.userId}), dealing remaining community cards immediately`);
+      postDealerMessage(
+        gameId,
+        io,
+        `${chipLeader?.name || 'Player'} is the only player with chips left. Dealing remaining community cards...`
+      );
     }
     
     // Deal remaining cards based on current street
