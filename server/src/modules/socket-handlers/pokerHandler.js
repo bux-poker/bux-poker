@@ -397,10 +397,30 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
       break;
     }
     case "ALL_IN": {
-      const allInAmount = player.chips;
+      let allInAmount = player.chips;
       if (allInAmount <= 0) {
         throw new Error("Cannot go all-in with zero chips");
       }
+      
+      // In heads-up pots, cap all-in to opponent's effective stack
+      if (opponent) {
+        const myContribution = state.bettingRound.getPlayerContribution(player.id);
+        const oppContribution = state.bettingRound.getPlayerContribution(opponent.id);
+        const myEffectiveMax = myContribution + player.chips;
+        const oppEffectiveMax = oppContribution + opponent.chips;
+        const effectiveCap = Math.min(myEffectiveMax, oppEffectiveMax);
+        const desiredNewContribution = myContribution + allInAmount;
+        if (desiredNewContribution > effectiveCap) {
+          const cappedAmount = Math.max(0, effectiveCap - myContribution);
+          if (cappedAmount < allInAmount) {
+            console.log(
+              `[ACTION] Capping ALL_IN amount for ${playerName} from ${allInAmount} to ${cappedAmount} based on effective stack (heads-up pot)`
+            );
+            allInAmount = cappedAmount;
+          }
+        }
+      }
+      
       // All-in acts as a raise if it's more than current bet
       const currentContribution = state.bettingRound.getPlayerContribution(player.id);
       const allInContribution = currentContribution + allInAmount;
