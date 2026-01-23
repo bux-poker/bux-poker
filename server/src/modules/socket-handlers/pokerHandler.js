@@ -2492,56 +2492,59 @@ async function advanceToNextStreet(gameId, io) {
     return;
   }
 
-  // Start new betting round - first player to act is first active player after dealer
+  // Start new betting round - only players with chips (not ALL_IN) should ever act
   if (activePlayers.length > 1) {
-    // Find first active player after dealer (clockwise)
-    const dealerSeat = state.dealerSeat;
-    const maxSeat = Math.max(...state.players.map(p => p.seatNumber));
-    const minSeat = Math.min(...state.players.map(p => p.seatNumber));
-    
-    let firstToActSeat = dealerSeat - 1; // Clockwise = decrease
-    if (firstToActSeat < minSeat) firstToActSeat = maxSeat;
-    
-    // Find active player at or after this seat
-    let firstToActPlayer = activePlayers.find(p => p.seatNumber === firstToActSeat);
-    let attempts = 0;
-    while (!firstToActPlayer && attempts < activePlayers.length) {
-      firstToActSeat = firstToActSeat - 1;
+    // Eligible to act = active, not ALL_IN, has chips > 0
+    const eligibleToAct = activePlayers.filter(p => p.status !== 'ALL_IN' && p.chips > 0);
+
+    if (eligibleToAct.length > 1) {
+      // Find first eligible player after dealer (clockwise)
+      const dealerSeat = state.dealerSeat;
+      const maxSeat = Math.max(...state.players.map(p => p.seatNumber));
+      const minSeat = Math.min(...state.players.map(p => p.seatNumber));
+      
+      let firstToActSeat = dealerSeat - 1; // Clockwise = decrease
       if (firstToActSeat < minSeat) firstToActSeat = maxSeat;
-      firstToActPlayer = activePlayers.find(p => p.seatNumber === firstToActSeat);
-      attempts++;
-    }
-    
-    if (firstToActPlayer) {
-      // Clear any existing turn timer before starting new betting round
-      const existingTimer = turnTimers.get(gameId);
-      if (existingTimer) {
-        clearTimeout(existingTimer.timerId);
-        if (existingTimer.graceTimerId) {
-          clearTimeout(existingTimer.graceTimerId);
-        }
-        turnTimers.delete(gameId);
-        console.log(`[POKER] advanceToNextStreet: Cleared existing turn timer before starting new street`);
+      
+      // Find eligible player at or after this seat
+      let firstToActPlayer = eligibleToAct.find(p => p.seatNumber === firstToActSeat);
+      let attempts = 0;
+      while (!firstToActPlayer && attempts < eligibleToAct.length) {
+        firstToActSeat = firstToActSeat - 1;
+        if (firstToActSeat < minSeat) firstToActSeat = maxSeat;
+        firstToActPlayer = eligibleToAct.find(p => p.seatNumber === firstToActSeat);
+        attempts++;
       }
       
-      console.log(`[POKER] advanceToNextStreet: Starting new betting round on ${state.street}, first to act: seat ${firstToActPlayer.seatNumber} (${firstToActPlayer.name || firstToActPlayer.userId})`);
-      state.currentTurnUserId = firstToActPlayer.userId;
-      state.lastRaiseUserId = null; // Reset last raise for new street
-      startTurnTimer(gameId, firstToActPlayer.userId, io);
-    } else {
-      console.error(`[POKER] ERROR in advanceToNextStreet: Could not find first player to act! Active players: ${activePlayers.length}`);
-      // Fallback: if we can't find a player, use the first active player
-      if (activePlayers.length > 0) {
-        const fallbackPlayer = activePlayers[0];
-        console.log(`[POKER] Using fallback player: seat ${fallbackPlayer.seatNumber} (${fallbackPlayer.name || fallbackPlayer.userId})`);
+      if (firstToActPlayer) {
+        // Clear any existing turn timer before starting new betting round
+        const existingTimer = turnTimers.get(gameId);
+        if (existingTimer) {
+          clearTimeout(existingTimer.timerId);
+          if (existingTimer.graceTimerId) {
+            clearTimeout(existingTimer.graceTimerId);
+          }
+          turnTimers.delete(gameId);
+          console.log(`[POKER] advanceToNextStreet: Cleared existing turn timer before starting new street`);
+        }
+        
+        console.log(`[POKER] advanceToNextStreet: Starting new betting round on ${state.street}, first to act: seat ${firstToActPlayer.seatNumber} (${firstToActPlayer.name || firstToActPlayer.userId})`);
+        state.currentTurnUserId = firstToActPlayer.userId;
+        state.lastRaiseUserId = null; // Reset last raise for new street
+        startTurnTimer(gameId, firstToActPlayer.userId, io);
+      } else {
+        console.error(`[POKER] ERROR in advanceToNextStreet: Could not find eligible player to act! Eligible players: ${eligibleToAct.length}`);
+        // Fallback: use the first eligible player
+        const fallbackPlayer = eligibleToAct[0];
+        console.log(`[POKER] Using fallback eligible player: seat ${fallbackPlayer.seatNumber} (${fallbackPlayer.name || fallbackPlayer.userId})`);
         state.currentTurnUserId = fallbackPlayer.userId;
         state.lastRaiseUserId = null;
         startTurnTimer(gameId, fallbackPlayer.userId, io);
-      } else {
-        console.error(`[POKER] CRITICAL ERROR: No active players found in advanceToNextStreet!`);
-        // Should not happen, but if it does, we need to handle it
-        state.currentTurnUserId = null;
       }
+    } else {
+      // 0 or 1 eligible players with chips -> no betting round should start
+      console.log(`[POKER] advanceToNextStreet: <=1 eligible players with chips, skipping betting round start`);
+      state.currentTurnUserId = null;
     }
   } else {
     console.log(`[POKER] advanceToNextStreet: Only 1 active player remaining, skipping betting round start`);
