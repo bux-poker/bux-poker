@@ -652,6 +652,10 @@ export function PokerGameView() {
   const activePlayers = gameState.players.filter(p => p.status !== 'ELIMINATED');
   const myPlayer = gameState.players.find(p => p.userId === user?.id || p.id === user?.id);
   
+  // Tournament player counts for header
+  const tournamentRemainingPlayers = tournament?.remainingPlayers ?? activePlayers.length;
+  const tournamentTotalPlayers = tournament?.registeredCount ?? gameState.players.length;
+  
   // For tournaments, header POSITION should reflect chip rank (1 = most chips at the table)
   const sortedByChips = [...activePlayers].sort((a, b) => b.chips - a.chips);
   const myChipRank = myPlayer ? sortedByChips.findIndex(p => p.id === myPlayer.id) + 1 : null;
