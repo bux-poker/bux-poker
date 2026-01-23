@@ -212,8 +212,9 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
   // IMPORTANT: For heads-up pots (exactly 2 active players), we cap the
   // effective bet size to the smaller stack so we never create a bet that
   // cannot be fully matched.
+  // Filter out folded, eliminated, and all-in players
   const activeNonFoldedPlayers = state.players.filter(
-    (p) => p.status !== "FOLDED" && p.status !== "ELIMINATED"
+    (p) => p.status !== "FOLDED" && p.status !== "ELIMINATED" && p.status !== "ALL_IN" && p.chips > 0
   );
   const isHeadsUpPot = activeNonFoldedPlayers.length === 2;
   const opponent =
@@ -1633,14 +1634,19 @@ async function handleShowdown(gameId, io) {
   const oldPot = state.pot || 0;
   state.pot = oldPot + collectedPot;
   
-  const activePlayers = state.players.filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
+  // Only include players who are still in the hand (not folded, not eliminated)
+  // ALL_IN players are still in the hand and should be included for showdown
+  const activePlayers = state.players.filter(p => 
+    p.status !== 'FOLDED' && 
+    p.status !== 'ELIMINATED'
+  );
   
   if (activePlayers.length === 0) {
     console.log(`[SHOWDOWN] No active players for showdown`);
     return;
   }
 
-  console.log(`[SHOWDOWN] Starting showdown with ${activePlayers.length} active players`);
+  console.log(`[SHOWDOWN] Starting showdown with ${activePlayers.length} active players (excluding folded players)`);
   console.log(`[SHOWDOWN] Community cards:`, state.communityCards);
   console.log(`[SHOWDOWN] Total pot: ${state.pot} (old: ${oldPot}, collected: ${collectedPot})`);
 
@@ -2600,7 +2606,13 @@ async function moveToNextPlayer(gameId, io) {
     console.log(`[POKER] Active hand in progress - skipping elimination of players with 0 chips until hand completes`);
   }
 
-  const activePlayers = state.players.filter((p) => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
+  // Filter out folded, eliminated, and all-in players (all-in players can't act)
+  const activePlayers = state.players.filter((p) => 
+    p.status !== 'FOLDED' && 
+    p.status !== 'ELIMINATED' && 
+    p.status !== 'ALL_IN' &&
+    p.chips > 0
+  );
   
   if (activePlayers.length === 0) {
     state.currentTurnUserId = null;
@@ -2739,8 +2751,8 @@ async function moveToNextPlayer(gameId, io) {
       const hasActed = state.actedPlayersInRound.has(playerAtSeat.userId);
       const isLastRaiser = state.lastRaiseUserId === playerAtSeat.userId;
       
-      // Check if player is all-in (has 0 chips remaining) or eliminated
-      const isAllIn = playerAtSeat.chips === 0 || playerAtSeat.status === 'ELIMINATED';
+      // Check if player is all-in (has 0 chips remaining or ALL_IN status) or eliminated
+      const isAllIn = playerAtSeat.status === 'ALL_IN' || playerAtSeat.chips === 0 || playerAtSeat.status === 'ELIMINATED';
       
       let needsToAct = false;
       if (isAllIn) {

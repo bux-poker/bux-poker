@@ -620,8 +620,9 @@ export function PokerTable({
           ];
 
           // Add cards as separate element if player has cards (including own player)
-          if (player && player.holeCards && player.holeCards.length > 0) {
-            const isFolded = player.status === 'FOLDED';
+          // Hide table cards for folded players (they can still see their own cards in action panel)
+          const isFolded = player?.status === 'FOLDED';
+          if (player && player.holeCards && player.holeCards.length > 0 && !isFolded) {
             const isShowdownActive = showdownActive || false;
             // During showdown, turn all active players' cards face up
             const showFaceUp = isMyPlayer || isShowdownActive;
