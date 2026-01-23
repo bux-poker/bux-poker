@@ -4,7 +4,7 @@
  * Starting from 901-1000px and working down
  */
 
-/* 901-1000px */
+/* 901-1000px (iPad landscape, small tablets) */
 @media (min-width: 901px) and (max-width: 1000px) {
   :root {
     --scale-factor: 1.0;
@@ -25,8 +25,9 @@
     --dealer-button-size: 12.8px;
     --timer-text-size: 20px;
     
-    --hole-card-width: 22px;
-    --hole-card-height: 31px;
+    /* Increased hole card size for better visibility on tablets */
+    --hole-card-width: 24px;
+    --hole-card-height: 34px;
     
     --bet-chip-size: 12px;
     --bet-chip-text-size: 10px;
@@ -117,7 +118,7 @@
   }
 }
 
-/* 851-900px */
+/* 851-900px (iPad portrait, medium tablets) */
 @media (min-width: 851px) and (max-width: 900px) {
   :root {
     --scale-factor: 0.95;
@@ -138,8 +139,9 @@
     --dealer-button-size: 12px;
     --timer-text-size: 19px;
     
-    --hole-card-width: 20px;
-    --hole-card-height: 28px;
+    /* Increased hole card size for better visibility on tablets */
+    --hole-card-width: 22px;
+    --hole-card-height: 31px;
     
     --bet-chip-size: 10.8px;
     --bet-chip-text-size: 9px;
@@ -173,7 +175,7 @@
   }
 }
 
-/* 801-850px */
+/* 801-850px (small tablets) */
 @media (min-width: 801px) and (max-width: 850px) {
   :root {
     --scale-factor: 0.90;
@@ -194,8 +196,9 @@
     --dealer-button-size: 11.6px;
     --timer-text-size: 18px;
     
-    --hole-card-width: 18px;
-    --hole-card-height: 25px;
+    /* Increased hole card size for better visibility on tablets */
+    --hole-card-width: 20px;
+    --hole-card-height: 28px;
     
     --bet-chip-size: 9.6px;
     --bet-chip-text-size: 8px;
@@ -229,7 +232,7 @@
   }
 }
 
-/* 751-800px */
+/* 751-800px (small tablets) */
 @media (min-width: 751px) and (max-width: 800px) {
   :root {
     --scale-factor: 0.85;
@@ -250,8 +253,9 @@
     --dealer-button-size: 11.2px;
     --timer-text-size: 17px;
     
-    --hole-card-width: 16px;
-    --hole-card-height: 22px;
+    /* Increased hole card size for better visibility on tablets */
+    --hole-card-width: 18px;
+    --hole-card-height: 25px;
     
     --bet-chip-size: 9px;
     --bet-chip-text-size: 8px;
@@ -740,10 +744,11 @@
   }
 }
 
-/* Global card scaling override for all screens up to 1000px wide
- * Ensure player table hand cards and community cards are ~50% of the desktop size
+/* Global card scaling override for small screens only (not tablets/iPads)
+ * Tablets (768px+) should use the specific breakpoint values above
+ * Only apply this override for very small screens (< 768px)
  */
-@media (max-width: 1000px) {
+@media (max-width: 767px) {
   :root {
     --community-card-width: 40px;
     --community-card-height: 56px;
