@@ -185,17 +185,19 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
     throw new Error("Player not at this table");
   }
 
-  // Reject actions from eliminated players or players with 0 chips (unless they're all-in in an active hand)
+  // Reject actions from eliminated players
   if (player.status === 'ELIMINATED') {
     throw new Error("Eliminated players cannot act");
   }
   
-  // If player has 0 chips and is not in an active hand, they should be eliminated
-  // But if they're all-in in an active hand, they can't act anyway (handled below)
-  if (player.chips === 0 && player.status !== 'ALL_IN') {
-    // Player has 0 chips but isn't marked as ALL_IN - they should be eliminated
-    // This shouldn't happen, but if it does, reject the action
-    throw new Error("Player has no chips and cannot act");
+  // Reject actions from all-in players (they've already committed all chips)
+  if (player.status === 'ALL_IN' || player.chips === 0) {
+    // If player has 0 chips but isn't marked as ALL_IN, mark them as ALL_IN
+    if (player.chips === 0 && player.status !== 'ALL_IN') {
+      player.status = 'ALL_IN';
+      console.log(`[ACTION] Auto-marking player ${player.name || player.userId} as ALL_IN (0 chips)`);
+    }
+    throw new Error("All-in players cannot act");
   }
 
   const playerName = player.name || player.user?.username || `Player ${player.seatNumber}`;
@@ -344,6 +346,13 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
         console.error(`[ACTION] WARNING: player ${playerName} chips went negative after CALL. Clamping to 0.`, player.chips);
         player.chips = 0;
       }
+      
+      // Mark player as ALL_IN if they have no chips remaining
+      if (player.chips === 0) {
+        player.status = 'ALL_IN';
+        console.log(`[ACTION] Player ${playerName} is now ALL_IN after CALL`);
+      }
+      
       // Don't update state.pot here - it's accumulated when advancing streets
       // state.pot should only change when collecting from betting round
       const newContribution = state.bettingRound.getPlayerContribution(player.id);
@@ -353,7 +362,11 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
       
       // Post dealer message
       if (io) {
-        postDealerMessage(gameId, io, `${playerName} calls ${spent.toLocaleString()}`);
+        if (player.chips === 0 && spent > 0) {
+          postDealerMessage(gameId, io, `${playerName} calls ${spent.toLocaleString()} (all-in)`);
+        } else {
+          postDealerMessage(gameId, io, `${playerName} calls ${spent.toLocaleString()}`);
+        }
       }
       break;
     }
