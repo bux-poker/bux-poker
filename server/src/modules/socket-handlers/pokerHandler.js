@@ -804,11 +804,19 @@ export async function startHandForGame(gameId, io) {
       bbPlayer.chips -= bbAmount;
     }
     
-    // Adjust current bet if blinds couldn't be posted fully
-    if (bbAmount < bigBlind) {
-      bettingRound.currentBet = bbAmount;
-      console.log(`[POKER] Big blind adjusted to ${bbAmount} (player has insufficient chips)`);
-    }
+    // IMPORTANT: Even if the big blind player is short (posts less than the
+    // full big blind and is effectively all-in), the *nominal* current bet
+    // for the round should remain the full big blind. This ensures that:
+    // - UTG and later players must at least call the full big blind amount,
+    //   with any excess over the short-stack's contribution going into a
+    //   side pot that the short-stack cannot win.
+    // - Minimum bet/raise logic still uses the configured big blind.
+    //
+    // Side pots are handled later via total contribution tracking and
+    // `isBettingComplete`, which treats all‑in players as having contributed
+    // the maximum they are able to.
+    bettingRound.currentBet = bigBlind;
+    bettingRound.minimumRaise = bigBlind;
   }
 
   // Calculate UTG (first to act after BB)

@@ -67,6 +67,8 @@ class SoundManager {
   private masterVolume: number = 1.0;
   private loadedCount: number = 0;
   private totalSounds: number = Object.keys(SOUND_CONFIGS).length;
+  private queue: { name: SoundName; volume?: number }[] = [];
+  private isQueuePlaying: boolean = false;
 
   constructor() {
     this.preloadSounds();
@@ -100,7 +102,7 @@ class SoundManager {
   }
 
   /**
-   * Play a sound effect
+   * Play a sound effect immediately (no sequencing)
    */
   play(soundName: SoundName, volumeOverride?: number): void {
     if (!this.isEnabled) return;
@@ -125,6 +127,56 @@ class SoundManager {
       if (err.name !== 'NotAllowedError' && err.name !== 'NotSupportedError') {
         console.warn(`[SOUND] Failed to play ${soundName}:`, err);
       }
+    });
+  }
+
+  /**
+   * Enqueue a sound to be played after any currently playing queued sound finishes.
+   * This guarantees sounds do not overlap and are heard clearly in sequence.
+   */
+  playQueued(soundName: SoundName, volumeOverride?: number): void {
+    if (!this.isEnabled) return;
+    this.queue.push({ name: soundName, volume: volumeOverride });
+    if (!this.isQueuePlaying) {
+      this.playNextInQueue();
+    }
+  }
+
+  private playNextInQueue(): void {
+    if (this.queue.length === 0) {
+      this.isQueuePlaying = false;
+      return;
+    }
+
+    const { name, volume } = this.queue.shift()!;
+    const audio = this.audioCache.get(name);
+    if (!audio) {
+      console.warn(`[SOUND] Sound not found in queue: ${name}`);
+      // Try next
+      this.playNextInQueue();
+      return;
+    }
+
+    this.isQueuePlaying = true;
+
+    const audioClone = audio.cloneNode() as HTMLAudioElement;
+    audioClone.volume = volume !== undefined
+      ? volume * this.masterVolume
+      : audio.volume;
+    audioClone.currentTime = 0;
+
+    audioClone.addEventListener('ended', () => {
+      this.isQueuePlaying = false;
+      this.playNextInQueue();
+    }, { once: true });
+
+    audioClone.play().catch((err) => {
+      if (err.name !== 'NotAllowedError' && err.name !== 'NotSupportedError') {
+        console.warn(`[SOUND] Failed to play queued ${name}:`, err);
+      }
+      // Even if play fails, move on to next
+      this.isQueuePlaying = false;
+      this.playNextInQueue();
     });
   }
 

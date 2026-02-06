@@ -139,13 +139,13 @@ export function TournamentLobby() {
     }
   }, [myGameId, tournament?.status]);
 
-  // Calculate running tournament stats
+  // Calculate running tournament stats + sync blinds / remaining players with game state
   useEffect(() => {
     if (!tournament || (tournament.status !== 'RUNNING' && tournament.status !== 'ACTIVE')) {
       return;
     }
 
-    const updateRunningStats = () => {
+    const updateRunningStats = async () => {
       // Calculate running time - use startedAt if available, otherwise startTime
       const actualStartTime = (tournament as any).startedAt 
         ? new Date((tournament as any).startedAt) 
@@ -156,56 +156,110 @@ export function TournamentLobby() {
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       setRunningTime(`${hours}h ${minutes}m`);
 
-      // TODO: Get current blind level from game state
-      // For now, calculate based on running time and blind durations
-      if (blindLevels.length > 0) {
-        let elapsed = diff / 1000 / 60; // minutes
-        let currentLevel = 0;
+      // Calculate current blind level and time to next level using the same logic as the table
+      if (blindLevels.length > 0 && (tournament as any).startedAt) {
+        let elapsedMinutes = diff / 1000 / 60;
+        let currentLevelIndex = 0;
+
         for (let i = 0; i < blindLevels.length; i++) {
           const level = blindLevels[i];
           if (level.duration === null) {
-            // Final level (infinite)
-            currentLevel = i;
+            currentLevelIndex = i;
+            elapsedMinutes = 0;
             break;
           }
-          if (elapsed <= level.duration) {
-            currentLevel = i;
+          const levelDuration = level.duration || 0;
+          if (elapsedMinutes <= levelDuration) {
+            currentLevelIndex = i;
             break;
           }
-          elapsed -= level.duration;
-          if (level.breakAfter) {
-            elapsed -= level.breakAfter;
-          }
+          elapsedMinutes -= levelDuration;
         }
-        
-        if (currentLevel < blindLevels.length) {
-          setCurrentBlindLevel(blindLevels[currentLevel]);
-          
-          // Get next level
-          if (currentLevel + 1 < blindLevels.length) {
-            setNextBlindLevel(blindLevels[currentLevel + 1]);
-            // Calculate time until next level
-            const currentLevelDuration = blindLevels[currentLevel].duration || 0;
-            const breakDuration = blindLevels[currentLevel].breakAfter || 0;
-            const timeUntilNext = (currentLevelDuration + breakDuration) * 60 * 1000 - (elapsed * 60 * 1000);
+
+        if (currentLevelIndex < blindLevels.length) {
+          const currentLevel = blindLevels[currentLevelIndex];
+          setCurrentBlindLevel(currentLevel);
+
+          if (currentLevelIndex + 1 < blindLevels.length) {
+            const nextLevel = blindLevels[currentLevelIndex + 1];
+            setNextBlindLevel(nextLevel);
+
+            const levelDuration = currentLevel.duration || 0;
+            const remainingMinutes = Math.max(0, levelDuration - elapsedMinutes);
+            const timeUntilNext = remainingMinutes * 60 * 1000;
             if (timeUntilNext > 0) {
               const mins = Math.floor(timeUntilNext / (1000 * 60));
-              setNextBlindIn(`${mins}m`);
+              const secs = Math.floor((timeUntilNext % (1000 * 60)) / 1000);
+              setNextBlindIn(`${mins}:${secs.toString().padStart(2, '0')}`);
+            } else {
+              setNextBlindIn('0:00');
             }
           } else {
             setNextBlindLevel(null);
+            setNextBlindIn('∞');
           }
         }
       }
 
-      // TODO: Get actual remaining players from game state
-      // For now, use registered count as placeholder
-      setRemainingPlayers(tournament.registeredCount || 0);
+      // Use live players from tournament payload (flattened in API) so that
+      // the lobby always reflects current chip stacks and statuses.
+      try {
+        // Prefer the tournament instance from the hook (keeps us in sync with
+        // other consumers), but refetch as a fallback if needed.
+        let data: any = tournament;
+        if (!data?.players) {
+          const response = await api.get(`/api/tournaments/${id}`);
+          data = response.data;
+        }
 
-      // TODO: Get current position for logged-in user
-      if (user) {
-        // Placeholder - would need to query game state
-        setCurrentPosition(null);
+        if (data?.players) {
+          // Active players sorted by chip count descending
+          const active = data.players.filter((p: any) => p.status !== 'ELIMINATED');
+          const eliminated = data.players.filter((p: any) => p.status === 'ELIMINATED');
+
+          const activeSorted: Player[] = active
+            .map((p: any) => ({
+              id: p.id,
+              userId: p.userId,
+              user: p.user,
+              chips: p.chips,
+              status: p.status,
+              position: null as number | null,
+            }))
+            .sort((a: Player, b: Player) => b.chips - a.chips);
+
+          // Eliminated players – `position` will be wired up from the backend
+          // when we start storing final standings per player.
+          const eliminatedWithPosition: Player[] = eliminated
+            .map((p: any) => ({
+              id: p.id,
+              userId: p.userId,
+              user: p.user,
+              chips: p.chips,
+              status: p.status,
+              // Use finishingPlace from API as the player's final position
+              position: p.finishingPlace ?? null,
+            }))
+            .sort((a: Player, b: Player) => (a.position || 0) - (b.position || 0));
+
+          setPlayers([...activeSorted, ...eliminatedWithPosition]);
+
+          // Remaining players = non-eliminated count
+          setRemainingPlayers(active.length);
+
+          // Current position for logged-in user (1 = most chips among remaining, otherwise final position)
+          if (user) {
+            const meActiveIndex = activeSorted.findIndex(p => p.userId === user.id);
+            if (meActiveIndex >= 0) {
+              setCurrentPosition(meActiveIndex + 1);
+            } else {
+              const meEliminated = eliminatedWithPosition.find(p => p.userId === user.id);
+              setCurrentPosition(meEliminated?.position ?? null);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[TOURNAMENT] Error updating running stats/players:', err);
       }
     };
 
@@ -213,9 +267,11 @@ export function TournamentLobby() {
     const interval = setInterval(updateRunningStats, 1000);
 
     return () => clearInterval(interval);
-  }, [tournament, blindLevels, user]);
+  }, [tournament, blindLevels, user, id]);
 
-  // Fetch players (registrations or active players)
+  // Initial players list (registrations / fallback). Once the tournament is
+  // running, `updateRunningStats` above keeps `players` live, so we avoid
+  // overwriting with starting stacks here.
   useEffect(() => {
     if (!tournament) return;
 
@@ -224,22 +280,9 @@ export function TournamentLobby() {
         // If tournament is running/active, fetch from games
         // Otherwise, fetch from registrations
         if (tournament.status === 'RUNNING' || tournament.status === 'ACTIVE') {
-          // TODO: Fetch active players with chip stacks from games
-          // For now, show registered players
-          const response = await api.get(`/api/tournaments/${id}`);
-          if (response.data?.registrations) {
-            const activePlayers = response.data.registrations
-              .filter((r: any) => r.status === 'CONFIRMED')
-              .map((r: any) => ({
-                id: r.id,
-                userId: r.userId,
-                user: r.user,
-                chips: tournament.startingChips, // Placeholder
-                status: 'ACTIVE',
-              }))
-              .sort((a: Player, b: Player) => b.chips - a.chips);
-            setPlayers(activePlayers);
-          }
+          // Running tournaments: live chip stacks are handled in
+          // updateRunningStats; don't overwrite here.
+          return;
         } else if (tournament.status === 'COMPLETED') {
           // TODO: Fetch final standings
           const response = await api.get(`/api/tournaments/${id}`);

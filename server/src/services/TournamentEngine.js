@@ -586,6 +586,15 @@ export class TournamentEngine {
    * Mark a player as eliminated and optionally trigger consolidation.
    */
   async onPlayerBust(tournamentId, playerId) {
+    // First, eliminate this player and assign a provisional finishing place
+    // based on how many active players remain after they bust.
+    //
+    // Example:
+    // - 9 players active -> one busts -> remaining=8 -> finPlace=9
+    // - 2 players active -> one busts -> remaining=1 -> finPlace=2
+    //
+    // The very last remaining active player will later be given
+    // finishingPlace = 1 when the tournament is completed.
     await prisma.player.update({
       where: { id: playerId },
       data: {
@@ -593,7 +602,7 @@ export class TournamentEngine {
       }
     });
 
-    // Count remaining active players across all games
+    // Count remaining active players across all games (AFTER this bust)
     const remaining = await prisma.player.count({
       where: {
         game: { tournamentId },
@@ -601,14 +610,79 @@ export class TournamentEngine {
       }
     });
 
+    // Total players that started the tournament (for sanity / future use)
+    const totalPlayers = await prisma.player.count({
+      where: {
+        game: { tournamentId }
+      }
+    });
+
+    // Assign finishing place for the busted player if not already set.
+    // We set it to remaining + 1 so that the last elimination gets place 2
+    // (with the final remaining active player later marked as place 1).
+    const finishingPlace = remaining + 1;
+    await prisma.player.update({
+      where: { id: playerId },
+      data: {
+        finishingPlace
+      }
+    }).catch((err) => {
+      console.error(`[TOURNAMENT] Error setting finishingPlace for player ${playerId}:`, err);
+    });
+
     if (remaining <= 1) {
+      // Tournament is over – mark the final remaining active player as the winner
+      // and set their finishingPlace = 1.
+      const winner = await prisma.player.findFirst({
+        where: {
+          game: { tournamentId },
+          status: "ACTIVE"
+        },
+        include: { user: true }
+      });
+
+      if (winner) {
+        await prisma.player.update({
+          where: { id: winner.id },
+          data: {
+            finishingPlace: 1
+          }
+        }).catch(err => {
+          console.error(`[TOURNAMENT] Error setting finishingPlace=1 for winner ${winner.id}:`, err);
+        });
+      }
+
       await prisma.tournament.update({
         where: { id: tournamentId },
         data: {
           status: "COMPLETED"
         }
       });
+
+      // Optionally post a winners summary embed to Discord
+      try {
+        const tournament = await prisma.tournament.findUnique({
+          where: { id: tournamentId },
+          include: {
+            games: {
+              include: {
+                players: {
+                  include: { user: true }
+                }
+              }
+            }
+          }
+        });
+
+        if (tournament) {
+          const { postTournamentWinnersEmbed } = await import("../discord/bot.js");
+          await postTournamentWinnersEmbed(tournament);
+        }
+      } catch (err) {
+        console.error("[TOURNAMENT] Error posting winners embed to Discord:", err);
+      }
     } else {
+      // Still multiple active players – continue with consolidation logic.
       await this.consolidateTables(tournamentId);
     }
   }

@@ -690,6 +690,131 @@ export async function updateTournamentEmbeds(tournamentId) {
 }
 
 /**
+ * Post a winners embed to Discord with final standings.
+ */
+export async function postTournamentWinnersEmbed(tournament) {
+  if (!discordClient) {
+    console.warn('[DISCORD BOT] Cannot post winners embed - bot not initialized');
+    return [];
+  }
+
+  try {
+    // Reload tournament with posts and full player data to ensure we have
+    // finishing places for everyone.
+    const tournamentWithRelations = await prisma.tournament.findUnique({
+      where: { id: tournament.id },
+      include: {
+        posts: {
+          include: {
+            server: true,
+          },
+        },
+        games: {
+          include: {
+            players: {
+              include: { user: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!tournamentWithRelations) {
+      console.warn(`[DISCORD BOT] Tournament ${tournament.id} not found for winners embed`);
+      return [];
+    }
+
+    if (!tournamentWithRelations.posts || tournamentWithRelations.posts.length === 0) {
+      console.log(`[DISCORD BOT] No posts found for tournament ${tournament.id}, skipping winners embed`);
+      return [];
+    }
+
+    // Flatten all players across games and build a final standings list
+    const allPlayers = [];
+    for (const game of tournamentWithRelations.games || []) {
+      for (const player of game.players || []) {
+        allPlayers.push(player);
+      }
+    }
+
+    if (allPlayers.length === 0) {
+      console.log(`[DISCORD BOT] No players found for tournament ${tournament.id}, skipping winners embed`);
+      return [];
+    }
+
+    // Sort by finishingPlace ascending (1 = winner). Fallback: higher chips first.
+    const standings = allPlayers
+      .filter(p => p.finishingPlace !== null && p.finishingPlace !== undefined)
+      .sort((a, b) => (a.finishingPlace || 0) - (b.finishingPlace || 0));
+
+    if (standings.length === 0) {
+      console.log(`[DISCORD BOT] No finishingPlace data for players in tournament ${tournament.id}, skipping winners embed`);
+      return [];
+    }
+
+    const clientUrl = process.env.CLIENT_URL || 'https://bux-poker.pro';
+    const logoUrl = `${clientUrl}/images/bux-poker.png`;
+    const tournamentUrl = `${clientUrl}/tournaments/${tournament.id}`;
+
+    const winner = standings[0];
+    const lines = standings.map(p => {
+      const name = p.user?.username || 'Unknown';
+      const place = p.finishingPlace ?? '?';
+      const chipStr = p.chips.toLocaleString();
+      return `**${place}.** ${name} — ${chipStr} chips`;
+    });
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🏆 ${tournamentWithRelations.name} — Final Standings`)
+      .setDescription(lines.join('\n'))
+      .setThumbnail(logoUrl)
+      .addFields(
+        { name: 'Winner', value: winner.user?.username || 'Unknown', inline: true },
+        { name: 'Players', value: `${standings.length}`, inline: true },
+      )
+      .setURL(tournamentUrl)
+      .setColor(0xFFD700)
+      .setTimestamp();
+
+    const posts = [];
+
+    for (const post of tournamentWithRelations.posts) {
+      if (!post.server || !post.server.announcementChannelId) continue;
+
+      try {
+        const guild = await discordClient.guilds.fetch(post.server.serverId);
+        const channel = await guild.channels.fetch(post.server.announcementChannelId);
+
+        if (!channel || !channel.isTextBased()) {
+          console.warn(`[DISCORD BOT] Invalid channel for server ${post.server.serverName}`);
+          continue;
+        }
+
+        const permissions = channel.permissionsFor(guild.members.me);
+        if (!permissions.has('SendMessages') || !permissions.has('EmbedLinks')) {
+          console.error(`[DISCORD BOT] Bot lacks permissions in channel ${channel.name} for server ${post.server.serverName}`);
+          continue;
+        }
+
+        const message = await channel.send({
+          embeds: [embed],
+        });
+
+        console.log(`[DISCORD BOT] Posted winners embed for tournament ${tournament.id} to ${post.server.serverName}, message ID: ${message.id}`);
+        posts.push({ serverId: post.server.serverId, messageId: message.id });
+      } catch (error) {
+        console.error(`[DISCORD BOT] Error posting winners embed to server ${post.server.serverName}:`, error.message || error);
+      }
+    }
+
+    return posts;
+  } catch (error) {
+    console.error('[DISCORD BOT] Error posting tournament winners embed:', error);
+    return [];
+  }
+}
+
+/**
  * Post a "Game starting in 2 minutes" notification to all Discord servers
  */
 export async function postTournamentStartingEmbed(tournament) {

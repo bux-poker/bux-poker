@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { getSocket } from "../../services/socket";
 import { PokerTable } from "../../components/poker/PokerTable";
 import type { Card } from "@shared/types/poker";
@@ -57,23 +57,33 @@ function parseCommunityCards(encoded: string): Card[] {
   return [];
 }
 
-// Helper function to play sound effects (deprecated - use soundManager directly)
-// Kept for backward compatibility during transition
-function playSound(soundFile: string, volume: number = 0.7) {
-  // Map old sound files to new sound names
-  const soundMap: Record<string, SoundName> = {
+// Helper to play sound effects using queued playback to avoid overlaps
+function playSound(soundNameOrFile: string, volume: number = 0.7) {
+  if (typeof window === 'undefined') return;
+
+  // Support old file-based calls for backward compatibility
+  const legacyMap: Record<string, SoundName> = {
     'turn.mp3': 'your-turn',
     'fold.wav': 'fold',
     'bet.wav': 'bet',
     'check.wav': 'check',
   };
-  
-  const soundName = soundMap[soundFile] || soundFile.replace(/\.(mp3|wav)$/, '') as SoundName;
-  soundManager.play(soundName, volume);
+
+  let soundName: SoundName;
+  if ((soundNameOrFile as SoundName) in SOUND_CONFIGS) {
+    soundName = soundNameOrFile as SoundName;
+  } else if (legacyMap[soundNameOrFile]) {
+    soundName = legacyMap[soundNameOrFile];
+  } else {
+    soundName = soundNameOrFile.replace(/\.(mp3|wav)$/, '') as SoundName;
+  }
+
+  soundManager.playQueued(soundName, volume);
 }
 
 export function PokerGameView() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [gameState, setGameState] = useState<GameStatePayload | null>(null);
   const [prevGameState, setPrevGameState] = useState<GameStatePayload | null>(null);
   const [connecting, setConnecting] = useState(true);
@@ -84,11 +94,15 @@ export function PokerGameView() {
   const [showdownResults, setShowdownResults] = useState<any>(null);
   const [showDealerMessages, setShowDealerMessages] = useState(true);
   const [tournamentCountdown, setTournamentCountdown] = useState<{ startTime: string; seconds: number } | null>(null);
+  const [eliminationInfo, setEliminationInfo] = useState<{ place: number | null } | null>(null);
+  const [winnerModalOpen, setWinnerModalOpen] = useState(false);
   // Track whether we've already created a local fallback countdown to avoid
   // recreating it (which previously caused the timer to reset back to 2 mins)
   const fallbackCountdownCreatedRef = useRef(false);
   const { user } = useAuth();
   const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
+  const lastTournamentStatusRef = useRef<string | null>(null);
+  const lastPlayerStatusRef = useRef<string | null>(null);
   
   // Request fullscreen on load to hide browser bar
   useEffect(() => {
@@ -393,9 +407,9 @@ export function PokerGameView() {
       return;
     }
     
-    // Timer only works when tournament is RUNNING (after Start Tournament is clicked)
-    // This sets startedAt and status to RUNNING
-    if (tournament.status !== 'RUNNING') {
+    // Timer only works when tournament is RUNNING/ACTIVE (after Start Tournament is clicked)
+    // This sets startedAt and status to RUNNING (or ACTIVE in some flows)
+    if (tournament.status !== 'RUNNING' && tournament.status !== 'ACTIVE') {
       setNextBlindTime('--:--');
       return;
     }
@@ -417,7 +431,18 @@ export function PokerGameView() {
         return;
       }
 
-      const blindLevels = tournament.blindLevels || [];
+      // Support both parsed arrays (from API) and raw JSON strings
+      let blindLevels: any[] = [];
+      try {
+        if (Array.isArray(tournament.blindLevels)) {
+          blindLevels = tournament.blindLevels;
+        } else if (typeof tournament.blindLevels === 'string') {
+          blindLevels = JSON.parse(tournament.blindLevels || '[]');
+        }
+      } catch (e) {
+        console.error('[BLIND TIMER] Failed to parse blindLevels in PokerGameView:', e);
+        blindLevels = [];
+      }
       if (blindLevels.length === 0) {
         setNextBlindTime('--:--');
         return;
@@ -467,6 +492,43 @@ export function PokerGameView() {
 
     return () => clearInterval(interval);
   }, [tournament]);
+
+  // Detect when the local user is eliminated from the tournament or wins it,
+  // and show a simple modal with their final position / winner announcement.
+  useEffect(() => {
+    if (!tournament || !user) return;
+
+    const anyTournament: any = tournament as any;
+    const players: any[] = anyTournament.players || [];
+    if (!Array.isArray(players) || players.length === 0) {
+      return;
+    }
+
+    const me = players.find(p => p.userId === user.id);
+    const currentStatus: string | null = me?.status || null;
+
+    const prevStatus = lastPlayerStatusRef.current;
+    lastPlayerStatusRef.current = currentStatus;
+    lastTournamentStatusRef.current = tournament.status;
+
+    // Show elimination modal once when the player transitions to ELIMINATED
+    if (currentStatus === 'ELIMINATED' && prevStatus && prevStatus !== 'ELIMINATED') {
+      const place: number | null = typeof me?.finishingPlace === 'number'
+        ? me.finishingPlace
+        : (typeof me?.position === 'number' ? me.position : null);
+      setEliminationInfo({ place });
+    }
+
+    // Show winner modal when tournament is completed and this player finished 1st
+    const finishedFirst =
+      (tournament.status === 'COMPLETED') &&
+      me &&
+      (me.finishingPlace === 1 || me.position === 1);
+
+    if (finishedFirst && !winnerModalOpen) {
+      setWinnerModalOpen(true);
+    }
+  }, [tournament, user, winnerModalOpen]);
 
   // Sound effects: Play sounds when game state changes
   useEffect(() => {
@@ -677,8 +739,73 @@ export function PokerGameView() {
     );
   }
 
+  const handleCloseTable = () => {
+    try {
+      if (window.opener) {
+        window.close();
+        return;
+      }
+    } catch {
+      // ignore
+    }
+    navigate('/tournaments');
+  };
+
   return (
     <div className="flex h-screen w-screen flex-col bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden">
+      {/* Elimination modal */}
+      {eliminationInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+          <div className="rounded-lg bg-slate-900 border border-slate-700 shadow-2xl max-w-sm w-full p-6 text-center">
+            <h2 className="text-xl font-bold text-red-300 mb-2">You have been eliminated</h2>
+            <p className="text-slate-200 mb-4">
+              {eliminationInfo.place
+                ? `You finished in position ${eliminationInfo.place}.`
+                : 'You are out of the tournament.'}
+            </p>
+            <div className="flex justify-center gap-3">
+              <button
+                onClick={() => setEliminationInfo(null)}
+                className="rounded bg-slate-700 px-4 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600"
+              >
+                Stay and Spectate
+              </button>
+              <button
+                onClick={handleCloseTable}
+                className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+              >
+                Close Table
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Winner modal */}
+      {winnerModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+          <div className="rounded-lg bg-slate-900 border border-emerald-500 shadow-2xl max-w-sm w-full p-6 text-center">
+            <h2 className="text-2xl font-bold text-emerald-300 mb-2">🏆 Tournament Winner!</h2>
+            <p className="text-slate-200 mb-4">
+              Congratulations, you finished <span className="font-semibold">1st</span> in this tournament.
+            </p>
+            <div className="flex justify-center gap-3">
+              <button
+                onClick={() => setWinnerModalOpen(false)}
+                className="rounded bg-slate-700 px-4 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600"
+              >
+                Stay at Table
+              </button>
+              <button
+                onClick={handleCloseTable}
+                className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+              >
+                Close Table
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Top Bar - Game Info */}
       <div 
         className="flex items-center justify-between border-b border-slate-800 bg-slate-900/90 backdrop-blur-sm flex-shrink-0"

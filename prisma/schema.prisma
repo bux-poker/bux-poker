@@ -103,6 +103,10 @@ model Player {
   status    PlayerStatus @default(ACTIVE)
   position  String? // e.g. "BTN", "SB", "BB"
 
+  // Tournament finishing place (1 = winner, 2 = runner-up, etc).
+  // This is independent from the per-hand positional field above.
+  finishingPlace Int?
+
   lastAction   String? // last betting action
   lastActionAt DateTime?
 

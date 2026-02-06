@@ -176,6 +176,31 @@ export class TournamentService {
           (r) => r.status === "CONFIRMED" || r.status === "PENDING"
         ).length || 0;
         const calculatedPrizePlaces = Math.floor(registeredCount / 4);
+
+        // Flatten live players across all games so the lobby (and other
+        // clients) can easily show current chip stacks / statuses without
+        // re-deriving them from games on the client.
+        //
+        // NOTE: This is a lightweight projection – it does NOT modify the
+        // underlying schema. If we later add explicit finishing positions,
+        // they can be surfaced here as `finishingPosition`.
+        const livePlayers = [];
+        for (const game of tournament.games || []) {
+          for (const player of game.players || []) {
+            livePlayers.push({
+              id: player.id,
+              userId: player.userId,
+              user: player.user,
+              chips: player.chips,
+              status: player.status,
+              gameId: game.id,
+              tableNumber: game.tableNumber,
+              seatNumber: player.seatNumber,
+              // Expose tournament finishing place (1 = winner, 2 = runner-up, etc.)
+              finishingPlace: player.finishingPlace ?? null,
+            });
+          }
+        }
         
         return {
           ...tournament,
@@ -194,6 +219,7 @@ export class TournamentService {
               inviteLink: post.server.inviteLink || null,
             };
           }).filter(server => server !== null),
+          players: livePlayers,
         };
       } catch (transformError) {
         console.error(`[TOURNAMENT SERVICE] Error transforming tournament ${id}:`, transformError);
@@ -202,6 +228,7 @@ export class TournamentService {
           ...tournament,
           registeredCount: 0,
           servers: [],
+          players: [],
         };
       }
     } catch (error) {

@@ -489,6 +489,15 @@ export function PokerTable({
                             );
                           })()}
                           
+                          {/* Elimination overlay: after showdown, show red X over eliminated players before they disappear next hand */}
+                          {showdownActive && player.status === 'ELIMINATED' && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-red-900/60">
+                              <span className="text-red-300 font-extrabold text-3xl select-none">
+                                ✕
+                              </span>
+                            </div>
+                          )}
+                          
                           {/* Action Overlay - shows when player acts (takes priority over timer) */}
                           {(() => {
                             const playerId = player.id || player.userId || '';
