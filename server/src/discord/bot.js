@@ -157,8 +157,23 @@ async function handleSetupCommand(interaction) {
   }
 
   try {
-    const guild = interaction.guild;
-    
+    // interaction.guild can be null if the guild isn't cached (e.g. new server)
+    let guild = interaction.guild;
+    if (!guild && interaction.guildId && discordClient) {
+      try {
+        guild = await discordClient.guilds.fetch(interaction.guildId);
+      } catch (fetchErr) {
+        console.warn('[DISCORD BOT] Could not fetch guild:', fetchErr);
+      }
+    }
+    if (!guild) {
+      await interaction.reply({
+        content: '❌ Could not resolve this server. Please try again in a moment, or re-invite the bot with the correct permissions.',
+        ephemeral: true,
+      });
+      return;
+    }
+
     // Upsert server configuration
     await prisma.discordServer.upsert({
       where: { serverId: guild.id },
