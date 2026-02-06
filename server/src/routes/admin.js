@@ -92,18 +92,13 @@ router.get("/servers", async (req, res, next) => {
       orderBy: { serverName: "asc" },
     });
 
-    // Enrich with current bot membership status
+    // Enrich with current bot membership status (fetch with .catch so Unknown Guild never throws)
     const enrichedServers = await Promise.all(
       servers.map(async (server) => {
         let isBotMember = false;
         if (discordClient) {
-          try {
-            const guild = await discordClient.guilds.fetch(server.serverId);
-            isBotMember = !!guild;
-          } catch (error) {
-            // Bot is not a member of this server
-            isBotMember = false;
-          }
+          const guild = await discordClient.guilds.fetch(server.serverId).catch(() => null);
+          isBotMember = !!guild;
         }
         return {
           ...server,

@@ -577,7 +577,11 @@ export async function postTournamentEmbed(tournament, serverIds) {
   for (const server of servers) {
     try {
       console.log(`[DISCORD BOT] Posting to server: ${server.serverName} (${server.serverId})`);
-      const guild = await discordClient.guilds.fetch(server.serverId);
+      const guild = await discordClient.guilds.fetch(server.serverId).catch(() => null);
+      if (!guild) {
+        console.warn(`[DISCORD BOT] Bot not in server ${server.serverName} (${server.serverId}), skipping`);
+        continue;
+      }
       const channel = await guild.channels.fetch(server.announcementChannelId);
 
       if (!channel || !channel.isTextBased()) {
@@ -666,7 +670,11 @@ export async function updateTournamentEmbeds(tournamentId) {
       if (!post.messageId || !post.server) continue;
 
       try {
-        const guild = await discordClient.guilds.fetch(post.server.serverId);
+        const guild = await discordClient.guilds.fetch(post.server.serverId).catch(() => null);
+        if (!guild) {
+          console.warn(`[DISCORD BOT] Bot not in server ${post.server.serverName}, skipping embed update`);
+          continue;
+        }
         const channel = await guild.channels.fetch(post.server.announcementChannelId);
 
         if (!channel || !channel.isTextBased()) {
@@ -791,7 +799,11 @@ export async function postTournamentWinnersEmbed(tournament) {
       if (!post.server || !post.server.announcementChannelId) continue;
 
       try {
-        const guild = await discordClient.guilds.fetch(post.server.serverId);
+        const guild = await discordClient.guilds.fetch(post.server.serverId).catch(() => null);
+        if (!guild) {
+          console.warn(`[DISCORD BOT] Bot not in server ${post.server.serverName}, skipping starting notification`);
+          continue;
+        }
         const channel = await guild.channels.fetch(post.server.announcementChannelId);
 
         if (!channel || !channel.isTextBased()) {
@@ -869,7 +881,11 @@ export async function postTournamentStartingEmbed(tournament) {
       if (!post.server || !post.server.announcementChannelId) continue;
 
       try {
-        const guild = await discordClient.guilds.fetch(post.server.serverId);
+        const guild = await discordClient.guilds.fetch(post.server.serverId).catch(() => null);
+        if (!guild) {
+          console.warn(`[DISCORD BOT] Bot not in server ${post.server.serverName}, skipping winners embed`);
+          continue;
+        }
         const channel = await guild.channels.fetch(post.server.announcementChannelId);
 
         if (!channel || !channel.isTextBased()) {
