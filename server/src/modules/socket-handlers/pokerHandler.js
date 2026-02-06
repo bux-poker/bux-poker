@@ -274,7 +274,6 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
       }
       
       // Check if the capped amount would actually be a raise or just a call
-      const myContribution = state.bettingRound.getPlayerContribution(player.id);
       const currentBet = state.bettingRound.currentBet;
       const newContribution = myContribution + amount;
       
