@@ -361,8 +361,9 @@ export function PokerTable({
               // Check if this card is part of any winning hand
               const isWinningCard = allWinningCards.some((wc: Card) => wc.rank === card.rank && wc.suit === card.suit);
               
-              // During showdown: keep winning cards normal size with 2px border, make losing cards smaller
-              const isLosingCard = showdownActive && !isWinningCard;
+              // Only shrink/gray losing cards when we have winner highlight (not during reveal/flop/turn/river phases)
+              const hasWinnerHighlight = showdownResults?.winners && showdownResults.winners.length > 0;
+              const isLosingCard = hasWinnerHighlight && !isWinningCard;
               const showdownScale = isLosingCard ? 0.75 : 1; // Make losing cards 75% size
               
               // Use windowSize to trigger recalculation
@@ -683,9 +684,10 @@ export function PokerTable({
                 )}
                 <div className="flex" style={{ gap: 'var(--hole-card-gap, 4px)' }}>
                   {player.holeCards.map((card, cardIdx) => {
-                    // During showdown: keep winning cards normal size, make losing cards smaller
-                    const cardIsWinning = isShowdownActive && !isFolded && isWinningCard(card);
-                    const cardIsLosing = isShowdownActive && !isFolded && !isWinningCard(card);
+                    // Only shrink/gray losing cards when we have winner highlight (not during reveal phases)
+                    const hasWinnerHighlight = showdownResults?.winners && showdownResults.winners.length > 0;
+                    const cardIsWinning = hasWinnerHighlight && !isFolded && isWinningCard(card);
+                    const cardIsLosing = hasWinnerHighlight && !isFolded && !isWinningCard(card);
                     const cardScale = cardIsLosing ? 0.75 : 1; // Losing cards at 75% size
                     
                     return (

@@ -2766,15 +2766,23 @@ async function moveToNextPlayer(gameId, io) {
     p.chips > 0
   );
 
+  // Players still in the hand (includes ALL_IN - they haven't folded)
+  const playersInHand = state.players.filter((p) => 
+    p.status !== 'FOLDED' && 
+    p.status !== 'ELIMINATED'
+  );
+
   // One player left (everyone else folded) – award pot and end hand immediately
-  if (activePlayers.length === 1) {
+  // Must use playersInHand: when someone goes all-in, activePlayers excludes them, but they're
+  // still in the hand – the other player needs a chance to call or fold
+  if (playersInHand.length === 1) {
     const existingTimer = turnTimers.get(gameId);
     if (existingTimer) {
       clearTimeout(existingTimer.timerId);
       if (existingTimer.graceTimerId) clearTimeout(existingTimer.graceTimerId);
       turnTimers.delete(gameId);
     }
-    const winner = activePlayers[0];
+    const winner = playersInHand[0];
     const collectedPot = state.bettingRound?.getTotalPot() || 0;
     const totalPot = (state.pot || 0) + collectedPot;
     winner.chips += totalPot;
