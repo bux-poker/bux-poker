@@ -10,6 +10,13 @@ import { HandEvaluator } from "../poker/HandEvaluator.js";
 const gameService = new PokerGameService();
 const engine = new TexasHoldem({ smallBlind: 10, bigBlind: 20 });
 
+/** Delay in ms between each phase of the cinematic all-in showdown */
+const SHOWDOWN_PHASE_DELAY_MS = 1000;
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // In-memory per-game state for the current hand and betting street.
 // For production you'd want this to be more robust / persisted.
 const tableState = new Map();
@@ -1694,8 +1701,9 @@ async function handleTestPlayerAction(gameId, userId, io) {
 
 /**
  * Handle showdown when river betting completes - determine winners and distribute pot
+ * @param {object} [options] - Optional: { cleanupDelayMs } - delay before mucking cards and starting next hand
  */
-async function handleShowdown(gameId, io) {
+async function handleShowdown(gameId, io, options = {}) {
   const state = tableState.get(gameId);
   if (!state) return;
 
@@ -2105,6 +2113,7 @@ async function handleShowdown(gameId, io) {
   }
 
   // Clear hand state after a delay (allow clients to see results clearly)
+  const cleanupDelayMs = options?.cleanupDelayMs ?? 8000;
   setTimeout(() => {
     console.log(`[SHOWDOWN] Clearing hand state for next hand`);
     const savedPlayers = [...state.players]; // Save players array before clearing state
@@ -2198,7 +2207,7 @@ async function handleShowdown(gameId, io) {
         console.log(`[SHOWDOWN] Cannot start new hand: game not found or not enough players (found: ${gameForNextHand?.players?.length || 0})`);
       }
     });
-  }, 8000); // 8 second delay to show results - gives everyone time to see winning cards
+  }, cleanupDelayMs);
 }
 
 /**
@@ -2330,6 +2339,76 @@ async function checkAndAdvanceBlindLevel(tournamentId, gameId, io) {
 }
 
 /**
+ * Emit current game state to all clients in the game room.
+ */
+async function emitGameState(gameId, io, state) {
+  if (!io) return;
+  const game = await prisma.game.findUnique({
+    where: { id: gameId },
+    include: { players: { include: { user: true } }, tournament: true },
+  });
+  if (game) {
+    const payload = buildClientGameState(game, state);
+    io.to(`game:${gameId}`).emit("game-state", payload);
+  }
+}
+
+/**
+ * Cinematic all-in showdown: reveal cards, deal community cards one at a time with delays,
+ * then evaluate and highlight winner, then cleanup. Called when betting completes with
+ * all players all-in or only one player with chips.
+ */
+async function runCinematicAllInShowdown(gameId, io, state, engine, allPlayersAllIn) {
+  const activePlayers = state.players.filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
+  if (activePlayers.length < 2) return;
+
+  if (allPlayersAllIn) {
+    postDealerMessage(gameId, io, "All players are all-in! Turning over cards...");
+  } else {
+    postDealerMessage(gameId, io, "Turning over cards...");
+  }
+
+  // Phase 1: Reveal hole cards (showdownActive without winner highlight)
+  state.showdownActive = true;
+  state.showdownResults = null;
+  tableState.set(gameId, state);
+  await emitGameState(gameId, io, state);
+  await delay(SHOWDOWN_PHASE_DELAY_MS);
+
+  // Phase 2-4: Deal flop, turn, river one at a time with delays
+  if (state.street === "PREFLOP") {
+    const { deck: newDeck, cards: flopCards } = engine.dealFlop(state.deck);
+    state.deck = newDeck;
+    state.communityCards = flopCards;
+    state.street = "FLOP";
+    postDealerMessage(gameId, io, "Dealing the flop...");
+    await emitGameState(gameId, io, state);
+    await delay(SHOWDOWN_PHASE_DELAY_MS);
+  }
+  if (state.street === "FLOP") {
+    const { deck: newDeck, card: turnCard } = engine.dealTurnOrRiver(state.deck);
+    state.deck = newDeck;
+    state.communityCards = [...state.communityCards, turnCard];
+    state.street = "TURN";
+    postDealerMessage(gameId, io, "Dealing the turn...");
+    await emitGameState(gameId, io, state);
+    await delay(SHOWDOWN_PHASE_DELAY_MS);
+  }
+  if (state.street === "TURN") {
+    const { deck: newDeck, card: riverCard } = engine.dealTurnOrRiver(state.deck);
+    state.deck = newDeck;
+    state.communityCards = [...state.communityCards, riverCard];
+    state.street = "RIVER";
+    postDealerMessage(gameId, io, "Dealing the river...");
+    await emitGameState(gameId, io, state);
+    await delay(SHOWDOWN_PHASE_DELAY_MS);
+  }
+
+  // Phase 5: Evaluate, distribute chips, highlight winner (handleShowdown)
+  await handleShowdown(gameId, io, { cleanupDelayMs: SHOWDOWN_PHASE_DELAY_MS });
+}
+
+/**
  * Advance to next street (deal community cards) when betting round completes
  */
 async function advanceToNextStreet(gameId, io) {
@@ -2389,7 +2468,15 @@ async function advanceToNextStreet(gameId, io) {
   // These are the players who can still make betting decisions on future streets
   const playersWithChips = activePlayers.filter(p => p.chips > 0);
 
-  // Deal community cards based on current street
+  const shouldAutoShowdown = allPlayersAllIn || playersWithChips.length === 1;
+
+  // Cinematic all-in showdown: reveal cards, deal flop/turn/river with delays, then winner
+  if (shouldAutoShowdown && io) {
+    await runCinematicAllInShowdown(gameId, io, state, engine, allPlayersAllIn);
+    return;
+  }
+
+  // Deal community cards based on current street (normal path)
   if (state.street === "PREFLOP") {
     // Deal flop
     const { deck: newDeck, cards: flopCards } = engine.dealFlop(state.deck);
@@ -2413,55 +2500,6 @@ async function advanceToNextStreet(gameId, io) {
     postDealerMessage(gameId, io, "Dealing the river...");
   } else if (state.street === "RIVER") {
     // Hand complete - showdown
-    await handleShowdown(gameId, io);
-    return;
-  }
-
-  // Decide whether to auto-deal remaining cards and go to showdown
-  //
-  // Rules (from user):
-  // - If ALL active players are all-in          → auto-showdown
-  // - If ONLY ONE active player has chips left  → auto-showdown
-  //   (this covers both heads-up and multi-way where one player still has chips)
-  // - If 2+ active players still have chips     → continue betting, skip ALL_IN players
-  const shouldAutoShowdown =
-    allPlayersAllIn || playersWithChips.length === 1;
-
-  if (shouldAutoShowdown) {
-    if (allPlayersAllIn) {
-      console.log(`[POKER] All active players are all-in, dealing remaining community cards immediately`);
-      postDealerMessage(gameId, io, "All players are all-in! Dealing remaining community cards...");
-    } else {
-      const chipLeader = playersWithChips[0];
-      console.log(`[POKER] Only one active player has chips (${chipLeader?.name || chipLeader?.userId}), dealing remaining community cards immediately`);
-      postDealerMessage(
-        gameId,
-        io,
-        `${chipLeader?.name || 'Player'} is the only player with chips left. Dealing remaining community cards...`
-      );
-    }
-    
-    // Deal remaining cards based on current street
-    if (state.street === "FLOP") {
-      // Deal turn and river
-      const { deck: newDeck1, card: turnCard } = engine.dealTurnOrRiver(state.deck);
-      state.deck = newDeck1;
-      state.communityCards = [...state.communityCards, turnCard];
-      state.street = "TURN";
-      
-      const { deck: newDeck2, card: riverCard } = engine.dealTurnOrRiver(state.deck);
-      state.deck = newDeck2;
-      state.communityCards = [...state.communityCards, riverCard];
-      state.street = "RIVER";
-    } else if (state.street === "TURN") {
-      // Deal river
-      const { deck: newDeck, card: riverCard } = engine.dealTurnOrRiver(state.deck);
-      state.deck = newDeck;
-      state.communityCards = [...state.communityCards, riverCard];
-      state.street = "RIVER";
-    }
-    
-    // Go to showdown immediately
     await handleShowdown(gameId, io);
     return;
   }
