@@ -292,9 +292,11 @@ export class TournamentEngine {
           console.log(`[TOURNAMENT] Advancing blind level for tournament ${tournamentId} from ${gameLevel} to ${currentLevelIndex}`);
           await this.advanceBlindLevel(tournamentId);
           
-          // Update blinds in active games
+          // Update blinds in active games and post dealer message to each table
           const newLevel = blindLevels[currentLevelIndex];
           if (newLevel) {
+            const { getIO } = await import("../modules/socket-handlers/pokerHandler.js");
+            const io = getIO();
             for (const game of games) {
               // Update game blinds - this will affect new hands
               // Existing hands continue with their current blinds
@@ -305,6 +307,19 @@ export class TournamentEngine {
                   bigBlind: newLevel.bigBlind
                 }
               });
+              // Announce new blind level at table
+              if (io) {
+                const dealerMessage = {
+                  id: `dealer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                  userId: 'DEALER',
+                  userName: 'Dealer',
+                  message: `Blinds increase to ${newLevel.smallBlind.toLocaleString()}/${newLevel.bigBlind.toLocaleString()}`,
+                  timestamp: Date.now(),
+                  isGameMessage: true,
+                  isDealerMessage: true
+                };
+                io.to(`game:${game.id}`).emit("game_message", { gameId: game.id, message: dealerMessage });
+              }
             }
           }
         }

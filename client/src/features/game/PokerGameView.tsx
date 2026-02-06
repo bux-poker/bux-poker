@@ -242,6 +242,10 @@ export function PokerGameView() {
         }
         return payload;
       });
+      // Clear showdown styling when new hand starts (no showdownActive / PREFLOP)
+      if (!payload.showdownActive && (payload.street === "PREFLOP" || !payload.street)) {
+        setShowdownResults(null);
+      }
       setConnecting(false);
       setError(null);
     });

@@ -932,8 +932,10 @@ export async function startHandForGame(gameId, io) {
   
   console.log(`[POKER] UTG calculation: dealer=${dealerSeat}, sb=${sbSeat}, bb=${bbSeat}, utg=${utgSeat} (${utgPlayer.user?.username || utgPlayer.userId})`);
 
-  // Create hand state
+  // Create hand state (explicitly clear showdown so client doesn't show old win/lose styling)
   const state = {
+    showdownActive: false,
+    showdownResults: null,
     street: "PREFLOP",
     deck: remainingDeck,
     communityCards: [],
