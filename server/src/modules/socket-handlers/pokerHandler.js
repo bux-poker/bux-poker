@@ -684,8 +684,10 @@ export async function startHandForGame(gameId, io) {
   });
   
   // Seats are numbered ANTICLOCKWISE, so CLOCKWISE movement = DECREASING seat numbers
-  const maxSeat = Math.max(...game.players.map(p => p.seatNumber));
-  const minSeat = Math.min(...game.players.map(p => p.seatNumber));
+  // Use ACTIVE players only for seat range (eliminated players may be at empty seats)
+  const maxSeat = Math.max(...activePlayersForDealer.map(p => p.seatNumber), 1);
+  const minSeat = Math.min(...activePlayersForDealer.map(p => p.seatNumber), 8);
+  const seatRange = maxSeat >= minSeat ? maxSeat - minSeat + 1 : 8; // Number of seats to search
   
   // Handle heads-up (2 players) special blind rules
   // In heads-up: dealer posts small blind, other player posts big blind
@@ -719,7 +721,7 @@ export async function startHandForGame(gameId, io) {
     if (!sbPlayer) {
       let attempts = 0;
       let searchSeat = sbSeat;
-      while (!sbPlayer && attempts < activePlayers.length) {
+      while (!sbPlayer && attempts < seatRange) {
         searchSeat = searchSeat - 1 < minSeat ? maxSeat : searchSeat - 1;
         sbPlayer = activePlayers.find(p => p.seatNumber === searchSeat && p.seatNumber >= 0);
         attempts++;
@@ -733,7 +735,7 @@ export async function startHandForGame(gameId, io) {
     if (!bbPlayer) {
       let attempts = 0;
       let searchSeat = bbSeat;
-      while (!bbPlayer && attempts < activePlayers.length) {
+      while (!bbPlayer && attempts < seatRange) {
         searchSeat = searchSeat - 1 < minSeat ? maxSeat : searchSeat - 1;
         bbPlayer = activePlayers.find(p => p.seatNumber === searchSeat && p.seatNumber >= 0 && p.id !== sbPlayer?.id);
         attempts++;
