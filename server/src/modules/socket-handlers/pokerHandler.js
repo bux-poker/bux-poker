@@ -564,6 +564,16 @@ export async function startHandForGame(gameId, io) {
     return;
   }
 
+  // Need at least 2 players with chips to start a hand (SB + BB)
+  const playersWithChips = game.players.filter(p => p.status !== 'ELIMINATED' && p.chips > 0);
+  if (playersWithChips.length < 2) {
+    console.log(`[POKER] Not enough players with chips to start hand (${playersWithChips.length}), skipping. Tournament may be complete.`);
+    if (game.tournament?.id && io) {
+      await emitIfTournamentCompleted(game.tournament.id, gameId, io);
+    }
+    return;
+  }
+
   // Get tournament blind levels - use current level from game, not always first level
   let smallBlind = 10;
   let bigBlind = 20;
