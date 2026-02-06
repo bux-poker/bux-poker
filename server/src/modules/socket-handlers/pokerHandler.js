@@ -242,17 +242,22 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
         amount = player.chips;
       }
 
-      // Cap so our total contribution does not exceed effective stack (any pot size)
       const myContribution = state.bettingRound.getPlayerContribution(player.id);
-      const effectiveCap = getEffectiveCap();
-      const desiredNewContribution = myContribution + amount;
-      if (desiredNewContribution > effectiveCap) {
-        const cappedAmount = Math.max(0, effectiveCap - myContribution);
-        if (cappedAmount < amount) {
-          console.log(
-            `[ACTION] Capping ${action} amount for ${playerName} from ${amount} to ${cappedAmount} based on effective stack`
-          );
-          amount = cappedAmount;
+
+      // Only apply effective stack cap when NOT going all-in. When betting full stack,
+      // always allow it - side pot logic handles it. Capping would block "bet all chips".
+      const isGoingAllIn = amount >= player.chips;
+      if (!isGoingAllIn) {
+        const effectiveCap = getEffectiveCap();
+        const desiredNewContribution = myContribution + amount;
+        if (desiredNewContribution > effectiveCap) {
+          const cappedAmount = Math.max(0, effectiveCap - myContribution);
+          if (cappedAmount < amount) {
+            console.log(
+              `[ACTION] Capping ${action} amount for ${playerName} from ${amount} to ${cappedAmount} based on effective stack`
+            );
+            amount = cappedAmount;
+          }
         }
       }
       
@@ -404,20 +409,8 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
       if (allInAmount <= 0) {
         throw new Error("Cannot go all-in with zero chips");
       }
-      
-      // Cap all-in to effective stack (so we never bet more than others can call)
-      const myContributionAllIn = state.bettingRound.getPlayerContribution(player.id);
-      const effectiveCapAllIn = getEffectiveCap();
-      const desiredAllInContribution = myContributionAllIn + allInAmount;
-      if (desiredAllInContribution > effectiveCapAllIn) {
-        const cappedAllIn = Math.max(0, effectiveCapAllIn - myContributionAllIn);
-        if (cappedAllIn < allInAmount) {
-          console.log(
-            `[ACTION] Capping ALL_IN amount for ${playerName} from ${allInAmount} to ${cappedAllIn} based on effective stack`
-          );
-          allInAmount = cappedAllIn;
-        }
-      }
+      // No effective stack cap for explicit ALL_IN - user intentionally goes all-in,
+      // side pot logic handles uncallable amounts
       
       // All-in acts as a raise if it's more than current bet
       const currentContribution = state.bettingRound.getPlayerContribution(player.id);
