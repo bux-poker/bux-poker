@@ -714,6 +714,12 @@ export async function startHandForGame(gameId, io) {
       if (bbPlayer) {
         bbSeat = bbPlayer.seatNumber;
         console.log(`[POKER] BB player not at calculated seat, found at seat ${bbSeat} clockwise`);
+      } else {
+        bbPlayer = activePlayers.find(p => p.id !== sbPlayer?.id);
+        if (bbPlayer) {
+          bbSeat = bbPlayer.seatNumber;
+          console.log(`[POKER] BB fallback: using seat ${bbSeat} (non-contiguous seats)`);
+        }
       }
     }
   }
@@ -856,37 +862,23 @@ export async function startHandForGame(gameId, io) {
     utgSeat = bbSeat;
     console.log(`[POKER] Heads-up game: UTG is BB (seat ${utgSeat})`);
   } else {
-    // Multi-way: UTG is first player clockwise after BB (not BB, SB, or dealer)
+    // Multi-way: UTG is first player clockwise after BB (only BB is excluded - dealer or SB can be UTG in 3-handed)
     // Clockwise = decreasing seat numbers (seats numbered anticlockwise)
     utgSeat = bbSeat - 1;
     if (utgSeat < minSeat) utgSeat = maxSeat;
     
-    // Find UTG player - must be active and not BB, SB, or dealer
-    utgPlayer = activePlayers.find(p => 
-      p.seatNumber === utgSeat && 
-      p.seatNumber >= 0 &&
-      p.id !== bbPlayer.id &&
-      p.id !== sbPlayer.id &&
-      p.id !== dealerPlayer.id
+    // Find UTG - first active player clockwise after BB (only exclude BB; dealer/SB can be UTG)
+    utgPlayer = activePlayers.find(p =>
+      p.seatNumber === utgSeat && p.seatNumber >= 0 && p.id !== bbPlayer.id
     );
     
-    // If no player found at calculated seat, search clockwise for next active player
     if (!utgPlayer) {
       let attempts = 0;
       let searchSeat = utgSeat;
       while (!utgPlayer && attempts < activePlayers.length) {
         searchSeat = searchSeat - 1 < minSeat ? maxSeat : searchSeat - 1;
-        // Skip if this seat is BB, SB, or dealer
-        if (searchSeat === bbSeat || searchSeat === sbSeat || searchSeat === dealerSeat) {
-          attempts++;
-          continue;
-        }
-        utgPlayer = activePlayers.find(p => 
-          p.seatNumber === searchSeat && 
-          p.seatNumber >= 0 &&
-          p.id !== bbPlayer.id &&
-          p.id !== sbPlayer.id &&
-          p.id !== dealerPlayer.id
+        utgPlayer = activePlayers.find(p =>
+          p.seatNumber === searchSeat && p.seatNumber >= 0 && p.id !== bbPlayer.id
         );
         attempts++;
       }
@@ -897,13 +889,7 @@ export async function startHandForGame(gameId, io) {
     }
     
     if (!utgPlayer) {
-      // Last resort: find any active player that's not BB, SB, or dealer
-      utgPlayer = activePlayers.find(p => 
-        p.seatNumber >= 0 &&
-        p.id !== bbPlayer.id &&
-        p.id !== sbPlayer.id &&
-        p.id !== dealerPlayer.id
-      );
+      utgPlayer = activePlayers.find(p => p.seatNumber >= 0 && p.id !== bbPlayer.id);
       if (utgPlayer) {
         utgSeat = utgPlayer.seatNumber;
         console.log(`[POKER] UTG fallback: using seat ${utgSeat} (${utgPlayer.user?.username || utgPlayer.userId})`);
@@ -912,11 +898,6 @@ export async function startHandForGame(gameId, io) {
     
     if (!utgPlayer) {
       throw new Error(`Could not find UTG player. BB seat: ${bbSeat}, SB seat: ${sbSeat}, Dealer seat: ${dealerSeat}, Active players: ${activePlayers.length}`);
-    }
-    
-    // CRITICAL: In multi-way, ensure UTG is NOT the big blind
-    if (utgPlayer.id === bbPlayer.id) {
-      throw new Error(`UTG calculation error: UTG player (${utgPlayer.userId}) is the same as BB player. BB seat: ${bbSeat}, UTG seat: ${utgSeat}`);
     }
   }
   
