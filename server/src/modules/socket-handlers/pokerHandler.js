@@ -209,9 +209,8 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
 
   // Basic action handling. This is intentionally simplified:
   //
-  // IMPORTANT: For heads-up pots (exactly 2 active players), we cap the
-  // effective bet size to the smaller stack so we never create a bet that
-  // cannot be fully matched.
+  // Cap bet/raise to effective stack: never bet more than the most chips
+  // any other active player has (so we don't create uncallable side pots).
   // Filter out folded, eliminated, and all-in players
   const activeNonFoldedPlayers = state.players.filter(
     (p) => p.status !== "FOLDED" && p.status !== "ELIMINATED" && p.status !== "ALL_IN" && p.chips > 0
@@ -224,6 +223,17 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
       ? activeNonFoldedPlayers[0]
       : null;
 
+  // Effective stack cap: max total contribution = min(my stack, largest opponent effective stack)
+  const getEffectiveCap = () => {
+    const myContribution = state.bettingRound.getPlayerContribution(player.id);
+    const others = activeNonFoldedPlayers.filter((p) => p.userId !== userId);
+    if (others.length === 0) return myContribution + player.chips;
+    const maxOtherEffective = Math.max(
+      ...others.map((o) => (state.bettingRound.getPlayerContribution(o.id) || 0) + o.chips)
+    );
+    return Math.min(myContribution + player.chips, maxOtherEffective);
+  };
+
   switch (action) {
     case "BET":
     case "RAISE": {
@@ -232,23 +242,17 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
         amount = player.chips;
       }
 
-      // In heads-up pots, also cap the bet/raise so that the player's total
-      // contribution cannot exceed the opponent's effective stack.
-      if (opponent) {
-        const myContribution = state.bettingRound.getPlayerContribution(player.id);
-        const oppContribution = state.bettingRound.getPlayerContribution(opponent.id);
-        const myEffectiveMax = myContribution + player.chips;
-        const oppEffectiveMax = oppContribution + opponent.chips;
-        const effectiveCap = Math.min(myEffectiveMax, oppEffectiveMax);
-        const desiredNewContribution = myContribution + amount;
-        if (desiredNewContribution > effectiveCap) {
-          const cappedAmount = Math.max(0, effectiveCap - myContribution);
-          if (cappedAmount < amount) {
-            console.log(
-              `[ACTION] Capping ${action} amount for ${playerName} from ${amount} to ${cappedAmount} based on effective stack (heads-up pot)`
-            );
-            amount = cappedAmount;
-          }
+      // Cap so our total contribution does not exceed effective stack (any pot size)
+      const myContribution = state.bettingRound.getPlayerContribution(player.id);
+      const effectiveCap = getEffectiveCap();
+      const desiredNewContribution = myContribution + amount;
+      if (desiredNewContribution > effectiveCap) {
+        const cappedAmount = Math.max(0, effectiveCap - myContribution);
+        if (cappedAmount < amount) {
+          console.log(
+            `[ACTION] Capping ${action} amount for ${playerName} from ${amount} to ${cappedAmount} based on effective stack`
+          );
+          amount = cappedAmount;
         }
       }
       
@@ -402,22 +406,17 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
         throw new Error("Cannot go all-in with zero chips");
       }
       
-      // In heads-up pots, cap all-in to opponent's effective stack
-      if (opponent) {
-        const myContribution = state.bettingRound.getPlayerContribution(player.id);
-        const oppContribution = state.bettingRound.getPlayerContribution(opponent.id);
-        const myEffectiveMax = myContribution + player.chips;
-        const oppEffectiveMax = oppContribution + opponent.chips;
-        const effectiveCap = Math.min(myEffectiveMax, oppEffectiveMax);
-        const desiredNewContribution = myContribution + allInAmount;
-        if (desiredNewContribution > effectiveCap) {
-          const cappedAmount = Math.max(0, effectiveCap - myContribution);
-          if (cappedAmount < allInAmount) {
-            console.log(
-              `[ACTION] Capping ALL_IN amount for ${playerName} from ${allInAmount} to ${cappedAmount} based on effective stack (heads-up pot)`
-            );
-            allInAmount = cappedAmount;
-          }
+      // Cap all-in to effective stack (so we never bet more than others can call)
+      const myContributionAllIn = state.bettingRound.getPlayerContribution(player.id);
+      const effectiveCapAllIn = getEffectiveCap();
+      const desiredAllInContribution = myContributionAllIn + allInAmount;
+      if (desiredAllInContribution > effectiveCapAllIn) {
+        const cappedAllIn = Math.max(0, effectiveCapAllIn - myContributionAllIn);
+        if (cappedAllIn < allInAmount) {
+          console.log(
+            `[ACTION] Capping ALL_IN amount for ${playerName} from ${allInAmount} to ${cappedAllIn} based on effective stack`
+          );
+          allInAmount = cappedAllIn;
         }
       }
       
@@ -501,6 +500,25 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
   }).catch(err => console.error('[ACTION] Error updating game in DB:', err));
 
   return state;
+}
+
+/**
+ * If the tournament just ended (COMPLETED), emit so clients refetch and show winner modal.
+ */
+async function emitIfTournamentCompleted(tournamentId, gameId, io) {
+  if (!tournamentId || !io) return;
+  try {
+    const t = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { status: true }
+    });
+    if (t?.status === "COMPLETED") {
+      io.to(`game:${gameId}`).emit("tournament_completed", { tournamentId });
+      console.log(`[POKER] Emitted tournament_completed for tournament ${tournamentId} to game ${gameId}`);
+    }
+  } catch (err) {
+    console.error("[POKER] Error in emitIfTournamentCompleted:", err);
+  }
 }
 
 /**
@@ -857,10 +875,10 @@ export async function startHandForGame(gameId, io) {
   let utgSeat;
   
   if (activePlayers.length === 2) {
-    // Heads-up: Big blind acts first preflop
-    utgPlayer = bbPlayer;
-    utgSeat = bbSeat;
-    console.log(`[POKER] Heads-up game: UTG is BB (seat ${utgSeat})`);
+    // Heads-up: Small blind (dealer) acts first preflop
+    utgPlayer = sbPlayer;
+    utgSeat = sbSeat;
+    console.log(`[POKER] Heads-up game: UTG is SB (seat ${utgSeat})`);
   } else {
     // Multi-way: UTG is first player clockwise after BB (only BB is excluded - dealer or SB can be UTG in 3-handed)
     // Clockwise = decreasing seat numbers (seats numbered anticlockwise)
@@ -1804,43 +1822,46 @@ async function handleShowdown(gameId, io) {
   // Calculate total pot amount from side pots
   const calculatedPotTotal = sidePots.reduce((sum, pot) => sum + pot.amount, 0);
   
-  // If calculated total doesn't match actual pot, use actual pot and adjust
-  // (This can happen due to rounding or if we're missing some street contributions)
+  // If calculated total doesn't match actual pot, scale side pots to match actual
+  // so we never distribute negative or excess chips.
   const actualPot = state.pot;
-  if (calculatedPotTotal !== actualPot) {
+  if (calculatedPotTotal !== actualPot && sidePots.length > 0) {
     console.log(`[SHOWDOWN] Pot mismatch: calculated=${calculatedPotTotal}, actual=${actualPot}, adjusting...`);
-    // Adjust the last side pot to make up the difference
-    if (sidePots.length > 0) {
-      sidePots[sidePots.length - 1].amount += (actualPot - calculatedPotTotal);
+    if (calculatedPotTotal > 0 && calculatedPotTotal >= actualPot) {
+      // Scale down so total = actualPot (avoid negative side pot)
+      const scale = actualPot / calculatedPotTotal;
+      let running = 0;
+      for (let i = 0; i < sidePots.length; i++) {
+        const scaled = i === sidePots.length - 1
+          ? Math.max(0, actualPot - running)
+          : Math.max(0, Math.floor(sidePots[i].amount * scale));
+        sidePots[i].amount = scaled;
+        running += scaled;
+      }
     } else {
-      // No side pots calculated, create one main pot
-      sidePots.push({
-        level: contributionAmounts[contributionAmounts.length - 1] || 0,
-        amount: actualPot,
-        eligiblePlayerIds: activePlayers.map(p => p.id)
-      });
+      sidePots[sidePots.length - 1].amount = Math.max(0, sidePots[sidePots.length - 1].amount + (actualPot - calculatedPotTotal));
     }
+  } else if (sidePots.length === 0 && actualPot > 0) {
+    sidePots.push({
+      level: contributionAmounts[contributionAmounts.length - 1] || 0,
+      amount: actualPot,
+      eligiblePlayerIds: activePlayers.map(p => p.id)
+    });
   }
   
-  // Distribute each side pot
+  // Distribute each side pot (skip pots with amount <= 0)
   const totalWon = new Map();
-  activePlayers.forEach(player => {
-    totalWon.set(player.id, 0);
-  });
+  activePlayers.forEach(p => totalWon.set(p.id, 0));
   
   for (const pot of sidePots) {
-    // Filter hand results to only eligible players
+    if (pot.amount <= 0) continue;
     const eligibleHandResults = handResults.filter(r => 
       pot.eligiblePlayerIds.includes(r.player.id)
     );
-    
     if (eligibleHandResults.length === 0) continue;
     
-    // Find best hand among eligible players
     const maxStrength = Math.max(...eligibleHandResults.map(r => r.strength));
     const potWinners = eligibleHandResults.filter(r => r.strength === maxStrength);
-    
-    // Split pot among winners
     const potPerWinner = Math.floor(pot.amount / potWinners.length);
     const remainder = pot.amount % potWinners.length;
     
@@ -1848,9 +1869,9 @@ async function handleShowdown(gameId, io) {
     
     potWinners.forEach((winner, index) => {
       const amount = potPerWinner + (index === 0 ? remainder : 0);
+      if (amount <= 0) return;
       const currentWon = totalWon.get(winner.player.id) || 0;
       totalWon.set(winner.player.id, currentWon + amount);
-      
       winner.player.chips += amount;
       console.log(`[SHOWDOWN]   Distributing ${amount} chips to ${winner.player.name || winner.player.userId} (seat ${winner.player.seatNumber}) from side pot level ${pot.level}`);
     });
@@ -1979,6 +2000,10 @@ async function handleShowdown(gameId, io) {
         console.error(`[SHOWDOWN] Error notifying tournament of player bust:`, err);
       });
     }
+  }
+
+  if (game?.tournament && io) {
+    await emitIfTournamentCompleted(game.tournament.id, gameId, io);
   }
 
   // Reset pot
@@ -2651,6 +2676,9 @@ async function moveToNextPlayer(gameId, io) {
         });
       }
     }
+    if (game?.tournament && io) {
+      await emitIfTournamentCompleted(game.tournament.id, gameId, io);
+    }
   } else {
     // Active hand in progress - don't eliminate all-in players yet, they need to see the hand through
     console.log(`[POKER] Active hand in progress - skipping elimination of players with 0 chips until hand completes`);
@@ -3163,6 +3191,7 @@ export function registerPokerHandlers(io) {
                   }
                 });
               }
+              await emitIfTournamentCompleted(game.tournament.id, gameId, socket.server);
             }
             
             // Update game pot in database (async)

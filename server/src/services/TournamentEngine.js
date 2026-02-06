@@ -627,12 +627,11 @@ export class TournamentEngine {
     });
 
     if (remaining <= 1) {
-      // Tournament is over – mark the final remaining active player as the winner
-      // and set their finishingPlace = 1.
+      // Tournament is over – mark the final remaining player (chips > 0) as winner
       const winner = await prisma.player.findFirst({
         where: {
           game: { tournamentId },
-          status: "ACTIVE"
+          chips: { gt: 0 }
         },
         include: { user: true }
       });

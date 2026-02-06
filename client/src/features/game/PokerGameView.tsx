@@ -324,6 +324,13 @@ export function PokerGameView() {
       }
     });
 
+    // Tournament ended – refetch so winner modal and COMPLETED status show
+    socket.on("tournament_completed", (payload: { tournamentId: string }) => {
+      if (payload.tournamentId === gameState?.tournamentId || payload.tournamentId === tournament?.id) {
+        refetchTournament();
+      }
+    });
+
     // Update timer every second to keep it synced
     const timerInterval = setInterval(() => {
       setTurnTimer((prev) => {
@@ -346,6 +353,7 @@ export function PokerGameView() {
       socket.off("showdown");
       socket.off("tournament-starting");
       socket.off("tournament-started");
+      socket.off("tournament_completed");
       clearInterval(timerInterval);
     };
   }, [id, turnTimer, gameState?.tournamentId, tournament?.id]);
