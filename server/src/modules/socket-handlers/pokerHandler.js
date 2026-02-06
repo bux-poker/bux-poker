@@ -2719,7 +2719,63 @@ async function moveToNextPlayer(gameId, io) {
     p.status !== 'ALL_IN' &&
     p.chips > 0
   );
-  
+
+  // One player left (everyone else folded) – award pot and end hand immediately
+  if (activePlayers.length === 1) {
+    const existingTimer = turnTimers.get(gameId);
+    if (existingTimer) {
+      clearTimeout(existingTimer.timerId);
+      if (existingTimer.graceTimerId) clearTimeout(existingTimer.graceTimerId);
+      turnTimers.delete(gameId);
+    }
+    const winner = activePlayers[0];
+    const collectedPot = state.bettingRound?.getTotalPot() || 0;
+    const totalPot = (state.pot || 0) + collectedPot;
+    winner.chips += totalPot;
+    state.pot = 0;
+    state.currentTurnUserId = null;
+    state.street = null;
+    tableState.set(gameId, state);
+
+    const winnerName = winner.name || winner.user?.username || `Player ${winner.seatNumber}`;
+    console.log(`[POKER] One player left – awarding pot of ${totalPot} to ${winnerName}`);
+
+    if (io) {
+      postDealerMessage(gameId, io, `${winnerName} wins ${totalPot.toLocaleString()} (all other players folded)`);
+      io.to(`game:${gameId}`).emit("winner", {
+        gameId,
+        winners: [{ playerId: winner.id, userId: winner.userId, name: winnerName, potWon: totalPot }],
+      });
+    }
+    prisma.player.update({ where: { id: winner.id }, data: { chips: winner.chips } }).catch(() => {});
+    prisma.game.update({ where: { id: gameId }, data: { pot: 0 } }).catch(() => {});
+
+    setTimeout(() => {
+      const savedPlayers = [...state.players];
+      tableState.delete(gameId);
+      const resetPromises = savedPlayers
+        .filter(p => p.status !== 'ELIMINATED' && p.chips > 0)
+        .map(p => prisma.player.update({
+          where: { id: p.id },
+          data: { status: 'ACTIVE', holeCards: '', lastAction: null },
+        }).catch(() => {}));
+      Promise.all(resetPromises).then(async () => {
+        const gameForNextHand = await prisma.game.findUnique({
+          where: { id: gameId },
+          include: { players: { include: { user: true } }, tournament: true },
+        });
+        if (gameForNextHand && gameForNextHand.players.filter(p => p.status === 'ACTIVE').length >= 2 && io) {
+          try {
+            await startHandForGame(gameId, io);
+          } catch (err) {
+            console.error(`[POKER] Error starting new hand after everyone-fold:`, err);
+          }
+        }
+      });
+    }, 3000);
+    return;
+  }
+
   if (activePlayers.length === 0) {
     state.currentTurnUserId = null;
     return;
