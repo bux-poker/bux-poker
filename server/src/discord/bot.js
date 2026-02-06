@@ -126,12 +126,15 @@ export async function initializeDiscordBot() {
 }
 
 async function handleSetupCommand(interaction) {
-  // Check if user has admin permissions
+  // Defer once so we never double-acknowledge; use editReply for all outcomes
+  const deferred = await interaction.deferReply({ ephemeral: true }).catch(() => false);
+  if (!deferred) return;
+
+  const send = (content) =>
+    interaction.editReply({ content }).catch((err) => console.error('[DISCORD BOT] editReply error:', err));
+
   if (!interaction.memberPermissions?.has('Administrator')) {
-    await interaction.reply({
-      content: '❌ You need Administrator permissions to configure the bot.',
-      ephemeral: true,
-    });
+    await send('❌ You need Administrator permissions to configure the bot.');
     return;
   }
 
@@ -140,24 +143,16 @@ async function handleSetupCommand(interaction) {
   const adminRole = interaction.options.getRole('admin-role');
 
   if (!channel || !inviteLink || !adminRole) {
-    await interaction.reply({
-      content: '❌ All fields are required.',
-      ephemeral: true,
-    });
+    await send('❌ All fields are required.');
     return;
   }
 
-  // Validate invite link format
   if (!inviteLink.startsWith('https://discord.gg/') && !inviteLink.startsWith('https://discord.com/invite/')) {
-    await interaction.reply({
-      content: '❌ Invalid invite link format. Please provide a valid Discord invite link.',
-      ephemeral: true,
-    });
+    await send('❌ Invalid invite link format. Please provide a valid Discord invite link.');
     return;
   }
 
   try {
-    // interaction.guild can be null if the guild isn't cached (e.g. new server)
     let guild = interaction.guild;
     if (!guild && interaction.guildId && discordClient) {
       try {
@@ -166,43 +161,42 @@ async function handleSetupCommand(interaction) {
         console.warn('[DISCORD BOT] Could not fetch guild:', fetchErr);
       }
     }
-    if (!guild) {
-      await interaction.reply({
-        content: '❌ Could not resolve this server. Please try again in a moment, or re-invite the bot with the correct permissions.',
-        ephemeral: true,
-      });
+
+    const serverId = guild?.id ?? interaction.guildId;
+    const serverName = guild?.name ?? 'Server';
+    const channelId = channel?.id;
+    const adminRoleId = adminRole?.id;
+
+    if (!serverId || !channelId || !adminRoleId) {
+      await send('❌ Could not resolve server, channel, or role. Please try again or re-invite the bot with the correct permissions.');
       return;
     }
 
-    // Upsert server configuration
     await prisma.discordServer.upsert({
-      where: { serverId: guild.id },
+      where: { serverId },
       update: {
-        serverName: guild.name,
-        announcementChannelId: channel.id,
-        inviteLink: inviteLink,
-        adminRoleId: adminRole.id,
+        serverName,
+        announcementChannelId: channelId,
+        inviteLink,
+        adminRoleId,
         setupCompleted: true,
         enabled: true,
       },
       create: {
-        serverId: guild.id,
-        serverName: guild.name,
-        announcementChannelId: channel.id,
-        inviteLink: inviteLink,
-        adminRoleId: adminRole.id,
+        serverId,
+        serverName,
+        announcementChannelId: channelId,
+        inviteLink,
+        adminRoleId,
         setupCompleted: true,
         enabled: true,
       },
     });
 
-    await interaction.reply({
-      content: `✅ Bot configured successfully!\n\n**Channel:** ${channel}\n**Invite Link:** ${inviteLink}\n**Admin Role:** ${adminRole}\n\nThe bot will now post tournament embeds in ${channel}.`,
-      ephemeral: true,
-    });
+    await send(`✅ Bot configured successfully!\n\n**Channel:** <#${channelId}>\n**Invite Link:** ${inviteLink}\n**Admin Role:** <@&${adminRoleId}>\n\nThe bot will now post tournament embeds in <#${channelId}>.`);
   } catch (error) {
     console.error('[DISCORD BOT] Error in setup command:', error);
-    throw error;
+    await send(`❌ Error: ${error.message || 'Setup failed.'}`);
   }
 }
 
