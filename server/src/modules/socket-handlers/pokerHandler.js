@@ -1295,7 +1295,25 @@ async function handleTestPlayerAction(gameId, userId, io) {
       }
       return;
     }
-    
+    if (player.chips === 0 || player.status === 'ALL_IN') {
+      console.log(`[POKER] Test player ${player.name || userId} is all-in (0 chips), skipping action and advancing`);
+      if (player.status !== 'ALL_IN') player.status = 'ALL_IN';
+      state.actedPlayersInRound.add(userId);
+      tableState.set(gameId, state);
+      const existingTimer = turnTimers.get(gameId);
+      if (existingTimer) {
+        clearTimeout(existingTimer.timerId);
+        if (existingTimer.graceTimerId) clearTimeout(existingTimer.graceTimerId);
+        turnTimers.delete(gameId);
+      }
+      try {
+        await moveToNextPlayer(gameId, io);
+      } catch (err) {
+        console.error(`[POKER] Error moving to next player after all-in:`, err);
+      }
+      return;
+    }
+
     console.log(`[POKER] Test player ${player.name || userId} is acting...`);
 
     const currentBet = state.bettingRound?.currentBet || 0;
@@ -1851,21 +1869,32 @@ async function handleShowdown(gameId, io) {
   // Distribute each side pot (skip pots with amount <= 0)
   const totalWon = new Map();
   activePlayers.forEach(p => totalWon.set(p.id, 0));
-  
+
+  // Heads-up: the single winner takes the entire pot (no "orphan" side pot to the loser)
+  const isHeadsUp = handResults.length === 2;
+  const overallWinner = isHeadsUp
+    ? handResults.reduce((best, r) => (r.strength > best.strength ? r : best), handResults[0])
+    : null;
+
   for (const pot of sidePots) {
     if (pot.amount <= 0) continue;
-    const eligibleHandResults = handResults.filter(r => 
-      pot.eligiblePlayerIds.includes(r.player.id)
-    );
-    if (eligibleHandResults.length === 0) continue;
-    
-    const maxStrength = Math.max(...eligibleHandResults.map(r => r.strength));
-    const potWinners = eligibleHandResults.filter(r => r.strength === maxStrength);
+    let potWinners;
+    if (isHeadsUp && overallWinner) {
+      potWinners = [overallWinner];
+      console.log(`[SHOWDOWN] Side pot ${pot.level}: heads-up, awarding ${pot.amount} chips to overall winner`);
+    } else {
+      const eligibleHandResults = handResults.filter(r =>
+        pot.eligiblePlayerIds.includes(r.player.id)
+      );
+      if (eligibleHandResults.length === 0) continue;
+      const maxStrength = Math.max(...eligibleHandResults.map(r => r.strength));
+      potWinners = eligibleHandResults.filter(r => r.strength === maxStrength);
+    }
     const potPerWinner = Math.floor(pot.amount / potWinners.length);
     const remainder = pot.amount % potWinners.length;
-    
+
     console.log(`[SHOWDOWN] Side pot ${pot.level}: ${potWinners.length} winner(s) for ${pot.amount} chips`);
-    
+
     potWinners.forEach((winner, index) => {
       const amount = potPerWinner + (index === 0 ? remainder : 0);
       if (amount <= 0) return;
