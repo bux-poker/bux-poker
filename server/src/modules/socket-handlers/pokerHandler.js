@@ -1905,16 +1905,21 @@ async function handleShowdown(gameId, io) {
     });
   }
   
-  // Update player chips in database (async)
-  activePlayers.forEach(player => {
-    const won = totalWon.get(player.id) || 0;
-    if (won > 0) {
-      prisma.player.update({
-        where: { id: player.id },
-        data: { chips: player.chips }
-      }).catch(err => console.error(`[SHOWDOWN] Error updating chips for player ${player.id}:`, err));
-    }
-  });
+  // Update player chips in database – MUST complete before we clear state / start next hand
+  await Promise.all(
+    activePlayers.map(player => {
+      const won = totalWon.get(player.id) || 0;
+      if (won > 0) {
+        return prisma.player.update({
+          where: { id: player.id },
+          data: { chips: player.chips }
+        }).catch(err => {
+          console.error(`[SHOWDOWN] Error updating chips for player ${player.id}:`, err);
+        });
+      }
+      return Promise.resolve();
+    })
+  );
   
   // Build updated winners list with total winnings for display
   const finalWinners = Array.from(totalWon.entries())
@@ -2747,8 +2752,19 @@ async function moveToNextPlayer(gameId, io) {
         winners: [{ playerId: winner.id, userId: winner.userId, name: winnerName, potWon: totalPot }],
       });
     }
-    prisma.player.update({ where: { id: winner.id }, data: { chips: winner.chips } }).catch(() => {});
-    prisma.game.update({ where: { id: gameId }, data: { pot: 0 } }).catch(() => {});
+    await prisma.player.update({ where: { id: winner.id }, data: { chips: winner.chips } }).catch(() => {});
+    await prisma.game.update({ where: { id: gameId }, data: { pot: 0 } }).catch(() => {});
+
+    if (io) {
+      const game = await prisma.game.findUnique({
+        where: { id: gameId },
+        include: { players: { include: { user: true } }, tournament: true },
+      }).catch(() => null);
+      if (game) {
+        const payload = buildClientGameState(game, state);
+        io.to(`game:${gameId}`).emit("game-state", payload);
+      }
+    }
 
     setTimeout(() => {
       const savedPlayers = [...state.players];
