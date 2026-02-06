@@ -522,6 +522,33 @@ export async function startHandForGame(gameId, io) {
     throw new Error("Game not found or not enough players");
   }
 
+  // CRITICAL: Ensure every non-eliminated player with chips is ACTIVE for the new hand.
+  // Post-hand reset can miss players in some paths (e.g. only in-hand players reset);
+  // this guarantees all 8 (or N) are included, not just half.
+  const needActivation = game.players.filter(
+    p => p.chips > 0 && p.status !== 'ELIMINATED' && p.status !== 'ACTIVE'
+  );
+  if (needActivation.length > 0) {
+    console.log(`[POKER] Activating ${needActivation.length} players for new hand (were ${needActivation.map(p => p.status).join(', ')})`);
+    await prisma.player.updateMany({
+      where: {
+        gameId,
+        chips: { gt: 0 },
+        status: { not: 'ELIMINATED' }
+      },
+      data: { status: 'ACTIVE', holeCards: '', lastAction: null }
+    });
+    // Reload game so rest of startHandForGame sees ACTIVE status
+    const refreshed = await prisma.game.findUnique({
+      where: { id: gameId },
+      include: { players: { include: { user: true } }, tournament: true }
+    });
+    if (refreshed) {
+      game.players = refreshed.players;
+      Object.assign(game, refreshed);
+    }
+  }
+
   // Skip if hand already exists
   if (tableState.get(gameId)) {
     return;
@@ -783,25 +810,23 @@ export async function startHandForGame(gameId, io) {
   if (sbAmount > 0 && bbAmount > 0) {
     bettingRound.postBlinds(sbPlayer.id, bbPlayer.id, sbAmount, bbAmount);
     
-    // Deduct chips from players in database
+    // Deduct chips from players in database (never go below 0)
     if (sbAmount > 0) {
+      const newChips = Math.max(0, sbPlayer.chips - sbAmount);
       await prisma.player.update({
         where: { id: sbPlayer.id },
-        data: { chips: sbPlayer.chips - sbAmount }
+        data: { chips: newChips }
       });
-      
-      // Update chips in memory for state
-      sbPlayer.chips -= sbAmount;
+      sbPlayer.chips = newChips;
     }
     
     if (bbAmount > 0) {
+      const newChips = Math.max(0, bbPlayer.chips - bbAmount);
       await prisma.player.update({
         where: { id: bbPlayer.id },
-        data: { chips: bbPlayer.chips - bbAmount }
+        data: { chips: newChips }
       });
-      
-      // Update chips in memory for state
-      bbPlayer.chips -= bbAmount;
+      bbPlayer.chips = newChips;
     }
     
     // IMPORTANT: Even if the big blind player is short (posts less than the
