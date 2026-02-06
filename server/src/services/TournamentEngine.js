@@ -602,18 +602,14 @@ export class TournamentEngine {
       }
     });
 
-    // Count remaining active players across all games (AFTER this bust)
+    // Count remaining players with chips > 0 across all games (AFTER this bust).
+    // We deliberately use chips > 0 instead of status === 'ACTIVE' because
+    // status can be transient during hand resets, but chip count is the
+    // source of truth for who is still in the tournament.
     const remaining = await prisma.player.count({
       where: {
         game: { tournamentId },
-        status: "ACTIVE"
-      }
-    });
-
-    // Total players that started the tournament (for sanity / future use)
-    const totalPlayers = await prisma.player.count({
-      where: {
-        game: { tournamentId }
+        chips: { gt: 0 }
       }
     });
 
