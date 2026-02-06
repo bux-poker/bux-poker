@@ -470,7 +470,7 @@ export function TournamentLobby() {
                 {closingRegistration ? 'Closing Registration...' : 'Close Registration & Seat Players'}
               </button>
             )}
-            {isSeated && (
+            {isSeated && !isRunning && (
               <button
                 onClick={handleStartTournament}
                 disabled={startingTournament}

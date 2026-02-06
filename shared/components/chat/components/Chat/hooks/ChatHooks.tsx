@@ -268,7 +268,8 @@ export const useChatHooks = ({
       userName: user?.username || 'Unknown',
       message: messageText,
       timestamp: Date.now(),
-      isGameMessage: chatType === 'game'
+      isGameMessage: chatType === 'game',
+      ...(chatType === 'game' && user?.avatarUrl && { userAvatar: user.avatarUrl })
     };
 
     try {

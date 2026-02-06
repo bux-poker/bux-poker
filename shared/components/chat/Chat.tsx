@@ -19,6 +19,7 @@ export interface ChatMessage {
   message: string;
   timestamp: number;
   isGameMessage?: boolean;
+  userAvatar?: string;
 }
 
 // Define PlayerStatsModalProps if it's not already defined globally or in a shared type file

@@ -143,7 +143,7 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
             {!isCurrentUser && (
               <div className={`${isMobile ? 'w-6 h-6 mr-1.5' : 'w-8 h-8 mr-2'} rounded-full overflow-hidden flex-shrink-0`}>
                 <img 
-                  src={(message as any).userAvatar || GUEST_AVATAR} 
+                  src={message.userAvatar || GUEST_AVATAR} 
                   alt={message.userName || ''} 
                   width={32}
                   height={32}
