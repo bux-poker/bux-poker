@@ -97,9 +97,6 @@ export function PokerGameView() {
   const [eliminationInfo, setEliminationInfo] = useState<{ place: number | null } | null>(null);
   const [winnerModalOpen, setWinnerModalOpen] = useState(false);
   const [consolidationWaiting, setConsolidationWaiting] = useState<string | null>(null);
-  // Track whether we've already created a local fallback countdown to avoid
-  // recreating it (which previously caused the timer to reset back to 2 mins)
-  const fallbackCountdownCreatedRef = useRef(false);
   const { user } = useAuth();
   const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
 
@@ -417,27 +414,9 @@ export function PokerGameView() {
     return () => clearInterval(interval);
   }, [tournamentCountdown]);
 
-  // Fallback countdown for clients (especially mobile) that might miss the
-  // \"tournament-starting\" socket event. This creates a one-time, local
-  // 2-minute countdown while the tournament is SEATED and not yet started.
-  //
-  // We guard with fallbackCountdownCreatedRef so that once cleared (e.g. when
-  // the game actually starts and we receive \"tournament-started\"), we don't
-  // recreate the countdown and accidentally reset it back to 2 minutes.
-  useEffect(() => {
-    if (!tournament) return;
-    if (tournamentCountdown) return;
-    if (fallbackCountdownCreatedRef.current) return;
-
-    if (tournament.status === "SEATED" && !tournament.startedAt) {
-      const startTime = new Date(Date.now() + 2 * 60 * 1000).toISOString();
-      setTournamentCountdown({
-        startTime,
-        seconds: 120,
-      });
-      fallbackCountdownCreatedRef.current = true;
-    }
-  }, [tournament, tournamentCountdown]);
+  // Do NOT show a 2-minute countdown when tournament is merely SEATED.
+  // The countdown must only start when the host clicks Start and the server
+  // emits "tournament-starting". No fallback countdown for SEATED.
 
   // Calculate next blind timer based on tournament.startedAt and blind level durations
   useEffect(() => {

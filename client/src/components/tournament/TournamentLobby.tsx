@@ -65,8 +65,16 @@ export function TournamentLobby() {
   const [blindLevels, setBlindLevels] = useState<BlindLevel[]>([]);
   const [closingRegistration, setClosingRegistration] = useState(false);
   const [startingTournament, setStartingTournament] = useState(false);
+  const [startRequested, setStartRequested] = useState(false);
   const [tables, setTables] = useState<any[]>([]);
   const [myGameId, setMyGameId] = useState<string | null>(null);
+
+  // Clear start-requested flag once tournament is actually running (after refetch)
+  useEffect(() => {
+    if (tournament?.status === 'RUNNING' || tournament?.status === 'ACTIVE') {
+      setStartRequested(false);
+    }
+  }, [tournament?.status]);
 
   // Parse blind levels from tournament
   useEffect(() => {
@@ -397,10 +405,12 @@ export function TournamentLobby() {
     }
 
     setStartingTournament(true);
+    setStartRequested(true);
     try {
       const token = localStorage.getItem('sessionToken');
       if (!token) {
         alert('Not authenticated');
+        setStartRequested(false);
         return;
       }
 
@@ -415,6 +425,7 @@ export function TournamentLobby() {
       alert('✅ Tournament started!');
       await refetch();
     } catch (err: any) {
+      setStartRequested(false);
       alert(err.response?.data?.error || 'Failed to start tournament');
       console.error('Error starting tournament:', err);
     } finally {
@@ -490,7 +501,7 @@ export function TournamentLobby() {
                 {closingRegistration ? 'Closing Registration...' : 'Close Registration & Seat Players'}
               </button>
             )}
-            {isSeated && !isRunning && (
+            {isSeated && !isRunning && !startRequested && (
               <button
                 onClick={handleStartTournament}
                 disabled={startingTournament}
@@ -498,6 +509,9 @@ export function TournamentLobby() {
               >
                 {startingTournament ? 'Starting Tournament...' : 'Start Tournament'}
               </button>
+            )}
+            {isSeated && startRequested && startingTournament && (
+              <span className="text-slate-400 text-sm">Starting Tournament...</span>
             )}
           </div>
         )}

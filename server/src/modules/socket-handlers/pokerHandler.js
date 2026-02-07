@@ -2233,12 +2233,14 @@ async function handleShowdown(gameId, io, options = {}) {
           return;
         }
         
-        // Check if we should consolidate (uneven tables) - run even without a bust
+        // Check if we should consolidate (uneven tables) - run even without a bust.
+        // Use in-tournament count (chips>0, not ELIMINATED), NOT just ACTIVE - during a hand
+        // most players are FOLDED/ALL_IN so the other table would look empty and we'd never consolidate.
         if (gameForNextHand.tournament?.status === 'RUNNING') {
           try {
             const games = await prisma.game.findMany({
               where: { tournamentId: gameForNextHand.tournament.id, status: 'ACTIVE' },
-              include: { players: { where: { status: 'ACTIVE' } } }
+              include: { players: { where: { status: { not: 'ELIMINATED' }, chips: { gt: 0 } } } }
             });
             const counts = games.map(g => g.players.length).filter(c => c > 0);
             if (counts.length > 1) {
