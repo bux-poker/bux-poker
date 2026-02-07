@@ -414,8 +414,12 @@ export class TournamentEngine {
     }
 
     console.log(`[TOURNAMENT] Seated ${totalPlayers} players into ${tables.length} balanced tables`);
-    tables.forEach((table, idx) => {
-      console.log(`[TOURNAMENT]   Table ${table.tableNumber}: ${table.players?.length || 'unknown'} players`);
+    const gamesWithPlayers = await prisma.game.findMany({
+      where: { tournamentId },
+      include: { _count: { select: { players: true } } }
+    });
+    gamesWithPlayers.forEach((g) => {
+      console.log(`[TOURNAMENT]   Table ${g.tableNumber}: ${g._count.players} players`);
     });
 
     return tables;
@@ -724,11 +728,11 @@ export class TournamentEngine {
       await this._markPlayerBust(tournamentId, playerId);
     }
     const remaining = await prisma.player.count({
-      where: { game: { tournamentId }, chips: { gt: 0 } }
+      where: { game: { tournamentId }, chips: { gt: 0 }, status: "ACTIVE" }
     });
     if (remaining <= 1) {
       const winner = await prisma.player.findFirst({
-        where: { game: { tournamentId }, chips: { gt: 0 } },
+        where: { game: { tournamentId }, chips: { gt: 0 }, status: "ACTIVE" },
         include: { user: true, game: true }
       });
       if (winner) {
@@ -765,7 +769,7 @@ export class TournamentEngine {
       data: { status: "ELIMINATED" }
     });
     const remaining = await prisma.player.count({
-      where: { game: { tournamentId }, chips: { gt: 0 } }
+      where: { game: { tournamentId }, chips: { gt: 0 }, status: "ACTIVE" }
     });
     const finishingPlace = remaining + 1;
     await prisma.player.update({

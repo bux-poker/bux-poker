@@ -531,8 +531,8 @@ async function emitIfTournamentCompleted(tournamentId, gameId, io) {
       select: { status: true }
     });
     if (t?.status === "COMPLETED") {
-      io.to(`game:${gameId}`).emit("tournament_completed", { tournamentId });
-      console.log(`[POKER] Emitted tournament_completed for tournament ${tournamentId} to game ${gameId}`);
+      io.emit("tournament_completed", { tournamentId });
+      console.log(`[POKER] Emitted tournament_completed for tournament ${tournamentId} (broadcast to all clients)`);
     }
   } catch (err) {
     console.error("[POKER] Error in emitIfTournamentCompleted:", err);
@@ -554,8 +554,14 @@ export async function startHandForGame(gameId, io) {
     }
   });
 
-  if (!game || game.players.length < 2) {
-    throw new Error("Game not found or not enough players");
+  if (!game) {
+    throw new Error("Game not found");
+  }
+  if (game.status !== "ACTIVE") {
+    return; // Do not start hands for COMPLETED or other non-ACTIVE games
+  }
+  if (game.players.length < 2) {
+    throw new Error("Not enough players");
   }
 
   // CRITICAL: Ensure every non-eliminated player with chips is ACTIVE for the new hand.
