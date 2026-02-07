@@ -547,6 +547,8 @@ export class TournamentEngine {
 
     console.log(`[TOURNAMENT] Consolidation: found ${games.length} ACTIVE table(s), player counts:`, games.map(g => `${g.tableNumber}:${g.players?.length ?? 0}`));
 
+    const allActiveGameIdsForClear = games.map(g => g.id);
+
     const allPlayers = [];
     for (const game of games) {
       for (const player of game.players) {
@@ -564,12 +566,16 @@ export class TournamentEngine {
     const numTablesNeeded = Math.max(1, Math.ceil(totalPlayers / seatsPerTable));
     
     if (games.length > numTablesNeeded) {
-      const toClose = games.slice(numTablesNeeded);
+      // Close the tables with the FEWEST players first, so we keep the tables that have players.
+      // Previously we closed the last N by table number, which could close the only table with players.
+      const byPlayerCount = [...games].sort((a, b) => (a.players?.length ?? 0) - (b.players?.length ?? 0));
+      const toClose = byPlayerCount.slice(0, byPlayerCount.length - numTablesNeeded);
+      const toKeep = byPlayerCount.slice(-numTablesNeeded);
       for (const g of toClose) {
         await prisma.game.update({ where: { id: g.id }, data: { status: "COMPLETED" } });
       }
-      games = games.slice(0, numTablesNeeded);
-      console.log(`[TOURNAMENT] Reduced to ${numTablesNeeded} table(s)`);
+      games = toKeep;
+      console.log(`[TOURNAMENT] Reduced to ${numTablesNeeded} table(s) (closed ${toClose.length} emptiest)`);
     }
 
     // Always redistribute when we have players - even with 1 table we must move players
@@ -608,12 +614,11 @@ export class TournamentEngine {
       });
     }
 
-    // CRITICAL: Clear in-memory state for ALL tournament games BEFORE deleting players.
-    // Otherwise pending turn timers will fire and try to update deleted players (P2025).
-    const allGameIds = [...new Set(allPlayers.map(p => p.gameId))];
+    // CRITICAL: Clear in-memory state for ALL ACTIVE tournament games BEFORE deleting players.
+    // Use the list we saved before closing any tables so we clear closed tables' state too.
     try {
       const { clearAllStateForGames } = await import("../modules/socket-handlers/pokerHandler.js");
-      clearAllStateForGames(allGameIds);
+      clearAllStateForGames(allActiveGameIdsForClear);
     } catch (e) {
       console.warn("[TOURNAMENT] Could not clear game state:", e?.message);
     }

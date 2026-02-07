@@ -1939,7 +1939,8 @@ async function handleShowdown(gameId, io, options = {}) {
     });
   }
   
-  // Update player chips in database – MUST complete before we clear state / start next hand
+  // Update player chips in database – MUST complete before we clear state / start next hand.
+  // If a player was already removed (e.g. by consolidation), skip update (P2025).
   await Promise.all(
     activePlayers.map(player => {
       const won = totalWon.get(player.id) || 0;
@@ -1948,7 +1949,11 @@ async function handleShowdown(gameId, io, options = {}) {
           where: { id: player.id },
           data: { chips: player.chips }
         }).catch(err => {
-          console.error(`[SHOWDOWN] Error updating chips for player ${player.id}:`, err);
+          if (err?.code === 'P2025') {
+            console.log(`[SHOWDOWN] Player ${player.id} already removed (consolidation), skipping chip update`);
+          } else {
+            console.error(`[SHOWDOWN] Error updating chips for player ${player.id}:`, err);
+          }
         });
       }
       return Promise.resolve();
