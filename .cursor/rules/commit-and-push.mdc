@@ -1,0 +1,14 @@
+---
+description: Commit and push changes after making edits
+alwaysApply: true
+---
+
+# Commit and push after changes
+
+After making code or config changes in this project:
+
+1. **Stage** all modified/new files: `git add -A` (or stage specific paths if the user asked for a subset).
+2. **Commit** with a short, descriptive message that explains what was done (e.g. "Fix tournament consolidation unique constraint", "Add dark mode toggle").
+3. **Push** to the current branch: `git push`.
+
+Do this in the same turn as the edits when the change is complete. Do not wait for the user to ask you to commit or push. Skip only if the user explicitly says not to commit, or if they are in the middle of a multi-step task and want one commit at the end.

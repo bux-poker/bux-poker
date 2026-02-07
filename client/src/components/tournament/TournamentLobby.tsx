@@ -91,7 +91,8 @@ export function TournamentLobby() {
       try {
         // Tables are included in tournament data from getTournamentById
         if (tournament.games && Array.isArray(tournament.games)) {
-          setTables(tournament.games);
+          // Only show ACTIVE tables (closed tables are hidden so counts match remaining players)
+          setTables(tournament.games.filter((g: any) => g.status === 'ACTIVE'));
         }
       } catch (err) {
         console.error('Error fetching tables:', err);
@@ -759,7 +760,8 @@ export function TournamentLobby() {
                 <p className="text-slate-400 text-center py-8">No tables created yet.</p>
               ) : (
                 tables.map((table) => {
-                  const playerCount = table.players?.length || 0;
+                  const activePlayers = table.players?.filter((p: any) => p.status !== 'ELIMINATED') ?? [];
+                  const playerCount = activePlayers.length;
                   const isMyTable = myGameId === table.id;
                   return (
                     <div
@@ -781,9 +783,9 @@ export function TournamentLobby() {
                           <p className="mt-1 text-sm text-slate-400">
                             {playerCount} / {tournament.seatsPerTable} players
                           </p>
-                          {table.players && table.players.length > 0 && (
+                          {activePlayers.length > 0 && (
                             <div className="mt-2 flex flex-wrap gap-2">
-                              {table.players.map((player: any) => (
+                              {activePlayers.map((player: any) => (
                                 <span
                                   key={player.id}
                                   className="rounded bg-slate-700 px-2 py-1 text-xs text-slate-300"

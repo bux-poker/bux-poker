@@ -618,10 +618,19 @@ export class TournamentEngine {
       console.warn("[TOURNAMENT] Could not clear game state:", e?.message);
     }
 
-    // Step 1: Remove all players from their current tables (we'll recreate them)
+    // Step 1: Remove all ACTIVE players from their current tables (we'll recreate them)
     for (const player of allPlayers) {
       await prisma.player.delete({
         where: { id: player.playerId }
+      });
+    }
+
+    // Step 1b: Clear any ELIMINATED (or other) players from target games so
+    // (gameId, seatNumber) is free when we create. We only deleted ACTIVE above;
+    // busted players remain and would cause unique constraint on create.
+    for (const assignment of tableAssignments) {
+      await prisma.player.deleteMany({
+        where: { gameId: assignment.gameId }
       });
     }
 
