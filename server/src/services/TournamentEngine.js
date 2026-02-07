@@ -112,96 +112,62 @@ export class TournamentEngine {
       console.error(`[TOURNAMENT] Error posting Discord starting notification:`, err);
     }
 
-    // Calculate start time (2 minutes from now)
-    const startTime = new Date(Date.now() + 2 * 60 * 1000);
-    
-    // Broadcast tournament starting event with countdown to all clients in tournament games
+    // Persist scheduled start so it survives process restart (e.g. Render)
+    const startScheduledAt = new Date(Date.now() + 2 * 60 * 1000);
+    await prisma.tournament.update({
+      where: { id: tournamentId },
+      data: { startScheduledAt }
+    });
     if (socketIO) {
-      // Emit to all game rooms in this tournament
       for (const game of tournament.games || []) {
         socketIO.to(`game:${game.id}`).emit("tournament-starting", {
           tournamentId,
-          startTime: startTime.toISOString(),
+          startTime: startScheduledAt.toISOString(),
           countdownSeconds: 120
         });
       }
-      // Also emit globally as fallback
       socketIO.emit("tournament-starting", {
         tournamentId,
-        startTime: startTime.toISOString(),
+        startTime: startScheduledAt.toISOString(),
         countdownSeconds: 120
       });
-      console.log(`[TOURNAMENT] Broadcasted tournament-starting event for tournament ${tournamentId}, starting in 2 minutes`);
+      console.log(`[TOURNAMENT] Scheduled start at ${startScheduledAt.toISOString()} for tournament ${tournamentId}`);
     }
+    const updatedTournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      include: { games: { include: { players: true } } }
+    });
+    return { tournamentId, games: updatedTournament?.games || [] };
+  }
 
-    // Wait 2 minutes before actually starting the game
-    setTimeout(async () => {
-      try {
-    // Mark as RUNNING and record actual start time
+  /** Run actual start (RUNNING, hands, blind timer). Used when startScheduledAt has passed. */
+  async runScheduledStart(tournamentId) {
+    const { getIO } = await import("../modules/socket-handlers/pokerHandler.js");
+    const socketIO = getIO();
     const startedAt = new Date();
     await prisma.tournament.update({
       where: { id: tournamentId },
-      data: {
-        status: "RUNNING",
-        startedAt: startedAt // Record actual start time
-      }
+      data: { status: "RUNNING", startedAt, startScheduledAt: null }
     });
-
-    // Start a hand for each game
-        const { startHandForGame } = await import("../modules/socket-handlers/pokerHandler.js");
-    
-    // Broadcast tournament started event to all clients so they can refetch tournament data
     if (socketIO) {
-      socketIO.emit("tournament-started", {
-        tournamentId,
-        startedAt: startedAt.toISOString()
-      });
-      console.log(`[TOURNAMENT] Broadcasted tournament-started event for tournament ${tournamentId}`);
+      socketIO.emit("tournament-started", { tournamentId, startedAt: startedAt.toISOString() });
+      console.log(`[TOURNAMENT] Started tournament ${tournamentId}`);
     }
-    
-    if (socketIO) {
-      const games = await prisma.game.findMany({
-        where: { tournamentId },
-        include: {
-          players: {
-            include: { user: true }
-          },
-          tournament: true
-        }
-      });
-
-      for (const game of games) {
-        if (game.status === "ACTIVE" && game.players.length >= 2) {
-          try {
-            await startHandForGame(game.id, socketIO);
-          } catch (err) {
-            console.error(`[TOURNAMENT] Error starting hand for game ${game.id}:`, err);
-          }
+    const { startHandForGame } = await import("../modules/socket-handlers/pokerHandler.js");
+    const games = await prisma.game.findMany({
+      where: { tournamentId },
+      include: { players: { include: { user: true } }, tournament: true }
+    });
+    for (const game of games) {
+      if (game.status === "ACTIVE" && game.players.length >= 2) {
+        try {
+          await startHandForGame(game.id, socketIO);
+        } catch (err) {
+          console.error(`[TOURNAMENT] Error starting hand for game ${game.id}:`, err);
         }
       }
     }
-
-    // Start blind level timer
-    console.log(`[TOURNAMENT] Starting blind level timer for tournament ${tournamentId}`);
     this.startBlindLevelTimer(tournamentId);
-      } catch (err) {
-        console.error(`[TOURNAMENT] Error starting tournament after countdown:`, err);
-      }
-    }, 2 * 60 * 1000); // 2 minutes delay
-
-    // Refresh games after starting hands
-    const updatedTournament = await prisma.tournament.findUnique({
-      where: { id: tournamentId },
-      include: {
-        games: {
-          include: {
-            players: true
-          }
-        }
-      }
-    });
-
-    return { tournamentId, games: updatedTournament?.games || [] };
   }
 
   /**
@@ -813,5 +779,31 @@ export class TournamentEngine {
 
     return updated;
   }
+}
+
+/** Poll for tournaments that are SEATED and startScheduledAt <= now; run actual start. Survives process restart. */
+let _scheduledStartPollInterval = null;
+export function startScheduledStartPoll() {
+  if (_scheduledStartPollInterval) return;
+  const engine = new TournamentEngine();
+  _scheduledStartPollInterval = setInterval(async () => {
+    try {
+      const now = new Date();
+      const due = await prisma.tournament.findMany({
+        where: { status: "SEATED", startScheduledAt: { lte: now } },
+        select: { id: true }
+      });
+      for (const t of due) {
+        try {
+          await engine.runScheduledStart(t.id);
+        } catch (err) {
+          console.error(`[TOURNAMENT] Error running scheduled start for ${t.id}:`, err);
+        }
+      }
+    } catch (err) {
+      console.error(`[TOURNAMENT] Scheduled start poll error:`, err);
+    }
+  }, 30000);
+  console.log("[TOURNAMENT] Scheduled start poll running every 30s");
 }
 

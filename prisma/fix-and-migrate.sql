@@ -5,3 +5,7 @@
 -- DiscordServer.updatedAt should have DEFAULT now() (drift fix)
 ALTER TABLE "DiscordServer"
   ALTER COLUMN "updatedAt" SET DEFAULT now();
+
+-- Tournament.startScheduledAt: when admin clicks Start, actual start runs at this time (survives process restart)
+ALTER TABLE "Tournament"
+  ADD COLUMN IF NOT EXISTS "startScheduledAt" TIMESTAMP(3);

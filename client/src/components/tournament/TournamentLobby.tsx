@@ -48,6 +48,17 @@ export function TournamentLobby() {
     return () => { socket.off('tournament_updated', handler); };
   }, [id, refetch]);
 
+  // Hide Start button as soon as server says tournament is starting (so it stays hidden in every tab/window)
+  useEffect(() => {
+    if (!id) return;
+    const socket = getSocket();
+    const handler = (payload: { tournamentId: string }) => {
+      if (payload.tournamentId === id) setStartRequested(true);
+    };
+    socket.on('tournament-starting', handler);
+    return () => { socket.off('tournament-starting', handler); };
+  }, [id]);
+
   // Poll when running so tables/players stay current (silent = no loading flash)
   useEffect(() => {
     if (!id || !tournament || (tournament.status !== 'RUNNING' && tournament.status !== 'ACTIVE')) return;
