@@ -2016,32 +2016,49 @@ async function handleShowdown(gameId, io, options = {}) {
   const tournamentEngine = new TournamentEngine();
   const bustedPlayerIds = [];
   
-  // Eliminate ALL players with 0 chips (batch for single consolidation)
+  // Eliminate ALL players with 0 chips (batch for single consolidation).
+  // Ignore P2025 (record not found): another table's consolidation may have already deleted them.
   for (const handResult of handResults) {
     if (handResult.player.chips <= 0 && handResult.player.status !== 'ELIMINATED') {
       console.log(`[SHOWDOWN] Player ${handResult.player.name || handResult.player.userId} eliminated with 0 chips`);
       handResult.player.status = 'ELIMINATED';
-      await prisma.player.update({
-        where: { id: handResult.player.id },
-        data: { status: 'ELIMINATED' }
-      });
-      bustedPlayerIds.push(handResult.player.id);
+      try {
+        await prisma.player.update({
+          where: { id: handResult.player.id },
+          data: { status: 'ELIMINATED' }
+        });
+        bustedPlayerIds.push(handResult.player.id);
+      } catch (err) {
+        if (err?.code === 'P2025') {
+          console.log(`[SHOWDOWN] Player ${handResult.player.id} already removed (consolidation)`);
+        } else {
+          throw err;
+        }
+      }
     }
   }
-  
+
   const allPlayersWith0Chips = state.players.filter(
     p => p.chips <= 0 && p.status !== 'ELIMINATED' && p.status !== 'FOLDED'
   );
-  
+
   for (const player of allPlayersWith0Chips) {
     if (handResults.some(hr => hr.player.id === player.id)) continue;
     console.log(`[SHOWDOWN] Eliminating player ${player.name || player.userId} with ${player.chips} chips (not in hand results)`);
     player.status = 'ELIMINATED';
-    await prisma.player.update({
-      where: { id: player.id },
-      data: { status: 'ELIMINATED' }
-    }).catch(err => console.error(`[SHOWDOWN] Error eliminating player ${player.id}:`, err));
-    bustedPlayerIds.push(player.id);
+    try {
+      await prisma.player.update({
+        where: { id: player.id },
+        data: { status: 'ELIMINATED' }
+      });
+      bustedPlayerIds.push(player.id);
+    } catch (err) {
+      if (err?.code === 'P2025') {
+        console.log(`[SHOWDOWN] Player ${player.id} already removed (consolidation)`);
+      } else {
+        console.error(`[SHOWDOWN] Error eliminating player ${player.id}:`, err);
+      }
+    }
   }
   
   // Process all busts and run consolidation once (avoids race / duplicate consolidation)
@@ -2117,56 +2134,52 @@ async function handleShowdown(gameId, io, options = {}) {
 
   // Clear hand state after a delay (allow clients to see results clearly)
   const cleanupDelayMs = options?.cleanupDelayMs ?? 8000;
-  setTimeout(() => {
-    console.log(`[SHOWDOWN] Clearing hand state for next hand`);
-    const savedPlayers = [...state.players]; // Save players array before clearing state
+  setTimeout(async () => {
     tableState.delete(gameId);
-    
-    // Reset player state for next hand:
-    // - Players marked ELIMINATED stay eliminated (no new cards)
-    // - Players with 0 chips should be eliminated (not reset to ACTIVE)
-    // - Active players with chips > 0 are reset to ACTIVE with cleared hole cards / lastAction
-    const resetPromises = savedPlayers.map(p => {
-      const isEliminated = p.status === 'ELIMINATED';
-      const hasNoChips = p.chips <= 0;
-      
-      // Eliminate players with 0 chips (they should have been eliminated already, but double-check)
-      if (hasNoChips && !isEliminated) {
-        console.log(`[SHOWDOWN] Eliminating player ${p.name || p.userId} with ${p.chips} chips during reset`);
-        return prisma.player.update({
-          where: { id: p.id },
-          data: { 
-            status: 'ELIMINATED',
-            // Keep seatNumber - eliminated players filtered by status
-            holeCards: "",
-            lastAction: null
-          }
-        }).catch(err => console.error(`[SHOWDOWN] Error eliminating player ${p.id}:`, err));
+
+    // Re-fetch game and current players so we only touch rows that still exist
+    // (another table's consolidation may have deleted this table's players and recreated elsewhere)
+    const gameForNextHand = await prisma.game.findUnique({
+      where: { id: gameId },
+      include: {
+        players: { include: { user: true } },
+        tournament: true
       }
-      
+    });
+    if (!gameForNextHand || gameForNextHand.status !== 'ACTIVE' || gameForNextHand.players.length === 0) {
+      console.log(`[SHOWDOWN] Game ${gameId} no longer active or no players (consolidated?), skipping cleanup`);
+      return;
+    }
+
+    console.log(`[SHOWDOWN] Clearing hand state for next hand`);
+    // Reset only current DB players (avoids P2025 on deleted rows after consolidation)
+    const resetPromises = gameForNextHand.players.map(p => {
+      const isEliminated = p.status === 'ELIMINATED';
+      const hasNoChips = (p.chips ?? 0) <= 0;
+      const status = hasNoChips && !isEliminated ? 'ELIMINATED' : (isEliminated ? 'ELIMINATED' : 'ACTIVE');
       return prisma.player.update({
         where: { id: p.id },
-        data: { 
-          status: isEliminated ? 'ELIMINATED' : 'ACTIVE',
-          holeCards: "",
-          lastAction: null
+        data: { status, holeCards: '', lastAction: null }
+      }).catch(err => {
+        if (err?.code === 'P2025') {
+          console.log(`[SHOWDOWN] Player ${p.id} already removed (consolidation)`);
+        } else {
+          console.error(`[SHOWDOWN] Error resetting player ${p.id}:`, err);
         }
-      }).catch(err => console.error(`[SHOWDOWN] Error resetting player ${p.id}:`, err));
+      });
     });
-    
+
     Promise.all(resetPromises).then(async () => {
       console.log(`[SHOWDOWN] All players reset for next hand`);
-      
+      // Re-fetch in case consolidation ran during reset
       const gameForNextHand = await prisma.game.findUnique({
         where: { id: gameId },
         include: {
-          players: {
-            include: { user: true }
-          },
+          players: { include: { user: true } },
           tournament: true
         }
       });
-      
+
       if (gameForNextHand && gameForNextHand.players.length >= 2) {
         const activePlayerCount = gameForNextHand.players.filter(p => p.status === 'ACTIVE').length;
         
