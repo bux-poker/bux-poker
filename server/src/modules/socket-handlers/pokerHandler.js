@@ -1094,22 +1094,30 @@ function startTurnTimer(gameId, userId, io) {
     console.log(`[POKER] Starting 3-second timer for test player ${playerName}, will call handleTestPlayerAction`);
     
     const timerId = setTimeout(async () => {
+      // Remove this timer from map immediately so startTurnTimer for next player can set theirs
+      turnTimers.delete(gameId);
+
       console.log(`[POKER] Timer expired for test player ${playerName} (userId: ${userId}), calling handleTestPlayerAction at ${new Date().toISOString()}`);
       
       // Verify state still exists before proceeding
       const currentState = tableState.get(gameId);
       if (!currentState) {
         console.error(`[POKER] State missing when timer fired for test player ${playerName}, gameId: ${gameId}`);
-        turnTimers.delete(gameId);
         return;
       }
       
       // Verify it's still this player's turn (state may have changed - street advanced, different hand, etc.)
       if (currentState.currentTurnUserId !== userId) {
         console.log(`[POKER] Timer fired for test player ${playerName} but it's no longer their turn (currentTurn=${currentState.currentTurnUserId}). Timer was likely from previous street/hand.`);
-        
-        // If it's someone else's turn, don't interfere - their timer will handle it
-        // But if currentTurnUserId is null, betting might be stuck - check and advance
+        // If it's someone else's turn, start their timer so the hand isn't stuck with no timer
+        if (currentState.currentTurnUserId) {
+          const nextPlayer = currentState.players.find((p) => p.userId === currentState.currentTurnUserId);
+          if (nextPlayer && !turnTimers.has(gameId)) {
+            console.log(`[POKER] Starting timer for current turn holder ${nextPlayer.name || currentState.currentTurnUserId} (hand was stuck)`);
+            startTurnTimer(gameId, currentState.currentTurnUserId, io);
+          }
+        }
+        // If currentTurnUserId is null, betting might be stuck - check and advance
         if (!currentState.currentTurnUserId) {
           console.log(`[POKER] No current turn - checking if betting is complete and advancing if needed`);
           const activePlayerIds = currentState.players
