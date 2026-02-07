@@ -153,18 +153,22 @@ export class TournamentEngine {
       socketIO.emit("tournament-started", { tournamentId, startedAt: startedAt.toISOString() });
       console.log(`[TOURNAMENT] Started tournament ${tournamentId}`);
     }
-    const { startHandForGame } = await import("../modules/socket-handlers/pokerHandler.js");
+    const { startHandForGame, hasActiveHand } = await import("../modules/socket-handlers/pokerHandler.js");
     const games = await prisma.game.findMany({
-      where: { tournamentId },
-      include: { players: { include: { user: true } }, tournament: true }
+      where: { tournamentId, status: "ACTIVE" },
+      include: { players: { where: { status: { not: "ELIMINATED" }, chips: { gt: 0 } }, include: { user: true } }, tournament: true }
     });
     for (const game of games) {
-      if (game.status === "ACTIVE" && game.players.length >= 2) {
+      const count = game.players?.length ?? 0;
+      if (count >= 2) {
         try {
           await startHandForGame(game.id, socketIO);
+          console.log(`[TOURNAMENT] Started hand for table ${game.tableNumber} (game ${game.id}, ${count} players)`);
         } catch (err) {
-          console.error(`[TOURNAMENT] Error starting hand for game ${game.id}:`, err);
+          console.error(`[TOURNAMENT] Error starting hand for game ${game.id} (table ${game.tableNumber}):`, err);
         }
+      } else {
+        console.log(`[TOURNAMENT] Skipping table ${game.tableNumber}: ${count} players (need 2+)`);
       }
     }
     this.startBlindLevelTimer(tournamentId);
@@ -805,5 +809,46 @@ export function startScheduledStartPoll() {
     }
   }, 30000);
   console.log("[TOURNAMENT] Scheduled start poll running every 30s");
+}
+
+/** Every 60s, ensure every ACTIVE table in a RUNNING tournament has a hand running. Recovers stuck tables. */
+let _idleTablesPollInterval = null;
+export function startIdleTablesPoll() {
+  if (_idleTablesPollInterval) return;
+  _idleTablesPollInterval = setInterval(async () => {
+    const { startHandForGame, hasActiveHand, getIO } = await import("../modules/socket-handlers/pokerHandler.js");
+    const socketIO = getIO();
+    if (!socketIO) return;
+    try {
+      const running = await prisma.tournament.findMany({
+        where: { status: "RUNNING" },
+        select: { id: true }
+      });
+      for (const t of running) {
+        const games = await prisma.game.findMany({
+          where: { tournamentId: t.id, status: "ACTIVE" },
+          include: {
+            players: {
+              where: { status: { not: "ELIMINATED" }, chips: { gt: 0 } },
+              select: { id: true }
+            }
+          }
+        });
+        for (const game of games) {
+          if (game.players.length < 2) continue;
+          if (hasActiveHand(game.id)) continue;
+          try {
+            await startHandForGame(game.id, socketIO);
+            console.log(`[TOURNAMENT] Idle-table recovery: started hand for game ${game.id} (table ${game.tableNumber})`);
+          } catch (err) {
+            console.error(`[TOURNAMENT] Idle-table start failed for game ${game.id}:`, err);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[TOURNAMENT] Idle tables poll error:", err);
+    }
+  }, 60000);
+  console.log("[TOURNAMENT] Idle tables poll running every 60s");
 }
 

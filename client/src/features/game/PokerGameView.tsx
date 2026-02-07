@@ -414,9 +414,21 @@ export function PokerGameView() {
     return () => clearInterval(interval);
   }, [tournamentCountdown]);
 
-  // Do NOT show a 2-minute countdown when tournament is merely SEATED.
-  // The countdown must only start when the host clicks Start and the server
-  // emits "tournament-starting". No fallback countdown for SEATED.
+  // When tournament is SEATED and server has startScheduledAt (host clicked Start), show countdown
+  // so the table shows the timer even if the socket event was missed (e.g. tab opened after click).
+  useEffect(() => {
+    if (!tournament || tournament.status !== 'SEATED') return;
+    const scheduledAt = (tournament as any).startScheduledAt;
+    if (!scheduledAt) return;
+    const startTime = new Date(scheduledAt);
+    const now = Date.now();
+    if (startTime.getTime() <= now) return;
+    const seconds = Math.max(0, Math.floor((startTime.getTime() - now) / 1000));
+    setTournamentCountdown(prev => {
+      if (prev && prev.startTime === startTime.toISOString()) return prev;
+      return { startTime: startTime.toISOString(), seconds };
+    });
+  }, [tournament?.status, (tournament as any)?.startScheduledAt]);
 
   // Calculate next blind timer based on tournament.startedAt and blind level durations
   useEffect(() => {
