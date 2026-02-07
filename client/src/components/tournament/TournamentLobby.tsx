@@ -91,8 +91,8 @@ export function TournamentLobby() {
       try {
         // Tables are included in tournament data from getTournamentById
         if (tournament.games && Array.isArray(tournament.games)) {
-          // Only show ACTIVE tables (closed tables are hidden so counts match remaining players)
-          setTables(tournament.games.filter((g: any) => g.status === 'ACTIVE'));
+          // Show all tables so remaining players total matches (count per table uses non-eliminated only)
+          setTables(tournament.games);
         }
       } catch (err) {
         console.error('Error fetching tables:', err);
