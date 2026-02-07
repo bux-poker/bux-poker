@@ -599,15 +599,15 @@ export class TournamentEngine {
       orderBy: { tableNumber: "asc" }
     });
 
-    const totalPlayers = games.reduce((sum, g) => sum + (g.players?.length ?? 0), 0);
-    const numTablesNeeded = Math.max(1, Math.ceil(totalPlayers / seatsPerTable));
+    const totalCount = games.reduce((sum, g) => sum + (g.players?.length ?? 0), 0);
+    const tablesNeeded = Math.max(1, Math.ceil(totalCount / seatsPerTable));
     const counts = games.map(g => g.players?.length ?? 0).filter(c => c > 0);
     const maxC = counts.length ? Math.max(...counts) : 0;
     const minC = counts.length ? Math.min(...counts) : 0;
     const spread = maxC - minC;
 
     // No need to consolidate: we're not closing tables AND tables are already balanced (spread <= 1)
-    if (games.length <= numTablesNeeded && spread <= 1) {
+    if (games.length <= tablesNeeded && spread <= 1) {
       console.log(`[TOURNAMENT] Skipping consolidation: ${games.length} tables, counts ${counts.join(",")}, spread ${spread} (no rebalance needed)`);
       return games;
     }
