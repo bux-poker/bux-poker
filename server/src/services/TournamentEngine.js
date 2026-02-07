@@ -474,12 +474,15 @@ export class TournamentEngine {
   }
 
   /**
-   * Wait for all tables to finish their current hands before rebalancing
+   * Wait for all tables to finish their current hands before rebalancing.
+   * If a table reports "active hand" for longer than stuckHandMs, we clear that game's state
+   * so consolidation can proceed (hand was stuck, e.g. disconnected player's turn).
    */
-  async waitForAllTablesToFinishHands(tournamentId, maxWaitMs = 300000) {
+  async waitForAllTablesToFinishHands(tournamentId, maxWaitMs = 120000, stuckHandMs = 90000) {
     const startTime = Date.now();
     const checkInterval = 2000; // Check every 2 seconds
-    
+    const activeSince = new Map(); // gameId -> first time we saw it with active hand
+
     return new Promise((resolve) => {
       const checkHands = async () => {
         const games = await prisma.game.findMany({
@@ -487,15 +490,29 @@ export class TournamentEngine {
           include: { players: true }
         });
 
-        // Check if any table has an active hand
         let allHandsFinished = true;
         for (const game of games) {
           const hasHand = await this.hasActiveHand(game.id);
           if (hasHand) {
+            const now = Date.now();
+            if (!activeSince.has(game.id)) activeSince.set(game.id, now);
+            const stuckFor = now - activeSince.get(game.id);
+            if (stuckFor >= stuckHandMs) {
+              try {
+                const { clearAllStateForGames } = await import("../modules/socket-handlers/pokerHandler.js");
+                clearAllStateForGames([game.id]);
+                console.log(`[TOURNAMENT] Table ${game.tableNumber} hand stuck ${(stuckFor / 1000).toFixed(0)}s - cleared state so consolidation can proceed`);
+                activeSince.delete(game.id);
+              } catch (e) {
+                console.warn(`[TOURNAMENT] Could not clear stuck hand for game ${game.id}:`, e?.message);
+              }
+              continue;
+            }
             allHandsFinished = false;
-            console.log(`[TOURNAMENT] Table ${game.tableNumber} still has active hand, waiting...`);
+            console.log(`[TOURNAMENT] Table ${game.tableNumber} still has active hand, waiting... (${(stuckFor / 1000).toFixed(0)}s)`);
             break;
           }
+          activeSince.delete(game.id);
         }
 
         if (allHandsFinished) {
@@ -504,14 +521,12 @@ export class TournamentEngine {
           return;
         }
 
-        // Check if we've exceeded max wait time
         if (Date.now() - startTime > maxWaitMs) {
-          console.log(`[TOURNAMENT] Max wait time exceeded, proceeding with rebalancing anyway`);
+          console.log(`[TOURNAMENT] Max wait time exceeded (${(maxWaitMs / 1000).toFixed(0)}s), proceeding with rebalancing anyway`);
           resolve(false);
           return;
         }
 
-        // Check again after interval
         setTimeout(checkHands, checkInterval);
       };
 
