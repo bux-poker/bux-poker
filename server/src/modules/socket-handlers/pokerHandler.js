@@ -888,6 +888,16 @@ export async function startHandForGame(gameId, io) {
       });
       bbPlayer.chips = newChips;
     }
+
+    // Mark as ALL_IN anyone who has 0 chips after posting (so we never give them the turn)
+    if (sbPlayer.chips === 0) {
+      sbPlayer.status = "ALL_IN";
+      console.log(`[POKER] SB is all-in (0 chips) after posting blind`);
+    }
+    if (bbPlayer.chips === 0) {
+      bbPlayer.status = "ALL_IN";
+      console.log(`[POKER] BB is all-in (0 chips) after posting blind`);
+    }
     
     // IMPORTANT: Even if the big blind player is short (posts less than the
     // full big blind and is effectively all-in), the *nominal* current bet
@@ -904,58 +914,59 @@ export async function startHandForGame(gameId, io) {
     bettingRound.minimumRaise = bigBlind;
   }
 
-  // Calculate UTG (first to act after BB)
-  // In heads-up (2 players): BB acts first preflop, so UTG = BB
-  // In multi-way (3+ players): UTG is the first player clockwise after BB (not BB themselves)
+  // Calculate UTG (first to act) - only players who can act (chips > 0, not ALL_IN)
+  const canAct = (p) => p.chips > 0 && p.status !== "ALL_IN";
   let utgPlayer;
   let utgSeat;
   
   if (activePlayers.length === 2) {
-    // Heads-up: Small blind (dealer) acts first preflop
-    utgPlayer = sbPlayer;
-    utgSeat = sbSeat;
-    console.log(`[POKER] Heads-up game: UTG is SB (seat ${utgSeat})`);
+    // Heads-up: SB acts first preflop, unless SB is all-in then BB acts
+    if (canAct(sbPlayer)) {
+      utgPlayer = sbPlayer;
+      utgSeat = sbSeat;
+      console.log(`[POKER] Heads-up game: UTG is SB (seat ${utgSeat})`);
+    } else if (canAct(bbPlayer)) {
+      utgPlayer = bbPlayer;
+      utgSeat = bbSeat;
+      console.log(`[POKER] Heads-up game: SB is all-in, UTG is BB (seat ${utgSeat})`);
+    } else {
+      utgPlayer = null;
+      utgSeat = null;
+      console.log(`[POKER] Heads-up: both players all-in, no turn to set`);
+    }
   } else {
-    // Multi-way: UTG is first player clockwise after BB (only BB is excluded - dealer or SB can be UTG in 3-handed)
-    // Clockwise = decreasing seat numbers (seats numbered anticlockwise)
+    // Multi-way: UTG is first player clockwise after BB who can act
     utgSeat = bbSeat - 1;
     if (utgSeat < minSeat) utgSeat = maxSeat;
-    
-    // Find UTG - first active player clockwise after BB (only exclude BB; dealer/SB can be UTG)
     utgPlayer = activePlayers.find(p =>
-      p.seatNumber === utgSeat && p.seatNumber >= 0 && p.id !== bbPlayer.id
+      p.seatNumber === utgSeat && p.seatNumber >= 0 && p.id !== bbPlayer.id && canAct(p)
     );
-    
     if (!utgPlayer) {
       let attempts = 0;
       let searchSeat = utgSeat;
       while (!utgPlayer && attempts < activePlayers.length) {
         searchSeat = searchSeat - 1 < minSeat ? maxSeat : searchSeat - 1;
         utgPlayer = activePlayers.find(p =>
-          p.seatNumber === searchSeat && p.seatNumber >= 0 && p.id !== bbPlayer.id
+          p.seatNumber === searchSeat && p.seatNumber >= 0 && p.id !== bbPlayer.id && canAct(p)
         );
         attempts++;
       }
-      if (utgPlayer) {
-        utgSeat = utgPlayer.seatNumber;
-        console.log(`[POKER] UTG player not at calculated seat, found at seat ${utgSeat} clockwise`);
-      }
+      if (utgPlayer) utgSeat = utgPlayer.seatNumber;
     }
-    
     if (!utgPlayer) {
-      utgPlayer = activePlayers.find(p => p.seatNumber >= 0 && p.id !== bbPlayer.id);
-      if (utgPlayer) {
-        utgSeat = utgPlayer.seatNumber;
-        console.log(`[POKER] UTG fallback: using seat ${utgSeat} (${utgPlayer.user?.username || utgPlayer.userId})`);
-      }
+      utgPlayer = activePlayers.find(p => p.seatNumber >= 0 && p.id !== bbPlayer.id && canAct(p));
+      if (utgPlayer) utgSeat = utgPlayer.seatNumber;
     }
-    
     if (!utgPlayer) {
-      throw new Error(`Could not find UTG player. BB seat: ${bbSeat}, SB seat: ${sbSeat}, Dealer seat: ${dealerSeat}, Active players: ${activePlayers.length}`);
+      utgPlayer = null;
+      utgSeat = null;
+      console.log(`[POKER] Multi-way: no player can act (all all-in), no turn to set`);
     }
   }
   
-  console.log(`[POKER] UTG calculation: dealer=${dealerSeat}, sb=${sbSeat}, bb=${bbSeat}, utg=${utgSeat} (${utgPlayer.user?.username || utgPlayer.userId})`);
+  if (utgPlayer) {
+    console.log(`[POKER] UTG calculation: dealer=${dealerSeat}, sb=${sbSeat}, bb=${bbSeat}, utg=${utgSeat} (${utgPlayer.user?.username || utgPlayer.userId})`);
+  }
 
   // Create hand state (explicitly clear showdown so client doesn't show old win/lose styling)
   const state = {
@@ -969,7 +980,7 @@ export async function startHandForGame(gameId, io) {
     dealerSeat: dealerPlayer.seatNumber,
     smallBlindSeat: sbPlayer.seatNumber,
     bigBlindSeat: bbPlayer.seatNumber,
-    currentTurnUserId: utgPlayer.userId, // First to act after BB (UTG)
+    currentTurnUserId: utgPlayer ? utgPlayer.userId : null, // First to act; null if everyone all-in
     lastRaiseUserId: null, // Track who last raised (for betting completion check)
     actedPlayersInRound: new Set(), // Track which players have acted in current betting round
     players: await Promise.all(
@@ -1037,16 +1048,21 @@ export async function startHandForGame(gameId, io) {
     io.to(`game:${gameId}`).emit("game-state", payload);
   }
 
-  // Start turn timer for first player to act (UTG)
-  // CRITICAL: Ensure currentTurnUserId is UTG, not BB
-  console.log(`[POKER] Starting hand: dealer=${dealerPlayer.seatNumber}, sb=${sbPlayer.seatNumber}, bb=${bbPlayer.seatNumber}, utg=${utgPlayer.seatNumber}`);
-  console.log(`[POKER] Setting currentTurnUserId to UTG: ${utgPlayer.userId} (${utgPlayer.user?.username || 'unknown'}), NOT BB: ${bbPlayer.userId}`);
-  console.log(`[POKER] BB contribution: ${bettingRound.getPlayerContribution(bbPlayer.id)}, currentBet: ${bettingRound.currentBet}`);
-  console.log(`[POKER] UTG contribution: ${bettingRound.getPlayerContribution(utgPlayer.id)}, currentBet: ${bettingRound.currentBet}`);
-  
-  startTurnTimer(gameId, utgPlayer.userId, io);
+  console.log(`[POKER] Starting hand: dealer=${dealerPlayer.seatNumber}, sb=${sbPlayer.seatNumber}, bb=${bbPlayer.seatNumber}, utg=${utgPlayer ? utgPlayer.seatNumber : 'none (all-in)'}`);
+  if (utgPlayer) {
+    console.log(`[POKER] Setting currentTurnUserId to UTG: ${utgPlayer.userId} (${utgPlayer.user?.username || 'unknown'})`);
+    console.log(`[POKER] BB contribution: ${bettingRound.getPlayerContribution(bbPlayer.id)}, currentBet: ${bettingRound.currentBet}`);
+    console.log(`[POKER] UTG contribution: ${bettingRound.getPlayerContribution(utgPlayer.id)}, currentBet: ${bettingRound.currentBet}`);
+    startTurnTimer(gameId, utgPlayer.userId, io);
+  } else {
+    // Everyone all-in: no one to act, advance to next street
+    console.log(`[POKER] All players all-in, advancing to next street`);
+    state.currentTurnUserId = null;
+    tableState.set(gameId, state);
+    await advanceToNextStreet(gameId, io);
+  }
 
-  console.log(`[POKER] Started hand for game ${gameId}: dealer=${dealerPlayer.seatNumber}, sb=${sbPlayer.seatNumber}, bb=${bbPlayer.seatNumber}, utg=${utgPlayer.seatNumber}`);
+  console.log(`[POKER] Started hand for game ${gameId}: dealer=${dealerPlayer.seatNumber}, sb=${sbPlayer.seatNumber}, bb=${bbPlayer.seatNumber}, utg=${utgPlayer ? utgPlayer.seatNumber : 'none'}`);
   
   return state;
 }
@@ -1224,17 +1240,27 @@ function startTurnTimer(gameId, userId, io) {
 }
 
 /**
- * Auto-fold a player when their timer expires
+ * Auto-fold a player when their timer expires.
+ * If player is already all-in (can't act), just advance turn instead of folding.
  */
 async function autoFoldPlayer(gameId, userId, io) {
   try {
-    const state = await applyPlayerAction({
-      gameId,
-      userId,
-      action: "FOLD",
-      amount: 0,
-      io
-    });
+    let state;
+    try {
+      state = await applyPlayerAction({
+        gameId,
+        userId,
+        action: "FOLD",
+        amount: 0,
+        io
+      });
+    } catch (err) {
+      if (err?.message === "All-in players cannot act") {
+        await moveToNextPlayer(gameId, io);
+        return;
+      }
+      throw err;
+    }
 
     const game = await prisma.game.findUnique({
       where: { id: gameId },
@@ -2023,8 +2049,37 @@ async function handleShowdown(gameId, io, options = {}) {
     return;
   }
 
-  // Mark hand as complete BEFORE elimination (which may trigger table consolidation)
-  // This ensures hasActiveHand() returns false immediately
+  // Build and emit showdown to client BEFORE we mark hand complete or run consolidation,
+  // so the user always sees who won before any "waiting for reseating" overlay appears.
+  const showdownResults = {
+    winners: updatedWinners.map(w => ({
+      playerId: w.player.id,
+      userId: w.player.userId,
+      name: w.player.name || w.player.user?.username || `Player ${w.player.seatNumber}`,
+      seatNumber: w.player.seatNumber,
+      handCategory: w.hand.category,
+      potWon: w.potWon,
+      hand: { ...w.hand, cards: w.hand.bestFive || [] }
+    })),
+    allHands: handResults.map(r => ({
+      playerId: r.player.id,
+      userId: r.player.userId,
+      name: r.player.name || r.player.user?.username || `Player ${r.player.seatNumber}`,
+      seatNumber: r.player.seatNumber,
+      handCategory: r.hand.category,
+      strength: r.strength,
+      hand: { ...r.hand, cards: r.hand.bestFive || [] }
+    })),
+    showdownActive: true
+  };
+  state.showdownActive = true;
+  state.showdownResults = showdownResults;
+  if (io) {
+    io.to(`game:${gameId}`).emit("showdown", { gameId, results: showdownResults });
+    io.to(`game:${gameId}`).emit("game-state", buildClientGameState(game, state));
+  }
+
+  // Now mark hand complete so hasActiveHand() is false before we run consolidation
   state.currentTurnUserId = null;
   state.street = null;
   tableState.set(gameId, state);
@@ -2097,59 +2152,6 @@ async function handleShowdown(gameId, io, options = {}) {
     where: { id: gameId },
     data: { pot: 0 }
   }).catch(err => console.error(`[SHOWDOWN] Error updating game pot:`, err));
-
-  if (!game) return;
-
-  // Build result payload for clients - include winning card information
-  const showdownResults = {
-    winners: updatedWinners.map(w => ({
-      playerId: w.player.id,
-      userId: w.player.userId,
-      name: w.player.name || w.player.user?.username || `Player ${w.player.seatNumber}`,
-      seatNumber: w.player.seatNumber,
-      handCategory: w.hand.category,
-      potWon: w.potWon,
-      hand: {
-        ...w.hand,
-        cards: w.hand.bestFive || [] // Map bestFive to cards for client compatibility
-      }
-    })),
-    allHands: handResults.map(r => ({
-      playerId: r.player.id,
-      userId: r.player.userId,
-      name: r.player.name || r.player.user?.username || `Player ${r.player.seatNumber}`,
-      seatNumber: r.player.seatNumber,
-      handCategory: r.hand.category,
-      strength: r.strength,
-      hand: {
-        ...r.hand,
-        cards: r.hand.bestFive || [] // Map bestFive to cards for client compatibility
-      }
-    })),
-    showdownActive: true // Flag to indicate showdown is active
-  };
-  
-  // Mark all active players' cards as face-up for showdown
-  state.showdownActive = true;
-  state.showdownResults = showdownResults;
-  
-  // CRITICAL: Mark hand as complete BEFORE elimination triggers consolidation
-  // This ensures hasActiveHand() returns false immediately
-  state.currentTurnUserId = null; // Clear turn to mark hand as complete
-  state.street = null; // Clear street to mark hand as complete
-  tableState.set(gameId, state); // Save updated state
-
-  // Emit showdown results
-  if (io) {
-    io.to(`game:${gameId}`).emit("showdown", {
-      gameId,
-      results: showdownResults
-    });
-
-    // Also emit updated game state
-    const payload = buildClientGameState(game, state);
-    io.to(`game:${gameId}`).emit("game-state", payload);
-  }
 
   // Clear hand state after a delay (allow clients to see results clearly)
   const cleanupDelayMs = options?.cleanupDelayMs ?? 8000;

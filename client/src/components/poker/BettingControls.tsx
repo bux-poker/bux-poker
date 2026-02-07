@@ -31,8 +31,11 @@ export function BettingControls({
   const hasRaises = isPreflop ? currentBet > bigBlind : currentBet > 0;
   const canCheck = !isPreflop || (isPreflop && isBigBlind && !hasRaises && currentBet === bigBlind);
   
-  // CALL amount: how much MORE I need to add (currentBet - what I've already contributed)
-  const callAmount = Math.max(0, currentBet - myContribution);
+  // CALL amount: how much MORE I need to add, capped at my stack (can't call more than I have)
+  const toCall = Math.max(0, currentBet - myContribution);
+  const callAmount = Math.min(toCall, myChips);
+  // When my stack is less than the full call, I can only go all-in (show ALL IN, not CALL 167)
+  const isAllInOnly = myChips > 0 && toCall > myChips;
   
   // RAISE amount: total bet amount I'd raise to (currentBet + minimumRaise)
   const minRaiseAmount = currentBet + minimumRaise;
@@ -147,7 +150,7 @@ export function BettingControls({
           </button>
         ) : (
           <button
-            onClick={() => onAction("CALL", callAmount)}
+            onClick={() => onAction(isAllInOnly ? "ALL_IN" : "CALL", callAmount)}
             disabled={!isMyTurn}
             className="rounded-lg bg-blue-600 font-bold text-white shadow-lg hover:bg-blue-700 transition-colors flex-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ 
@@ -160,7 +163,7 @@ export function BettingControls({
               fontSize: `var(--action-button-text, 16px)`
             }}
           >
-            CALL {callAmount}
+            {isAllInOnly ? `ALL IN ${myChips}` : `CALL ${callAmount}`}
           </button>
         )}
         <button

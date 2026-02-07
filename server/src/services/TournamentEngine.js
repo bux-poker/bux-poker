@@ -544,6 +544,9 @@ export class TournamentEngine {
   async _doConsolidateTables(tournamentId) {
     console.log(`[TOURNAMENT] Starting table consolidation for tournament ${tournamentId}`);
 
+    // Short delay so the table that just finished can show showdown (who won) before we show "waiting"
+    await new Promise((r) => setTimeout(r, 4000));
+
     const gamesToWait = await prisma.game.findMany({
       where: { tournamentId, status: "ACTIVE" },
       select: { id: true }
@@ -913,6 +916,11 @@ export function startIdleTablesPoll() {
           }
         });
         for (const game of games) {
+          if (game.players.length === 0) {
+            await prisma.game.update({ where: { id: game.id }, data: { status: "COMPLETED" } });
+            console.log(`[TOURNAMENT] Closed empty table ${game.tableNumber} (game ${game.id})`);
+            continue;
+          }
           if (game.players.length < 2) continue;
           if (hasActiveHand(game.id)) continue;
           try {

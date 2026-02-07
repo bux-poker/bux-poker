@@ -110,8 +110,8 @@ export function TournamentLobby() {
       try {
         // Tables are included in tournament data from getTournamentById
         if (tournament.games && Array.isArray(tournament.games)) {
-          // Show all tables so remaining players total matches (count per table uses non-eliminated only)
-          setTables(tournament.games);
+          // Hide tables with 0 players (should not be shown; consolidation may not have closed them yet)
+          setTables(tournament.games.filter((g: any) => (g.players?.length ?? 0) > 0));
         }
       } catch (err) {
         console.error('Error fetching tables:', err);
