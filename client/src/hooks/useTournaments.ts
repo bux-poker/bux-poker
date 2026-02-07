@@ -73,11 +73,13 @@ export function useTournament(id: string | undefined) {
   const [error, setError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const fetchTournament = useCallback(async () => {
+  const fetchTournament = useCallback(async (opts?: { silent?: boolean }) => {
     if (!id) {
       setLoading(false);
       return;
     }
+
+    const silent = opts?.silent ?? false;
 
     // Cancel previous request if it exists
     if (abortControllerRef.current) {
@@ -89,7 +91,7 @@ export function useTournament(id: string | undefined) {
     abortControllerRef.current = abortController;
 
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await api.get(`/api/tournaments/${id}`, {
         signal: abortController.signal,
       });
@@ -118,8 +120,8 @@ export function useTournament(id: string | undefined) {
       setError(err.response?.data?.error || 'Failed to fetch tournament');
       console.error('Error fetching tournament:', err);
     } finally {
-      if (!abortController.signal.aborted) {
-      setLoading(false);
+      if (!abortController.signal.aborted && !silent) {
+        setLoading(false);
       }
     }
   }, [id]);

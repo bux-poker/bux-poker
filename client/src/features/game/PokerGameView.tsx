@@ -102,10 +102,10 @@ export function PokerGameView() {
   const { user } = useAuth();
   const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
 
-  // Keep tournament data fresh (remainingPlayers, etc.) when in active game
+  // Keep tournament data fresh (remainingPlayers, etc.) when in active game (silent = no loading flash)
   useEffect(() => {
     if (!gameState?.tournamentId || !tournament) return;
-    const interval = setInterval(refetchTournament, 10000);
+    const interval = setInterval(() => refetchTournament({ silent: true }), 10000);
     return () => clearInterval(interval);
   }, [gameState?.tournamentId, tournament, refetchTournament]);
   const lastTournamentStatusRef = useRef<string | null>(null);
@@ -194,7 +194,7 @@ export function PokerGameView() {
         }
         
         console.log('[BLIND TIMER] Refetching tournament data to check for startedAt...');
-        refetchTournament().then(() => {
+        refetchTournament({ silent: true }).then(() => {
           // After refetch, the tournament object will be updated and this useEffect will re-run
           // If tournament.startedAt is now set, the interval will be cleared
         }).catch((err) => {

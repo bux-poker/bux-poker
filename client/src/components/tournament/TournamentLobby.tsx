@@ -42,16 +42,16 @@ export function TournamentLobby() {
     if (!id) return;
     const socket = getSocket();
     const handler = (payload: { tournamentId: string }) => {
-      if (payload.tournamentId === id) refetch();
+      if (payload.tournamentId === id) refetch({ silent: true });
     };
     socket.on('tournament_updated', handler);
     return () => { socket.off('tournament_updated', handler); };
   }, [id, refetch]);
 
-  // Poll when running so tables/players stay current
+  // Poll when running so tables/players stay current (silent = no loading flash)
   useEffect(() => {
     if (!id || !tournament || (tournament.status !== 'RUNNING' && tournament.status !== 'ACTIVE')) return;
-    const interval = setInterval(refetch, 5000);
+    const interval = setInterval(() => refetch({ silent: true }), 5000);
     return () => clearInterval(interval);
   }, [id, tournament?.status, refetch]);
   const [activeTab, setActiveTab] = useState<Tab>('players');

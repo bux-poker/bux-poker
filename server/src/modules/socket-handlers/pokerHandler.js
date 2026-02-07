@@ -2138,7 +2138,6 @@ async function handleShowdown(gameId, io, options = {}) {
     Promise.all(resetPromises).then(async () => {
       console.log(`[SHOWDOWN] All players reset for next hand`);
       
-      // Move dealer button clockwise (decrease seat number, wrap if needed)
       const gameForNextHand = await prisma.game.findUnique({
         where: { id: gameId },
         include: {
@@ -2150,8 +2149,33 @@ async function handleShowdown(gameId, io, options = {}) {
       });
       
       if (gameForNextHand && gameForNextHand.players.length >= 2) {
-        // Count active (non-eliminated) players
         const activePlayerCount = gameForNextHand.players.filter(p => p.status === 'ACTIVE').length;
+        
+        if (activePlayerCount < 2 && gameForNextHand.tournament?.status === 'RUNNING') {
+          console.log(`[SHOWDOWN] Not enough active players (${activePlayerCount}) at this table - triggering consolidation to rebalance`);
+          try {
+            const { TournamentEngine } = await import("../../services/TournamentEngine.js");
+            const tournamentEngine = new TournamentEngine();
+            await tournamentEngine.consolidateTables(gameForNextHand.tournament.id);
+            const refreshed = await prisma.game.findUnique({
+              where: { id: gameId },
+              include: { players: { include: { user: true } }, tournament: true }
+            });
+            const refreshedActive = refreshed?.players?.filter(p => p.status === 'ACTIVE').length ?? 0;
+            if (refreshed && refreshedActive >= 2 && io) {
+              try {
+                await checkAndAdvanceBlindLevel(refreshed.tournament?.id, gameId, io);
+                await startHandForGame(gameId, io);
+                console.log(`[SHOWDOWN] Started new hand after consolidation (${refreshedActive} players)`);
+              } catch (err) {
+                console.error(`[SHOWDOWN] Error starting hand after consolidation:`, err);
+              }
+            }
+          } catch (consErr) {
+            console.error(`[SHOWDOWN] Consolidation failed:`, consErr);
+          }
+          return;
+        }
         
         if (activePlayerCount < 2) {
           console.log(`[SHOWDOWN] Not enough active players (${activePlayerCount}) to start new hand`);
@@ -2599,14 +2623,15 @@ async function advanceToNextStreet(gameId, io) {
       const dealerSeat = state.dealerSeat;
       const maxSeat = Math.max(...state.players.map(p => p.seatNumber));
       const minSeat = Math.min(...state.players.map(p => p.seatNumber));
+      const seatRange = maxSeat - minSeat + 1;
       
       let firstToActSeat = dealerSeat - 1; // Clockwise = decrease
       if (firstToActSeat < minSeat) firstToActSeat = maxSeat;
       
-      // Find eligible player at or after this seat
+      // Iterate through ALL seats (not just eligibleToAct.length) to find next to act
       let firstToActPlayer = eligibleToAct.find(p => p.seatNumber === firstToActSeat);
       let attempts = 0;
-      while (!firstToActPlayer && attempts < eligibleToAct.length) {
+      while (!firstToActPlayer && attempts < seatRange) {
         firstToActSeat = firstToActSeat - 1;
         if (firstToActSeat < minSeat) firstToActSeat = maxSeat;
         firstToActPlayer = eligibleToAct.find(p => p.seatNumber === firstToActSeat);

@@ -523,6 +523,8 @@ export class TournamentEngine {
       orderBy: { tableNumber: "asc" }
     });
 
+    console.log(`[TOURNAMENT] Consolidation: found ${games.length} ACTIVE table(s), player counts:`, games.map(g => `${g.tableNumber}:${g.players?.length ?? 0}`));
+
     const allPlayers = [];
     for (const game of games) {
       for (const player of game.players) {
@@ -625,6 +627,26 @@ export class TournamentEngine {
     
     if (maxPlayers - minPlayers > 1) {
       console.warn(`[TOURNAMENT] WARNING: Tables are not balanced! Max difference is ${maxPlayers - minPlayers}`);
+    }
+
+    // Start hands for tables that have 2+ players and no active hand
+    try {
+      const { startHandForGame, hasActiveHand, getIO } = await import("../modules/socket-handlers/pokerHandler.js");
+      const io = getIO();
+      if (io) {
+        for (const g of updatedGames) {
+          if (g.players.length >= 2 && !(await this.hasActiveHand(g.id))) {
+            try {
+              await startHandForGame(g.id, io);
+              console.log(`[TOURNAMENT] Started hand for table ${g.tableNumber} after rebalancing (${g.players.length} players)`);
+            } catch (err) {
+              console.error(`[TOURNAMENT] Error starting hand for table ${g.tableNumber}:`, err?.message);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[TOURNAMENT] Could not start hands after rebalancing:", e?.message);
     }
 
     // Notify all game rooms so lobby can refetch
