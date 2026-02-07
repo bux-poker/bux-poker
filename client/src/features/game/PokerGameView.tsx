@@ -101,6 +101,13 @@ export function PokerGameView() {
   const fallbackCountdownCreatedRef = useRef(false);
   const { user } = useAuth();
   const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
+
+  // Keep tournament data fresh (remainingPlayers, etc.) when in active game
+  useEffect(() => {
+    if (!gameState?.tournamentId || !tournament) return;
+    const interval = setInterval(refetchTournament, 10000);
+    return () => clearInterval(interval);
+  }, [gameState?.tournamentId, tournament, refetchTournament]);
   const lastTournamentStatusRef = useRef<string | null>(null);
   const lastPlayerStatusRef = useRef<string | null>(null);
   

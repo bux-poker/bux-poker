@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTournament } from '../../hooks/useTournaments';
 import { useAuth } from '@shared/features/auth/AuthContext';
 import { useAdmin } from '../../hooks/useAdmin';
+import { getSocket } from '../../services/socket';
 import { TournamentTimestamp } from './TournamentTimestamp';
 import api from '../../services/api';
 
@@ -35,6 +36,24 @@ export function TournamentLobby() {
   const { user } = useAuth();
   const { isAdmin } = useAdmin();
   const { tournament, loading, error, refetch } = useTournament(id);
+
+  // Live update: refetch when tournament_updated event fires (consolidation, etc.)
+  useEffect(() => {
+    if (!id) return;
+    const socket = getSocket();
+    const handler = (payload: { tournamentId: string }) => {
+      if (payload.tournamentId === id) refetch();
+    };
+    socket.on('tournament_updated', handler);
+    return () => { socket.off('tournament_updated', handler); };
+  }, [id, refetch]);
+
+  // Poll when running so tables/players stay current
+  useEffect(() => {
+    if (!id || !tournament || (tournament.status !== 'RUNNING' && tournament.status !== 'ACTIVE')) return;
+    const interval = setInterval(refetch, 5000);
+    return () => clearInterval(interval);
+  }, [id, tournament?.status, refetch]);
   const [activeTab, setActiveTab] = useState<Tab>('players');
   const [players, setPlayers] = useState<Player[]>([]);
   const [runningTime, setRunningTime] = useState<string>('');
@@ -244,8 +263,8 @@ export function TournamentLobby() {
 
           setPlayers([...activeSorted, ...eliminatedWithPosition]);
 
-          // Remaining players = non-eliminated count
-          setRemainingPlayers(active.length);
+          // Remaining players = use API value if available, else non-eliminated count
+          setRemainingPlayers((data as any).remainingPlayers ?? active.length);
 
           // Current position for logged-in user (1 = most chips among remaining, otherwise final position)
           if (user) {

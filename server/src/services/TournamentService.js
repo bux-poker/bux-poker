@@ -185,8 +185,12 @@ export class TournamentService {
         // underlying schema. If we later add explicit finishing positions,
         // they can be surfaced here as `finishingPosition`.
         const livePlayers = [];
+        let remainingPlayers = 0;
         for (const game of tournament.games || []) {
           for (const player of game.players || []) {
+            if (player.chips > 0 && player.status !== "ELIMINATED") {
+              remainingPlayers++;
+            }
             livePlayers.push({
               id: player.id,
               userId: player.userId,
@@ -207,6 +211,7 @@ export class TournamentService {
           startedAt: tournament.startedAt, // Include startedAt for blind timer
           blindLevels: blindLevels, // Add parsed blind levels
           registeredCount: registeredCount,
+          remainingPlayers: remainingPlayers, // Players with chips left in tournament
           prizePlaces: calculatedPrizePlaces, // Calculate dynamically based on registrations
           servers: (tournament.posts || []).map((post) => {
             if (!post || !post.server) {

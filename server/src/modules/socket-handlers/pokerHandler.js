@@ -1995,59 +1995,39 @@ async function handleShowdown(gameId, io, options = {}) {
   // Check for player elimination after distributing pot
   const { TournamentEngine } = await import("../../services/TournamentEngine.js");
   const tournamentEngine = new TournamentEngine();
+  const bustedPlayerIds = [];
   
-  // Eliminate ALL players with 0 chips (including ALL_IN players, not just ACTIVE)
+  // Eliminate ALL players with 0 chips (batch for single consolidation)
   for (const handResult of handResults) {
     if (handResult.player.chips <= 0 && handResult.player.status !== 'ELIMINATED') {
       console.log(`[SHOWDOWN] Player ${handResult.player.name || handResult.player.userId} eliminated with 0 chips`);
-      // Update status in state first
       handResult.player.status = 'ELIMINATED';
-      // Don't change seatNumber - keep it to avoid unique constraint violation
-      // ELIMINATED players are filtered out by status, not seatNumber
-      // Update database
       await prisma.player.update({
         where: { id: handResult.player.id },
-        data: { 
-          status: 'ELIMINATED'
-          // Keep seatNumber - eliminated players filtered by status
-        }
+        data: { status: 'ELIMINATED' }
       });
-      // Eliminate player (this may trigger table consolidation, but hand is already marked complete)
-      if (game.tournament) {
-        await tournamentEngine.onPlayerBust(game.tournament.id, handResult.player.id);
-      }
+      bustedPlayerIds.push(handResult.player.id);
     }
   }
   
-  // Also eliminate any other players with 0 chips who weren't in the hand results
-  // (e.g., players who folded early but still have 0 chips)
   const allPlayersWith0Chips = state.players.filter(
     p => p.chips <= 0 && p.status !== 'ELIMINATED' && p.status !== 'FOLDED'
   );
   
   for (const player of allPlayersWith0Chips) {
-    // Skip if already processed in handResults
-    const alreadyProcessed = handResults.some(hr => hr.player.id === player.id);
-    if (alreadyProcessed) continue;
-    
+    if (handResults.some(hr => hr.player.id === player.id)) continue;
     console.log(`[SHOWDOWN] Eliminating player ${player.name || player.userId} with ${player.chips} chips (not in hand results)`);
     player.status = 'ELIMINATED';
-    // Don't change seatNumber - keep it to avoid unique constraint violation
-    // ELIMINATED players are filtered out by status, not seatNumber
-    
     await prisma.player.update({
       where: { id: player.id },
-      data: { 
-        status: 'ELIMINATED'
-        // Keep seatNumber - eliminated players filtered by status
-      }
+      data: { status: 'ELIMINATED' }
     }).catch(err => console.error(`[SHOWDOWN] Error eliminating player ${player.id}:`, err));
-    
-    if (game.tournament) {
-      await tournamentEngine.onPlayerBust(game.tournament.id, player.id).catch(err => {
-        console.error(`[SHOWDOWN] Error notifying tournament of player bust:`, err);
-      });
-    }
+    bustedPlayerIds.push(player.id);
+  }
+  
+  // Process all busts and run consolidation once (avoids race / duplicate consolidation)
+  if (game.tournament && bustedPlayerIds.length > 0) {
+    await tournamentEngine.onPlayersBust(game.tournament.id, bustedPlayerIds);
   }
 
   if (game?.tournament && io) {

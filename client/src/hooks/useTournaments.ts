@@ -21,6 +21,7 @@ export interface Tournament {
   blindLevels: any; // JSON structure
   prizePlaces: number;
   registeredCount?: number;
+  remainingPlayers?: number;
   createdBy: string | any;
   createdAt: Date | string;
   servers?: TournamentServer[];
