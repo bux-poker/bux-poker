@@ -96,6 +96,7 @@ export function PokerGameView() {
   const [tournamentCountdown, setTournamentCountdown] = useState<{ startTime: string; seconds: number } | null>(null);
   const [eliminationInfo, setEliminationInfo] = useState<{ place: number | null } | null>(null);
   const [winnerModalOpen, setWinnerModalOpen] = useState(false);
+  const [consolidationWaiting, setConsolidationWaiting] = useState<string | null>(null);
   // Track whether we've already created a local fallback countdown to avoid
   // recreating it (which previously caused the timer to reset back to 2 mins)
   const fallbackCountdownCreatedRef = useRef(false);
@@ -253,6 +254,7 @@ export function PokerGameView() {
       if (!payload.showdownActive && (payload.street === "PREFLOP" || !payload.street)) {
         setShowdownResults(null);
       }
+      setConsolidationWaiting(null);
       setConnecting(false);
       setError(null);
     });
@@ -287,6 +289,26 @@ export function PokerGameView() {
         soundManager.play('showdown');
         // Clear after 8 seconds
         setTimeout(() => setShowdownResults(null), 8000);
+      }
+    });
+
+    socket.on("consolidation-waiting", (payload: { message: string; tournamentId: string }) => {
+      setConsolidationWaiting(payload.message);
+    });
+
+    socket.on("tournament_updated", async () => {
+      setConsolidationWaiting(null);
+      refetchTournament({ silent: true });
+      if (gameState?.tournamentId && user?.id) {
+        try {
+          const { data: t } = await api.get(`/api/tournaments/${gameState.tournamentId}`);
+          const myEntry = (t?.players || []).find((p: any) => p.userId === user.id);
+          if (myEntry?.gameId && myEntry.gameId !== id) {
+            navigate(`/game/${myEntry.gameId}`, { replace: true });
+          }
+        } catch {
+          // ignore
+        }
       }
     });
 
@@ -362,6 +384,9 @@ export function PokerGameView() {
       socket.off("game_message");
       socket.off("turn-timer-start");
       socket.off("showdown");
+      socket.off("consolidation-waiting");
+      socket.off("tournament_updated");
+      socket.off("winner");
       socket.off("tournament-starting");
       socket.off("tournament-started");
       socket.off("tournament_completed");
@@ -919,6 +944,14 @@ export function PokerGameView() {
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">
           {/* Table area - takes most of the space */}
           <div className="relative flex-1 overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900 min-h-0">
+            {consolidationWaiting && (
+              <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className="rounded-xl bg-slate-800/95 border border-slate-600 px-8 py-6 text-center max-w-md shadow-2xl">
+                  <p className="text-lg font-medium text-slate-200">{consolidationWaiting}</p>
+                  <p className="mt-2 text-sm text-slate-400">Please wait...</p>
+                </div>
+              </div>
+            )}
             <PokerTable
               gameId={gameState.id}
               turnTimer={turnTimer}

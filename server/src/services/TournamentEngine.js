@@ -504,6 +504,28 @@ export class TournamentEngine {
 
   async _doConsolidateTables(tournamentId) {
     console.log(`[TOURNAMENT] Starting table consolidation for tournament ${tournamentId}`);
+
+    const gamesToWait = await prisma.game.findMany({
+      where: { tournamentId, status: "ACTIVE" },
+      select: { id: true }
+    });
+    if (gamesToWait.length > 0) {
+      try {
+        const { getIO } = await import("../modules/socket-handlers/pokerHandler.js");
+        const io = getIO();
+        if (io) {
+          for (const g of gamesToWait) {
+            io.to(`game:${g.id}`).emit("consolidation-waiting", {
+              message: "Waiting for other tables to finish their hands before reseating...",
+              tournamentId
+            });
+          }
+        }
+      } catch (e) {
+        console.warn("[TOURNAMENT] Could not emit consolidation-waiting:", e?.message);
+      }
+    }
+
     await this.waitForAllTablesToFinishHands(tournamentId);
     
     const tournament = await prisma.tournament.findUnique({
@@ -550,12 +572,14 @@ export class TournamentEngine {
       console.log(`[TOURNAMENT] Reduced to ${numTablesNeeded} table(s)`);
     }
 
-    if (games.length <= 1) {
-      console.log(`[TOURNAMENT] Only ${games.length} table(s), no rebalancing needed`);
+    // Always redistribute when we have players - even with 1 table we must move players
+    // from closed tables into the remaining table. Previously we returned early and left
+    // players stranded at closed tables.
+    if (totalPlayers === 0) {
+      console.log(`[TOURNAMENT] No players remaining, skipping redistribution`);
       return games;
     }
 
-    // allPlayers and totalPlayers already computed above
     const numTables = games.length;
     
     // Calculate balanced distribution
