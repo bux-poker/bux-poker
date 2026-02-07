@@ -68,6 +68,25 @@ export function hasActiveHand(gameId) {
   return false;
 }
 
+/**
+ * Clear all in-memory state and timers for given game IDs.
+ * MUST be called before consolidation deletes/moves players, otherwise
+ * pending timers will try to update deleted player records (P2025).
+ */
+export function clearAllStateForGames(gameIds) {
+  if (!gameIds || gameIds.length === 0) return;
+  for (const gameId of gameIds) {
+    tableState.delete(gameId);
+    const timer = turnTimers.get(gameId);
+    if (timer) {
+      if (timer.timerId) clearTimeout(timer.timerId);
+      if (timer.graceTimerId) clearTimeout(timer.graceTimerId);
+      turnTimers.delete(gameId);
+    }
+  }
+  console.log(`[POKER] Cleared state for ${gameIds.length} game(s) before consolidation`);
+}
+
 function buildClientGameState(game, state) {
   // Calculate total pot: state.pot (accumulated from previous streets) + current betting round
   const totalPot = state 
@@ -2182,19 +2201,38 @@ async function handleShowdown(gameId, io, options = {}) {
           return;
         }
         
-        // Check if blind level should advance (for tournaments)
+        // Check if we should consolidate (uneven tables) - run even without a bust
+        if (gameForNextHand.tournament?.status === 'RUNNING') {
+          try {
+            const games = await prisma.game.findMany({
+              where: { tournamentId: gameForNextHand.tournament.id, status: 'ACTIVE' },
+              include: { players: { where: { status: 'ACTIVE' } } }
+            });
+            const counts = games.map(g => g.players.length).filter(c => c > 0);
+            if (counts.length > 1) {
+              const maxC = Math.max(...counts);
+              const minC = Math.min(...counts);
+              if (maxC - minC > 1) {
+                console.log(`[SHOWDOWN] Uneven tables (${counts.join(',')}), triggering consolidation`);
+                const { TournamentEngine } = await import("../../services/TournamentEngine.js");
+                const tournamentEngine = new TournamentEngine();
+                await tournamentEngine.consolidateTables(gameForNextHand.tournament.id);
+                return;
+              }
+            }
+          } catch (consErr) {
+            console.error(`[SHOWDOWN] Consolidation check failed:`, consErr);
+          }
+        }
+
         if (gameForNextHand.tournament && gameForNextHand.tournament.status === 'RUNNING') {
           try {
             await checkAndAdvanceBlindLevel(gameForNextHand.tournament.id, gameId, io);
           } catch (err) {
             console.error(`[SHOWDOWN] Error advancing blind level:`, err);
-            // Continue anyway - don't block hand start
           }
         }
         
-        // Dealer seat is now stored in database and will be rotated in startHandForGame
-        
-        // Start new hand (dealer will be rotated clockwise in startHandForGame)
         if (io) {
           try {
             console.log(`[SHOWDOWN] Starting new hand with ${activePlayerCount} active players...`);

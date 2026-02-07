@@ -608,6 +608,16 @@ export class TournamentEngine {
       });
     }
 
+    // CRITICAL: Clear in-memory state for ALL tournament games BEFORE deleting players.
+    // Otherwise pending turn timers will fire and try to update deleted players (P2025).
+    const allGameIds = [...new Set(allPlayers.map(p => p.gameId))];
+    try {
+      const { clearAllStateForGames } = await import("../modules/socket-handlers/pokerHandler.js");
+      clearAllStateForGames(allGameIds);
+    } catch (e) {
+      console.warn("[TOURNAMENT] Could not clear game state:", e?.message);
+    }
+
     // Step 1: Remove all players from their current tables (we'll recreate them)
     for (const player of allPlayers) {
       await prisma.player.delete({
