@@ -581,13 +581,41 @@ export class TournamentEngine {
   async _doConsolidateTables(tournamentId) {
     console.log(`[TOURNAMENT] Starting table consolidation for tournament ${tournamentId}`);
 
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { seatsPerTable: true }
+    });
+    const seatsPerTable = tournament?.seatsPerTable ?? 9;
+
+    // Load current table counts to see if we actually need to consolidate
+    let games = await prisma.game.findMany({
+      where: { tournamentId, status: "ACTIVE" },
+      include: {
+        players: {
+          where: { status: { not: "ELIMINATED" }, chips: { gt: 0 } },
+          include: { user: true }
+        }
+      },
+      orderBy: { tableNumber: "asc" }
+    });
+
+    const totalPlayers = games.reduce((sum, g) => sum + (g.players?.length ?? 0), 0);
+    const numTablesNeeded = Math.max(1, Math.ceil(totalPlayers / seatsPerTable));
+    const counts = games.map(g => g.players?.length ?? 0).filter(c => c > 0);
+    const maxC = counts.length ? Math.max(...counts) : 0;
+    const minC = counts.length ? Math.min(...counts) : 0;
+    const spread = maxC - minC;
+
+    // No need to consolidate: we're not closing tables AND tables are already balanced (spread <= 1)
+    if (games.length <= numTablesNeeded && spread <= 1) {
+      console.log(`[TOURNAMENT] Skipping consolidation: ${games.length} tables, counts ${counts.join(",")}, spread ${spread} (no rebalance needed)`);
+      return games;
+    }
+
     // Short delay so the table that just finished can show showdown (who won) before we show "waiting"
     await new Promise((r) => setTimeout(r, 4000));
 
-    const gamesToWait = await prisma.game.findMany({
-      where: { tournamentId, status: "ACTIVE" },
-      select: { id: true }
-    });
+    const gamesToWait = games.map(g => ({ id: g.id }));
     if (gamesToWait.length > 0) {
       try {
         const { getIO } = await import("../modules/socket-handlers/pokerHandler.js");
@@ -609,16 +637,9 @@ export class TournamentEngine {
     }
 
     await this.waitForAllTablesToFinishHands(tournamentId);
-    
-    const tournament = await prisma.tournament.findUnique({
-      where: { id: tournamentId },
-      select: { seatsPerTable: true }
-    });
-    const seatsPerTable = tournament?.seatsPerTable ?? 9;
-    
-    // Include ALL non-eliminated players with chips (not just ACTIVE). During a hand players
-    // are FOLDED/ALL_IN; if we only count ACTIVE we close the wrong tables and strand players.
-    let games = await prisma.game.findMany({
+
+    // Re-fetch games after wait (state may have changed)
+    games = await prisma.game.findMany({
       where: { tournamentId, status: "ACTIVE" },
       include: {
         players: {
@@ -699,7 +720,6 @@ export class TournamentEngine {
     }
 
     // CRITICAL: Clear in-memory state for ALL ACTIVE tournament games BEFORE deleting players.
-    // Use the list we saved before closing any tables so we clear closed tables' state too.
     try {
       const { clearAllStateForGames } = await import("../modules/socket-handlers/pokerHandler.js");
       clearAllStateForGames(allActiveGameIdsForClear);
@@ -707,38 +727,33 @@ export class TournamentEngine {
       console.warn("[TOURNAMENT] Could not clear game state:", e?.message);
     }
 
-    // Step 1: Remove all ACTIVE players from their current tables (we'll recreate them)
-    for (const player of allPlayers) {
-      await prisma.player.delete({
-        where: { id: player.playerId }
-      });
-    }
-
-    // Step 1b: Clear any ELIMINATED (or other) players from target games so
-    // (gameId, seatNumber) is free when we create. We only deleted ACTIVE above;
-    // busted players remain and would cause unique constraint on create.
-    for (const assignment of tableAssignments) {
-      await prisma.player.deleteMany({
-        where: { gameId: assignment.gameId }
-      });
-    }
-
-    // Step 2: Recreate players at their new tables with balanced distribution
-    for (const assignment of tableAssignments) {
-      for (let seatIndex = 0; seatIndex < assignment.players.length; seatIndex++) {
-        const { player } = assignment.players[seatIndex];
-        await prisma.player.create({
-          data: {
-            gameId: assignment.gameId,
-            userId: player.userId,
-            seatNumber: seatIndex + 1,
-            chips: player.chips,
-            holeCards: "",
-            status: "ACTIVE"
-          }
-        });
+    // Run delete + recreate in a single transaction so we never leave DB with partial state (e.g. 1 player)
+    await prisma.$transaction(async (tx) => {
+      for (const player of allPlayers) {
+        await tx.player.delete({ where: { id: player.playerId } });
       }
-    }
+      for (const assignment of tableAssignments) {
+        await tx.player.deleteMany({ where: { gameId: assignment.gameId } });
+      }
+      for (const assignment of tableAssignments) {
+        for (let seatIndex = 0; seatIndex < assignment.players.length; seatIndex++) {
+          const { player } = assignment.players[seatIndex];
+          if (!player?.userId) {
+            throw new Error(`[TOURNAMENT] Invalid player in assignment table ${assignment.tableNumber} seat ${seatIndex + 1}`);
+          }
+          await tx.player.create({
+            data: {
+              gameId: assignment.gameId,
+              userId: player.userId,
+              seatNumber: seatIndex + 1,
+              chips: player.chips,
+              holeCards: "",
+              status: "ACTIVE"
+            }
+          });
+        }
+      }
+    });
 
     // Verify balance
     const updatedGames = await prisma.game.findMany({
