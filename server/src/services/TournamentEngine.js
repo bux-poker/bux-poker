@@ -538,18 +538,20 @@ export class TournamentEngine {
     });
     const seatsPerTable = tournament?.seatsPerTable ?? 9;
     
+    // Include ALL non-eliminated players with chips (not just ACTIVE). During a hand players
+    // are FOLDED/ALL_IN; if we only count ACTIVE we close the wrong tables and strand players.
     let games = await prisma.game.findMany({
       where: { tournamentId, status: "ACTIVE" },
-      include: { 
+      include: {
         players: {
-          where: { status: "ACTIVE" },
+          where: { status: { not: "ELIMINATED" }, chips: { gt: 0 } },
           include: { user: true }
         }
       },
       orderBy: { tableNumber: "asc" }
     });
 
-    console.log(`[TOURNAMENT] Consolidation: found ${games.length} ACTIVE table(s), player counts:`, games.map(g => `${g.tableNumber}:${g.players?.length ?? 0}`));
+    console.log(`[TOURNAMENT] Consolidation: found ${games.length} ACTIVE table(s), player counts (in-tournament):`, games.map(g => `${g.tableNumber}:${g.players?.length ?? 0}`));
 
     const allActiveGameIdsForClear = games.map(g => g.id);
 
