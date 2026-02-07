@@ -216,6 +216,19 @@ export class TournamentEngine {
       where: { id: tournamentId },
       data: { startScheduledAt }
     });
+    // Start exactly when timer expires (poll every 30s would add up to 30s delay)
+    if (_scheduledStartTimers.has(tournamentId)) {
+      clearTimeout(_scheduledStartTimers.get(tournamentId).timeoutId);
+      _scheduledStartTimers.delete(tournamentId);
+    }
+    const delayMs = Math.max(0, startScheduledAt.getTime() - Date.now());
+    const timeoutId = setTimeout(() => {
+      _scheduledStartTimers.delete(tournamentId);
+      this.runScheduledStart(tournamentId).catch((err) =>
+        console.error(`[TOURNAMENT] Scheduled start timer error for ${tournamentId}:`, err)
+      );
+    }, delayMs);
+    _scheduledStartTimers.set(tournamentId, { timeoutId });
     if (socketIO) {
       for (const game of tournament.games || []) {
         socketIO.to(`game:${game.id}`).emit("tournament-starting", {
@@ -229,7 +242,7 @@ export class TournamentEngine {
         startTime: startScheduledAt.toISOString(),
         countdownSeconds: 120
       });
-      console.log(`[TOURNAMENT] Scheduled start at ${startScheduledAt.toISOString()} for tournament ${tournamentId}`);
+      console.log(`[TOURNAMENT] Scheduled start at ${startScheduledAt.toISOString()} for tournament ${tournamentId} (timer in ${(delayMs / 1000).toFixed(0)}s)`);
     }
     const updatedTournament = await prisma.tournament.findUnique({
       where: { id: tournamentId },
@@ -240,6 +253,15 @@ export class TournamentEngine {
 
   /** Run actual start (RUNNING, hands, blind timer). Used when startScheduledAt has passed. */
   async runScheduledStart(tournamentId) {
+    if (_scheduledStartTimers.has(tournamentId)) {
+      clearTimeout(_scheduledStartTimers.get(tournamentId).timeoutId);
+      _scheduledStartTimers.delete(tournamentId);
+    }
+    const existing = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { status: true }
+    });
+    if (!existing || existing.status !== "SEATED") return;
     const { getIO } = await import("../modules/socket-handlers/pokerHandler.js");
     const socketIO = getIO();
     const startedAt = new Date();
@@ -880,6 +902,9 @@ export class TournamentEngine {
     return updated;
   }
 }
+
+/** One-time timers so start runs exactly when 2 min expires (poll is backup for restarts). */
+const _scheduledStartTimers = new Map(); // tournamentId -> { timeoutId }
 
 /** Poll for tournaments that are SEATED and startScheduledAt <= now; run actual start. Survives process restart. */
 let _scheduledStartPollInterval = null;
