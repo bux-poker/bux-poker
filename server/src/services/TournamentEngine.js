@@ -4,6 +4,104 @@ import { prisma } from "../config/database.js";
 // This is intentionally simplified but provides real table assignment
 // and consolidation hooks.
 
+/**
+ * Compute current blind level index from tournament start time and blind level durations.
+ * Returns { currentLevelIndex, blindLevels } or null if tournament/blinds invalid.
+ */
+export function getTournamentBlindLevelFromTime(tournament) {
+  if (!tournament?.startedAt) return null;
+  let blindLevels = [];
+  try {
+    blindLevels = tournament.blindLevelsJson ? JSON.parse(tournament.blindLevelsJson) : [];
+  } catch (e) {
+    return null;
+  }
+  if (blindLevels.length === 0) return null;
+  const startedAt = new Date(tournament.startedAt);
+  const elapsedMs = Date.now() - startedAt.getTime();
+  let elapsedMinutes = elapsedMs / 1000 / 60;
+  let currentLevelIndex = 0;
+  for (let i = 0; i < blindLevels.length; i++) {
+    const level = blindLevels[i];
+    if (level.duration == null) {
+      currentLevelIndex = i;
+      break;
+    }
+    if (elapsedMinutes <= level.duration) {
+      currentLevelIndex = i;
+      break;
+    }
+    elapsedMinutes -= level.duration;
+    if (level.breakAfter) elapsedMinutes -= level.breakAfter;
+  }
+  return { currentLevelIndex, blindLevels };
+}
+
+/**
+ * Sync all ACTIVE games in a RUNNING tournament to the same blind level (from tournament elapsed time).
+ * Call after consolidation so all tables resume with the same blinds; also used by blind timer.
+ * Optionally emits dealer message to each table.
+ */
+export async function syncBlindLevelsToTournamentTime(tournamentId, io, options = { emitDealerMessage: true }) {
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId }
+  });
+  if (!tournament || tournament.status !== "RUNNING" || !tournament.startedAt) return null;
+  const result = getTournamentBlindLevelFromTime(tournament);
+  if (!result) return null;
+  const { currentLevelIndex, blindLevels } = result;
+  const newLevel = blindLevels[currentLevelIndex];
+  if (!newLevel) return null;
+
+  const games = await prisma.game.findMany({
+    where: { tournamentId, status: "ACTIVE" },
+    select: { id: true, tableNumber: true, currentBlindLevel: true }
+  });
+  if (games.length === 0) return null;
+
+  const updateData = {
+    currentBlindLevel: currentLevelIndex,
+    ...(newLevel.smallBlind != null && { smallBlind: newLevel.smallBlind }),
+    ...(newLevel.bigBlind != null && { bigBlind: newLevel.bigBlind })
+  };
+
+  for (const game of games) {
+    await prisma.game.update({
+      where: { id: game.id },
+      data: updateData
+    }).catch((err) => {
+      if (err.message?.includes("Unknown argument")) {
+        return prisma.game.update({
+          where: { id: game.id },
+          data: { currentBlindLevel: currentLevelIndex }
+        });
+      }
+      throw err;
+    });
+  }
+
+  if (options.emitDealerMessage && io && newLevel.smallBlind != null && newLevel.bigBlind != null) {
+    const msg = `Blinds ${newLevel.smallBlind.toLocaleString()}/${newLevel.bigBlind.toLocaleString()}`;
+    for (const game of games) {
+      io.to(`game:${game.id}`).emit("game_message", {
+        gameId: game.id,
+        message: {
+          id: `dealer-${Date.now()}-${game.id}`,
+          userId: "DEALER",
+          userName: "Dealer",
+          message: msg,
+          timestamp: Date.now(),
+          isGameMessage: true,
+          isDealerMessage: true
+        }
+      });
+    }
+  }
+
+  console.log(`[TOURNAMENT] Synced blind level to ${currentLevelIndex} for ${games.length} table(s) (${newLevel.smallBlind}/${newLevel.bigBlind})`);
+  return { currentLevelIndex, newLevel, games };
+}
+
 export class TournamentEngine {
   /**
    * Close registration: seat players into tables but don't start the game.
@@ -246,52 +344,19 @@ export class TournamentEngine {
           }
         }
 
-        // Get current level from games
         const games = await prisma.game.findMany({
-          where: {
-            tournamentId,
-            status: "ACTIVE"
-          }
+          where: { tournamentId, status: "ACTIVE" },
+          select: { id: true, currentBlindLevel: true }
         });
-
         if (games.length === 0) return;
 
-        // Check if we need to advance to next level
-        const gameLevel = games[0].currentBlindLevel || 0;
+        // Sync all tables to the level dictated by tournament elapsed time (same level for everyone)
+        const gameLevel = games[0].currentBlindLevel ?? 0;
         if (currentLevelIndex > gameLevel) {
           console.log(`[TOURNAMENT] Advancing blind level for tournament ${tournamentId} from ${gameLevel} to ${currentLevelIndex}`);
-          await this.advanceBlindLevel(tournamentId);
-          
-          // Update blinds in active games and post dealer message to each table
-          const newLevel = blindLevels[currentLevelIndex];
-          if (newLevel) {
-            const { getIO } = await import("../modules/socket-handlers/pokerHandler.js");
-            const io = getIO();
-            for (const game of games) {
-              // Update game blinds - this will affect new hands
-              // Existing hands continue with their current blinds
-              await prisma.game.update({
-                where: { id: game.id },
-                data: {
-                  smallBlind: newLevel.smallBlind,
-                  bigBlind: newLevel.bigBlind
-                }
-              });
-              // Announce new blind level at table
-              if (io) {
-                const dealerMessage = {
-                  id: `dealer-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                  userId: 'DEALER',
-                  userName: 'Dealer',
-                  message: `Blinds increase to ${newLevel.smallBlind.toLocaleString()}/${newLevel.bigBlind.toLocaleString()}`,
-                  timestamp: Date.now(),
-                  isGameMessage: true,
-                  isDealerMessage: true
-                };
-                io.to(`game:${game.id}`).emit("game_message", { gameId: game.id, message: dealerMessage });
-              }
-            }
-          }
+          const { getIO } = await import("../modules/socket-handlers/pokerHandler.js");
+          const io = getIO();
+          await syncBlindLevelsToTournamentTime(tournamentId, io, { emitDealerMessage: true });
         }
       } catch (err) {
         console.error(`[TOURNAMENT] Error in blind level timer for tournament ${tournamentId}:`, err);
@@ -656,20 +721,33 @@ export class TournamentEngine {
       console.warn(`[TOURNAMENT] WARNING: Tables are not balanced! Max difference is ${maxPlayers - minPlayers}`);
     }
 
-    // Start hands for tables that have 2+ players and no active hand
+    // Sync all tables to same blind level (from tournament time) so they resume in sync
     try {
-      const { startHandForGame, hasActiveHand, getIO } = await import("../modules/socket-handlers/pokerHandler.js");
+      const { getIO } = await import("../modules/socket-handlers/pokerHandler.js");
+      const io = getIO();
+      await syncBlindLevelsToTournamentTime(tournamentId, io, { emitDealerMessage: false });
+    } catch (e) {
+      console.warn("[TOURNAMENT] Could not sync blind levels after rebalancing:", e?.message);
+    }
+
+    // Start hands for ALL tables at once so play resumes together
+    try {
+      const { startHandForGame, getIO } = await import("../modules/socket-handlers/pokerHandler.js");
       const io = getIO();
       if (io) {
+        const startPromises = [];
         for (const g of updatedGames) {
           if (g.players.length >= 2 && !(await this.hasActiveHand(g.id))) {
-            try {
-              await startHandForGame(g.id, io);
-              console.log(`[TOURNAMENT] Started hand for table ${g.tableNumber} after rebalancing (${g.players.length} players)`);
-            } catch (err) {
-              console.error(`[TOURNAMENT] Error starting hand for table ${g.tableNumber}:`, err?.message);
-            }
+            startPromises.push(
+              startHandForGame(g.id, io)
+                .then(() => console.log(`[TOURNAMENT] Started hand for table ${g.tableNumber} after rebalancing (${g.players.length} players)`))
+                .catch((err) => console.error(`[TOURNAMENT] Error starting hand for table ${g.tableNumber}:`, err?.message))
+            );
           }
+        }
+        await Promise.all(startPromises);
+        if (startPromises.length > 0) {
+          io.emit("consolidation-complete", { tournamentId });
         }
       }
     } catch (e) {

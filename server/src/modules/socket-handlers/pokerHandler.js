@@ -2310,108 +2310,38 @@ function postDealerMessage(gameId, io, message) {
 }
 
 /**
- * Check if blind level should advance based on tournament elapsed time and advance if needed
+ * Check if blind level should advance based on tournament elapsed time.
+ * When advancing, syncs ALL tables in the tournament to the same level so every table
+ * is on the same blind level at the same time.
  */
 async function checkAndAdvanceBlindLevel(tournamentId, gameId, io) {
   try {
+    const { syncBlindLevelsToTournamentTime, getTournamentBlindLevelFromTime } = await import("../../services/TournamentEngine.js");
     const tournament = await prisma.tournament.findUnique({
       where: { id: tournamentId }
     });
 
-    if (!tournament || tournament.status !== 'RUNNING' || !tournament.startedAt) {
+    if (!tournament || tournament.status !== "RUNNING" || !tournament.startedAt) {
       return;
     }
 
-    // Parse blind levels
-    let blindLevels = [];
-    try {
-      blindLevels = tournament.blindLevelsJson ? JSON.parse(tournament.blindLevelsJson) : [];
-    } catch (e) {
-      console.error(`[POKER] Failed to parse blind levels for tournament ${tournamentId}:`, e);
-      return;
-    }
+    const result = getTournamentBlindLevelFromTime(tournament);
+    if (!result) return;
 
-    if (blindLevels.length === 0) return;
-
-    // Calculate elapsed time since tournament started
-    const now = new Date();
-    const startedAt = new Date(tournament.startedAt);
-    const elapsedMs = now.getTime() - startedAt.getTime();
-    let elapsedMinutes = elapsedMs / 1000 / 60;
-
-    // Determine current blind level based on elapsed time
-    let currentLevelIndex = 0;
-    for (let i = 0; i < blindLevels.length; i++) {
-      const level = blindLevels[i];
-      if (level.duration === null) {
-        // Final level (infinite duration)
-        currentLevelIndex = i;
-        break;
-      }
-      if (elapsedMinutes <= level.duration) {
-        currentLevelIndex = i;
-        break;
-      }
-      elapsedMinutes -= level.duration;
-      // Account for break after level
-      if (level.breakAfter) {
-        elapsedMinutes -= level.breakAfter;
-      }
-    }
-
-    // Get current level from game
+    const { currentLevelIndex } = result;
     const game = await prisma.game.findUnique({
-      where: { id: gameId }
+      where: { id: gameId },
+      select: { currentBlindLevel: true }
     });
 
     if (!game) return;
 
-    const gameLevel = game.currentBlindLevel || 0;
-    
-    // Check if we need to advance to next level
-    console.log(`[BLIND LEVEL] Tournament ${tournamentId}, game ${gameId}: elapsed=${(elapsedMs / 1000 / 60).toFixed(2)}min, calculatedLevel=${currentLevelIndex}, gameLevel=${gameLevel}`);
-    
+    const gameLevel = game.currentBlindLevel ?? 0;
+    console.log(`[BLIND LEVEL] Tournament ${tournamentId}, game ${gameId}: calculatedLevel=${currentLevelIndex}, gameLevel=${gameLevel}`);
+
     if (currentLevelIndex > gameLevel) {
-      console.log(`[POKER] Advancing blind level for game ${gameId} from ${gameLevel} to ${currentLevelIndex}`);
-      
-      const newLevel = blindLevels[currentLevelIndex];
-      if (newLevel) {
-        // Update game blinds and level
-        // Note: smallBlind/bigBlind fields may not exist in database yet if migration hasn't been run
-        await prisma.game.update({
-          where: { id: gameId },
-          data: {
-            currentBlindLevel: currentLevelIndex,
-            smallBlind: newLevel.smallBlind,
-            bigBlind: newLevel.bigBlind
-          }
-        }).catch(err => {
-          // If fields don't exist, log warning but don't fail
-          if (err.message && err.message.includes('Unknown argument')) {
-            console.warn(`[BLIND LEVEL] smallBlind/bigBlind fields not in database yet - migration needed. Error: ${err.message}`);
-            // Fallback: only update currentBlindLevel
-            return prisma.game.update({
-              where: { id: gameId },
-              data: { currentBlindLevel: currentLevelIndex }
-            }).catch(fallbackErr => {
-              console.error(`[BLIND LEVEL] Error updating currentBlindLevel:`, fallbackErr);
-            });
-          } else {
-            console.error(`[BLIND LEVEL] Error updating game blinds:`, err);
-          }
-        });
-
-        console.log(`[BLIND LEVEL] Updated game ${gameId} to level ${currentLevelIndex}: ${newLevel.smallBlind}/${newLevel.bigBlind}`);
-
-        // Post dealer message
-        if (io) {
-          postDealerMessage(gameId, io, `Blinds increase to ${newLevel.smallBlind.toLocaleString()}/${newLevel.bigBlind.toLocaleString()}`);
-        }
-      } else {
-        console.warn(`[BLIND LEVEL] No level found at index ${currentLevelIndex} for tournament ${tournamentId}`);
-      }
-    } else {
-      console.log(`[BLIND LEVEL] No advancement needed: currentLevelIndex=${currentLevelIndex} <= gameLevel=${gameLevel}`);
+      const socketIO = io || getIO();
+      await syncBlindLevelsToTournamentTime(tournamentId, socketIO, { emitDealerMessage: true });
     }
   } catch (err) {
     console.error(`[POKER] Error checking blind level advancement:`, err);
