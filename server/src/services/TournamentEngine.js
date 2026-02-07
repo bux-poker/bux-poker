@@ -519,10 +519,13 @@ export class TournamentEngine {
         const io = getIO();
         if (io) {
           for (const g of gamesToWait) {
-            io.to(`game:${g.id}`).emit("consolidation-waiting", {
-              message: "Waiting for other tables to finish their hands before reseating...",
-              tournamentId
-            });
+            const hasHand = await this.hasActiveHand(g.id);
+            if (!hasHand) {
+              io.to(`game:${g.id}`).emit("consolidation-waiting", {
+                message: "Waiting for other tables to finish their hands before reseating...",
+                tournamentId
+              });
+            }
           }
         }
       } catch (e) {
