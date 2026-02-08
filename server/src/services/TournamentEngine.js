@@ -917,13 +917,22 @@ export class TournamentEngine {
   }
 
   /** Mark a single player as bust - only updates DB, no consolidation (handled by onPlayersBust).
+   * Handles P2025: player may already have been removed by consolidation on another table.
    * @param {number} finishingPlace - Explicit place (from onPlayersBust when multiple bust same hand).
    */
   async _markPlayerBust(tournamentId, playerId, finishingPlace = null) {
-    await prisma.player.update({
-      where: { id: playerId },
-      data: { status: "ELIMINATED", chips: 0 }
-    });
+    try {
+      await prisma.player.update({
+        where: { id: playerId },
+        data: { status: "ELIMINATED", chips: 0 }
+      });
+    } catch (err) {
+      if (err?.code === "P2025") {
+        console.log(`[TOURNAMENT] Player ${playerId} already removed (consolidation), skipping bust update`);
+        return;
+      }
+      throw err;
+    }
     const place = finishingPlace ?? (await prisma.player.count({
       where: { game: { tournamentId }, chips: { gt: 0 }, status: { not: "ELIMINATED" } }
     })) + 1;
@@ -931,6 +940,7 @@ export class TournamentEngine {
       where: { id: playerId },
       data: { finishingPlace: place }
     }).catch((err) => {
+      if (err?.code === "P2025") return; // Already removed
       console.error(`[TOURNAMENT] Error setting finishingPlace for player ${playerId}:`, err);
     });
   }

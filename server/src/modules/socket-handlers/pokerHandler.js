@@ -463,7 +463,13 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
       status: player.status,
       lastAction: action
     }
-  }).catch(err => console.error('[ACTION] Error updating player in DB:', err));
+  }).catch(err => {
+    if (err?.code === 'P2025') {
+      console.log(`[ACTION] Player ${player.id} already removed (consolidation), skipping update`);
+    } else {
+      console.error('[ACTION] Error updating player in DB:', err);
+    }
+  });
 
   // Persist pot to game (async - don't block)
   prisma.game.update({
@@ -1621,7 +1627,10 @@ async function handleTestPlayerAction(gameId, userId, io) {
                   holeCards: "",
                   lastAction: null
                 }
-              }).catch(err => console.error(`[TEST PLAYER] Error resetting player ${p.id}:`, err))
+              }).catch(err => {
+                if (err?.code === 'P2025') return;
+                console.error(`[TEST PLAYER] Error resetting player ${p.id}:`, err);
+              })
             );
           
           await Promise.all(resetPromises);
@@ -2593,7 +2602,13 @@ async function advanceToNextStreet(gameId, io) {
         prisma.player.update({
           where: { id: bbPlayer.id },
           data: { chips: bbPlayer.chips }
-        }).catch(err => console.error(`[POKER] Error updating chips for player ${bbPlayer.id}:`, err));
+        }).catch(err => {
+          if (err?.code === 'P2025') {
+            console.log(`[POKER] Player ${bbPlayer.id} already removed (consolidation), skipping chip update`);
+          } else {
+            console.error(`[POKER] Error updating chips for player ${bbPlayer.id}:`, err);
+          }
+        });
         
         // Update game pot
         prisma.game.update({
@@ -2617,7 +2632,10 @@ async function advanceToNextStreet(gameId, io) {
                   holeCards: "",
                   lastAction: null
                 }
-              }).catch(err => console.error(`[POKER] Error resetting player ${p.id}:`, err));
+              }).catch(err => {
+                if (err?.code === 'P2025') return;
+                console.error(`[POKER] Error resetting player ${p.id}:`, err);
+              });
             });
           
           Promise.all(resetPromises).then(async () => {
@@ -2787,7 +2805,13 @@ async function moveToNextPlayer(gameId, io) {
           status: 'ELIMINATED',
           chips: 0
         }
-      }).catch(err => console.error(`[POKER] Error eliminating player ${player.id}:`, err));
+      }).catch(err => {
+        if (err?.code === 'P2025') {
+          console.log(`[POKER] Player ${player.id} already removed (consolidation), skipping eliminate`);
+        } else {
+          console.error(`[POKER] Error eliminating player ${player.id}:`, err);
+        }
+      });
       
       // Notify tournament engine if in tournament
       if (game?.tournament) {
@@ -3382,7 +3406,7 @@ export function registerPokerHandlers(io) {
               const bustedPlayers = state.players.filter(p => p.chips <= 0 && p.status === 'ACTIVE');
               for (const busted of bustedPlayers) {
                 console.log(`[POKER] Player ${busted.name || busted.userId} busted with 0 chips after pot award`);
-                await tournamentEngine.onPlayerBust(game.tournament.id, busted.id);
+                await tournamentEngine.onPlayerBust(game.tournament.id, busted.id).catch(() => {});
                 busted.status = 'ELIMINATED';
                 // Don't change seatNumber - keep it to avoid unique constraint violation
                 // ELIMINATED players are filtered out by status, not seatNumber
@@ -3391,6 +3415,12 @@ export function registerPokerHandlers(io) {
                   data: { 
                     status: 'ELIMINATED',
                     chips: 0
+                  }
+                }).catch(err => {
+                  if (err?.code === 'P2025') {
+                    console.log(`[POKER] Player ${busted.id} already removed (consolidation), skipping bust update`);
+                  } else {
+                    console.error(`[POKER] Error updating busted player ${busted.id}:`, err);
                   }
                 });
               }
@@ -3418,7 +3448,10 @@ export function registerPokerHandlers(io) {
                     holeCards: "",
                     lastAction: null
                   }
-                }).catch(err => console.error(`[POKER] Error resetting player ${p.id}:`, err));
+                }).catch(err => {
+                  if (err?.code === 'P2025') return;
+                  console.error(`[POKER] Error resetting player ${p.id}:`, err);
+                });
               });
               
               // Advance blind level and start new hand if tournament
