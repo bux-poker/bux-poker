@@ -97,6 +97,7 @@ export function PokerGameView() {
   const [eliminationInfo, setEliminationInfo] = useState<{ place: number | null } | null>(null);
   const [winnerModalOpen, setWinnerModalOpen] = useState(false);
   const [consolidationWaiting, setConsolidationWaiting] = useState<string | null>(null);
+  const [socketConnected, setSocketConnected] = useState(false);
   const { user } = useAuth();
   const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
 
@@ -262,9 +263,13 @@ export function PokerGameView() {
     });
 
     socket.on("connect", () => {
-      // Re-join table when reconnected
+      setSocketConnected(true);
       socket.emit("join-table", { gameId: id });
     });
+    socket.on("disconnect", () => {
+      setSocketConnected(false);
+    });
+    setSocketConnected(socket.connected);
 
     socket.on("game_message", (data: { gameId: string; message: any }) => {
       // Ensure we have the correct structure
@@ -293,19 +298,23 @@ export function PokerGameView() {
       setConsolidationWaiting(payload.message);
     });
 
-    socket.on("tournament_updated", async () => {
+    socket.on("tournament_updated", () => {
       setConsolidationWaiting(null);
       refetchTournament({ silent: true });
-      if (gameState?.tournamentId && user?.id) {
-        try {
-          const { data: t } = await api.get(`/api/tournaments/${gameState.tournamentId}`);
-          const myEntry = (t?.players || []).find((p: any) => p.userId === user.id);
-          if (myEntry?.gameId && myEntry.gameId !== id) {
-            navigate(`/game/${myEntry.gameId}`, { replace: true });
-          }
-        } catch {
-          // ignore
+    });
+    // Only redirect when tables were rebalanced (consolidation), not on every tournament_updated
+    socket.on("consolidation-complete", async (payload: { tournamentId: string }) => {
+      if (payload.tournamentId !== gameState?.tournamentId && payload.tournamentId !== tournament?.id) return;
+      refetchTournament({ silent: true });
+      if (!user?.id) return;
+      try {
+        const { data: t } = await api.get(`/api/tournaments/${payload.tournamentId}`);
+        const myEntry = (t?.players || []).find((p: any) => p.userId === user.id);
+        if (myEntry?.gameId && myEntry.gameId !== id) {
+          navigate(`/game/${myEntry.gameId}`, { replace: true });
         }
+      } catch {
+        // ignore
       }
     });
 
@@ -378,11 +387,13 @@ export function PokerGameView() {
       socket.off("game-state");
       socket.off("error");
       socket.off("connect");
+      socket.off("disconnect");
       socket.off("game_message");
       socket.off("turn-timer-start");
       socket.off("showdown");
       socket.off("consolidation-waiting");
       socket.off("tournament_updated");
+      socket.off("consolidation-complete");
       socket.off("winner");
       socket.off("tournament-starting");
       socket.off("tournament-started");
@@ -788,6 +799,12 @@ export function PokerGameView() {
 
   return (
     <div className="flex h-screen w-screen flex-col bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden">
+      {!socketConnected && gameState && (
+        <div className="flex items-center justify-between gap-4 bg-amber-500/20 border-b border-amber-500/40 px-4 py-2 text-amber-200 text-sm shrink-0">
+          <span>Connection lost. Game may be out of date.</span>
+          <button type="button" onClick={() => getSocket().connect()} className="rounded bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-500">Reconnect</button>
+        </div>
+      )}
       {/* Elimination modal */}
       {eliminationInfo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">

@@ -838,12 +838,20 @@ export class TournamentEngine {
     const remaining = await prisma.player.count({
       where: { game: { tournamentId }, chips: { gt: 0 }, status: "ACTIVE" }
     });
-    if (remaining <= 1) {
+    // Only complete when exactly one player left (one winner). remaining === 0 would be a bug.
+    if (remaining === 1) {
       const winner = await prisma.player.findFirst({
         where: { game: { tournamentId }, chips: { gt: 0 }, status: "ACTIVE" },
         include: { user: true, game: true }
       });
       if (winner) {
+        const current = await prisma.tournament.findUnique({
+          where: { id: tournamentId },
+          select: { status: true }
+        });
+        if (current?.status === "COMPLETED") {
+          return; // Already completed (e.g. race) - do not post Discord again
+        }
         await prisma.player.update({
           where: { id: winner.id },
           data: { finishingPlace: 1 }
@@ -865,7 +873,7 @@ export class TournamentEngine {
           console.error("[TOURNAMENT] Error posting winners embed:", err);
         }
       }
-    } else {
+    } else if (remaining > 1) {
       await this.consolidateTables(tournamentId);
     }
   }
