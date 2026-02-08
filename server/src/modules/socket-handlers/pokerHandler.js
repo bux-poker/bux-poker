@@ -1860,11 +1860,27 @@ async function handleShowdown(gameId, io, options = {}) {
     };
   }).filter(result => result.hand !== null);
 
-  if (handResults.length === 0) {
-    console.error(`[SHOWDOWN] No valid hands evaluated`);
-    return;
-  }
+  let totalWon;
+  let sidePots = [];
 
+  if (handResults.length === 0) {
+    // Chip leak (e.g. 26k -> 9k): we used to return here without awarding the pot. Chips had already been
+    // taken from players into state.pot; they were never given to anyone, so they left the economy. Split pot so they are not lost.
+    console.error(`[SHOWDOWN] No valid hands evaluated - splitting pot among ${activePlayers.length} active players to avoid chip leak`);
+    totalWon = new Map();
+    const splitAmount = Math.floor(state.pot / activePlayers.length);
+    const remainder = state.pot % activePlayers.length;
+    activePlayers.forEach((p, i) => {
+      const amount = splitAmount + (i < remainder ? 1 : 0);
+      totalWon.set(p.id, amount);
+      p.chips += amount;
+    });
+    handResults = activePlayers.map(p => ({
+      player: p,
+      hand: { category: 'Split (no valid hands)', bestFive: [] },
+      strength: 0
+    }));
+  } else {
   // Find maximum strength (best hand)
   const maxStrength = Math.max(...handResults.map(r => r.strength));
   const winners = handResults.filter(r => r.strength === maxStrength);
@@ -1912,7 +1928,7 @@ async function handleShowdown(gameId, io, options = {}) {
   
   // Calculate side pots correctly
   // Side pot logic: For each contribution level, create a pot with players who contributed at least that amount
-  const sidePots = [];
+  sidePots = [];
   let previousLevel = 0;
   
   for (let i = 0; i < contributionAmounts.length; i++) {
@@ -1971,7 +1987,7 @@ async function handleShowdown(gameId, io, options = {}) {
   }
   
   // Distribute each side pot (skip pots with amount <= 0)
-  const totalWon = new Map();
+  totalWon = new Map();
   activePlayers.forEach(p => totalWon.set(p.id, 0));
 
   // Heads-up: the single winner takes the entire pot (no "orphan" side pot to the loser)
@@ -2008,7 +2024,8 @@ async function handleShowdown(gameId, io, options = {}) {
       console.log(`[SHOWDOWN]   Distributing ${amount} chips to ${winner.player.name || winner.player.userId} (seat ${winner.player.seatNumber}) from side pot level ${pot.level}`);
     });
   }
-  
+  }
+
   // Update player chips in database – MUST complete before we clear state / start next hand.
   // If a player was already removed (e.g. by consolidation), skip update (P2025).
   await Promise.all(
