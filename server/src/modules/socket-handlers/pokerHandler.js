@@ -51,11 +51,9 @@ export function hasActiveHand(gameId) {
   const state = tableState.get(gameId);
   if (!state) return false;
   
-  // If showdown is active, the hand is complete (just showing results)
-  // Consolidation can proceed
-  if (state.showdownActive) {
-    return false;
-  }
+  // Do NOT consider showdownActive as "hand complete" - we still need to update chips,
+  // process busts, and call onPlayersBust. Consolidation must wait until we've cleared state.
+  // (Previously returning false here caused consolidation to delete players mid-showdown.)
   
   // If there's a current turn, hand is active
   if (state.currentTurnUserId) {
@@ -295,20 +293,34 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
       }
       
       // Only proceed with BET/RAISE if amount is still positive and would be a raise
-      state.bettingRound.bet(player.id, amount);
+      // When opponent has fewer chips than min raise, bet() would throw - use short-raise path
+      const activeCount = state.players.filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED').length;
+      const isHeadsUpPot = activeCount === 2;
+      const raiseAmount = newContribution - currentBet;
+      const minRaise = state.bettingRound.minimumRaise || state.bettingRound.bigBlind || 20;
+      const isShortRaise = raiseAmount > 0 && raiseAmount < minRaise;
+      const isGoingAllIn = amount >= player.chips;
+      if (isShortRaise && (isGoingAllIn || isHeadsUpPot)) {
+        // Allow short raise when going all-in or heads-up (opponent can't call a full raise)
+        state.bettingRound.playerBets.set(player.id, newContribution);
+        if (newContribution > state.bettingRound.currentBet) {
+          state.bettingRound.currentBet = newContribution;
+          state.lastRaiseUserId = player.userId;
+          state.actedPlayersInRound.clear();
+        }
+        state.actedPlayersInRound.add(userId);
+      } else {
+        state.bettingRound.bet(player.id, amount);
+        state.lastRaiseUserId = player.userId;
+        state.actedPlayersInRound.clear();
+        state.actedPlayersInRound.add(userId);
+      }
       player.chips -= amount;
       if (player.chips < 0) {
         console.error(`[ACTION] WARNING: player ${playerName} chips went negative after ${action}. Clamping to 0.`, player.chips);
         player.chips = 0;
       }
-      // Don't update state.pot here - it's accumulated when advancing streets
-      // state.pot should only change when collecting from betting round
-      state.lastRaiseUserId = player.userId; // Track who raised
-      // Reset acted players when someone raises - all players need to act again
-      state.actedPlayersInRound.clear();
-      // Mark the raiser as having acted (they just raised)
-      state.actedPlayersInRound.add(userId);
-      
+
       const newBet = state.bettingRound.currentBet;
       const finalContribution = state.bettingRound.getPlayerContribution(player.id);
       console.log(`[ACTION] After ${action}: currentBet=${newBet}, playerContribution=${finalContribution}, lastRaiseUserId=${state.lastRaiseUserId}, remainingChips=${player.chips}`);
@@ -918,8 +930,28 @@ async function _startHandForGameBody(gameId, io) {
       utgSeat = null;
       console.log(`[POKER] Heads-up: both players all-in, no turn to set`);
     }
+  } else if (activePlayers.length === 3) {
+    // Three-handed: UTG is the Button (dealer) - correct preflop order is Button, SB, BB
+    utgPlayer = activePlayers.find(p => p.seatNumber === dealerSeat && p.id !== bbPlayer.id && canAct(p));
+    if (!utgPlayer) {
+      // Dealer can't act (e.g. all-in) - find first after dealer: SB, then BB
+      let searchSeat = dealerSeat - 1;
+      if (searchSeat < minSeat) searchSeat = maxSeat;
+      for (let i = 0; i < 2; i++) {
+        utgPlayer = activePlayers.find(p => p.seatNumber === searchSeat && p.id !== bbPlayer.id && canAct(p));
+        if (utgPlayer) break;
+        searchSeat = searchSeat - 1 < minSeat ? maxSeat : searchSeat - 1;
+      }
+    }
+    utgSeat = utgPlayer ? utgPlayer.seatNumber : null;
+    if (utgPlayer) {
+      console.log(`[POKER] Three-handed: UTG is seat ${utgSeat} (Button first when able)`);
+    } else {
+      utgPlayer = null;
+      utgSeat = null;
+    }
   } else {
-    // Multi-way: UTG is first player clockwise after BB who can act
+    // Multi-way (4+): UTG is first player clockwise after BB who can act
     utgSeat = bbSeat - 1;
     if (utgSeat < minSeat) utgSeat = maxSeat;
     utgPlayer = activePlayers.find(p =>
@@ -1837,11 +1869,11 @@ async function handleShowdown(gameId, io, options = {}) {
   let totalWon;
   let sidePots = [];
 
-  // Build totalContributions early - needed for side pots AND bust place ordering (Robert's Rules)
-  // CRITICAL: For SIDE POTS, use ONLY activePlayers (non-folded) - folded players' chips are in the pot
-  // but they can't win. Including them inflates contribution levels and causes pot mismatch.
+  // Build totalContributions - include ALL players who put chips in (active + folded) so side pot
+  // amounts sum to state.pot. Folded players can't win, but their chips are in the pot.
   const totalContributions = new Map();
-  activePlayers.forEach(player => {
+  const allPlayersInHand = state.players.filter(p => p.status !== 'ELIMINATED');
+  allPlayersInHand.forEach(player => {
     const handContribution = player.contributions || 0;
     const currentContribution = state.bettingRound.getPlayerContribution(player.id) || 0;
     totalContributions.set(player.id, handContribution + currentContribution);
@@ -1891,18 +1923,20 @@ async function handleShowdown(gameId, io, options = {}) {
   sidePots = [];
   let previousLevel = 0;
   
+  const nonFoldedIds = new Set(activePlayers.map(p => p.id));
   for (let i = 0; i < contributionAmounts.length; i++) {
     const currentLevel = contributionAmounts[i];
     
-    // Find all players who contributed at least this amount (eligible for this side pot)
+    // Pot amount: count of ALL players (incl folded) who contributed >= level
+    const contributorCount = Array.from(totalContributions.entries()).filter(([, c]) => c >= currentLevel).length;
+    // Who can win: only non-folded players who contributed >= level
     const eligiblePlayerIds = Array.from(totalContributions.entries())
-      .filter(([id, contribution]) => contribution >= currentLevel)
+      .filter(([id, contribution]) => contribution >= currentLevel && nonFoldedIds.has(id))
       .map(([id]) => id);
     
-    if (eligiblePlayerIds.length === 0) continue;
+    if (contributorCount === 0) continue;
     
-    // Calculate pot amount: each eligible player contributes (currentLevel - previousLevel)
-    const potAmount = (currentLevel - previousLevel) * eligiblePlayerIds.length;
+    const potAmount = (currentLevel - previousLevel) * contributorCount;
     
     if (potAmount > 0) {
       sidePots.push({
@@ -2104,11 +2138,8 @@ async function handleShowdown(gameId, io, options = {}) {
     io.to(`game:${gameId}`).emit("game-state", buildClientGameState(game, state));
   }
 
-  // Now mark hand complete so hasActiveHand() is false before we run consolidation
-  state.currentTurnUserId = null;
-  state.street = null;
-  tableState.set(gameId, state);
-  console.log(`[SHOWDOWN] Marked hand as complete - hasActiveHand will now return false`);
+  // Do NOT mark hand complete yet - hasActiveHand must stay true until after onPlayersBust,
+  // otherwise consolidation can run and delete our players mid-showdown (P2025 race).
 
   // Check for player elimination after distributing pot
   // Robert's Rules: "If two (or more) players go broke during the same hand, the player
@@ -2180,6 +2211,12 @@ async function handleShowdown(gameId, io, options = {}) {
   if (game?.tournament && io) {
     await emitIfTournamentCompleted(game.tournament.id, gameId, io);
   }
+
+  // Now mark hand complete - hasActiveHand can return false so consolidation may proceed
+  state.currentTurnUserId = null;
+  state.street = null;
+  tableState.set(gameId, state);
+  console.log(`[SHOWDOWN] Marked hand as complete - hasActiveHand will now return false`);
 
   // Reset pot
   state.pot = 0;
@@ -3101,17 +3138,19 @@ async function moveToNextPlayer(gameId, io) {
       // Don't start timer if player doesn't need to act - check if betting is complete and advance
       state.currentTurnUserId = null;
       
-      // Check if betting is complete and advance if needed
+      // Check if betting is complete and advance if needed (use seat map to ignore ghosts)
       const activePlayerIds = state.players
         .filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED')
         .map(p => p.id);
+      const presentPlayerIds = new Set([...seatMap.values()].map(p => p.id));
       
       const bettingComplete = state.bettingRound.isBettingComplete(
         activePlayerIds,
         state.lastRaiseUserId,
         state.currentTurnUserId,
         state.players,
-        state.actedPlayersInRound || new Set()
+        state.actedPlayersInRound || new Set(),
+        presentPlayerIds
       );
       
       if (bettingComplete) {
@@ -3171,18 +3210,19 @@ async function moveToNextPlayer(gameId, io) {
     state.currentTurnUserId = null;
     
     // Immediately check if betting is complete and advance if needed
-    // This ensures post-flop betting rounds complete correctly
-    // Note: Only do this if no player needs to act, otherwise the action handler will check
+    // Use presentPlayerIds (players in seat map) to ignore ghosts - consolidated players may still be in state
     const activePlayerIds = state.players
       .filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED')
       .map(p => p.id);
+    const presentPlayerIds = new Set([...seatMap.values()].map(p => p.id));
     
     const bettingComplete = state.bettingRound.isBettingComplete(
       activePlayerIds,
       state.lastRaiseUserId,
       state.currentTurnUserId, // This is now null
       state.players,
-      state.actedPlayersInRound || new Set()
+      state.actedPlayersInRound || new Set(),
+      presentPlayerIds
     );
     
     if (bettingComplete && io) {

@@ -1,5 +1,11 @@
 import { useState, useEffect } from "react";
 
+interface PlayerForBetting {
+  chips: number;
+  status: string;
+  userId?: string;
+}
+
 interface BettingControlsProps {
   onAction: (action: string, amount: number) => void;
   currentBet?: number;
@@ -10,6 +16,8 @@ interface BettingControlsProps {
   isBigBlind?: boolean;
   isMyTurn?: boolean; // Whether it's currently the player's turn
   myContribution?: number; // How much I've already contributed this round
+  players?: PlayerForBetting[]; // For heads-up short-stack: allow bet when opponent has < min raise
+  myUserId?: string;
 }
 
 export function BettingControls({ 
@@ -22,6 +30,8 @@ export function BettingControls({
   isBigBlind = false,
   isMyTurn = false,
   myContribution = 0, // How much I've already contributed this round
+  players = [],
+  myUserId,
 }: BettingControlsProps) {
   const [raiseAmount, setRaiseAmount] = useState(bigBlind * 2);
 
@@ -39,6 +49,13 @@ export function BettingControls({
   
   // RAISE amount: total bet amount I'd raise to (currentBet + minimumRaise)
   const minRaiseAmount = currentBet + minimumRaise;
+  // Heads-up with short stack: opponent may have < min raise, so we can bet any amount that puts them all-in
+  const activePlayers = players.filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
+  const opponent = activePlayers.find(p => p.userId !== myUserId);
+  const opponentChips = opponent?.chips ?? 0;
+  const isHeadsUpShortStack = activePlayers.length === 2 && opponentChips > 0 && opponentChips < minimumRaise;
+  // When heads-up vs short stack: min raise = currentBet + opponent's remaining (put them all-in)
+  const effectiveMinRaise = isHeadsUpShortStack ? currentBet + Math.min(minimumRaise, opponentChips) : minRaiseAmount;
 
   // Update raise amount when current bet changes
   useEffect(() => {
@@ -46,13 +63,13 @@ export function BettingControls({
       // Preflop, no bets yet - min raise is 2x big blind
       setRaiseAmount(bigBlind * 2);
     } else if (currentBet > 0) {
-      // There's a current bet - min raise is current bet + minimum raise
-      setRaiseAmount(minRaiseAmount);
+      // There's a current bet - use effective min (allows short raise when heads-up vs short stack)
+      setRaiseAmount(effectiveMinRaise);
     } else {
       // Post-flop, no bets yet - min bet is big blind
       setRaiseAmount(bigBlind);
     }
-  }, [currentBet, bigBlind, minimumRaise, isPreflop, minRaiseAmount]);
+  }, [currentBet, bigBlind, minimumRaise, isPreflop, minRaiseAmount, effectiveMinRaise]);
 
   const handlePreset = (preset: string) => {
     switch (preset) {
@@ -167,7 +184,11 @@ export function BettingControls({
           </button>
         )}
         <button
-          onClick={() => onAction(actionLabel, actionAmount)}
+          onClick={() => {
+            // Server expects additional chips to put in, not total; BET/RAISE displays total
+            const amountToSend = (actionLabel === "BET" || actionLabel === "RAISE") ? actionAmount - myContribution : actionAmount;
+            onAction(actionLabel, amountToSend);
+          }}
           disabled={!isMyTurn}
           className="rounded-lg bg-emerald-600 font-bold text-white shadow-lg hover:bg-emerald-700 transition-colors flex-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ 
@@ -260,8 +281,8 @@ export function BettingControls({
         <div className="flex items-center gap-2">
             <button
               onClick={() => {
-                const minAmount = isPreflop && currentBet === 0 ? bigBlind * 2 : (currentBet > 0 ? minRaiseAmount : bigBlind);
-                setRaiseAmount(Math.max(minAmount, raiseAmount - minimumRaise));
+                const minAmount = isPreflop && currentBet === 0 ? bigBlind * 2 : (currentBet > 0 ? effectiveMinRaise : bigBlind);
+                setRaiseAmount(Math.max(minAmount, raiseAmount - (isHeadsUpShortStack ? Math.max(1, minimumRaise / 2) : minimumRaise)));
               }}
               disabled={!isMyTurn}
               className="flex items-center justify-center rounded-full bg-slate-700 font-bold text-white hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -289,16 +310,16 @@ export function BettingControls({
             }}
             value={raiseAmount}
             onChange={(e) => {
-              const minAmount = isPreflop && currentBet === 0 ? bigBlind * 2 : (currentBet > 0 ? minRaiseAmount : bigBlind);
+              const minAmount = isPreflop && currentBet === 0 ? bigBlind * 2 : (currentBet > 0 ? effectiveMinRaise : bigBlind);
               const val = Math.max(minAmount, Math.min(myChips, Number(e.target.value) || minAmount));
               setRaiseAmount(val);
             }}
             onWheel={(e) => e.currentTarget.blur()}
-            min={isPreflop && currentBet === 0 ? bigBlind * 2 : (currentBet > 0 ? minRaiseAmount : bigBlind)}
+            min={isPreflop && currentBet === 0 ? bigBlind * 2 : (currentBet > 0 ? effectiveMinRaise : bigBlind)}
             max={myChips}
           />
           <button
-            onClick={() => setRaiseAmount(Math.min(myChips, raiseAmount + minimumRaise))}
+            onClick={() => setRaiseAmount(Math.min(myChips, raiseAmount + (isHeadsUpShortStack ? Math.max(1, minimumRaise / 2) : minimumRaise)))}
             disabled={!isMyTurn}
             className="flex items-center justify-center rounded-full bg-slate-700 font-bold text-white hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             style={{

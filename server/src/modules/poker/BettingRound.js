@@ -102,8 +102,9 @@ export class BettingRound {
    * @param {string|null} currentTurnUserId - User ID of the player whose turn it currently is
    * @param {Array} allPlayers - All players with their userIds and seatNumbers (to determine turn order)
    * @param {Set} actedPlayersInRound - Set of userIds who have acted in this betting round
+   * @param {Set|null} [presentPlayerIds] - If provided, only require these players to have acted (ignore ghosts)
    */
-  isBettingComplete(activePlayerIds, lastRaiseUserId, currentTurnUserId, allPlayers, actedPlayersInRound = new Set()) {
+  isBettingComplete(activePlayerIds, lastRaiseUserId, currentTurnUserId, allPlayers, actedPlayersInRound = new Set(), presentPlayerIds = null) {
     if (activePlayerIds.length <= 1) return true; // Only one or zero active players
     
     // Get contributions for all active players
@@ -142,8 +143,11 @@ export class BettingRound {
     // 2. AND all active players have either acted OR are all-in (can't act)
     if (!lastRaiseUserId) {
       // No raise - betting is complete when all active players have acted once OR are all-in
-      // Get userIds and all-in status for active players
-      const activePlayerInfo = activePlayerIds.map(id => {
+      // If presentPlayerIds given, only consider those (ignore ghosts/consolidated players)
+      const idsToCheck = presentPlayerIds
+        ? activePlayerIds.filter(id => presentPlayerIds.has(id))
+        : activePlayerIds;
+      const activePlayerInfo = idsToCheck.map(id => {
         const player = allPlayers.find(p => p.id === id);
         return {
           userId: player?.userId || id,
@@ -151,7 +155,7 @@ export class BettingRound {
         };
       });
       
-      // Check if all active players have either acted OR are all-in
+      // Check if all active players (present at table) have either acted OR are all-in
       const allHaveActedOrAllIn = activePlayerInfo.every(({ userId, isAllIn }) => {
         if (isAllIn) {
           return true; // All-in players can't act, so they're considered "done"

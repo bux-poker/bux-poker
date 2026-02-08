@@ -1035,6 +1035,8 @@ export function PokerGameView() {
                 isBigBlind={myPlayer?.seatNumber === gameState.bigBlindSeat}
                 isMyTurn={gameState.currentTurnUserId === user?.id}
                 myContribution={myContribution}
+                players={gameState.players}
+                myUserId={user?.id}
               />
           </div>
         </div>
