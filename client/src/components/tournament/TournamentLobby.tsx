@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTournament } from '../../hooks/useTournaments';
 import { useAuth } from '@shared/features/auth/AuthContext';
@@ -79,7 +79,6 @@ export function TournamentLobby() {
   const [startRequested, setStartRequested] = useState(false);
   const [tables, setTables] = useState<any[]>([]);
   const [myGameId, setMyGameId] = useState<string | null>(null);
-  const previousMyGameIdRef = useRef<string | null>(null);
 
   // Clear start-requested flag once tournament is actually running (after refetch)
   useEffect(() => {
@@ -147,39 +146,9 @@ export function TournamentLobby() {
     fetchMyTable();
   }, [tournament, user, id]);
 
-  // Auto-open game table in new window only when first assigned to a table (SEATED/RUNNING).
-  // On reseat (myGameId changed from A to B), do NOT open a new window - the existing game tab
-  // receives consolidation-complete and navigates to the new table in the same window.
-  useEffect(() => {
-    if (!myGameId || !tournament) return;
-
-    const shouldAutoNavigate = tournament.status === 'SEATED' || tournament.status === 'RUNNING';
-    if (!shouldAutoNavigate) return;
-
-    const prev = previousMyGameIdRef.current;
-    previousMyGameIdRef.current = myGameId;
-    if (prev !== null && prev !== myGameId) {
-      return;
-    }
-
-    const openedWindows = localStorage.getItem('openedGameWindows');
-    const openedWindowsArray = openedWindows ? JSON.parse(openedWindows) : [];
-    if (openedWindowsArray.includes(myGameId)) return;
-
-    console.log(`[TOURNAMENT] Auto-opening game table in new window: ${myGameId}`);
-    const gameWindow = window.open(`/game/${myGameId}`, '_blank', 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
-    if (gameWindow) {
-      gameWindow.addEventListener('load', () => {
-        setTimeout(() => {
-          if (gameWindow.document.documentElement.requestFullscreen) {
-            gameWindow.document.documentElement.requestFullscreen().catch(() => {});
-          }
-        }, 500);
-      });
-    }
-    openedWindowsArray.push(myGameId);
-    localStorage.setItem('openedGameWindows', JSON.stringify(openedWindowsArray));
-  }, [myGameId, tournament?.status]);
+  // Do NOT auto-open the game from the lobby - it causes duplicate tabs when the user
+  // already has the game open. Open game only via explicit "Join table" / "Your table" click.
+  // On reseat, the existing game tab receives consolidation-complete and navigates in-place.
 
   // Calculate running tournament stats + sync blinds / remaining players with game state
   useEffect(() => {

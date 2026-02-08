@@ -627,28 +627,31 @@ async function _startHandForGameBody(gameId, io) {
     return;
   }
 
-  // Get tournament blind levels - use current level from game, not always first level
-  let smallBlind = 10;
-  let bigBlind = 20;
-  
+  // Get tournament blind levels - use current level from game, not always first level.
+  // Tournament default when config missing/empty: 25/50. Non-tournament: 10/20.
+  const isTournamentGame = !!game.tournamentId;
+  let smallBlind = isTournamentGame ? 25 : 10;
+  let bigBlind = isTournamentGame ? 50 : 20;
+
   if (game.tournament?.blindLevelsJson) {
     try {
-      const blindLevels = JSON.parse(game.tournament.blindLevelsJson);
-      if (blindLevels && blindLevels.length > 0) {
-        // Use currentBlindLevel from game (updated by checkAndAdvanceBlindLevel)
-        // If not set, default to first level (0)
+      const raw = JSON.parse(game.tournament.blindLevelsJson);
+      const blindLevels = Array.isArray(raw) ? raw : (raw?.levels || raw?.blindLevels || []);
+      if (blindLevels.length > 0) {
         const currentLevelIndex = game.currentBlindLevel ?? 0;
-        const currentLevel = blindLevels[currentLevelIndex] || blindLevels[0];
-        smallBlind = currentLevel.smallBlind || 10;
-        bigBlind = currentLevel.bigBlind || 20;
-        
-        console.log(`[POKER] Using blind level ${currentLevelIndex}: ${smallBlind}/${bigBlind}`);
+        const currentLevel = blindLevels[currentLevelIndex] ?? blindLevels[0];
+        const sb = currentLevel.smallBlind ?? currentLevel.small;
+        const bb = currentLevel.bigBlind ?? currentLevel.big;
+        if (sb != null && bb != null) {
+          smallBlind = sb;
+          bigBlind = bb;
+          console.log(`[POKER] Using blind level ${currentLevelIndex}: ${smallBlind}/${bigBlind}`);
+        }
       }
     } catch (e) {
-      console.warn("Failed to parse blind levels, using defaults");
+      console.warn("[POKER] Failed to parse tournament blind levels, using tournament default:", e?.message);
     }
-  } else if (game.smallBlind && game.bigBlind) {
-    // Fallback: use blinds from game record if tournament blind levels not available
+  } else if (game.smallBlind != null && game.bigBlind != null) {
     smallBlind = game.smallBlind;
     bigBlind = game.bigBlind;
     console.log(`[POKER] Using blinds from game record: ${smallBlind}/${bigBlind}`);
@@ -803,18 +806,16 @@ async function _startHandForGameBody(gameId, io) {
     throw new Error(`Could not find SB or BB players. Dealer seat: ${dealerSeat}, SB seat: ${sbSeat}, BB seat: ${bbSeat}`);
   }
 
-  // Deal hole cards ONLY to active players (eliminated players should not receive cards)
-  // IMPORTANT: Filter out eliminated players
-  // IMPORTANT: We must keep a consistent ordering between the players we deal to
-  // and the players we later persist holeCards for. We use seatNumber ordering
-  // for both dealing and mapping so that cards are assigned to the correct seats.
+  // Deal hole cards to ALL non-eliminated players (including 0-chip all-in from previous hand).
+  // If we only deal to chips > 0, players who are all-in at hand start get no cards and
+  // showdown fails with "invalid hole cards".
   const deck = tournamentEngine.createShuffledDeck();
   const activeDealtPlayers = game.players
-    .filter(p => p.status === 'ACTIVE' && p.chips > 0) // Only ACTIVE players with chips (not ELIMINATED)
+    .filter(p => p.status !== 'ELIMINATED')
     .sort((a, b) => a.seatNumber - b.seatNumber);
   
   if (activeDealtPlayers.length < 2) {
-    throw new Error(`Not enough active players to deal cards. Found ${activeDealtPlayers.length} active players with valid seats.`);
+    throw new Error(`Not enough active players to deal cards. Found ${activeDealtPlayers.length} non-eliminated players.`);
   }
   
   console.log(`[POKER] Dealing cards to ${activeDealtPlayers.length} active players (filtered from ${game.players.length} total players)`);
@@ -1821,12 +1822,20 @@ async function handleShowdown(gameId, io, options = {}) {
 
   // Evaluate all active players' hands
   const handResults = activePlayers.map(player => {
-    if (!player.holeCards || !Array.isArray(player.holeCards) || player.holeCards.length !== 2) {
+    let holeCards = player.holeCards;
+    if (typeof holeCards === 'string' && holeCards.trim()) {
+      try {
+        holeCards = JSON.parse(holeCards);
+      } catch (e) {
+        holeCards = null;
+      }
+    }
+    if (!holeCards || !Array.isArray(holeCards) || holeCards.length !== 2) {
       console.warn(`[SHOWDOWN] Player ${player.name || player.userId} (seat ${player.seatNumber}) has invalid hole cards:`, player.holeCards);
       return { player, hand: null, strength: -1 };
     }
 
-    const sevenCards = [...state.communityCards, ...player.holeCards];
+    const sevenCards = [...state.communityCards, ...holeCards];
 
     // Debug logging: show full 7-card hand for each player at showdown so we
     // can verify the server is evaluating the same cards you see on screen.
@@ -1834,9 +1843,9 @@ async function handleShowdown(gameId, io, options = {}) {
     console.log(
       `[SHOWDOWN] Evaluating 7 cards for ${player.name || player.userId} (seat ${player.seatNumber}, id: ${player.id}):`,
       {
-        holeCards: player.holeCards,
+        holeCards,
         community: state.communityCards,
-        sevenCards: sevenCards
+        sevenCards
       }
     );
 
