@@ -299,7 +299,6 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
       const raiseAmount = newContribution - currentBet;
       const minRaise = state.bettingRound.minimumRaise || state.bettingRound.bigBlind || 20;
       const isShortRaise = raiseAmount > 0 && raiseAmount < minRaise;
-      const isGoingAllIn = amount >= player.chips;
       if (isShortRaise && (isGoingAllIn || isHeadsUpPot)) {
         // Allow short raise when going all-in or heads-up (opponent can't call a full raise)
         state.bettingRound.playerBets.set(player.id, newContribution);
