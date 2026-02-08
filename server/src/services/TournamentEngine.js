@@ -1,5 +1,7 @@
 import { prisma } from "../config/database.js";
 
+const _onPlayersBustLocks = new Map();
+
 // TournamentEngine: manages tables, seating, and basic progression.
 // This is intentionally simplified but provides real table assignment
 // and consolidation hooks.
@@ -836,18 +838,35 @@ export class TournamentEngine {
    */
   async onPlayersBust(tournamentId, playerIds) {
     if (!playerIds || playerIds.length === 0) return;
-    const remaining = await prisma.player.count({
+    const existing = _onPlayersBustLocks.get(tournamentId);
+    if (existing) {
+      await existing;
+      return this.onPlayersBust(tournamentId, playerIds);
+    }
+    const p = this._doOnPlayersBust(tournamentId, playerIds);
+    _onPlayersBustLocks.set(tournamentId, p);
+    try {
+      return await p;
+    } finally {
+      _onPlayersBustLocks.delete(tournamentId);
+    }
+  }
+
+  async _doOnPlayersBust(tournamentId, playerIds) {
+    if (!playerIds || playerIds.length === 0) return;
+    const remainingBeforeBust = await prisma.player.count({
       where: { game: { tournamentId }, chips: { gt: 0 }, status: "ACTIVE" }
     });
-    const basePlace = remaining + 1;
+    const basePlace = remainingBeforeBust + 1;
+    console.log(`[TOURNAMENT] onPlayersBust: ${playerIds.length} busted, remainingBeforeBust=${remainingBeforeBust}, basePlace=${basePlace}`);
     for (let i = 0; i < playerIds.length; i++) {
       await this._markPlayerBust(tournamentId, playerIds[i], basePlace + i);
     }
-    const remaining = await prisma.player.count({
+    const remainingAfterBust = await prisma.player.count({
       where: { game: { tournamentId }, chips: { gt: 0 }, status: "ACTIVE" }
     });
     // Only complete when exactly one player left (one winner). remaining === 0 would be a bug.
-    if (remaining === 1) {
+    if (remainingAfterBust === 1) {
       const winner = await prisma.player.findFirst({
         where: { game: { tournamentId }, chips: { gt: 0 }, status: "ACTIVE" },
         include: { user: true, game: true }
@@ -881,7 +900,7 @@ export class TournamentEngine {
           console.error("[TOURNAMENT] Error posting winners embed:", err);
         }
       }
-    } else if (remaining > 1) {
+    } else if (remainingAfterBust > 1) {
       await this.consolidateTables(tournamentId);
     }
   }

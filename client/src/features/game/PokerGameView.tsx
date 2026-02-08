@@ -241,6 +241,8 @@ export function PokerGameView() {
     socket.emit("join-table", { gameId: id });
 
     socket.on("game-state", (payload: GameStatePayload) => {
+      // Ignore game-state for other tables (user may receive stale msgs if room leave was delayed)
+      if (payload.id && id && payload.id !== id) return;
       setGameState((prev) => {
         // Store previous state before updating
         if (prev) {

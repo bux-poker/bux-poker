@@ -2209,6 +2209,10 @@ async function handleShowdown(gameId, io, options = {}) {
       });
 
       if (gameForNextHand && gameForNextHand.players.length >= 2) {
+        if (gameForNextHand.tournament?.status === 'COMPLETED') {
+          console.log(`[SHOWDOWN] Tournament already COMPLETED - not starting new hand`);
+          return;
+        }
         const activePlayerCount = gameForNextHand.players.filter(p => p.status === 'ACTIVE').length;
         
         if (activePlayerCount < 2 && gameForNextHand.tournament?.status === 'RUNNING') {
@@ -3173,6 +3177,14 @@ export function registerPokerHandlers(io) {
           return;
         }
 
+        // Leave all other game rooms so we only receive events for THIS table.
+        // Without this, after consolidation+redirect the user stays in the old room
+        // and receives game-state from both tables, causing the view to flip between them.
+        for (const room of socket.rooms) {
+          if (room.startsWith("game:") && room !== `game:${gameId}`) {
+            socket.leave(room);
+          }
+        }
         socket.join(`game:${gameId}`);
 
         // Auto-start a hand if:

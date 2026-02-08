@@ -295,21 +295,30 @@ export function TournamentLobby() {
           // updateRunningStats; don't overwrite here.
           return;
         } else if (tournament.status === 'COMPLETED') {
-          // TODO: Fetch final standings
           const response = await api.get(`/api/tournaments/${id}`);
-          if (response.data?.registrations) {
-            const finalPlayers = response.data.registrations
+          if (response.data?.players && response.data.players.length > 0) {
+            const finalPlayers = response.data.players
+              .map((p: any) => ({
+                id: p.id,
+                userId: p.userId,
+                user: p.user,
+                chips: p.chips,
+                status: p.status,
+                position: p.finishingPlace ?? null,
+              }))
+              .sort((a: Player, b: Player) => (a.position ?? 999) - (b.position ?? 999));
+            setPlayers(finalPlayers);
+          } else if (response.data?.registrations) {
+            setPlayers(response.data.registrations
               .filter((r: any) => r.status === 'CONFIRMED')
-              .map((r: any, index: number) => ({
+              .map((r: any) => ({
                 id: r.id,
                 userId: r.userId,
                 user: r.user,
-                chips: tournament.startingChips, // Placeholder - would be final chips
+                chips: 0,
                 status: 'COMPLETED',
-                position: index + 1,
-              }))
-              .sort((a: Player, b: Player) => (a.position || 0) - (b.position || 0));
-            setPlayers(finalPlayers);
+                position: null,
+              })));
           }
         } else {
           // Show registered players
