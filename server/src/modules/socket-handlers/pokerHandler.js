@@ -1952,23 +1952,21 @@ async function handleShowdown(gameId, io, options = {}) {
   // Calculate total pot amount from side pots
   const calculatedPotTotal = sidePots.reduce((sum, pot) => sum + pot.amount, 0);
   
-  // If calculated total doesn't match actual pot, scale side pots to match actual
-  // so we never distribute negative or excess chips.
+  // If calculated total doesn't match actual pot, adjust side pots so we distribute EXACTLY actualPot.
+  // Chip conservation: total chips in play must never change. No rounding loss allowed.
   const actualPot = state.pot;
   if (calculatedPotTotal !== actualPot && sidePots.length > 0) {
     console.log(`[SHOWDOWN] Pot mismatch: calculated=${calculatedPotTotal}, actual=${actualPot}, adjusting...`);
     if (calculatedPotTotal > 0 && calculatedPotTotal >= actualPot) {
-      // Scale down so total = actualPot (avoid negative side pot)
-      const scale = actualPot / calculatedPotTotal;
+      // Scale down: use integer division, assign remainder to last pot so sum = actualPot exactly
       let running = 0;
-      for (let i = 0; i < sidePots.length; i++) {
-        const scaled = i === sidePots.length - 1
-          ? Math.max(0, actualPot - running)
-          : Math.max(0, Math.floor(sidePots[i].amount * scale));
+      for (let i = 0; i < sidePots.length - 1; i++) {
+        const scaled = Math.floor((sidePots[i].amount * actualPot) / calculatedPotTotal);
         sidePots[i].amount = scaled;
         running += scaled;
       }
-    } else {
+      sidePots[sidePots.length - 1].amount = actualPot - running;
+    } else if (calculatedPotTotal < actualPot) {
       sidePots[sidePots.length - 1].amount = Math.max(0, sidePots[sidePots.length - 1].amount + (actualPot - calculatedPotTotal));
     }
   } else if (sidePots.length === 0 && actualPot > 0) {
@@ -2025,26 +2023,33 @@ async function handleShowdown(gameId, io, options = {}) {
   }
   }
 
-  // Chip conservation: verify we distributed the full pot (chips must never leave the economy)
+  // Chip conservation: we MUST distribute exactly state.pot. No more, no less.
   const totalDistributed = Array.from(totalWon.values()).reduce((s, a) => s + a, 0);
   if (totalDistributed !== state.pot) {
-    console.error(`[SHOWDOWN] CHIP LEAK: distributed ${totalDistributed} but pot was ${state.pot} (shortfall ${state.pot - totalDistributed}) - awarding remainder to winner`);
     const diff = state.pot - totalDistributed;
-    if (diff > 0 && handResults.length > 0) {
-      const maxStrength = Math.max(...handResults.map(r => r.strength));
-      const winners = handResults.filter(r => r.strength === maxStrength);
-      if (winners.length > 0) {
-        winners[0].player.chips += diff;
-        totalWon.set(winners[0].player.id, (totalWon.get(winners[0].player.id) || 0) + diff);
-        console.log(`[SHOWDOWN]   Awarded ${diff} chips to ${winners[0].player.name || winners[0].player.userId} to fix leak`);
+    if (diff > 0) {
+      // Shortfall: we under-distributed - award remainder to a winner
+      console.error(`[SHOWDOWN] CHIP LEAK: distributed ${totalDistributed} but pot was ${state.pot} (shortfall ${diff}) - awarding remainder to winner`);
+      if (handResults.length > 0) {
+        const maxStrength = Math.max(...handResults.map(r => r.strength));
+        const winners = handResults.filter(r => r.strength === maxStrength);
+        if (winners.length > 0) {
+          winners[0].player.chips += diff;
+          totalWon.set(winners[0].player.id, (totalWon.get(winners[0].player.id) || 0) + diff);
+          console.log(`[SHOWDOWN]   Awarded ${diff} chips to ${winners[0].player.name || winners[0].player.userId} to fix leak`);
+        }
       }
+    } else {
+      // Excess: we over-distributed (chip creation) - must never happen; log and fix
+      console.error(`[SHOWDOWN] CHIP INFLATION: distributed ${totalDistributed} but pot was ${state.pot} (excess ${-diff}) - THIS MUST NOT HAPPEN`);
     }
   }
 
   // Update ALL player chips in database – required for chip conservation.
-  // Not persisting losers causes inflation (DB keeps stale chips, next hand loads them).
+  // Must include folded players too: they had chips deducted when they called/raised; not persisting causes inflation.
+  const playersToPersist = state.players.filter(p => p.status !== 'ELIMINATED');
   await Promise.all(
-    activePlayers.map(player =>
+    playersToPersist.map(player =>
       prisma.player.update({
         where: { id: player.id },
         data: { chips: player.chips }

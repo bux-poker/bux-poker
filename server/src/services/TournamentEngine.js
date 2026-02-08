@@ -2,6 +2,33 @@ import { prisma } from "../config/database.js";
 
 const _onPlayersBustLocks = new Map();
 
+/**
+ * Audit chip conservation: total chips in tournament must equal expected (registrations * startingChips).
+ * Logs error if mismatch - chips must NEVER be created or destroyed.
+ */
+async function auditChipConservation(tournamentId) {
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    include: {
+      registrations: { where: { status: "CONFIRMED" } },
+      games: { include: { players: true } }
+    }
+  });
+  if (!tournament) return;
+  const expectedTotal = tournament.registrations.length * tournament.startingChips;
+  let actualTotal = 0;
+  for (const game of tournament.games || []) {
+    for (const p of game.players || []) {
+      actualTotal += p.chips ?? 0;
+    }
+  }
+  if (actualTotal !== expectedTotal) {
+    console.error(`[TOURNAMENT] CHIP CONSERVATION VIOLATION: tournament ${tournamentId} has ${actualTotal} chips, expected ${expectedTotal} (${tournament.registrations.length} players × ${tournament.startingChips} starting). Difference: ${actualTotal - expectedTotal}`);
+  } else {
+    console.log(`[TOURNAMENT] Chip audit OK: ${actualTotal} chips (expected ${expectedTotal})`);
+  }
+}
+
 // TournamentEngine: manages tables, seating, and basic progression.
 // This is intentionally simplified but provides real table assignment
 // and consolidation hooks.
@@ -780,6 +807,9 @@ export class TournamentEngine {
       console.warn(`[TOURNAMENT] WARNING: Tables are not balanced! Max difference is ${maxPlayers - minPlayers}`);
     }
 
+    // Chip conservation audit: total chips must equal expected (no creation or loss)
+    await auditChipConservation(tournamentId);
+
     // Sync all tables to same blind level (from tournament time) so they resume in sync
     try {
       const { getIO } = await import("../modules/socket-handlers/pokerHandler.js");
@@ -898,6 +928,7 @@ export class TournamentEngine {
           where: { id: tournamentId },
           data: { status: "COMPLETED" }
         });
+        await auditChipConservation(tournamentId);
         try {
           const tournament = await prisma.tournament.findUnique({
             where: { id: tournamentId },
