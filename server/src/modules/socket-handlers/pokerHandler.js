@@ -748,9 +748,12 @@ async function _startHandForGameBody(gameId, io) {
       if (sbPlayer) {
         sbSeat = sbPlayer.seatNumber;
         console.log(`[POKER] SB player not at calculated seat, found at seat ${sbSeat} clockwise`);
+        // CRITICAL: Recalculate bbSeat from actual SB - otherwise bbSeat can equal sbSeat (same player)
+        bbSeat = sbSeat - 1 < minSeat ? maxSeat : sbSeat - 1;
+        bbPlayer = activePlayers.find(p => p.seatNumber === bbSeat && p.seatNumber >= 0 && p.id !== sbPlayer.id);
       }
     }
-    
+
     if (!bbPlayer) {
       let attempts = 0;
       let searchSeat = bbSeat;

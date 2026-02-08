@@ -142,6 +142,24 @@ export class BettingRound {
     // 1. All have equal contributions (checked above)
     // 2. AND all active players have either acted OR are all-in (can't act)
     if (!lastRaiseUserId) {
+      // Heads-up short-stack (same street): if one player is all-in and the other has already put in >= that amount,
+      // the other player has nothing to act on - go straight to next street/showdown.
+      // Only apply when all-in contribution > 0 (otherwise we're on a new street and the other player should get to check/bet).
+      if (contributions.length === 2) {
+        const [a, b] = contributions;
+        const allInPlayer = a.isAllIn ? a : (b.isAllIn ? b : null);
+        const otherPlayer = a.isAllIn ? b : (b.isAllIn ? a : null);
+        if (
+          allInPlayer &&
+          otherPlayer &&
+          allInPlayer.contribution > 0 &&
+          otherPlayer.contribution >= allInPlayer.contribution
+        ) {
+          console.log(`[BETTING] Complete: heads-up, one all-in (${allInPlayer.contribution}), other already has ${otherPlayer.contribution} - no action needed`);
+          return true;
+        }
+      }
+
       // No raise - betting is complete when all active players have acted once OR are all-in
       // If presentPlayerIds given, only consider those (ignore ghosts/consolidated players)
       const idsToCheck = presentPlayerIds
