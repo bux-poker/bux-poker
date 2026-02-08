@@ -145,60 +145,13 @@ function buildClientGameState(game, state) {
 }
 
 async function ensureHandState(gameId) {
-  let state = tableState.get(gameId);
+  const state = tableState.get(gameId);
   if (state) return state;
 
-  const game = await prisma.game.findUnique({
-    where: { id: gameId },
-    include: {
-      players: {
-        include: { user: true }
-      }
-    }
-  });
-
-  if (!game) {
-    throw new Error("Game not found");
-  }
-
-  const deck = engine.createShuffledDeck();
-  const { deck: remainingDeck, players: dealtHands } = engine.dealHoleCards(
-    deck,
-    game.players.length
-  );
-
-  // Persist hole cards to players (encoded as JSON string).
-  await Promise.all(
-    game.players.map((p, index) =>
-      prisma.player.update({
-        where: { id: p.id },
-        data: {
-          holeCards: JSON.stringify(dealtHands[index])
-        }
-      })
-    )
-  );
-
-  const bettingRound = new BettingRound({
-    smallBlind: engine.smallBlind,
-    bigBlind: engine.bigBlind,
-    startingPot: 0 // Pot is tracked in state, not in BettingRound
-  });
-
-  state = {
-    street: "PREFLOP",
-    deck: remainingDeck,
-    communityCards: [],
-    bettingRound,
-    pot: game.pot + bettingRound.getTotalPot(), // Start with game.pot + current betting round (blinds)
-    players: game.players.map((p) => ({
-      ...p,
-      contributions: 0
-    }))
-  };
-
-  tableState.set(gameId, state);
-  return state;
+  // No active hand - do NOT create one here. The ensureHandState fallback used to create
+  // corrupt state (wrong blinds, no dealer/blinds/UTG, dealt to eliminated players).
+  // Fail fast so the client can retry or refresh.
+  throw new Error("No active hand in progress. Please wait for the hand to start.");
 }
 
 async function applyPlayerAction({ gameId, userId, action, amount, io = null }) {
@@ -1049,7 +1002,7 @@ async function _startHandForGameBody(gameId, io) {
           user: p.user, // Include user object for test player detection
           chips: updated?.chips || p.chips,
           holeCards: holeCards, // Include parsed hole cards
-          contributions: (p.id === sbPlayer.id ? smallBlind : 0) + (p.id === bbPlayer.id ? bigBlind : 0),
+          contributions: (p.id === sbPlayer.id ? sbAmount : 0) + (p.id === bbPlayer.id ? bbAmount : 0),
           name: p.user?.username || "Player" // Store name for test player detection
         };
       })
@@ -1863,6 +1816,25 @@ async function handleShowdown(gameId, io, options = {}) {
   let totalWon;
   let sidePots = [];
 
+  // Build totalContributions early - needed for side pots AND bust place ordering (Robert's Rules)
+  const totalContributions = new Map();
+  const allPlayersWhoContributed = state.players.filter(p => {
+    const contribution = (p.contributions || 0) + (state.bettingRound.getPlayerContribution(p.id) || 0);
+    return contribution > 0;
+  });
+  allPlayersWhoContributed.forEach(player => {
+    const handContribution = player.contributions || 0;
+    const currentContribution = state.bettingRound.getPlayerContribution(player.id) || 0;
+    totalContributions.set(player.id, handContribution + currentContribution);
+  });
+  activePlayers.forEach(player => {
+    if (!totalContributions.has(player.id)) {
+      const handContribution = player.contributions || 0;
+      const currentContribution = state.bettingRound.getPlayerContribution(player.id) || 0;
+      totalContributions.set(player.id, handContribution + currentContribution);
+    }
+  });
+
   if (handResults.length === 0) {
     // Chip leak (e.g. 26k -> 9k): we used to return here without awarding the pot. Chips had already been
     // taken from players into state.pot; they were never given to anyone, so they left the economy. Split pot so they are not lost.
@@ -1892,31 +1864,7 @@ async function handleShowdown(gameId, io, options = {}) {
 
   // Post dealer message about winners (will be updated after side pot calculation)
 
-  // Calculate side pots based on all-in contributions
-  // Track total contributions per player across entire hand (all streets)
-  const totalContributions = new Map();
-  
-  // Initialize with current betting round contributions
-  activePlayers.forEach(player => {
-    const currentContribution = state.bettingRound.getPlayerContribution(player.id);
-    // Also check player.contributions (which tracks blinds from start of hand)
-    const handContribution = player.contributions || 0;
-    totalContributions.set(player.id, handContribution + currentContribution);
-  });
-  
-  // Include folded players who contributed (for accurate side pot calculation)
-  const allPlayersWhoContributed = state.players.filter(p => {
-    const contribution = (p.contributions || 0) + (state.bettingRound.getPlayerContribution(p.id) || 0);
-    return contribution > 0;
-  });
-  
-  // Build complete contribution map including folded players
-  allPlayersWhoContributed.forEach(player => {
-    const handContribution = player.contributions || 0;
-    const currentContribution = state.bettingRound.getPlayerContribution(player.id) || 0;
-    totalContributions.set(player.id, handContribution + currentContribution);
-  });
-  
+  // totalContributions already built above - use for side pots
   // Get unique contribution amounts (sorted ascending)
   const contributionAmounts = Array.from(new Set(totalContributions.values())).sort((a, b) => a - b);
   
@@ -2133,22 +2081,29 @@ async function handleShowdown(gameId, io, options = {}) {
   console.log(`[SHOWDOWN] Marked hand as complete - hasActiveHand will now return false`);
 
   // Check for player elimination after distributing pot
+  // Robert's Rules: "If two (or more) players go broke during the same hand, the player
+  // starting the hand with the larger amount of money finishes in the higher tournament place."
   const { TournamentEngine } = await import("../../services/TournamentEngine.js");
   const tournamentEngine = new TournamentEngine();
-  const bustedPlayerIds = [];
-  
+  const bustedWithStacks = []; // { playerId, startingStack } for correct place order
+
+  const getStartingStack = (player) => {
+    const contrib = totalContributions?.get(player.id) ?? (player.contributions || 0);
+    return contrib;
+  };
+
   // Eliminate ALL players with 0 chips (batch for single consolidation).
-  // Ignore P2025 (record not found): another table's consolidation may have already deleted them.
   for (const handResult of handResults) {
     if (handResult.player.chips <= 0 && handResult.player.status !== 'ELIMINATED') {
-      console.log(`[SHOWDOWN] Player ${handResult.player.name || handResult.player.userId} eliminated with 0 chips`);
+      const startingStack = getStartingStack(handResult.player);
+      bustedWithStacks.push({ playerId: handResult.player.id, startingStack });
+      console.log(`[SHOWDOWN] Player ${handResult.player.name || handResult.player.userId} eliminated with 0 chips (started hand with ${startingStack})`);
       handResult.player.status = 'ELIMINATED';
       try {
         await prisma.player.update({
           where: { id: handResult.player.id },
           data: { status: 'ELIMINATED' }
         });
-        bustedPlayerIds.push(handResult.player.id);
       } catch (err) {
         if (err?.code === 'P2025') {
           console.log(`[SHOWDOWN] Player ${handResult.player.id} already removed (consolidation)`);
@@ -2164,15 +2119,16 @@ async function handleShowdown(gameId, io, options = {}) {
   );
 
   for (const player of allPlayersWith0Chips) {
-    if (handResults.some(hr => hr.player.id === player.id)) continue;
-    console.log(`[SHOWDOWN] Eliminating player ${player.name || player.userId} with ${player.chips} chips (not in hand results)`);
+    if (bustedWithStacks.some(b => b.playerId === player.id)) continue;
+    const startingStack = getStartingStack(player);
+    bustedWithStacks.push({ playerId: player.id, startingStack });
+    console.log(`[SHOWDOWN] Eliminating player ${player.name || player.userId} with ${player.chips} chips (not in hand results, started with ${startingStack})`);
     player.status = 'ELIMINATED';
     try {
       await prisma.player.update({
         where: { id: player.id },
         data: { status: 'ELIMINATED' }
       });
-      bustedPlayerIds.push(player.id);
     } catch (err) {
       if (err?.code === 'P2025') {
         console.log(`[SHOWDOWN] Player ${player.id} already removed (consolidation)`);
@@ -2181,7 +2137,11 @@ async function handleShowdown(gameId, io, options = {}) {
       }
     }
   }
-  
+
+  // Sort by starting stack descending: higher stack gets better (lower) place number
+  bustedWithStacks.sort((a, b) => b.startingStack - a.startingStack);
+  const bustedPlayerIds = bustedWithStacks.map(b => b.playerId);
+
   // Process all busts and run consolidation once (avoids race / duplicate consolidation)
   if (game.tournament && bustedPlayerIds.length > 0) {
     await tournamentEngine.onPlayersBust(game.tournament.id, bustedPlayerIds);
@@ -2295,7 +2255,8 @@ async function handleShowdown(gameId, io, options = {}) {
             if (counts.length > 1) {
               const maxC = Math.max(...counts);
               const minC = Math.min(...counts);
-              if (maxC - minC > 1) {
+              const maxSpread = games.length > 6 ? 2 : 1;
+              if (maxC - minC > maxSpread) {
                 console.log(`[SHOWDOWN] Uneven tables (${counts.join(',')}), triggering consolidation`);
                 const { TournamentEngine } = await import("../../services/TournamentEngine.js");
                 const tournamentEngine = new TournamentEngine();

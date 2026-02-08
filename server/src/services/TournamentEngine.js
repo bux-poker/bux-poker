@@ -606,8 +606,10 @@ export class TournamentEngine {
     const minC = counts.length ? Math.min(...counts) : 0;
     const spread = maxC - minC;
 
-    // No need to consolidate: we're not closing tables AND tables are already balanced (spread <= 1)
-    if (games.length <= tablesNeeded && spread <= 1) {
+    // No need to consolidate: we're not closing tables AND tables are already balanced.
+    // Robert's Rules: within 1 player for 6 or fewer tables, within 2 for 7+ tables.
+    const maxSpread = games.length > 6 ? 2 : 1;
+    if (games.length <= tablesNeeded && spread <= maxSpread) {
       console.log(`[TOURNAMENT] Skipping consolidation: ${games.length} tables, counts ${counts.join(",")}, spread ${spread} (no rebalance needed)`);
       return games;
     }
@@ -829,11 +831,17 @@ export class TournamentEngine {
   /**
    * Mark multiple players as eliminated and run consolidation once.
    * Batches busts to avoid race conditions when multiple players bust in same hand.
+   * Robert's Rules: when multiple bust in same hand, playerIds MUST be ordered by
+   * starting stack descending (highest first = best place). First in list gets remaining+1, etc.
    */
   async onPlayersBust(tournamentId, playerIds) {
     if (!playerIds || playerIds.length === 0) return;
-    for (const playerId of playerIds) {
-      await this._markPlayerBust(tournamentId, playerId);
+    const remaining = await prisma.player.count({
+      where: { game: { tournamentId }, chips: { gt: 0 }, status: "ACTIVE" }
+    });
+    const basePlace = remaining + 1;
+    for (let i = 0; i < playerIds.length; i++) {
+      await this._markPlayerBust(tournamentId, playerIds[i], basePlace + i);
     }
     const remaining = await prisma.player.count({
       where: { game: { tournamentId }, chips: { gt: 0 }, status: "ACTIVE" }
@@ -878,19 +886,20 @@ export class TournamentEngine {
     }
   }
 
-  /** Mark a single player as bust - only updates DB, no consolidation (handled by onPlayersBust) */
-  async _markPlayerBust(tournamentId, playerId) {
+  /** Mark a single player as bust - only updates DB, no consolidation (handled by onPlayersBust).
+   * @param {number} finishingPlace - Explicit place (from onPlayersBust when multiple bust same hand).
+   */
+  async _markPlayerBust(tournamentId, playerId, finishingPlace = null) {
     await prisma.player.update({
       where: { id: playerId },
       data: { status: "ELIMINATED" }
     });
-    const remaining = await prisma.player.count({
+    const place = finishingPlace ?? (await prisma.player.count({
       where: { game: { tournamentId }, chips: { gt: 0 }, status: "ACTIVE" }
-    });
-    const finishingPlace = remaining + 1;
+    })) + 1;
     await prisma.player.update({
       where: { id: playerId },
-      data: { finishingPlace }
+      data: { finishingPlace: place }
     }).catch((err) => {
       console.error(`[TOURNAMENT] Error setting finishingPlace for player ${playerId}:`, err);
     });
@@ -986,7 +995,8 @@ export function startIdleTablesPoll() {
         const tablesNeeded = Math.max(1, Math.ceil(totalCount / seatsPerTable));
         const counts = games.map(g => g.players?.length ?? 0).filter(c => c > 0);
         const spread = counts.length >= 2 ? Math.max(...counts) - Math.min(...counts) : 0;
-        const needsConsolidation = games.length > tablesNeeded || spread > 1;
+        const maxSpread = games.length > 6 ? 2 : 1;
+        const needsConsolidation = games.length > tablesNeeded || spread > maxSpread;
         if (needsConsolidation && totalCount >= 2) {
           try {
             console.log(`[TOURNAMENT] Idle poll: uneven tables (${counts.join(",")}), triggering consolidation`);
