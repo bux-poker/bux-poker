@@ -21,6 +21,9 @@ function delay(ms) {
 // For production you'd want this to be more robust / persisted.
 const tableState = new Map();
 
+/** Prevents two concurrent startHandForGame(gameId) from both running (e.g. idle poll + join-table). */
+const startHandLocks = new Map();
+
 // Turn timers: map of gameId -> { playerId, timeout, expiresAt }
 const turnTimers = new Map();
 
@@ -544,6 +547,24 @@ async function emitIfTournamentCompleted(tournamentId, gameId, io) {
  * This can be called from startTournament or when players join
  */
 export async function startHandForGame(gameId, io) {
+  if (tableState.get(gameId)) return;
+  let lock = startHandLocks.get(gameId);
+  if (lock) {
+    await lock;
+    return;
+  }
+  lock = (async () => {
+    try {
+      return await _startHandForGameBody(gameId, io);
+    } finally {
+      startHandLocks.delete(gameId);
+    }
+  })();
+  startHandLocks.set(gameId, lock);
+  await lock;
+}
+
+async function _startHandForGameBody(gameId, io) {
   const game = await prisma.game.findUnique({
     where: { id: gameId },
     include: {
