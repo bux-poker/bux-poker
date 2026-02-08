@@ -1002,7 +1002,8 @@ async function _startHandForGameBody(gameId, io) {
           user: p.user, // Include user object for test player detection
           chips: updated?.chips || p.chips,
           holeCards: holeCards, // Include parsed hole cards
-          contributions: (p.id === sbPlayer.id ? sbAmount : 0) + (p.id === bbPlayer.id ? bbAmount : 0),
+          // Start at 0 - advanceToNextStreet adds each street's bets. Blinds go through betting round.
+          contributions: 0,
           name: p.user?.username || "Player" // Store name for test player detection
         };
       })
@@ -1516,8 +1517,8 @@ async function handleTestPlayerAction(gameId, userId, io) {
         await prisma.player.update({
           where: { id: player.id },
           data: { 
-            status: 'ELIMINATED'
-            // Keep seatNumber - eliminated players filtered by status
+            status: 'ELIMINATED',
+            chips: 0
           }
         }).catch(err => console.error(`[TEST PLAYER] Error eliminating player ${player.id}:`, err));
         
@@ -1817,22 +1818,13 @@ async function handleShowdown(gameId, io, options = {}) {
   let sidePots = [];
 
   // Build totalContributions early - needed for side pots AND bust place ordering (Robert's Rules)
+  // CRITICAL: For SIDE POTS, use ONLY activePlayers (non-folded) - folded players' chips are in the pot
+  // but they can't win. Including them inflates contribution levels and causes pot mismatch.
   const totalContributions = new Map();
-  const allPlayersWhoContributed = state.players.filter(p => {
-    const contribution = (p.contributions || 0) + (state.bettingRound.getPlayerContribution(p.id) || 0);
-    return contribution > 0;
-  });
-  allPlayersWhoContributed.forEach(player => {
+  activePlayers.forEach(player => {
     const handContribution = player.contributions || 0;
     const currentContribution = state.bettingRound.getPlayerContribution(player.id) || 0;
     totalContributions.set(player.id, handContribution + currentContribution);
-  });
-  activePlayers.forEach(player => {
-    if (!totalContributions.has(player.id)) {
-      const handContribution = player.contributions || 0;
-      const currentContribution = state.bettingRound.getPlayerContribution(player.id) || 0;
-      totalContributions.set(player.id, handContribution + currentContribution);
-    }
   });
 
   if (handResults.length === 0) {
@@ -1865,8 +1857,8 @@ async function handleShowdown(gameId, io, options = {}) {
   // Post dealer message about winners (will be updated after side pot calculation)
 
   // totalContributions already built above - use for side pots
-  // Get unique contribution amounts (sorted ascending)
-  const contributionAmounts = Array.from(new Set(totalContributions.values())).sort((a, b) => a - b);
+  // Get unique contribution amounts from players still in hand (sorted ascending), exclude 0
+  const contributionAmounts = Array.from(new Set(totalContributions.values())).filter(x => x > 0).sort((a, b) => a - b);
   
   console.log(`[SHOWDOWN] Total contributions:`, Array.from(totalContributions.entries()).map(([id, amount]) => {
     const player = activePlayers.find(p => p.id === id);
@@ -1954,9 +1946,15 @@ async function handleShowdown(gameId, io, options = {}) {
       const eligibleHandResults = handResults.filter(r =>
         pot.eligiblePlayerIds.includes(r.player.id)
       );
-      if (eligibleHandResults.length === 0) continue;
-      const maxStrength = Math.max(...eligibleHandResults.map(r => r.strength));
-      potWinners = eligibleHandResults.filter(r => r.strength === maxStrength);
+      // NEVER skip a pot - chips would be lost. Fall back to overall winner(s) if no eligible (shouldn't happen)
+      if (eligibleHandResults.length === 0) {
+        console.warn(`[SHOWDOWN] Side pot ${pot.level}: no eligible players (bug?), awarding to max-strength winner(s) to preserve chips`);
+        const maxStrength = Math.max(...handResults.map(r => r.strength));
+        potWinners = handResults.filter(r => r.strength === maxStrength);
+      } else {
+        const maxStrength = Math.max(...eligibleHandResults.map(r => r.strength));
+        potWinners = eligibleHandResults.filter(r => r.strength === maxStrength);
+      }
     }
     const potPerWinner = Math.floor(pot.amount / potWinners.length);
     const remainder = pot.amount % potWinners.length;
@@ -1974,25 +1972,37 @@ async function handleShowdown(gameId, io, options = {}) {
   }
   }
 
-  // Update player chips in database – MUST complete before we clear state / start next hand.
-  // If a player was already removed (e.g. by consolidation), skip update (P2025).
-  await Promise.all(
-    activePlayers.map(player => {
-      const won = totalWon.get(player.id) || 0;
-      if (won > 0) {
-        return prisma.player.update({
-          where: { id: player.id },
-          data: { chips: player.chips }
-        }).catch(err => {
-          if (err?.code === 'P2025') {
-            console.log(`[SHOWDOWN] Player ${player.id} already removed (consolidation), skipping chip update`);
-          } else {
-            console.error(`[SHOWDOWN] Error updating chips for player ${player.id}:`, err);
-          }
-        });
+  // Chip conservation: verify we distributed the full pot (chips must never leave the economy)
+  const totalDistributed = Array.from(totalWon.values()).reduce((s, a) => s + a, 0);
+  if (totalDistributed !== state.pot) {
+    console.error(`[SHOWDOWN] CHIP LEAK: distributed ${totalDistributed} but pot was ${state.pot} (shortfall ${state.pot - totalDistributed}) - awarding remainder to winner`);
+    const diff = state.pot - totalDistributed;
+    if (diff > 0 && handResults.length > 0) {
+      const maxStrength = Math.max(...handResults.map(r => r.strength));
+      const winners = handResults.filter(r => r.strength === maxStrength);
+      if (winners.length > 0) {
+        winners[0].player.chips += diff;
+        totalWon.set(winners[0].player.id, (totalWon.get(winners[0].player.id) || 0) + diff);
+        console.log(`[SHOWDOWN]   Awarded ${diff} chips to ${winners[0].player.name || winners[0].player.userId} to fix leak`);
       }
-      return Promise.resolve();
-    })
+    }
+  }
+
+  // Update ALL player chips in database – chip conservation requires accurate DB state.
+  // Persist every player's chips (not just winners) so consolidation/reload never uses stale values.
+  await Promise.all(
+    activePlayers.map(player =>
+      prisma.player.update({
+        where: { id: player.id },
+        data: { chips: player.chips }
+      }).catch(err => {
+        if (err?.code === 'P2025') {
+          console.log(`[SHOWDOWN] Player ${player.id} already removed (consolidation), skipping chip update`);
+        } else {
+          console.error(`[SHOWDOWN] Error updating chips for player ${player.id}:`, err);
+        }
+      })
+    )
   );
   
   // Build updated winners list with total winnings for display
@@ -2102,7 +2112,7 @@ async function handleShowdown(gameId, io, options = {}) {
       try {
         await prisma.player.update({
           where: { id: handResult.player.id },
-          data: { status: 'ELIMINATED' }
+          data: { status: 'ELIMINATED', chips: 0 }
         });
       } catch (err) {
         if (err?.code === 'P2025') {
@@ -2127,7 +2137,7 @@ async function handleShowdown(gameId, io, options = {}) {
     try {
       await prisma.player.update({
         where: { id: player.id },
-        data: { status: 'ELIMINATED' }
+        data: { status: 'ELIMINATED', chips: 0 }
       });
     } catch (err) {
       if (err?.code === 'P2025') {
@@ -2763,8 +2773,8 @@ async function moveToNextPlayer(gameId, io) {
       await prisma.player.update({
         where: { id: player.id },
         data: { 
-          status: 'ELIMINATED'
-          // Keep seatNumber - eliminated players filtered by status
+          status: 'ELIMINATED',
+          chips: 0
         }
       }).catch(err => console.error(`[POKER] Error eliminating player ${player.id}:`, err));
       
@@ -3368,8 +3378,8 @@ export function registerPokerHandlers(io) {
                 await prisma.player.update({
                   where: { id: busted.id },
                   data: { 
-                    status: 'ELIMINATED'
-                    // Keep seatNumber - eliminated players filtered by status
+                    status: 'ELIMINATED',
+                    chips: 0
                   }
                 });
               }

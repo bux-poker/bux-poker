@@ -37,7 +37,7 @@ export function TournamentLobby() {
   const { isAdmin } = useAdmin();
   const { tournament, loading, error, refetch } = useTournament(id);
 
-  // Live update: refetch when tournament_updated event fires (consolidation, etc.)
+  // Live update: refetch when tournament_updated or tournament_completed fires
   useEffect(() => {
     if (!id) return;
     const socket = getSocket();
@@ -45,7 +45,11 @@ export function TournamentLobby() {
       if (payload.tournamentId === id) refetch({ silent: true });
     };
     socket.on('tournament_updated', handler);
-    return () => { socket.off('tournament_updated', handler); };
+    socket.on('tournament_completed', handler);
+    return () => {
+      socket.off('tournament_updated', handler);
+      socket.off('tournament_completed', handler);
+    };
   }, [id, refetch]);
 
   // Hide Start button as soon as server says tournament is starting (so it stays hidden in every tab/window)
@@ -808,16 +812,23 @@ export function TournamentLobby() {
                             <button
                               onClick={() => {
                                 const winName = `buxpoker-game-${table.id}`;
-                                const gameWindow = window.open(`/game/${table.id}`, winName, 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
-                                if (gameWindow) {
-                                  gameWindow.focus();
-                                  gameWindow.addEventListener('load', () => {
-                                    setTimeout(() => {
-                                      if (gameWindow.document.documentElement.requestFullscreen) {
-                                        gameWindow.document.documentElement.requestFullscreen().catch(() => {});
-                                      }
-                                    }, 500);
-                                  });
+                                const url = `/game/${table.id}`;
+                                let w = window.open('', winName);
+                                if (w && !w.closed) {
+                                  w.location.href = url;
+                                  w.focus();
+                                } else {
+                                  w = window.open(url, winName, 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
+                                  if (w) {
+                                    w.focus();
+                                    w.addEventListener('load', () => {
+                                      setTimeout(() => {
+                                        if (w?.document?.documentElement?.requestFullscreen) {
+                                          w.document.documentElement.requestFullscreen().catch(() => {});
+                                        }
+                                      }, 500);
+                                    });
+                                  }
                                 }
                               }}
                               className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
@@ -828,16 +839,23 @@ export function TournamentLobby() {
                             <button
                               onClick={() => {
                                 const winName = `buxpoker-game-${table.id}`;
-                                const gameWindow = window.open(`/game/${table.id}`, winName, 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
-                                if (gameWindow) {
-                                  gameWindow.focus();
-                                  gameWindow.addEventListener('load', () => {
-                                    setTimeout(() => {
-                                      if (gameWindow.document.documentElement.requestFullscreen) {
-                                        gameWindow.document.documentElement.requestFullscreen().catch(() => {});
-                                      }
-                                    }, 500);
-                                  });
+                                const url = `/game/${table.id}`;
+                                let w = window.open('', winName);
+                                if (w && !w.closed) {
+                                  w.location.href = url;
+                                  w.focus();
+                                } else {
+                                  w = window.open(url, winName, 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
+                                  if (w) {
+                                    w.focus();
+                                    w.addEventListener('load', () => {
+                                      setTimeout(() => {
+                                        if (w?.document?.documentElement?.requestFullscreen) {
+                                          w.document.documentElement.requestFullscreen().catch(() => {});
+                                        }
+                                      }, 500);
+                                    });
+                                  }
                                 }
                               }}
                               className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"

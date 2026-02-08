@@ -913,7 +913,7 @@ export class TournamentEngine {
   async _markPlayerBust(tournamentId, playerId, finishingPlace = null) {
     await prisma.player.update({
       where: { id: playerId },
-      data: { status: "ELIMINATED" }
+      data: { status: "ELIMINATED", chips: 0 }
     });
     const place = finishingPlace ?? (await prisma.player.count({
       where: { game: { tournamentId }, chips: { gt: 0 }, status: { not: "ELIMINATED" } }
