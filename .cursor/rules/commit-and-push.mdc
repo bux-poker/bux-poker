@@ -11,4 +11,5 @@ After making code or config changes in this project:
 2. **Commit** with a short, descriptive message that explains what was done (e.g. "Fix tournament consolidation unique constraint", "Add dark mode toggle").
 3. **Push** to the current branch: `git push`.
 
-Do this in the same turn as the edits when the change is complete. Do not wait for the user to ask you to commit or push. Skip only if the user explicitly says not to commit, or if they are in the middle of a multi-step task and want one commit at the end.
+- Do this **in the same turn** as the edits when the change is complete. Run the git commands immediately after your edits; do not say "I'll commit" or "you can commit" or wait for the user to ask.
+- Skip only if the user explicitly says not to commit, or if they are in the middle of a multi-step task and want one commit at the end.
