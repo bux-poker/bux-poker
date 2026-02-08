@@ -2472,8 +2472,12 @@ async function runCinematicAllInShowdown(gameId, io, state, engine, allPlayersAl
     state.deck = newDeck;
     state.communityCards = flopCards;
     state.street = "FLOP";
+    tableState.set(gameId, state); // Persist so join-table and other readers see full flop
     postDealerMessage(gameId, io, "Dealing the flop...");
     await emitGameState(gameId, io, state);
+    if (state.communityCards.length !== 3) {
+      console.warn(`[SHOWDOWN] Flop should have 3 cards, got ${state.communityCards.length}`);
+    }
     await delay(SHOWDOWN_PHASE_DELAY_MS);
   }
   if (state.street === "FLOP") {
@@ -2481,6 +2485,7 @@ async function runCinematicAllInShowdown(gameId, io, state, engine, allPlayersAl
     state.deck = newDeck;
     state.communityCards = [...state.communityCards, turnCard];
     state.street = "TURN";
+    tableState.set(gameId, state);
     postDealerMessage(gameId, io, "Dealing the turn...");
     await emitGameState(gameId, io, state);
     await delay(SHOWDOWN_PHASE_DELAY_MS);
@@ -2490,6 +2495,7 @@ async function runCinematicAllInShowdown(gameId, io, state, engine, allPlayersAl
     state.deck = newDeck;
     state.communityCards = [...state.communityCards, riverCard];
     state.street = "RIVER";
+    tableState.set(gameId, state);
     postDealerMessage(gameId, io, "Dealing the river...");
     await emitGameState(gameId, io, state);
     await delay(SHOWDOWN_PHASE_DELAY_MS);
