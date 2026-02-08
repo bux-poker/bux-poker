@@ -485,6 +485,38 @@ export function TournamentLobby() {
           </span>
         </div>
 
+        {/* Join my table - for registered players when tournament is running */}
+        {user && (isRunning || isSeated) && myGameId && !isCompleted && (
+          <div className="mt-4 flex gap-3 border-t border-slate-800 pt-4">
+            <button
+              onClick={() => {
+                const url = `/game/${myGameId}`;
+                const winName = 'buxpoker-game-window';
+                let w = window.open('', winName);
+                if (w && !w.closed) {
+                  w.location.href = url;
+                  w.focus();
+                } else {
+                  w = window.open(url, winName, 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
+                  if (w) {
+                    w.focus();
+                    w.addEventListener('load', () => {
+                      setTimeout(() => {
+                        if (w?.document?.documentElement?.requestFullscreen) {
+                          w.document.documentElement.requestFullscreen().catch(() => {});
+                        }
+                      }, 500);
+                    });
+                  }
+                }
+              }}
+              className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
+            >
+              Join my table
+            </button>
+          </div>
+        )}
+
         {/* Admin Actions */}
         {isAdmin && !isCompleted && (
           <div className="mt-4 flex gap-3 border-t border-slate-800 pt-4">
