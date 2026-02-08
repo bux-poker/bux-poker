@@ -500,7 +500,7 @@ export class TournamentEngine {
    * If a table reports "active hand" for longer than stuckHandMs, we clear that game's state
    * so consolidation can proceed (hand was stuck, e.g. disconnected player's turn).
    */
-  async waitForAllTablesToFinishHands(tournamentId, maxWaitMs = 120000, stuckHandMs = 90000) {
+  async waitForAllTablesToFinishHands(tournamentId, maxWaitMs = 120000, stuckHandMs = 25000) {
     const startTime = Date.now();
     const checkInterval = 2000; // Check every 2 seconds
     const activeSince = new Map(); // gameId -> first time we saw it with active hand
@@ -955,10 +955,13 @@ export function startScheduledStartPoll() {
   console.log("[TOURNAMENT] Scheduled start poll running every 30s");
 }
 
-/** Every 60s, ensure every ACTIVE table in a RUNNING tournament has a hand running. Recovers stuck tables. */
+/** Every 60s, ensure every ACTIVE table in a RUNNING tournament has a hand running. Recovers stuck tables.
+ *  Also triggers consolidation when tables are uneven (e.g. 8 on one table, 1 on another) so we rebalance
+ *  even if showdown path didn't run. */
 let _idleTablesPollInterval = null;
 export function startIdleTablesPoll() {
   if (_idleTablesPollInterval) return;
+  const engine = new TournamentEngine();
   _idleTablesPollInterval = setInterval(async () => {
     const { startHandForGame, hasActiveHand, getIO } = await import("../modules/socket-handlers/pokerHandler.js");
     const socketIO = getIO();
@@ -966,9 +969,10 @@ export function startIdleTablesPoll() {
     try {
       const running = await prisma.tournament.findMany({
         where: { status: "RUNNING" },
-        select: { id: true }
+        select: { id: true, seatsPerTable: true }
       });
       for (const t of running) {
+        const seatsPerTable = t.seatsPerTable ?? 9;
         const games = await prisma.game.findMany({
           where: { tournamentId: t.id, status: "ACTIVE" },
           include: {
@@ -978,6 +982,20 @@ export function startIdleTablesPoll() {
             }
           }
         });
+        const totalCount = games.reduce((sum, g) => sum + (g.players?.length ?? 0), 0);
+        const tablesNeeded = Math.max(1, Math.ceil(totalCount / seatsPerTable));
+        const counts = games.map(g => g.players?.length ?? 0).filter(c => c > 0);
+        const spread = counts.length >= 2 ? Math.max(...counts) - Math.min(...counts) : 0;
+        const needsConsolidation = games.length > tablesNeeded || spread > 1;
+        if (needsConsolidation && totalCount >= 2) {
+          try {
+            console.log(`[TOURNAMENT] Idle poll: uneven tables (${counts.join(",")}), triggering consolidation`);
+            await engine.consolidateTables(t.id);
+          } catch (err) {
+            console.error("[TOURNAMENT] Idle-poll consolidation failed:", err?.message);
+          }
+          continue;
+        }
         for (const game of games) {
           if (game.players.length === 0) {
             await prisma.game.update({ where: { id: game.id }, data: { status: "COMPLETED" } });
