@@ -811,8 +811,8 @@ export function TournamentLobby() {
                           {isMyTable ? (
                             <button
                               onClick={() => {
-                                const winName = `buxpoker-game-${table.id}`;
                                 const url = `/game/${table.id}`;
+                                const winName = 'buxpoker-game-window';
                                 let w = window.open('', winName);
                                 if (w && !w.closed) {
                                   w.location.href = url;
@@ -838,8 +838,8 @@ export function TournamentLobby() {
                           ) : (
                             <button
                               onClick={() => {
-                                const winName = `buxpoker-game-${table.id}`;
                                 const url = `/game/${table.id}`;
+                                const winName = 'buxpoker-game-window';
                                 let w = window.open('', winName);
                                 if (w && !w.closed) {
                                   w.location.href = url;

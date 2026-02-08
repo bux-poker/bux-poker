@@ -181,28 +181,47 @@ export class TournamentService {
         // clients) can easily show current chip stacks / statuses without
         // re-deriving them from games on the client.
         //
-        // NOTE: This is a lightweight projection – it does NOT modify the
-        // underlying schema. If we later add explicit finishing positions,
-        // they can be surfaced here as `finishingPosition`.
-        const livePlayers = [];
+        // For COMPLETED tournaments, always fetch players directly from DB
+        // so we get correct chips and finishingPlace (games relation can miss closed tables).
+        let livePlayers = [];
         let remainingPlayers = 0;
-        for (const game of tournament.games || []) {
-          for (const player of game.players || []) {
-            if (player.chips > 0 && player.status !== "ELIMINATED") {
-              remainingPlayers++;
-            }
+
+        if (tournament.status === "COMPLETED") {
+          const directPlayers = await prisma.player.findMany({
+            where: { game: { tournamentId: id } },
+            include: { user: { select: { id: true, username: true, avatarUrl: true } } },
+            orderBy: [{ finishingPlace: "asc" }, { chips: "desc" }],
+          });
+          for (const p of directPlayers) {
+            if (p.chips > 0 && p.status !== "ELIMINATED") remainingPlayers++;
             livePlayers.push({
-              id: player.id,
-              userId: player.userId,
-              user: player.user,
-              chips: player.chips,
-              status: player.status,
-              gameId: game.id,
-              tableNumber: game.tableNumber,
-              seatNumber: player.seatNumber,
-              // Expose tournament finishing place (1 = winner, 2 = runner-up, etc.)
-              finishingPlace: player.finishingPlace ?? null,
+              id: p.id,
+              userId: p.userId,
+              user: p.user,
+              chips: p.chips,
+              status: p.status,
+              gameId: p.gameId,
+              tableNumber: null,
+              seatNumber: p.seatNumber,
+              finishingPlace: p.finishingPlace ?? null,
             });
+          }
+        } else {
+          for (const game of tournament.games || []) {
+            for (const player of game.players || []) {
+              if (player.chips > 0 && player.status !== "ELIMINATED") remainingPlayers++;
+              livePlayers.push({
+                id: player.id,
+                userId: player.userId,
+                user: player.user,
+                chips: player.chips,
+                status: player.status,
+                gameId: game.id,
+                tableNumber: game.tableNumber,
+                seatNumber: player.seatNumber,
+                finishingPlace: player.finishingPlace ?? null,
+              });
+            }
           }
         }
         

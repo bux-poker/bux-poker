@@ -867,6 +867,7 @@ export class TournamentEngine {
     const remainingAfterBust = await prisma.player.count({
       where: { game: { tournamentId }, chips: { gt: 0 }, status: { not: "ELIMINATED" } }
     });
+    console.log(`[TOURNAMENT] onPlayersBust: remainingAfterBust=${remainingAfterBust}`);
     // Only complete when exactly one player left (one winner). remaining === 0 would be a bug.
     if (remainingAfterBust === 1) {
       const winner = await prisma.player.findFirst({
@@ -880,6 +881,14 @@ export class TournamentEngine {
         });
         if (current?.status === "COMPLETED") {
           return; // Already completed (e.g. race) - do not post Discord again
+        }
+        // Double-check: must have exactly 1 non-eliminated player with chips before completing
+        const verifyCount = await prisma.player.count({
+          where: { game: { tournamentId }, chips: { gt: 0 }, status: { not: "ELIMINATED" } }
+        });
+        if (verifyCount !== 1) {
+          console.warn(`[TOURNAMENT] Aborting completion: verifyCount=${verifyCount} (expected 1) - possible race`);
+          return;
         }
         await prisma.player.update({
           where: { id: winner.id },

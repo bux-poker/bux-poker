@@ -758,6 +758,9 @@ async function _startHandForGameBody(gameId, io) {
   if (!sbPlayer || !bbPlayer) {
     throw new Error(`Could not find SB or BB players. Dealer seat: ${dealerSeat}, SB seat: ${sbSeat}, BB seat: ${bbSeat}`);
   }
+  if (!isHeadsUp && sbPlayer.id === bbPlayer.id) {
+    throw new Error(`BUG: Same player (${sbPlayer.name || sbPlayer.id}) would post both SB and BB. Dealer: ${dealerSeat}, SB: ${sbSeat}, BB: ${bbSeat}`);
+  }
 
   // Deal hole cards to ALL non-eliminated players (including 0-chip all-in from previous hand).
   // If we only deal to chips > 0, players who are all-in at hand start get no cards and
@@ -943,6 +946,13 @@ async function _startHandForGameBody(gameId, io) {
     console.log(`[POKER] UTG calculation: dealer=${dealerSeat}, sb=${sbSeat}, bb=${bbSeat}, utg=${utgSeat} (${utgPlayer.user?.username || utgPlayer.userId})`);
   }
 
+  // Reset any stale pot from crashed/interrupted hand to prevent chip inflation
+  const startPot = (game.pot && game.pot > 0) ? 0 : (game.pot ?? 0);
+  if (game.pot > 0) {
+    console.warn(`[POKER] Resetting stale game.pot ${game.pot} to 0 at hand start`);
+    await prisma.game.update({ where: { id: gameId }, data: { pot: 0 } }).catch(() => {});
+  }
+
   // Create hand state (explicitly clear showdown so client doesn't show old win/lose styling)
   const state = {
     showdownActive: false,
@@ -951,7 +961,7 @@ async function _startHandForGameBody(gameId, io) {
     deck: remainingDeck,
     communityCards: [],
     bettingRound,
-    pot: game.pot, // Start with game.pot (should be 0 for new hand), current betting round is added separately in buildClientGameState
+    pot: startPot, // Start with 0; current betting round is added separately in buildClientGameState
     dealerSeat: dealerPlayer.seatNumber,
     smallBlindSeat: sbPlayer.seatNumber,
     bigBlindSeat: bbPlayer.seatNumber,
@@ -1765,9 +1775,10 @@ async function handleShowdown(gameId, io, options = {}) {
     return;
   }
 
+  const chipsBeforeDist = activePlayers.reduce((s, p) => s + (p.chips || 0), 0);
   console.log(`[SHOWDOWN] Starting showdown with ${activePlayers.length} active players (excluding folded players)`);
   console.log(`[SHOWDOWN] Community cards:`, state.communityCards);
-  console.log(`[SHOWDOWN] Total pot: ${state.pot} (old: ${oldPot}, collected: ${collectedPot})`);
+  console.log(`[SHOWDOWN] Total pot: ${state.pot} (old: ${oldPot}, collected: ${collectedPot}), chips before dist: ${chipsBeforeDist}`);
 
   // Post dealer message about showdown
   if (io) {
@@ -1988,8 +1999,8 @@ async function handleShowdown(gameId, io, options = {}) {
     }
   }
 
-  // Update ALL player chips in database – chip conservation requires accurate DB state.
-  // Persist every player's chips (not just winners) so consolidation/reload never uses stale values.
+  // Update ALL player chips in database – required for chip conservation.
+  // Not persisting losers causes inflation (DB keeps stale chips, next hand loads them).
   await Promise.all(
     activePlayers.map(player =>
       prisma.player.update({

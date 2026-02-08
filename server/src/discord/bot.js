@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, REST, Routes, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
+import { Client, Events, GatewayIntentBits, REST, Routes, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import dotenv from 'dotenv';
 import { prisma } from '../config/database.js';
 
@@ -112,7 +112,7 @@ export async function initializeDiscordBot() {
       }
     });
 
-    client.once('ready', () => {
+    client.once(Events.ClientReady, () => {
       console.log(`[DISCORD BOT] Logged in as ${client.user.tag}`);
     });
 
@@ -726,6 +726,10 @@ export async function postTournamentWinnersEmbed(tournament) {
             server: true,
           },
         },
+        registrations: {
+          where: { status: { in: ['CONFIRMED', 'PENDING'] } },
+          select: { id: true },
+        },
         games: {
           include: {
             players: {
@@ -769,16 +773,20 @@ export async function postTournamentWinnersEmbed(tournament) {
       return [];
     }
 
+    const registeredCount = tournamentWithRelations.registrations?.length ?? standings.length;
+    const topPlacesToShow = Math.max(1, Math.ceil(registeredCount * 0.2)); // Top 20%
+    const topStandings = standings.slice(0, topPlacesToShow);
+
     const clientUrl = process.env.CLIENT_URL || 'https://bux-poker.pro';
     const logoUrl = `${clientUrl}/images/bux-poker.png`;
     const tournamentUrl = `${clientUrl}/tournaments/${tournament.id}`;
 
     const winner = standings[0];
-    const lines = standings.map(p => {
+    // Use display rank (1, 2, 3...) for consecutive numbering; finishingPlace can have ties/gaps
+    const lines = topStandings.map((p, i) => {
       const name = p.user?.username || 'Unknown';
-      const place = p.finishingPlace ?? '?';
-      const chipStr = p.chips.toLocaleString();
-      return `**${place}.** ${name} — ${chipStr} chips`;
+      const displayRank = i + 1;
+      return `**${displayRank}.** ${name}`;
     });
 
     const embed = new EmbedBuilder()
@@ -787,7 +795,7 @@ export async function postTournamentWinnersEmbed(tournament) {
       .setThumbnail(logoUrl)
       .addFields(
         { name: 'Winner', value: winner.user?.username || 'Unknown', inline: true },
-        { name: 'Players', value: `${standings.length}`, inline: true },
+        { name: 'Players', value: `${registeredCount}`, inline: true },
       )
       .setURL(tournamentUrl)
       .setColor(0xFFD700)
