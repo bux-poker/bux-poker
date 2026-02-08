@@ -955,7 +955,7 @@ export function PokerGameView() {
           {/* Table area - takes most of the space */}
           <div className="relative flex-1 overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900 min-h-0">
             {consolidationWaiting && (
-              <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm" style={{ zIndex: 100 }}>
                 <div className="rounded-xl bg-slate-800/95 border border-slate-600 px-8 py-6 text-center max-w-md shadow-2xl">
                   <p className="text-lg font-medium text-slate-200">{consolidationWaiting}</p>
                   <p className="mt-2 text-sm text-slate-400">Please wait...</p>
