@@ -854,8 +854,10 @@ export class TournamentEngine {
 
   async _doOnPlayersBust(tournamentId, playerIds) {
     if (!playerIds || playerIds.length === 0) return;
+    // Count players with chips who are NOT eliminated. Must use status: { not: "ELIMINATED" }
+    // because during/after a hand players can be FOLDED or ALL_IN - they still have chips!
     const remainingBeforeBust = await prisma.player.count({
-      where: { game: { tournamentId }, chips: { gt: 0 }, status: "ACTIVE" }
+      where: { game: { tournamentId }, chips: { gt: 0 }, status: { not: "ELIMINATED" } }
     });
     const basePlace = remainingBeforeBust + 1;
     console.log(`[TOURNAMENT] onPlayersBust: ${playerIds.length} busted, remainingBeforeBust=${remainingBeforeBust}, basePlace=${basePlace}`);
@@ -863,12 +865,12 @@ export class TournamentEngine {
       await this._markPlayerBust(tournamentId, playerIds[i], basePlace + i);
     }
     const remainingAfterBust = await prisma.player.count({
-      where: { game: { tournamentId }, chips: { gt: 0 }, status: "ACTIVE" }
+      where: { game: { tournamentId }, chips: { gt: 0 }, status: { not: "ELIMINATED" } }
     });
     // Only complete when exactly one player left (one winner). remaining === 0 would be a bug.
     if (remainingAfterBust === 1) {
       const winner = await prisma.player.findFirst({
-        where: { game: { tournamentId }, chips: { gt: 0 }, status: "ACTIVE" },
+        where: { game: { tournamentId }, chips: { gt: 0 }, status: { not: "ELIMINATED" } },
         include: { user: true, game: true }
       });
       if (winner) {
@@ -914,7 +916,7 @@ export class TournamentEngine {
       data: { status: "ELIMINATED" }
     });
     const place = finishingPlace ?? (await prisma.player.count({
-      where: { game: { tournamentId }, chips: { gt: 0 }, status: "ACTIVE" }
+      where: { game: { tournamentId }, chips: { gt: 0 }, status: { not: "ELIMINATED" } }
     })) + 1;
     await prisma.player.update({
       where: { id: playerId },

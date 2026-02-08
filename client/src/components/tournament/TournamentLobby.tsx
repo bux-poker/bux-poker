@@ -807,9 +807,10 @@ export function TournamentLobby() {
                           {isMyTable ? (
                             <button
                               onClick={() => {
-                                const gameWindow = window.open(`/game/${table.id}`, '_blank', 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
-                                // Request fullscreen when window loads
+                                const winName = `buxpoker-game-${table.id}`;
+                                const gameWindow = window.open(`/game/${table.id}`, winName, 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
                                 if (gameWindow) {
+                                  gameWindow.focus();
                                   gameWindow.addEventListener('load', () => {
                                     setTimeout(() => {
                                       if (gameWindow.document.documentElement.requestFullscreen) {
@@ -826,9 +827,10 @@ export function TournamentLobby() {
                           ) : (
                             <button
                               onClick={() => {
-                                const gameWindow = window.open(`/game/${table.id}`, '_blank', 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
-                                // Request fullscreen when window loads
+                                const winName = `buxpoker-game-${table.id}`;
+                                const gameWindow = window.open(`/game/${table.id}`, winName, 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
                                 if (gameWindow) {
+                                  gameWindow.focus();
                                   gameWindow.addEventListener('load', () => {
                                     setTimeout(() => {
                                       if (gameWindow.document.documentElement.requestFullscreen) {
