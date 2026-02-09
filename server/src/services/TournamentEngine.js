@@ -16,14 +16,17 @@ async function auditChipConservation(tournamentId) {
   });
   if (!tournament) return;
   const expectedTotal = tournament.registrations.length * tournament.startingChips;
-  let actualTotal = 0;
+  let playerChipsTotal = 0;
+  let gamePotTotal = 0;
   for (const game of tournament.games || []) {
+    gamePotTotal += game.pot ?? 0;
     for (const p of game.players || []) {
-      actualTotal += p.chips ?? 0;
+      playerChipsTotal += p.chips ?? 0;
     }
   }
+  const actualTotal = playerChipsTotal + gamePotTotal;
   if (actualTotal !== expectedTotal) {
-    console.error(`[TOURNAMENT] CHIP CONSERVATION VIOLATION: tournament ${tournamentId} has ${actualTotal} chips, expected ${expectedTotal} (${tournament.registrations.length} players × ${tournament.startingChips} starting). Difference: ${actualTotal - expectedTotal}`);
+    console.error(`[TOURNAMENT] CHIP CONSERVATION VIOLATION: tournament ${tournamentId} has ${actualTotal} chips (players: ${playerChipsTotal}, game pots: ${gamePotTotal}), expected ${expectedTotal} (${tournament.registrations.length} players × ${tournament.startingChips} starting). Difference: ${actualTotal - expectedTotal}`);
   } else {
     console.log(`[TOURNAMENT] Chip audit OK: ${actualTotal} chips (expected ${expectedTotal})`);
   }
@@ -708,7 +711,7 @@ export class TournamentEngine {
       const toClose = byPlayerCount.slice(0, byPlayerCount.length - numTablesNeeded);
       const toKeep = byPlayerCount.slice(-numTablesNeeded);
       for (const g of toClose) {
-        await prisma.game.update({ where: { id: g.id }, data: { status: "COMPLETED" } });
+        await prisma.game.update({ where: { id: g.id }, data: { status: "COMPLETED", pot: 0 } });
       }
       games = toKeep;
       console.log(`[TOURNAMENT] Reduced to ${numTablesNeeded} table(s) (closed ${toClose.length} emptiest)`);
@@ -1079,7 +1082,7 @@ export function startIdleTablesPoll() {
         }
         for (const game of games) {
           if (game.players.length === 0) {
-            await prisma.game.update({ where: { id: game.id }, data: { status: "COMPLETED" } });
+            await prisma.game.update({ where: { id: game.id }, data: { status: "COMPLETED", pot: 0 } });
             console.log(`[TOURNAMENT] Closed empty table ${game.tableNumber} (game ${game.id})`);
             continue;
           }

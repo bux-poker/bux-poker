@@ -25,6 +25,7 @@ export interface Tournament {
   createdBy: string | any;
   createdAt: Date | string;
   servers?: TournamentServer[];
+  games?: Array<{ id: string; tableNumber: number; players?: Array<{ id: string; userId: string; status: string; chips?: number; user?: { username?: string } }> }>;
 }
 
 export function useTournaments() {
