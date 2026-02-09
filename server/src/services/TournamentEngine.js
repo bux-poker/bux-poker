@@ -529,12 +529,12 @@ export class TournamentEngine {
 
   /**
    * Wait for all tables to finish their current hands before rebalancing.
-   * We NEVER clear state or force consolidation while hands are in progress -
-   * that would destroy chips in the pot (never persisted) and cause chip loss.
-   * Turn timers handle AFK players; we just wait.
+   * We NEVER clear state (that would destroy chips). If a hand is stuck for 90s
+   * (e.g. turn timer failed), force the current player to act (CHECK or FOLD) to unstick.
    */
   async waitForAllTablesToFinishHands(tournamentId) {
     const checkInterval = 2000; // Check every 2 seconds
+    const stuckThresholdMs = 90000; // 90 seconds - force action to unstick
     const activeSince = new Map(); // gameId -> first time we saw it with active hand
 
     return new Promise((resolve) => {
@@ -550,9 +550,26 @@ export class TournamentEngine {
           if (hasHand) {
             const now = Date.now();
             if (!activeSince.has(game.id)) activeSince.set(game.id, now);
-            const waitingFor = (now - activeSince.get(game.id)) / 1000;
+            const stuckForMs = now - activeSince.get(game.id);
+            const waitingFor = stuckForMs / 1000;
             allHandsFinished = false;
-            console.log(`[TOURNAMENT] Table ${game.tableNumber} still has active hand, waiting... (${waitingFor.toFixed(0)}s)`);
+
+            // If stuck 90s+, force current player to act (preserves chips)
+            if (stuckForMs >= stuckThresholdMs) {
+              try {
+                const { forceStuckPlayerToAct, getIO } = await import("../modules/socket-handlers/pokerHandler.js");
+                const io = getIO();
+                const ok = await forceStuckPlayerToAct(game.id, io);
+                if (ok) {
+                  console.log(`[TOURNAMENT] Table ${game.tableNumber} hand stuck ${waitingFor.toFixed(0)}s - forced player to act`);
+                  activeSince.delete(game.id);
+                }
+              } catch (e) {
+                console.warn(`[TOURNAMENT] Force-stuck failed for table ${game.tableNumber}:`, e?.message);
+              }
+            } else {
+              console.log(`[TOURNAMENT] Table ${game.tableNumber} still has active hand, waiting... (${waitingFor.toFixed(0)}s)`);
+            }
             break;
           }
           activeSince.delete(game.id);

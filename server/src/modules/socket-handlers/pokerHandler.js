@@ -74,6 +74,47 @@ export function hasActiveHand(gameId) {
  * MUST be called before consolidation deletes/moves players, otherwise
  * pending timers will try to update deleted player records (P2025).
  */
+/**
+ * Force a stuck hand to advance by making the current player CHECK (if legal) or FOLD.
+ * Used when consolidation is waiting but a hand's turn timer failed (e.g. io was null).
+ * Preserves chips - applies a real action, does NOT clear state.
+ */
+export async function forceStuckPlayerToAct(gameId, io) {
+  const state = tableState.get(gameId);
+  if (!state || !io) return false;
+  const userId = state.currentTurnUserId;
+  if (!userId) {
+    // No turn set - try moveToNextPlayer which may detect betting complete
+    await moveToNextPlayer(gameId, io);
+    return true;
+  }
+  const player = state.players.find(p => p.userId === userId);
+  if (!player || player.status === 'FOLDED' || player.status === 'ELIMINATED') {
+    await moveToNextPlayer(gameId, io);
+    return true;
+  }
+  if (player.chips === 0 || player.status === 'ALL_IN') {
+    await moveToNextPlayer(gameId, io);
+    return true;
+  }
+  const currentBet = state.bettingRound?.currentBet || 0;
+  const myContribution = state.bettingRound?.getPlayerContribution(player.id) || 0;
+  const canCheck = myContribution >= currentBet;
+  try {
+    if (canCheck) {
+      await applyPlayerAction({ gameId, userId, action: "CHECK", amount: 0, io });
+    } else {
+      await applyPlayerAction({ gameId, userId, action: "FOLD", amount: 0, io });
+    }
+    await moveToNextPlayer(gameId, io);
+    console.log(`[POKER] Force-stuck recovery: ${canCheck ? "CHECK" : "FOLD"} for ${player.name || userId} at table ${gameId}`);
+    return true;
+  } catch (err) {
+    console.error(`[POKER] Force-stuck recovery failed for ${gameId}:`, err?.message);
+    return false;
+  }
+}
+
 export function clearAllStateForGames(gameIds) {
   if (!gameIds || gameIds.length === 0) return;
   for (const gameId of gameIds) {
