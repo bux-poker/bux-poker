@@ -49,6 +49,8 @@ export function BettingControls({
   
   // RAISE amount: total bet amount I'd raise to (currentBet + minimumRaise)
   const minRaiseAmount = currentBet + minimumRaise;
+  // Max total bet = what we've put in + entire stack (true all-in)
+  const maxTotalBet = myContribution + myChips;
   // Heads-up with short stack: opponent may have < min raise, so we can bet any amount that puts them all-in
   const activePlayers = players.filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED');
   const opponent = activePlayers.find(p => p.userId !== myUserId);
@@ -57,19 +59,18 @@ export function BettingControls({
   // When heads-up vs short stack: min raise = currentBet + opponent's remaining (put them all-in)
   const effectiveMinRaise = isHeadsUpShortStack ? currentBet + Math.min(minimumRaise, opponentChips) : minRaiseAmount;
 
-  // Update raise amount when current bet changes
+  // Update raise amount when current bet changes, clamped to max (all-in)
   useEffect(() => {
+    let amount: number;
     if (isPreflop && currentBet === 0) {
-      // Preflop, no bets yet - min raise is 2x big blind
-      setRaiseAmount(bigBlind * 2);
+      amount = bigBlind * 2;
     } else if (currentBet > 0) {
-      // There's a current bet - use effective min (allows short raise when heads-up vs short stack)
-      setRaiseAmount(effectiveMinRaise);
+      amount = effectiveMinRaise;
     } else {
-      // Post-flop, no bets yet - min bet is big blind
-      setRaiseAmount(bigBlind);
+      amount = bigBlind;
     }
-  }, [currentBet, bigBlind, minimumRaise, isPreflop, minRaiseAmount, effectiveMinRaise]);
+    setRaiseAmount(Math.min(amount, maxTotalBet));
+  }, [currentBet, bigBlind, minimumRaise, isPreflop, minRaiseAmount, effectiveMinRaise, maxTotalBet]);
 
   const handlePreset = (preset: string) => {
     switch (preset) {
@@ -83,7 +84,8 @@ export function BettingControls({
         setRaiseAmount(potSize);
         break;
       case 'allin':
-        setRaiseAmount(myChips);
+        // Total bet = what we've already put in + our entire stack (true all-in)
+        setRaiseAmount(myContribution + myChips);
         break;
     }
   };
@@ -185,6 +187,12 @@ export function BettingControls({
         )}
         <button
           onClick={() => {
+            // When user chose ALL IN preset, send explicit ALL_IN so server uses full stack
+            const isAllInBet = actionAmount === myContribution + myChips && myChips > 0;
+            if (isAllInBet) {
+              onAction("ALL_IN", myChips);
+              return;
+            }
             // Server expects additional chips to put in, not total; BET/RAISE displays total
             const amountToSend = (actionLabel === "BET" || actionLabel === "RAISE") ? actionAmount - myContribution : actionAmount;
             onAction(actionLabel, amountToSend);
@@ -311,15 +319,15 @@ export function BettingControls({
             value={raiseAmount}
             onChange={(e) => {
               const minAmount = isPreflop && currentBet === 0 ? bigBlind * 2 : (currentBet > 0 ? effectiveMinRaise : bigBlind);
-              const val = Math.max(minAmount, Math.min(myChips, Number(e.target.value) || minAmount));
+              const val = Math.max(minAmount, Math.min(maxTotalBet, Number(e.target.value) || minAmount));
               setRaiseAmount(val);
             }}
             onWheel={(e) => e.currentTarget.blur()}
             min={isPreflop && currentBet === 0 ? bigBlind * 2 : (currentBet > 0 ? effectiveMinRaise : bigBlind)}
-            max={myChips}
+            max={maxTotalBet}
           />
           <button
-            onClick={() => setRaiseAmount(Math.min(myChips, raiseAmount + (isHeadsUpShortStack ? Math.max(1, minimumRaise / 2) : minimumRaise)))}
+            onClick={() => setRaiseAmount(Math.min(maxTotalBet, raiseAmount + (isHeadsUpShortStack ? Math.max(1, minimumRaise / 2) : minimumRaise)))}
             disabled={!isMyTurn}
             className="flex items-center justify-center rounded-full bg-slate-700 font-bold text-white hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
