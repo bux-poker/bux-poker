@@ -1027,10 +1027,11 @@ async function _startHandForGameBody(gameId, io) {
     console.log(`[POKER] UTG calculation: dealer=${dealerSeat}, sb=${sbSeat}, bb=${bbSeat}, utg=${utgSeat} (${utgPlayer.user?.username || utgPlayer.userId})`);
   }
 
-  // Reset any stale pot from crashed/interrupted hand to prevent chip inflation
-  const startPot = (game.pot && game.pot > 0) ? 0 : (game.pot ?? 0);
-  if (game.pot > 0) {
-    console.warn(`[POKER] Resetting stale game.pot ${game.pot} to 0 at hand start`);
+  // Preserve any stale pot: if game.pot > 0 (crashed/interrupted hand), fold it into this hand's pot
+  // instead of zeroing it - zeroing would destroy chips and violate conservation.
+  const startPot = game.pot ?? 0;
+  if (startPot > 0) {
+    console.warn(`[POKER] Preserving stale game.pot ${startPot} - folding into this hand's pot (chip conservation)`);
     await prisma.game.update({ where: { id: gameId }, data: { pot: 0 } }).catch(() => {});
   }
 
@@ -3034,35 +3035,52 @@ async function moveToNextPlayer(gameId, io) {
     
     if (allPlayersCurrent) {
       // The current player exists but is folded/eliminated - start from next seat clockwise after them
-      const currentSeat = allPlayersCurrent.seatNumber;
-      const allSeatNumbers = state.players.map(p => p.seatNumber);
-      const minSeat = Math.min(...allSeatNumbers);
-      const maxSeat = Math.max(...allSeatNumbers);
-      
-      console.log(`[TURN ORDER] Folded player was at seat ${currentSeat}, starting search clockwise from seat ${currentSeat - 1 < minSeat ? maxSeat : currentSeat - 1}`);
-      
-      // Start from next seat clockwise after the folded player
-      let nextSeat = currentSeat - 1;
+      // CRITICAL: We must find the next player who NEEDS TO ACT, not just the first active player.
+      // Otherwise the raiser (who already acted) could get the turn before others who haven't acted.
+      const foldedSeat = allPlayersCurrent.seatNumber;
+      const seatMap = new Map();
+      activePlayers.forEach(p => {
+        seatMap.set(p.seatNumber, p);
+      });
+      const currentBet = state.bettingRound?.currentBet || 0;
+      if (!state.actedPlayersInRound) {
+        state.actedPlayersInRound = new Set();
+      }
+
+      let nextSeat = foldedSeat - 1;
       if (nextSeat < minSeat) nextSeat = maxSeat;
-      
-      // Find first active player at or after this seat
-      let nextPlayer = activePlayers.find(p => p.seatNumber === nextSeat);
+
       let attempts = 0;
-      while (!nextPlayer && attempts < activePlayers.length) {
+      let nextPlayer = null;
+      const totalSeats = maxSeat - minSeat + 1;
+
+      while (attempts < totalSeats) {
+        const playerAtSeat = seatMap.get(nextSeat);
+        if (playerAtSeat) {
+          const contribution = state.bettingRound?.getPlayerContribution(playerAtSeat.id) || 0;
+          const hasActed = state.actedPlayersInRound.has(playerAtSeat.userId);
+          const isAllIn = playerAtSeat.status === 'ALL_IN' || playerAtSeat.chips === 0;
+          let needsToAct = false;
+          if (!isAllIn) {
+            needsToAct = currentBet === 0 ? !hasActed : (contribution < currentBet || !hasActed);
+          }
+          if (needsToAct) {
+            nextPlayer = playerAtSeat;
+            console.log(`[TURN ORDER] Found next player after folded (seat ${foldedSeat}): seat ${nextPlayer.seatNumber} (${nextPlayer.name || nextPlayer.userId}) needs to act`);
+            break;
+          }
+        }
         nextSeat = nextSeat - 1;
         if (nextSeat < minSeat) nextSeat = maxSeat;
-        nextPlayer = activePlayers.find(p => p.seatNumber === nextSeat);
         attempts++;
-        console.log(`[TURN ORDER] Searching for active player, checked seat ${nextSeat}, found: ${!!nextPlayer}`);
       }
-      
+
       if (nextPlayer) {
-        console.log(`[TURN ORDER] Found next player after folded player: seat ${nextPlayer.seatNumber} (${nextPlayer.name || nextPlayer.userId})`);
         state.currentTurnUserId = nextPlayer.userId;
         startTurnTimer(gameId, state.currentTurnUserId, io);
         return;
       } else {
-        console.log(`[TURN ORDER] No active players found after folded player at seat ${currentSeat}`);
+        console.log(`[TURN ORDER] No player needing to act found after folded player at seat ${foldedSeat}`);
       }
     }
     
