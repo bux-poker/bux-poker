@@ -2251,6 +2251,14 @@ async function handleShowdown(gameId, io, options = {}) {
   bustedWithStacks.sort((a, b) => b.startingStack - a.startingStack);
   const bustedPlayerIds = bustedWithStacks.map(b => b.playerId);
 
+  // CRITICAL: Mark hand complete BEFORE onPlayersBust. onPlayersBust may trigger consolidation,
+  // which waits for all hands to finish. If we haven't marked complete yet, consolidation waits
+  // forever for THIS game while we're blocked in onPlayersBust = deadlock.
+  state.currentTurnUserId = null;
+  state.street = null;
+  tableState.set(gameId, state);
+  console.log(`[SHOWDOWN] Marked hand as complete - hasActiveHand will now return false`);
+
   // Process all busts and run consolidation once (avoids race / duplicate consolidation)
   if (game.tournament && bustedPlayerIds.length > 0) {
     await tournamentEngine.onPlayersBust(game.tournament.id, bustedPlayerIds);
@@ -2259,12 +2267,6 @@ async function handleShowdown(gameId, io, options = {}) {
   if (game?.tournament && io) {
     await emitIfTournamentCompleted(game.tournament.id, gameId, io);
   }
-
-  // Now mark hand complete - hasActiveHand can return false so consolidation may proceed
-  state.currentTurnUserId = null;
-  state.street = null;
-  tableState.set(gameId, state);
-  console.log(`[SHOWDOWN] Marked hand as complete - hasActiveHand will now return false`);
 
   // Reset pot
   state.pot = 0;
