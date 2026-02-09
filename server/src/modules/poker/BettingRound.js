@@ -248,8 +248,18 @@ export class BettingRound {
       return false; // Can't determine if players not found
     }
     
-    // If current turn is the last raiser, betting is NOT complete (they need to act again)
+    // If current turn is the last raiser, betting is complete ONLY if all other players are all-in (can't act).
+    // Otherwise action needs to come back to the last raiser.
     if (currentTurnUserId === lastRaiseUserId) {
+      const otherActivePlayers = contributions.filter(c => {
+        const player = allPlayers.find(p => p.id === c.id);
+        return player && player.userId !== lastRaiseUserId;
+      });
+      const allOthersAllIn = otherActivePlayers.length > 0 && otherActivePlayers.every(c => c.isAllIn);
+      if (allOthersAllIn) {
+        console.log(`[BETTING] Complete: last raiser acted, all other active players are all-in`);
+        return true;
+      }
       console.log(`[BETTING] Not complete: current turn is last raiser (seat ${lastRaiser.seatNumber})`);
       return false;
     }
