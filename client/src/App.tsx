@@ -16,7 +16,7 @@ function App() {
   const isGameRoute = window.location.pathname.startsWith('/game/');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50">
+    <div className={`min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 ${isGameRoute ? 'min-h-[100dvh] flex flex-col' : ''}`}>
       {!isGameRoute && (
       <header className="sticky top-0 z-50 border-b border-slate-800/50 bg-slate-950/80 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

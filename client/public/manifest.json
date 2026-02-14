@@ -1,0 +1,10 @@
+{
+  "name": "BUX Poker",
+  "short_name": "BUX Poker",
+  "description": "Texas Hold'em Tournament Platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "orientation": "any"
+}

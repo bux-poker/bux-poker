@@ -493,22 +493,27 @@ export function TournamentLobby() {
             <button
               onClick={() => {
                 const url = `/game/${myGameId}`;
-                const winName = 'buxpoker-game-window';
-                let w = window.open('', winName);
-                if (w && !w.closed) {
-                  w.location.href = url;
-                  w.focus();
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+                if (isMobile) {
+                  navigate(url);
                 } else {
-                  w = window.open(url, winName, 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
-                  if (w) {
+                  const winName = 'buxpoker-game-window';
+                  let w = window.open('', winName);
+                  if (w && !w.closed) {
+                    w.location.href = url;
                     w.focus();
-                    w.addEventListener('load', () => {
-                      setTimeout(() => {
-                        if (w?.document?.documentElement?.requestFullscreen) {
-                          w.document.documentElement.requestFullscreen().catch(() => {});
-                        }
-                      }, 500);
-                    });
+                  } else {
+                    w = window.open(url, winName, 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
+                    if (w) {
+                      w.focus();
+                      w.addEventListener('load', () => {
+                        setTimeout(() => {
+                          if (w?.document?.documentElement?.requestFullscreen) {
+                            w.document.documentElement.requestFullscreen().catch(() => {});
+                          }
+                        }, 500);
+                      });
+                    }
                   }
                 }
               }}
@@ -846,22 +851,27 @@ export function TournamentLobby() {
                             <button
                               onClick={() => {
                                 const url = `/game/${table.id}`;
-                                const winName = 'buxpoker-game-window';
-                                let w = window.open('', winName);
-                                if (w && !w.closed) {
-                                  w.location.href = url;
-                                  w.focus();
+                                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+                                if (isMobile) {
+                                  navigate(url);
                                 } else {
-                                  w = window.open(url, winName, 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
-                                  if (w) {
+                                  const winName = 'buxpoker-game-window';
+                                  let w = window.open('', winName);
+                                  if (w && !w.closed) {
+                                    w.location.href = url;
                                     w.focus();
-                                    w.addEventListener('load', () => {
-                                      setTimeout(() => {
-                                        if (w?.document?.documentElement?.requestFullscreen) {
-                                          w.document.documentElement.requestFullscreen().catch(() => {});
-                                        }
-                                      }, 500);
-                                    });
+                                  } else {
+                                    w = window.open(url, winName, 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
+                                    if (w) {
+                                      w.focus();
+                                      w.addEventListener('load', () => {
+                                        setTimeout(() => {
+                                          if (w?.document?.documentElement?.requestFullscreen) {
+                                            w.document.documentElement.requestFullscreen().catch(() => {});
+                                          }
+                                        }, 500);
+                                      });
+                                    }
                                   }
                                 }
                               }}
@@ -873,22 +883,27 @@ export function TournamentLobby() {
                             <button
                               onClick={() => {
                                 const url = `/game/${table.id}`;
-                                const winName = 'buxpoker-game-window';
-                                let w = window.open('', winName);
-                                if (w && !w.closed) {
-                                  w.location.href = url;
-                                  w.focus();
+                                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+                                if (isMobile) {
+                                  navigate(url);
                                 } else {
-                                  w = window.open(url, winName, 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
-                                  if (w) {
+                                  const winName = 'buxpoker-game-window';
+                                  let w = window.open('', winName);
+                                  if (w && !w.closed) {
+                                    w.location.href = url;
                                     w.focus();
-                                    w.addEventListener('load', () => {
-                                      setTimeout(() => {
-                                        if (w?.document?.documentElement?.requestFullscreen) {
-                                          w.document.documentElement.requestFullscreen().catch(() => {});
-                                        }
-                                      }, 500);
-                                    });
+                                  } else {
+                                    w = window.open(url, winName, 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
+                                    if (w) {
+                                      w.focus();
+                                      w.addEventListener('load', () => {
+                                        setTimeout(() => {
+                                          if (w?.document?.documentElement?.requestFullscreen) {
+                                            w.document.documentElement.requestFullscreen().catch(() => {});
+                                          }
+                                        }, 500);
+                                      });
+                                    }
                                   }
                                 }
                               }}

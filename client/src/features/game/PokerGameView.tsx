@@ -800,7 +800,7 @@ export function PokerGameView() {
   };
 
   return (
-    <div className="flex h-screen w-screen flex-col bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden">
+    <div className="flex h-[100dvh] min-h-screen w-screen flex-col bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden">
       {!socketConnected && gameState && (
         <div className="flex items-center justify-between gap-4 bg-amber-500/20 border-b border-amber-500/40 px-4 py-2 text-amber-200 text-sm shrink-0">
           <span>Connection lost. Game may be out of date.</span>
