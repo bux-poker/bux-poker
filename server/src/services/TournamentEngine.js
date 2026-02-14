@@ -1102,4 +1102,3 @@ export function startIdleTablesPoll() {
   }, 60000);
   console.log("[TOURNAMENT] Idle tables poll running every 60s");
 }
-

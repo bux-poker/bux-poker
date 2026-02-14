@@ -244,15 +244,17 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
       ? activeNonFoldedPlayers[0]
       : null;
 
-  // Effective stack cap: max total contribution = min(my stack, largest opponent effective stack)
+  // Effective stack cap: max total contribution so we don't create uncallable bets.
+  // With all-in short stacks: we can raise beyond their amount into a side pot with remaining players.
+  // Cap = currentBet + min(opponent chips) for opponents who still have chips to call.
   const getEffectiveCap = () => {
     const myContribution = state.bettingRound.getPlayerContribution(player.id);
-    const others = activeNonFoldedPlayers.filter((p) => p.userId !== userId);
-    if (others.length === 0) return myContribution + player.chips;
-    const maxOtherEffective = Math.max(
-      ...others.map((o) => (state.bettingRound.getPlayerContribution(o.id) || 0) + o.chips)
-    );
-    return Math.min(myContribution + player.chips, maxOtherEffective);
+    const currentBet = state.bettingRound.currentBet || 0;
+    const othersWithChips = activeNonFoldedPlayers.filter((p) => p.userId !== userId && p.chips > 0);
+    if (othersWithChips.length === 0) return myContribution + player.chips; // No one can call more - allow all-in
+    const minOpponentChips = Math.min(...othersWithChips.map((o) => o.chips));
+    const sidePotRoom = currentBet + minOpponentChips;
+    return Math.min(myContribution + player.chips, sidePotRoom);
   };
 
   switch (action) {
