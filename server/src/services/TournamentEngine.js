@@ -621,8 +621,20 @@ export class TournamentEngine {
     });
     const seatsPerTable = tournament?.seatsPerTable ?? 9;
 
-    // Load current table counts to see if we actually need to consolidate
+    // Never balance while any table has an active hand
     let games = await prisma.game.findMany({
+      where: { tournamentId, status: "ACTIVE" },
+      include: { players: true }
+    });
+    for (const g of games) {
+      if (await this.hasActiveHand(g.id)) {
+        console.log(`[TOURNAMENT] Skipping consolidation: table ${g.tableNumber} (game ${g.id}) has active hand`);
+        return games;
+      }
+    }
+
+    // Load current table counts to see if we actually need to consolidate
+    games = await prisma.game.findMany({
       where: { tournamentId, status: "ACTIVE" },
       include: {
         players: {
@@ -781,6 +793,14 @@ export class TournamentEngine {
         tableNumber: game.tableNumber,
         players: playersForThisTable
       });
+    }
+
+    // Never run the rebalance while any table has an active hand (race check before destructive work)
+    for (const gameId of allActiveGameIdsForClear) {
+      if (await this.hasActiveHand(gameId)) {
+        console.warn(`[TOURNAMENT] Aborting consolidation: game ${gameId} has active hand (started during wait)`);
+        return games;
+      }
     }
 
     // CRITICAL: Clear in-memory state for ALL ACTIVE tournament games BEFORE deleting players.
