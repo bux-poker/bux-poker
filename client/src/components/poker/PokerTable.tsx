@@ -443,7 +443,7 @@ export function PokerTable({
           const elements = [
             <div
               key={`player-${player?.id || `seat-${seatIdx + 1}`}`}
-              className="absolute z-20"
+              className="absolute z-[60]"
               style={{
                 left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${horizontalOffset}px)`,
                 top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}% + ${verticalOffset}px)`,

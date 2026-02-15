@@ -98,8 +98,22 @@ export function PokerGameView() {
   const [winnerModalOpen, setWinnerModalOpen] = useState(false);
   const [consolidationWaiting, setConsolidationWaiting] = useState<string | null>(null);
   const [socketConnected, setSocketConnected] = useState(false);
+  const [chatCollapsed, setChatCollapsed] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [isMobileWidth, setIsMobileWidth] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
+  const chatCollapsedRef = useRef(chatCollapsed);
   const { user } = useAuth();
+
+  chatCollapsedRef.current = chatCollapsed;
   const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
+
+  // Mobile width detection for collapsible chat
+  useEffect(() => {
+    const check = () => setIsMobileWidth(window.innerWidth <= 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   // Keep tournament data fresh (remainingPlayers, etc.) when in active game (silent = no loading flash)
   useEffect(() => {
@@ -278,6 +292,11 @@ export function PokerGameView() {
       const messageData = data.message || data;
       // Dispatch a custom event to be caught by ChatHooks
       window.dispatchEvent(new CustomEvent('gameMessage', { detail: { gameId: id, message: messageData } }));
+      // If chat is collapsed on mobile and message is from another user (not dealer), increment unread
+      const isUserChat = messageData && !messageData.isDealerMessage && messageData.userId !== 'DEALER' && messageData.userId !== user?.id;
+      if (isUserChat && chatCollapsedRef.current && window.innerWidth <= 768) {
+        setUnreadChatCount((c) => c + 1);
+      }
     });
 
     socket.on("turn-timer-start", (payload: { gameId: string; userId: string; expiresAt: number; duration: number }) => {
@@ -402,7 +421,7 @@ export function PokerGameView() {
       socket.off("tournament_completed");
       clearInterval(timerInterval);
     };
-  }, [id, turnTimer, gameState?.tournamentId, tournament?.id]);
+  }, [id, turnTimer, gameState?.tournamentId, tournament?.id, user?.id]);
 
   // Update countdown timer every second (separate from socket setup).
   // IMPORTANT: Countdown is driven only by server \"tournament-starting\" /
@@ -860,9 +879,9 @@ export function PokerGameView() {
           </div>
         </div>
       )}
-      {/* Top Bar - Game Info */}
+      {/* Top Bar - Game Info - z-10 so table content can overlap when needed */}
       <div 
-        className="flex items-center justify-between border-b border-slate-800 bg-slate-900/90 backdrop-blur-sm flex-shrink-0"
+        className="relative z-10 flex items-center justify-between border-b border-slate-800 bg-slate-900/90 backdrop-blur-sm flex-shrink-0"
         style={{
           paddingLeft: 'var(--top-bar-padding-x, 24px)',
           paddingRight: 'var(--top-bar-padding-x, 24px)',
@@ -948,8 +967,8 @@ export function PokerGameView() {
         </div>
       </div>
 
-      {/* Main game area - full screen layout */}
-      <div className="flex flex-1 overflow-hidden min-h-0">
+      {/* Main game area - z-20 so player names stack above top bar */}
+      <div className="relative z-20 flex flex-1 overflow-hidden min-h-0">
         {/* Left side - Table and controls */}
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">
           {/* Table area - takes most of the space */}
@@ -1041,55 +1060,93 @@ export function PokerGameView() {
           </div>
         </div>
 
-        {/* Right side - Chat */}
+        {/* Right side - Chat (collapsible on mobile) */}
         {user && (
-          <div 
-            className="border-l border-slate-800 flex-shrink-0"
-            style={{ width: 'var(--chat-width, 320px)' }}
-          >
-            <div className="flex flex-col h-full">
-              {/* Dealer Message Toggle */}
-              <div className="px-2 py-1 border-b border-slate-700 flex items-center justify-between bg-slate-800/50">
-                <span className="text-xs text-slate-300">Dealer Messages</span>
-                <button
-                  onClick={() => setShowDealerMessages(!showDealerMessages)}
-                  className={`relative inline-flex items-center rounded-full transition-colors ${
-                    showDealerMessages ? 'bg-blue-600' : 'bg-slate-600'
-                  }`}
-                  style={{
-                    height: '20px',
-                    width: '36px'
-                  }}
-                >
-                  <span
-                    className={`inline-block rounded-full bg-white transition-transform ${
-                      showDealerMessages ? 'translate-x-4' : 'translate-x-0'
-                    }`}
-                    style={{
-                      height: '16px',
-                      width: '16px',
-                      marginLeft: '2px'
-                    }}
-                  />
-                </button>
+          <>
+            {/* Chat icon tab - mobile only, when collapsed */}
+            {isMobileWidth && chatCollapsed && (
+              <button
+                onClick={() => {
+                  setChatCollapsed(false);
+                  setUnreadChatCount(0);
+                }}
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-40 flex items-center justify-center w-10 h-14 rounded-l-lg bg-slate-800/95 border border-slate-600 border-r-0 shadow-lg"
+                aria-label="Open chat"
+              >
+                <svg className="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                {unreadChatCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-bold text-white">
+                    {unreadChatCount > 99 ? '99+' : unreadChatCount}
+                  </span>
+                )}
+              </button>
+            )}
+            {/* Chat panel - hidden on mobile when collapsed */}
+            {(!isMobileWidth || !chatCollapsed) && (
+              <div 
+                className={`border-l border-slate-800 flex-shrink-0 relative ${isMobileWidth ? 'w-72 max-w-[45%]' : ''}`}
+                style={!isMobileWidth ? { width: 'var(--chat-width, 320px)' } : undefined}
+              >
+                <div className="flex flex-col h-full">
+                  {/* Header: Dealer toggle + collapse button on mobile */}
+                  <div className="px-2 py-1 border-b border-slate-700 flex items-center justify-between bg-slate-800/50">
+                    <span className="text-xs text-slate-300">Dealer Messages</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowDealerMessages(!showDealerMessages)}
+                        className={`relative inline-flex items-center rounded-full transition-colors ${
+                          showDealerMessages ? 'bg-blue-600' : 'bg-slate-600'
+                        }`}
+                        style={{
+                          height: '20px',
+                          width: '36px'
+                        }}
+                      >
+                        <span
+                          className={`inline-block rounded-full bg-white transition-transform ${
+                            showDealerMessages ? 'translate-x-4' : 'translate-x-0'
+                          }`}
+                          style={{
+                            height: '16px',
+                            width: '16px',
+                            marginLeft: '2px'
+                          }}
+                        />
+                      </button>
+                      {isMobileWidth && (
+                        <button
+                          onClick={() => setChatCollapsed(true)}
+                          className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-600"
+                          aria-label="Collapse chat"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex-1 min-h-0">
+                    <Chat
+                      gameId={gameState.id}
+                      userId={user.id}
+                      userName={user.username || 'Player'}
+                      players={chatPlayers}
+                      spectators={[]}
+                      userAvatar={user.avatarUrl}
+                      showPlayerListTab={false}
+                      chatType="game"
+                      isSpectator={false}
+                      PlayerStatsModal={PlayerStatsModal}
+                      showDealerMessages={showDealerMessages}
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="flex-1 min-h-0">
-                <Chat
-                  gameId={gameState.id}
-                  userId={user.id}
-                  userName={user.username || 'Player'}
-                  players={chatPlayers}
-                  spectators={[]}
-                  userAvatar={user.avatarUrl}
-                  showPlayerListTab={false}
-                  chatType="game"
-                  isSpectator={false}
-                  PlayerStatsModal={PlayerStatsModal}
-                  showDealerMessages={showDealerMessages}
-                />
-              </div>
-            </div>
-          </div>
+            )}
+          </>
         )}
       </div>
     </div>

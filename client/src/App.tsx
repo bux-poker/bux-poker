@@ -8,6 +8,7 @@ import { CreateTournament } from "./components/admin/CreateTournament";
 import { AdminRoute } from "./components/admin/AdminRoute";
 import { AuthCallback } from "./pages/AuthCallback";
 import { useAdmin } from "./hooks/useAdmin";
+import { AddToHomeScreen } from "./components/AddToHomeScreen";
 
 function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -152,7 +153,7 @@ function App() {
                           Discord integration, real-time gameplay, and competitive
                           league systems.
                         </p>
-                        <div className="flex flex-wrap gap-2 sm:gap-3">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                           <Link
                             to="/tournaments"
                             className="rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-emerald-500/25 transition-all hover:scale-105 hover:shadow-emerald-500/40 sm:px-5 sm:py-2.5 sm:text-sm md:px-6 md:py-3 md:text-base"
@@ -165,6 +166,7 @@ function App() {
                           >
                             View Leagues
                           </Link>
+                          <AddToHomeScreen />
                         </div>
                       </div>
                       {/* Aces Image */}

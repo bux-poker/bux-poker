@@ -5,6 +5,7 @@ import { useAuth } from '@shared/features/auth/AuthContext';
 import { useAdmin } from '../../hooks/useAdmin';
 import { getSocket } from '../../services/socket';
 import { TournamentTimestamp } from './TournamentTimestamp';
+import { AddToHomeScreen } from '../AddToHomeScreen';
 import api from '../../services/api';
 
 type Tab = 'players' | 'blinds' | 'prizes' | 'tables';
@@ -442,13 +443,14 @@ export function TournamentLobby() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <button
           onClick={() => navigate('/tournaments')}
           className="text-slate-400 hover:text-slate-200"
         >
           ← Back to Tournaments
         </button>
+        <AddToHomeScreen compact />
       </div>
 
       {/* Tournament Info Card */}

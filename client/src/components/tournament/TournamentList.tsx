@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import api from '../../services/api';
 import { TournamentTimestamp } from './TournamentTimestamp';
 import { useAuth } from '@shared/features/auth/AuthContext';
+import { AddToHomeScreen } from '../AddToHomeScreen';
 
 interface ServerWithMembership {
   id: string;
@@ -444,7 +445,9 @@ export function TournamentList() {
       {/* Header with Filter */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold text-slate-100">Tournaments</h1>
-        <div className="flex gap-2 rounded-lg border border-slate-800 bg-slate-900/50 p-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <AddToHomeScreen compact />
+          <div className="flex gap-2 rounded-lg border border-slate-800 bg-slate-900/50 p-1">
           <button
             onClick={() => setFilter('all')}
             className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
@@ -485,6 +488,7 @@ export function TournamentList() {
           >
             Completed
           </button>
+        </div>
         </div>
       </div>
 
