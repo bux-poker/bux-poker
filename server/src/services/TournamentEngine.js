@@ -703,6 +703,28 @@ export class TournamentEngine {
         });
       }
     }
+    // Chip conservation: any chips in game pots must be added to a player before we close games
+    // or delete/recreate players, otherwise setting pot: 0 would destroy those chips.
+    for (const game of games) {
+      const pot = game.pot ?? 0;
+      if (pot > 0) {
+        const firstFromGame = allPlayers.find((p) => p.gameId === game.id);
+        if (firstFromGame) {
+          firstFromGame.chips += pot;
+          firstFromGame.player.chips = (firstFromGame.player.chips ?? 0) + pot;
+          console.log(`[TOURNAMENT] Preserving pot ${pot} from game ${game.id} (table ${game.tableNumber}) into player ${firstFromGame.playerId} before consolidation`);
+        } else {
+          console.warn(`[TOURNAMENT] Game ${game.id} has pot ${pot} but no players to assign it to - chips will be lost`);
+        }
+      }
+    }
+    // Zero game pots in DB for games whose pot we transferred (avoid double-count in audit)
+    await Promise.all(
+      games
+        .filter((g) => (g.pot ?? 0) > 0)
+        .map((g) => prisma.game.update({ where: { id: g.id }, data: { pot: 0 } }))
+    ).catch((e) => console.warn("[TOURNAMENT] Error zeroing game pots after transfer:", e?.message));
+
     const totalPlayers = allPlayers.length;
     const numTablesNeeded = Math.max(1, Math.ceil(totalPlayers / seatsPerTable));
     
@@ -718,6 +740,7 @@ export class TournamentEngine {
           console.warn(`[TOURNAMENT] Cannot close table ${g.tableNumber} - has active hand (likely all-in players); skipping consolidation`);
           return games; // Abort - cannot safely close
         }
+        // Pot was already transferred into a player above (chip conservation)
         await prisma.game.update({ where: { id: g.id }, data: { status: "COMPLETED", pot: 0 } });
       }
       games = toKeep;
