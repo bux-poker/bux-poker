@@ -12,8 +12,8 @@ import { useAdmin } from "./hooks/useAdmin";
 function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isAdmin, loading: adminLoading } = useAdmin();
-
-  const isGameRoute = window.location.pathname.startsWith('/game/');
+  const location = useLocation();
+  const isGameRoute = location.pathname.startsWith('/game/');
 
   return (
     <div className={`min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 ${isGameRoute ? 'min-h-[100dvh] flex flex-col' : ''}`}>
