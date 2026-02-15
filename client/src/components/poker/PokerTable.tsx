@@ -489,11 +489,15 @@ export function PokerTable({
             <div className="flex flex-col items-center gap-1 rounded-lg border border-amber-500/60 bg-slate-900/95 px-3 py-2 text-center shadow-xl">
               {showdownResults.winners.length === 1 ? (
                 <span className="font-bold text-amber-300" style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}>
-                  {showdownResults.winners[0].name} wins with {formatHandCategory(showdownResults.winners[0].handCategory)}
+                  {showdownResults.winners[0].handCategory
+                    ? `${showdownResults.winners[0].name} wins with ${formatHandCategory(showdownResults.winners[0].handCategory)}`
+                    : `${showdownResults.winners[0].name} wins ${(showdownResults.winners[0].potWon ?? 0).toLocaleString()} chips`}
                 </span>
               ) : (
                 <span className="font-bold text-amber-300" style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}>
-                  {showdownResults.winners.map((w: any) => w.name).join(" & ")} split with {formatHandCategory(showdownResults.winners[0]?.handCategory)}
+                  {showdownResults.winners[0]?.handCategory
+                    ? `${showdownResults.winners.map((w: any) => w.name).join(" & ")} split with ${formatHandCategory(showdownResults.winners[0]?.handCategory)}`
+                    : `${showdownResults.winners.map((w: any) => w.name).join(" & ")} split ${(showdownResults.winners[0]?.potWon ?? 0).toLocaleString()} chips`}
                 </span>
               )}
             </div>

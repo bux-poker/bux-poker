@@ -2698,19 +2698,25 @@ async function advanceToNextStreet(gameId, io) {
         
         if (io) {
           postDealerMessage(gameId, io, `${winnerName} wins ${totalPot.toLocaleString()} (all other players folded)`);
-          
-          // Emit winner event
+          // Show table win message and +potWon before next hand (no hand strength - fold win)
+          state.showdownActive = true;
+          state.showdownResults = {
+            winners: [{ playerId: bbPlayer.id, userId: bbPlayer.userId, name: winnerName, potWon: totalPot }]
+          };
+          tableState.set(gameId, state);
+          const gameForEmit = await prisma.game.findUnique({
+            where: { id: gameId },
+            include: { players: { include: { user: true } }, tournament: true }
+          }).catch(() => null);
+          if (gameForEmit && io) {
+            io.to(`game:${gameId}`).emit("game-state", buildClientGameState(gameForEmit, state));
+          }
           io.to(`game:${gameId}`).emit("winner", {
             gameId,
-            winners: [{
-              playerId: bbPlayer.id,
-              userId: bbPlayer.userId,
-              name: winnerName,
-              potWon: totalPot
-            }]
+            winners: [{ playerId: bbPlayer.id, userId: bbPlayer.userId, name: winnerName, potWon: totalPot }]
           });
         }
-        
+
         // Update player chips in database
         prisma.player.update({
           where: { id: bbPlayer.id },
@@ -2977,14 +2983,23 @@ async function moveToNextPlayer(gameId, io) {
     state.pot = 0;
     state.currentTurnUserId = null;
     state.currentTurnStartedAt = null;
-    state.street = null;
-    tableState.set(gameId, state);
-
     const winnerName = winner.name || winner.user?.username || `Player ${winner.seatNumber}`;
     console.log(`[POKER] One player left – awarding pot of ${totalPot} to ${winnerName}`);
 
     if (io) {
       postDealerMessage(gameId, io, `${winnerName} wins ${totalPot.toLocaleString()} (all other players folded)`);
+      state.showdownActive = true;
+      state.showdownResults = {
+        winners: [{ playerId: winner.id, userId: winner.userId, name: winnerName, potWon: totalPot }]
+      };
+      tableState.set(gameId, state);
+      const game = await prisma.game.findUnique({
+        where: { id: gameId },
+        include: { players: { include: { user: true } }, tournament: true },
+      }).catch(() => null);
+      if (game) {
+        io.to(`game:${gameId}`).emit("game-state", buildClientGameState(game, state));
+      }
       io.to(`game:${gameId}`).emit("winner", {
         gameId,
         winners: [{ playerId: winner.id, userId: winner.userId, name: winnerName, potWon: totalPot }],
@@ -2992,17 +3007,6 @@ async function moveToNextPlayer(gameId, io) {
     }
     await prisma.player.update({ where: { id: winner.id }, data: { chips: winner.chips } }).catch(() => {});
     await prisma.game.update({ where: { id: gameId }, data: { pot: 0 } }).catch(() => {});
-
-    if (io) {
-      const game = await prisma.game.findUnique({
-        where: { id: gameId },
-        include: { players: { include: { user: true } }, tournament: true },
-      }).catch(() => null);
-      if (game) {
-        const payload = buildClientGameState(game, state);
-        io.to(`game:${gameId}`).emit("game-state", payload);
-      }
-    }
 
     setTimeout(() => {
       const savedPlayers = [...state.players];
@@ -3620,7 +3624,14 @@ export function registerPokerHandlers(io) {
                 }
               }
             }, 3000); // 3 second delay to show winner
-            
+
+            // Show table win message and +potWon before next hand (no hand strength - fold/uncalled win)
+            state.showdownActive = true;
+            state.showdownResults = {
+              winners: [{ playerId: winner.id, userId: winner.userId, name: winnerName, potWon: totalPot }]
+            };
+            tableState.set(gameId, state);
+
             // Emit updated state
             const updatedGameFromState = {
               id: gameId,
