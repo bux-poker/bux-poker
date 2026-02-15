@@ -7,6 +7,7 @@ import { LoginButton } from "./components/auth/LoginButton";
 import { CreateTournament } from "./components/admin/CreateTournament";
 import { AdminRoute } from "./components/admin/AdminRoute";
 import { AuthCallback } from "./pages/AuthCallback";
+import { TableTestPage } from "./pages/TableTestPage";
 import { useAdmin } from "./hooks/useAdmin";
 import { AddToHomeScreen } from "./components/AddToHomeScreen";
 
@@ -14,7 +15,7 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isAdmin, loading: adminLoading } = useAdmin();
   const location = useLocation();
-  const isGameRoute = location.pathname.startsWith('/game/');
+  const isGameRoute = location.pathname.startsWith('/game/') || location.pathname === '/table-test';
 
   return (
     <div className={`min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 ${isGameRoute ? 'min-h-[100dvh] flex flex-col' : ''}`}>
@@ -51,12 +52,20 @@ function App() {
                 Leagues
               </Link>
               {!adminLoading && isAdmin && (
-                <Link
-                  to="/admin"
-                  className="text-sm font-medium text-slate-300 transition-colors hover:text-emerald-400"
-                >
-                  Admin
-                </Link>
+                <>
+                  <Link
+                    to="/table-test"
+                    className="text-sm font-medium text-slate-300 transition-colors hover:text-emerald-400"
+                  >
+                    Table test
+                  </Link>
+                  <Link
+                    to="/admin"
+                    className="text-sm font-medium text-slate-300 transition-colors hover:text-emerald-400"
+                  >
+                    Admin
+                  </Link>
+                </>
               )}
               <LoginButton />
             </nav>
@@ -104,13 +113,22 @@ function App() {
                   Leagues
                 </Link>
                 {!adminLoading && isAdmin && (
-                  <Link
-                    to="/admin"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-emerald-400"
-                  >
-                    Admin
-                  </Link>
+                  <>
+                    <Link
+                      to="/table-test"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-emerald-400"
+                    >
+                      Table test
+                    </Link>
+                    <Link
+                      to="/admin"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-emerald-400"
+                    >
+                      Admin
+                    </Link>
+                  </>
                 )}
                 <div className="px-4">
                   <LoginButton />
@@ -315,6 +333,7 @@ function App() {
           <Route path="/tournaments" element={<TournamentList />} />
           <Route path="/tournaments/:id" element={<TournamentDetail />} />
           <Route path="/game/:id" element={<PokerGameView />} />
+          <Route path="/table-test" element={<TableTestPage />} />
           <Route
             path="/admin"
             element={
