@@ -706,11 +706,16 @@ export class TournamentEngine {
     
     if (games.length > numTablesNeeded) {
       // Close the tables with the FEWEST players first, so we keep the tables that have players.
-      // Previously we closed the last N by table number, which could close the only table with players.
+      // NEVER close a table with an active hand - it may show 0 players (all all-in) due to chips>0 filter.
       const byPlayerCount = [...games].sort((a, b) => (a.players?.length ?? 0) - (b.players?.length ?? 0));
       const toClose = byPlayerCount.slice(0, byPlayerCount.length - numTablesNeeded);
       const toKeep = byPlayerCount.slice(-numTablesNeeded);
       for (const g of toClose) {
+        const hasHand = await this.hasActiveHand(g.id);
+        if (hasHand) {
+          console.warn(`[TOURNAMENT] Cannot close table ${g.tableNumber} - has active hand (likely all-in players); skipping consolidation`);
+          return games; // Abort - cannot safely close
+        }
         await prisma.game.update({ where: { id: g.id }, data: { status: "COMPLETED", pot: 0 } });
       }
       games = toKeep;
@@ -1082,6 +1087,11 @@ export function startIdleTablesPoll() {
         }
         for (const game of games) {
           if (game.players.length === 0) {
+            // Never close a table with an active hand - players may all be all-in (0 chips)
+            // and filtered out; closing would strand them and lose chips
+            if (hasActiveHand(game.id)) {
+              continue;
+            }
             await prisma.game.update({ where: { id: game.id }, data: { status: "COMPLETED", pot: 0 } });
             console.log(`[TOURNAMENT] Closed empty table ${game.tableNumber} (game ${game.id})`);
             continue;
