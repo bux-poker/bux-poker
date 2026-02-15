@@ -80,11 +80,6 @@ export function getTurnStartedAt(gameId) {
  * MUST be called before consolidation deletes/moves players, otherwise
  * pending timers will try to update deleted player records (P2025).
  */
-/** When the current turn started (ms since epoch). 0 if no turn or no state. Used by idle poll to only force after 90s. */
-export function getTurnStartedAt(gameId) {
-  const state = tableState.get(gameId);
-  return state?.currentTurnStartedAt ?? 0;
-}
 /**
  * Force a stuck hand to advance by making the current player CHECK (if legal) or FOLD.
  * Used when consolidation is waiting but a hand's turn timer failed (e.g. io was null).
