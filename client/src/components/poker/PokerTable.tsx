@@ -50,7 +50,7 @@ function BetChip({ value }: { value: number }) {
       </div>
       <span 
         className="font-semibold text-white drop-shadow-lg"
-        style={{ fontSize: 'var(--bet-chip-text-size, 12px)' }}
+        style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}
       >
         {value.toLocaleString()}
       </span>
@@ -150,6 +150,14 @@ interface PokerTableProps {
   smallBlind?: number;
   bigBlind?: number;
   myUserId?: string;
+  /** When true, all seat hole cards render face down (e.g. for table-test layout). */
+  forceSeatCardsFaceDown?: boolean;
+  /** Top-left corner: blinds (e.g. "50/100") and next blind timer (e.g. "2:15 mins"). Shown inside play area when provided. */
+  topLeftBlinds?: string;
+  topLeftTimer?: string;
+  /** Top-right corner: position (e.g. "13th") and players count (e.g. "28/45"). Shown inside play area when provided. */
+  topRightPosition?: string;
+  topRightPlayers?: string;
   showdownActive?: boolean;
   showdownResults?: any;
 }
@@ -179,6 +187,11 @@ export function PokerTable({
   smallBlind = 10,
   bigBlind = 20,
   myUserId,
+  forceSeatCardsFaceDown = false,
+  topLeftBlinds,
+  topLeftTimer,
+  topRightPosition,
+  topRightPlayers,
   showdownActive = false,
   showdownResults,
   tournamentCountdown,
@@ -291,8 +304,87 @@ export function PokerTable({
   return (
     <div 
       className="relative flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden"
-      style={{ padding: 'var(--table-padding, 32px)' }}
+      style={{
+        paddingTop: 'var(--table-padding-top, 56px)',
+        paddingRight: 'var(--table-padding, 32px)',
+        paddingBottom: 'var(--table-padding, 32px)',
+        paddingLeft: 'var(--table-padding, 32px)',
+      }}
     >
+      {/* Top-left corner: blinds + timer (inside play area) - bigger on desktop */}
+      {(topLeftBlinds != null || topLeftTimer != null) && (() => {
+        const isDesktop = windowSize.width >= 1000;
+        const cornerLabelSize = isDesktop ? '12px' : '9px';
+        const cornerValueSize = isDesktop ? '16px' : '11px';
+        const cornerPadding = isDesktop ? '8px 10px' : '4px 6px';
+        return (
+        <div
+          className="absolute left-0 top-0 z-10 rounded border border-slate-600/60 bg-slate-900/90"
+          style={{ marginLeft: '6px', marginTop: '6px', padding: cornerPadding }}
+        >
+          <div className="flex flex-col gap-1 leading-snug">
+            {topLeftBlinds != null && (
+              <div className="flex flex-col">
+                <span className="font-semibold uppercase tracking-wide text-slate-400" style={{ fontSize: cornerLabelSize }}>
+                  BLINDS
+                </span>
+                <span className="font-bold text-white" style={{ fontSize: cornerValueSize }}>
+                  {topLeftBlinds}
+                </span>
+              </div>
+            )}
+            {topLeftTimer != null && (
+              <div className="flex flex-col">
+                <span className="font-semibold uppercase tracking-wide text-slate-400" style={{ fontSize: cornerLabelSize }}>
+                  NEXT BLIND
+                </span>
+                <span className="font-bold text-white" style={{ fontSize: cornerValueSize }}>
+                  {topLeftTimer}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+        );
+      })()}
+
+      {/* Top-right corner: position + players (inside play area) - bigger on desktop */}
+      {(topRightPosition != null || topRightPlayers != null) && (() => {
+        const isDesktop = windowSize.width >= 1000;
+        const cornerLabelSize = isDesktop ? '12px' : '9px';
+        const cornerValueSize = isDesktop ? '16px' : '11px';
+        const cornerPadding = isDesktop ? '8px 10px' : '4px 6px';
+        return (
+        <div
+          className="absolute right-0 top-0 z-10 rounded border border-slate-600/60 bg-slate-900/90"
+          style={{ marginRight: '6px', marginTop: '6px', padding: cornerPadding }}
+        >
+          <div className="flex flex-col items-end gap-1 leading-snug">
+            {topRightPlayers != null && (
+              <div className="flex flex-col text-right">
+                <span className="font-semibold uppercase tracking-wide text-slate-400" style={{ fontSize: cornerLabelSize }}>
+                  PLAYERS
+                </span>
+                <span className="font-bold text-white" style={{ fontSize: cornerValueSize }}>
+                  {topRightPlayers}
+                </span>
+              </div>
+            )}
+            {topRightPosition != null && (
+              <div className="flex flex-col text-right">
+                <span className="font-semibold uppercase tracking-wide text-slate-400" style={{ fontSize: cornerLabelSize }}>
+                  POSITION
+                </span>
+                <span className="font-bold text-white" style={{ fontSize: cornerValueSize }}>
+                  {topRightPosition}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+        );
+      })()}
+
       {/* Oval/Circular Table */}
       <div 
         className="relative h-full w-full max-h-[calc(85vh-4rem)] max-w-[calc(90vw-4rem)] rounded-[50%] border-8 border-amber-600/40 bg-gradient-to-br from-emerald-900/60 to-slate-900/80 shadow-2xl" 
@@ -320,13 +412,13 @@ export function PokerTable({
             >
               <p 
                 className="font-semibold text-yellow-400 mb-1"
-                style={{ fontSize: 'var(--countdown-title-size, 14px)' }}
+                style={{ fontSize: 'var(--countdown-title-size, 15px)' }}
               >
                 Game Starting Soon
               </p>
               <div 
                 className="font-bold text-emerald-400"
-                style={{ fontSize: 'var(--countdown-time-size, 28px)' }}
+                style={{ fontSize: 'var(--countdown-time-size, 30px)' }}
               >
                 {Math.floor(tournamentCountdown.seconds / 60)}:{(tournamentCountdown.seconds % 60).toString().padStart(2, '0')}
               </div>
@@ -334,10 +426,24 @@ export function PokerTable({
           </div>
         )}
 
-        {/* Community Cards - Center of table */}
-        {communityCards.length > 0 && (
+        {/* TOTAL POT + Community Cards - Center of table */}
+        <div 
+          className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+          style={{ gap: 'var(--community-card-gap, 8px)' }}
+        >
+          {/* Total pot above community cards - same chip style as player bets */}
+          <div className="flex items-center gap-2">
+            <span 
+              className="font-semibold uppercase tracking-wide text-slate-300"
+              style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}
+            >
+              TOTAL POT :
+            </span>
+            <BetChip value={pot} />
+          </div>
+          {communityCards.length > 0 && (
           <div 
-            className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2"
+            className="flex"
             style={{ gap: 'var(--community-card-gap, 8px)' }}
           >
             {communityCards.map((card, idx) => {
@@ -389,7 +495,8 @@ export function PokerTable({
               );
             })}
           </div>
-        )}
+          )}
+        </div>
 
         {/* Player Positions - 10 seats at table edge */}
         {allSeats.flatMap((player, seatIdx) => {
@@ -435,10 +542,14 @@ export function PokerTable({
             }
           }
           
-          // Adjust horizontal position for smaller screens: seats 1,10 left, seats 5,6 right
-          const horizontalOffset = windowSize.width <= 900
+          // Seats 1, 2, 3, 9, 10: move left 20px; seats 4, 5, 6, 7, 8: move right 20px
+          const seatNumber = seatIdx + 1;
+          const baseHorizontalOffset = [1, 2, 3, 9, 10].includes(seatNumber) ? -20 : 20;
+          // Additional horizontal tweak for smaller screens
+          const smallScreenOffset = windowSize.width <= 900
             ? ((seatIdx === 0 || seatIdx === 9) ? -12 : ((seatIdx === 4 || seatIdx === 5) ? 12 : 0))
             : 0;
+          const horizontalOffset = baseHorizontalOffset + smallScreenOffset;
 
           const elements = [
             <div
@@ -524,7 +635,7 @@ export function PokerTable({
                                       className="font-bold drop-shadow-lg text-center px-1"
                                       style={{ 
                                         color: actionInfo.color,
-                                        fontSize: 'var(--player-name-size, 14px)',
+                                        fontSize: 'var(--player-name-size, 15px)',
                                         textShadow: '0 2px 4px rgba(0,0,0,0.8)'
                                       }}
                                     >
@@ -547,7 +658,7 @@ export function PokerTable({
                                 <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full" style={{ zIndex: 10 }}>
                                   <span 
                                     className="font-bold text-yellow-400 drop-shadow-lg"
-                                    style={{ fontSize: 'var(--timer-text-size, 20px)' }}
+                                    style={{ fontSize: 'var(--timer-text-size, 21px)' }}
                                   >
                                     {timerRemaining}
                                   </span>
@@ -589,7 +700,7 @@ export function PokerTable({
                         <div className="w-full px-2 py-1 rounded bg-slate-900/80 border border-slate-700/50">
                           <div 
                             className="font-semibold text-white drop-shadow-lg truncate text-center whitespace-nowrap"
-                            style={{ fontSize: 'var(--player-name-size, 14px)' }}
+                            style={{ fontSize: 'var(--player-name-size, 15px)' }}
                           >
                             {player.name}
                           </div>
@@ -597,7 +708,7 @@ export function PokerTable({
                         <div className="w-full px-2 py-1 rounded bg-slate-900/80 border border-slate-700/50">
                           <div 
                             className="font-medium text-emerald-300 text-center whitespace-nowrap"
-                            style={{ fontSize: 'var(--player-chips-size, 12px)' }}
+                            style={{ fontSize: 'var(--player-chips-size, 13px)' }}
                           >
                             {player.chips.toLocaleString()}
                           </div>
@@ -617,7 +728,7 @@ export function PokerTable({
                         <div className="flex h-full w-full items-center justify-center">
                           <span 
                             className="text-slate-500"
-                            style={{ fontSize: 'var(--player-chips-size, 12px)' }}
+                            style={{ fontSize: 'var(--player-chips-size, 13px)' }}
                           >
                             {seatIdx + 1}
                           </span>
@@ -634,8 +745,8 @@ export function PokerTable({
           const isFolded = player?.status === 'FOLDED';
           if (player && player.holeCards && player.holeCards.length > 0 && !isFolded) {
             const isShowdownActive = showdownActive || false;
-            // During showdown, turn all active players' cards face up
-            const showFaceUp = isMyPlayer || isShowdownActive;
+            // During showdown, turn all active players' cards face up (unless forced face down for test layout)
+            const showFaceUp = !forceSeatCardsFaceDown && (isMyPlayer || isShowdownActive);
             
             // Get winner information for highlighting
             const isWinner = showdownResults?.winners?.some((w: any) => w.playerId === player.id || w.userId === player.userId);
@@ -671,7 +782,7 @@ export function PokerTable({
                 key={`cards-${player.id}`}
                 className={`absolute flex flex-col items-center gap-1 ${isFolded ? 'opacity-50' : ''}`}
                 style={{
-                  left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset}px)`,
+                  left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset + horizontalOffset}px)`,
                   top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}%)`,
                   transform: 'translate(-50%, -50%)',
                   transition: 'transform 0.5s ease-in-out',
@@ -726,7 +837,7 @@ export function PokerTable({
                 key={`bet-${player.id}`}
                 className="absolute z-20"
                 style={{
-                  left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset}px)`,
+                  left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset + horizontalOffset}px)`,
                   top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}% + ${seatIdx + 1 <= 5 ? -60 : 60}px)`,
                   transform: 'translate(-50%, -50%)',
                 }}

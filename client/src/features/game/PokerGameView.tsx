@@ -879,95 +879,7 @@ export function PokerGameView() {
           </div>
         </div>
       )}
-      {/* Top Bar - Game Info - z-10 so table content can overlap when needed */}
-      <div 
-        className="relative z-10 flex items-center justify-between border-b border-slate-800 bg-slate-900/90 backdrop-blur-sm flex-shrink-0"
-        style={{
-          paddingLeft: 'var(--top-bar-padding-x, 24px)',
-          paddingRight: 'var(--top-bar-padding-x, 24px)',
-          paddingTop: 'var(--top-bar-padding-y, 12px)',
-          paddingBottom: 'var(--top-bar-padding-y, 12px)'
-        }}
-      >
-        <div className="flex items-center" style={{ gap: 'var(--top-bar-gap, 24px)' }}>
-          <div className="flex flex-col">
-            <span 
-              className="font-semibold text-slate-400 uppercase tracking-wide"
-              style={{ fontSize: 'var(--top-bar-label-size, 12px)' }}
-            >
-              BLINDS
-            </span>
-            <span 
-              className="font-bold text-white"
-              style={{ fontSize: 'var(--top-bar-value-size, 18px)' }}
-            >
-              {smallBlind}/{bigBlind}
-            </span>
-          </div>
-          <div className="flex flex-col">
-            <span 
-              className="font-semibold text-slate-400 uppercase tracking-wide"
-              style={{ fontSize: 'var(--top-bar-label-size, 12px)' }}
-            >
-              NEXT BLIND
-            </span>
-            <span 
-              className="font-bold text-white"
-              style={{ fontSize: 'var(--top-bar-value-size, 18px)' }}
-            >
-              {nextBlindTime}
-            </span>
-          </div>
-          <div className="flex flex-col">
-            <span 
-              className="font-semibold text-slate-400 uppercase tracking-wide"
-              style={{ fontSize: 'var(--top-bar-label-size, 12px)' }}
-            >
-              TOTAL POT
-            </span>
-            <span 
-              className="font-bold text-white"
-              style={{ fontSize: 'var(--top-bar-value-size, 18px)' }}
-            >
-              {gameState.pot.toLocaleString()}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center" style={{ gap: 'var(--top-bar-gap, 24px)' }}>
-          <div className="flex flex-col text-right">
-            <span 
-              className="font-semibold text-slate-400 uppercase tracking-wide"
-              style={{ fontSize: 'var(--top-bar-label-size, 12px)' }}
-            >
-              PLAYERS
-            </span>
-            <span 
-              className="font-bold text-white"
-              style={{ fontSize: 'var(--top-bar-value-size, 18px)' }}
-            >
-              {tournament ? `${tournamentRemainingPlayers}/${tournamentTotalPlayers}` : `${activePlayers.length}/${gameState.players.length}`}
-            </span>
-          </div>
-          {myPosition && (
-            <div className="flex flex-col text-right">
-              <span 
-                className="font-semibold text-slate-400 uppercase tracking-wide"
-                style={{ fontSize: 'var(--top-bar-label-size, 12px)' }}
-              >
-                POSITION
-              </span>
-              <span 
-                className="font-bold text-white"
-                style={{ fontSize: 'var(--top-bar-value-size, 18px)' }}
-              >
-                {myPosition}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Main game area - z-20 so player names stack above top bar */}
+      {/* Main game area - table + controls | chat (no header; info in table corners) */}
       <div className="relative z-20 flex flex-1 overflow-hidden min-h-0">
         {/* Left side - Table and controls */}
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">
@@ -1009,6 +921,10 @@ export function PokerGameView() {
               showdownActive={gameState.showdownActive || false}
               showdownResults={showdownResults || gameState.showdownResults}
               tournamentCountdown={tournamentCountdown}
+              topLeftBlinds={`${smallBlind}/${bigBlind}`}
+              topLeftTimer={nextBlindTime}
+              topRightPlayers={tournament ? `${tournamentRemainingPlayers}/${tournamentTotalPlayers}` : `${activePlayers.length}/${gameState.players.length}`}
+              topRightPosition={myPosition != null ? `${myPosition}${myPosition === 1 ? 'st' : myPosition === 2 ? 'nd' : myPosition === 3 ? 'rd' : 'th'}` : undefined}
             />
           </div>
 
