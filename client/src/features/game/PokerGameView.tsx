@@ -258,17 +258,27 @@ export function PokerGameView() {
     socket.on("game-state", (payload: GameStatePayload) => {
       // Ignore game-state for other tables (user may receive stale msgs if room leave was delayed)
       if (payload.id && id && payload.id !== id) return;
+
+      // Start of new hand: clear any cached/stale card data so we never show previous hand's cards
+      const isNewHand = (payload.street === "PREFLOP" || !payload.street) && !payload.showdownActive;
+      const normalized: GameStatePayload = isNewHand
+        ? {
+            ...payload,
+            communityCards: "[]",
+            showdownActive: false,
+            showdownResults: null,
+            players: (payload.players || []).map((p) => ({
+              ...p,
+              lastAction: null,
+            })),
+          }
+        : payload;
+
       setGameState((prev) => {
-        // Store previous state before updating
-        if (prev) {
-          setPrevGameState(prev);
-        }
-        return payload;
+        if (prev) setPrevGameState(prev);
+        return normalized;
       });
-      // Clear showdown styling when new hand starts (no showdownActive / PREFLOP)
-      if (!payload.showdownActive && (payload.street === "PREFLOP" || !payload.street)) {
-        setShowdownResults(null);
-      }
+      if (isNewHand) setShowdownResults(null);
       setConsolidationWaiting(null);
       setConnecting(false);
       setError(null);

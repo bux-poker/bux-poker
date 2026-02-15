@@ -140,14 +140,21 @@ function buildClientGameState(game, state) {
   const totalPot = state 
     ? (state.pot || 0) + (state.bettingRound?.getTotalPot() || 0)
     : game.pot || 0;
-  
+
+  // Start of new hand: never send stale card data from previous hand
+  const street = state?.street || "PREFLOP";
+  const isNewHand = street === "PREFLOP" && !state?.showdownActive;
+  const communityCardsEncoded = isNewHand
+    ? "[]"
+    : JSON.stringify(state?.communityCards ?? []);
+
   return {
     id: game.id,
     tournamentId: game.tournamentId,
     tableNumber: game.tableNumber,
     pot: totalPot,
-    communityCards: JSON.stringify(state?.communityCards ?? []),
-    street: state?.street || "PREFLOP",
+    communityCards: communityCardsEncoded,
+    street,
     currentBet: state?.bettingRound?.currentBet || 0,
     minimumRaise: state?.bettingRound?.minimumRaise || (state?.bettingRound?.bigBlind || 20),
     smallBlind: state?.bettingRound?.smallBlind || 10,
@@ -156,8 +163,8 @@ function buildClientGameState(game, state) {
     smallBlindSeat: state?.smallBlindSeat ?? game.smallBlindSeat,
     bigBlindSeat: state?.bigBlindSeat ?? game.bigBlindSeat,
     currentTurnUserId: state?.currentTurnUserId,
-    showdownActive: state?.showdownActive || false,
-    showdownResults: state?.showdownResults || null,
+    showdownActive: isNewHand ? false : (state?.showdownActive || false),
+    showdownResults: isNewHand ? null : (state?.showdownResults || null),
     players: (state?.players ?? game.players)
       .filter(p => p.status !== 'ELIMINATED') // Only include non-eliminated players
       .map((p) => ({
