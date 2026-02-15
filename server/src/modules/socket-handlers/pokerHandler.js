@@ -3104,6 +3104,7 @@ async function moveToNextPlayer(gameId, io) {
 
       if (nextPlayer) {
         state.currentTurnUserId = nextPlayer.userId;
+        state.currentTurnStartedAt = Date.now();
         startTurnTimer(gameId, state.currentTurnUserId, io);
         return;
       } else {

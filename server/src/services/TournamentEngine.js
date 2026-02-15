@@ -1045,11 +1045,12 @@ export function startScheduledStartPoll() {
   console.log("[TOURNAMENT] Scheduled start poll running every 30s");
 }
 
-/** Every 60s, ensure every ACTIVE table in a RUNNING tournament has a hand running. Recovers stuck tables.
+/** Every 30s, ensure every ACTIVE table in a RUNNING tournament has a hand running. Recovers stuck tables.
  *  Also triggers consolidation when tables are uneven (e.g. 8 on one table, 1 on another) so we rebalance
  *  even if showdown path didn't run.
- *  Tables stuck mid-hand (e.g. turn timer never started) are force-advanced after 90s. */
-const STUCK_THRESHOLD_MS = 90000; // 90 seconds - same as consolidation
+ *  Tables stuck mid-hand (e.g. turn timer never started) are force-advanced after 45s. */
+const STUCK_THRESHOLD_MS = 45000; // 45 seconds - recover faster when timers fail
+const IDLE_POLL_INTERVAL_MS = 30000; // 30 seconds
 
 let _idleTablesPollInterval = null;
 export function startIdleTablesPoll() {
@@ -1103,7 +1104,7 @@ export function startIdleTablesPoll() {
             continue;
           }
           if (game.players.length < 2) continue;
-          // Recover stuck tables: same turn active for 90s -> force current player to act
+          // Recover stuck tables: same turn active for 45s -> force current player to act
           if (hasActiveHand(game.id)) {
             const turnStarted = getTurnStartedAt(game.id);
             if (turnStarted > 0 && now - turnStarted >= STUCK_THRESHOLD_MS) {
@@ -1129,6 +1130,6 @@ export function startIdleTablesPoll() {
     } catch (err) {
       console.error("[TOURNAMENT] Idle tables poll error:", err);
     }
-  }, 60000);
-  console.log("[TOURNAMENT] Idle tables poll running every 60s (stuck-table recovery after 90s)");
+  }, IDLE_POLL_INTERVAL_MS);
+  console.log(`[TOURNAMENT] Idle tables poll running every ${IDLE_POLL_INTERVAL_MS / 1000}s (stuck-table recovery after ${STUCK_THRESHOLD_MS / 1000}s)`);
 }
