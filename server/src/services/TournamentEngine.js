@@ -2,6 +2,9 @@ import { prisma } from "../config/database.js";
 
 const _onPlayersBustLocks = new Map();
 
+/** Module-level lock per tournament - prevents concurrent consolidation from different TournamentEngine instances. */
+const _consolidationLocks = new Map();
+
 /**
  * Audit chip conservation: total chips in tournament must equal expected (registrations * startingChips).
  * Logs error if mismatch - chips must NEVER be created or destroyed.
@@ -130,7 +133,8 @@ export async function syncBlindLevelsToTournamentTime(tournamentId, io, options 
     }
   }
 
-  console.log(`[TOURNAMENT] Synced blind level to ${currentLevelIndex} for ${games.length} table(s) (${newLevel.smallBlind}/${newLevel.bigBlind})`);
+  const tableIds = games.map(g => `T${g.tableNumber}`).join(",");
+  console.log(`[TOURNAMENT] Synced blind level to ${currentLevelIndex} for ${games.length} table(s) (${tableIds}) (${newLevel.smallBlind}/${newLevel.bigBlind})`);
   return { currentLevelIndex, newLevel, games };
 }
 
@@ -588,25 +592,23 @@ export class TournamentEngine {
     });
   }
 
-  _consolidationLocks = new Map();
-
   /**
    * Rebalance tables: reduce table count as players eliminated, then balance.
    * 36 players @ 9 max = 4 tables, 27 = 3, 18 = 2, 9 = 1 (final table).
+   * Uses module-level lock so consolidation from any TournamentEngine instance is serialized.
    */
   async consolidateTables(tournamentId) {
-    const existing = this._consolidationLocks?.get(tournamentId);
+    const existing = _consolidationLocks.get(tournamentId);
     if (existing) {
       await existing;
       return this.consolidateTables(tournamentId);
     }
     const p = this._doConsolidateTables(tournamentId);
-    this._consolidationLocks = this._consolidationLocks || new Map();
-    this._consolidationLocks.set(tournamentId, p);
+    _consolidationLocks.set(tournamentId, p);
     try {
       return await p;
     } finally {
-      this._consolidationLocks.delete(tournamentId);
+      _consolidationLocks.delete(tournamentId);
     }
   }
 
