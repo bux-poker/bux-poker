@@ -193,7 +193,7 @@ export class TournamentService {
             orderBy: [{ finishingPlace: "asc" }, { chips: "desc" }],
           });
           for (const p of directPlayers) {
-            if (p.chips > 0 && p.status !== "ELIMINATED") remainingPlayers++;
+            if (p.status !== "ELIMINATED") remainingPlayers++;
             livePlayers.push({
               id: p.id,
               userId: p.userId,
@@ -209,7 +209,7 @@ export class TournamentService {
         } else {
           for (const game of tournament.games || []) {
             for (const player of game.players || []) {
-              if (player.chips > 0 && player.status !== "ELIMINATED") remainingPlayers++;
+              if (player.status !== "ELIMINATED") remainingPlayers++;
               livePlayers.push({
                 id: player.id,
                 userId: player.userId,
@@ -230,7 +230,7 @@ export class TournamentService {
           startedAt: tournament.startedAt, // Include startedAt for blind timer
           blindLevels: blindLevels, // Add parsed blind levels
           registeredCount: registeredCount,
-          remainingPlayers: remainingPlayers, // Players with chips left in tournament
+          remainingPlayers: remainingPlayers, // Players still in tournament (not eliminated; includes all-in)
           prizePlaces: calculatedPrizePlaces, // Calculate dynamically based on registrations
           servers: (tournament.posts || []).map((post) => {
             if (!post || !post.server) {

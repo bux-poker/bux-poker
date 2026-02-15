@@ -555,6 +555,8 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
 async function emitIfTournamentCompleted(tournamentId, gameId, io) {
   if (!tournamentId || !io) return;
   try {
+    const { TournamentEngine } = await import("../../services/TournamentEngine.js");
+    await (new TournamentEngine()).completeTournamentIfOneLeft(tournamentId);
     const t = await prisma.tournament.findUnique({
       where: { id: tournamentId },
       select: { status: true }
@@ -2715,6 +2717,9 @@ async function advanceToNextStreet(gameId, io) {
             gameId,
             winners: [{ playerId: bbPlayer.id, userId: bbPlayer.userId, name: winnerName, potWon: totalPot }]
           });
+          if (gameForEmit?.tournament?.id) {
+            await emitIfTournamentCompleted(gameForEmit.tournament.id, gameId, io);
+          }
         }
 
         // Update player chips in database
@@ -3004,6 +3009,9 @@ async function moveToNextPlayer(gameId, io) {
         gameId,
         winners: [{ playerId: winner.id, userId: winner.userId, name: winnerName, potWon: totalPot }],
       });
+      if (game?.tournament?.id) {
+        await emitIfTournamentCompleted(game.tournament.id, gameId, io);
+      }
     }
     await prisma.player.update({ where: { id: winner.id }, data: { chips: winner.chips } }).catch(() => {});
     await prisma.game.update({ where: { id: gameId }, data: { pot: 0 } }).catch(() => {});

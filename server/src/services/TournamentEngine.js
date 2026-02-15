@@ -957,6 +957,55 @@ export class TournamentEngine {
     }
   }
 
+  /**
+   * If exactly one player has chips and is not eliminated, mark tournament COMPLETED.
+   * Call after any hand that awards the pot (showdown or fold win) so we complete when
+   * the last opponent folds and we never run onPlayersBust.
+   */
+  async completeTournamentIfOneLeft(tournamentId) {
+    const count = await prisma.player.count({
+      where: { game: { tournamentId }, chips: { gt: 0 }, status: { not: "ELIMINATED" } }
+    });
+    if (count !== 1) return false;
+    const winner = await prisma.player.findFirst({
+      where: { game: { tournamentId }, chips: { gt: 0 }, status: { not: "ELIMINATED" } },
+      include: { user: true, game: true }
+    });
+    if (!winner) return false;
+    const current = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { status: true }
+    });
+    if (current?.status === "COMPLETED") return true;
+    const verifyCount = await prisma.player.count({
+      where: { game: { tournamentId }, chips: { gt: 0 }, status: { not: "ELIMINATED" } }
+    });
+    if (verifyCount !== 1) return false;
+    await prisma.player.update({
+      where: { id: winner.id },
+      data: { finishingPlace: 1 }
+    });
+    await prisma.tournament.update({
+      where: { id: tournamentId },
+      data: { status: "COMPLETED" }
+    });
+    await auditChipConservation(tournamentId);
+    try {
+      const tournament = await prisma.tournament.findUnique({
+        where: { id: tournamentId },
+        include: { games: { include: { players: { include: { user: true } } } } }
+      });
+      if (tournament) {
+        const { postTournamentWinnersEmbed } = await import("../discord/bot.js");
+        await postTournamentWinnersEmbed(tournament);
+      }
+    } catch (err) {
+      console.error("[TOURNAMENT] Error posting winners embed:", err);
+    }
+    console.log(`[TOURNAMENT] Completed tournament ${tournamentId} - one player left (winner: ${winner.user?.username || winner.id})`);
+    return true;
+  }
+
   /** Mark a single player as bust - only updates DB, no consolidation (handled by onPlayersBust).
    * Handles P2025: player may already have been removed by consolidation on another table.
    * @param {number} finishingPlace - Explicit place (from onPlayersBust when multiple bust same hand).
