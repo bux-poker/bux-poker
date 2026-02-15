@@ -858,37 +858,23 @@ async function _startHandForGameBody(gameId, io) {
     activeDealtPlayers.length
   );
 
-  // Persist hole cards
-  // CRITICAL: We must iterate over activeDealtPlayers in the SAME order we dealt cards,
-  // not over game.players, to ensure cards are assigned correctly.
-  await Promise.all(
-    activeDealtPlayers.map((p, index) => {
-      const holeCards = JSON.stringify(dealtHands[index]);
-      
-      // Log card assignment for debugging
-      console.log(`[CARD DEAL] Assigning cards to ${p.name || p.userId} (seat ${p.seatNumber}, id: ${p.id}):`, dealtHands[index]);
-      
-      return prisma.player.update({
-        where: { id: p.id },
-        data: {
-          holeCards,
-        },
-      });
-    })
-  );
-  
-  // Also update eliminated players to have no cards
+  // Persist hole cards sequentially to avoid exhausting DB connection pool
+  for (let index = 0; index < activeDealtPlayers.length; index++) {
+    const p = activeDealtPlayers[index];
+    const holeCards = JSON.stringify(dealtHands[index]);
+    console.log(`[CARD DEAL] Assigning cards to ${p.name || p.userId} (seat ${p.seatNumber}, id: ${p.id}):`, dealtHands[index]);
+    await prisma.player.update({
+      where: { id: p.id },
+      data: { holeCards },
+    });
+  }
   const eliminatedPlayers = game.players.filter(p => p.status === 'ELIMINATED');
-  await Promise.all(
-    eliminatedPlayers.map((p) => {
-      return prisma.player.update({
-        where: { id: p.id },
-        data: {
-          holeCards: "",
-        },
-      });
-    })
-  );
+  for (const p of eliminatedPlayers) {
+    await prisma.player.update({
+      where: { id: p.id },
+      data: { holeCards: "" },
+    });
+  }
 
   // Create betting round
   // Note: startingPot is set to 0 because we track the pot in state.pot
@@ -1068,13 +1054,10 @@ async function _startHandForGameBody(gameId, io) {
     currentTurnStartedAt: utgPlayer ? Date.now() : null, // When current turn started (for stuck-table recovery)
     lastRaiseUserId: null, // Track who last raised (for betting completion check)
     actedPlayersInRound: new Set(), // Track which players have acted in current betting round
-    players: await Promise.all(
-      game.players.map(async (p) => {
+    players: await (async () => {
+      const result = [];
+      for (const p of game.players) {
         const updated = await prisma.player.findUnique({ where: { id: p.id } });
-        // Parse hole cards from database (stored as JSON string)
-        // If updated player has holeCards, use those (parsed if string)
-        // Otherwise fall back to p.holeCards (parsed if string)
-        // If neither exists, find the correct index in activeDealtPlayers to get from dealtHands
         let holeCards = null;
         if (updated?.holeCards) {
           if (typeof updated.holeCards === 'object') {
@@ -1084,7 +1067,6 @@ async function _startHandForGameBody(gameId, io) {
               holeCards = JSON.parse(updated.holeCards);
             } catch (e) {
               console.warn(`[POKER] Failed to parse holeCards from database for player ${p.id}:`, e.message);
-              // Find correct index in activeDealtPlayers
               const activeIndex = activeDealtPlayers.findIndex(ap => ap.id === p.id);
               holeCards = activeIndex >= 0 ? dealtHands[activeIndex] : null;
             }
@@ -1097,27 +1079,25 @@ async function _startHandForGameBody(gameId, io) {
               holeCards = JSON.parse(p.holeCards);
             } catch (e) {
               console.warn(`[POKER] Failed to parse holeCards from p for player ${p.id}:`, e.message);
-              // Find correct index in activeDealtPlayers
               const activeIndex = activeDealtPlayers.findIndex(ap => ap.id === p.id);
               holeCards = activeIndex >= 0 ? dealtHands[activeIndex] : null;
             }
           }
         } else {
-          // Find correct index in activeDealtPlayers (not using game.players index!)
           const activeIndex = activeDealtPlayers.findIndex(ap => ap.id === p.id);
           holeCards = activeIndex >= 0 ? dealtHands[activeIndex] : null;
         }
-        return {
+        result.push({
           ...p,
-          user: p.user, // Include user object for test player detection
+          user: p.user,
           chips: updated?.chips || p.chips,
-          holeCards: holeCards, // Include parsed hole cards
-          // Start at 0 - advanceToNextStreet adds each street's bets. Blinds go through betting round.
+          holeCards,
           contributions: 0,
-          name: p.user?.username || "Player" // Store name for test player detection
-        };
-      })
-    )
+          name: p.user?.username || "Player"
+        });
+      }
+      return result;
+    })()
   };
 
   tableState.set(gameId, state);

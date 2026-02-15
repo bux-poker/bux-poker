@@ -872,23 +872,24 @@ export class TournamentEngine {
       console.warn("[TOURNAMENT] Could not sync blind levels after rebalancing:", e?.message);
     }
 
-    // Start hands for ALL tables at once so play resumes together
+    // Start hands one table at a time to avoid exhausting DB connection pool
     try {
       const { startHandForGame, getIO } = await import("../modules/socket-handlers/pokerHandler.js");
       const io = getIO();
       if (io) {
-        const startPromises = [];
+        let started = 0;
         for (const g of updatedGames) {
           if (g.players.length >= 2 && !(await this.hasActiveHand(g.id))) {
-            startPromises.push(
-              startHandForGame(g.id, io)
-                .then(() => console.log(`[TOURNAMENT] Started hand for table ${g.tableNumber} after rebalancing (${g.players.length} players)`))
-                .catch((err) => console.error(`[TOURNAMENT] Error starting hand for table ${g.tableNumber}:`, err?.message))
-            );
+            try {
+              await startHandForGame(g.id, io);
+              started++;
+              console.log(`[TOURNAMENT] Started hand for table ${g.tableNumber} after rebalancing (${g.players.length} players)`);
+            } catch (err) {
+              console.error(`[TOURNAMENT] Error starting hand for table ${g.tableNumber}:`, err?.message);
+            }
           }
         }
-        await Promise.all(startPromises);
-        if (startPromises.length > 0) {
+        if (started > 0) {
           io.emit("consolidation-complete", { tournamentId });
         }
       }
