@@ -58,19 +58,40 @@ function BetChip({ value }: { value: number }) {
   );
 }
 
-// Simple poker card image component
-function PokerCardImage({ 
-  card, 
-  width, 
-  height, 
-  className = '', 
-  faceDown = false 
-}: { 
-  card: Card; 
-  width: number; 
-  height: number; 
+// Suit symbols and red suits for text cards
+const SUIT_SYMBOLS: Record<string, string> = {
+  SPADES: "♠",
+  HEARTS: "♥",
+  DIAMONDS: "♦",
+  CLUBS: "♣",
+};
+const RED_SUITS = new Set(["HEARTS", "DIAMONDS"]);
+
+// Format hand category for display (e.g. FULL_HOUSE -> "Full House")
+function formatHandCategory(category: string): string {
+  if (!category) return "";
+  const formatted = category
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+  return formatted;
+}
+
+// Simple poker card: on mobile uses CSS (rank above suit); on desktop uses PNG
+function PokerCardImage({
+  card,
+  width,
+  height,
+  className = "",
+  faceDown = false,
+  useTextCard = false,
+}: {
+  card: Card;
+  width: number;
+  height: number;
   className?: string;
   faceDown?: boolean;
+  useTextCard?: boolean;
 }) {
   if (faceDown) {
     return (
@@ -79,10 +100,11 @@ function PokerCardImage({
         style={{ width, height }}
       >
         <div className="absolute inset-0 opacity-20">
-          <div 
-            className="absolute inset-0" 
+          <div
+            className="absolute inset-0"
             style={{
-              backgroundImage: "repeating-linear-gradient(45deg, transparent, transparent 6px, white 6px, white 7px), repeating-linear-gradient(-45deg, transparent, transparent 6px, white 6px, white 7px)"
+              backgroundImage:
+                "repeating-linear-gradient(45deg, transparent, transparent 6px, white 6px, white 7px), repeating-linear-gradient(-45deg, transparent, transparent 6px, white 6px, white 7px)",
             }}
           />
         </div>
@@ -90,34 +112,65 @@ function PokerCardImage({
     );
   }
 
-  // Get card image filename - always use PNG images
+  // Mobile: rank and suit as large text (no PNG)
+  if (useTextCard) {
+    const suitSymbol = SUIT_SYMBOLS[card.suit] ?? card.suit.charAt(0);
+    const isRed = RED_SUITS.has(card.suit);
+    const rankSize = Math.max(10, Math.floor(height * 0.42));
+    const suitSize = Math.max(10, Math.floor(height * 0.38));
+    return (
+      <div
+        className={`${className} flex flex-col items-center justify-center rounded-lg border-2 border-slate-300 bg-white shadow-md`}
+        style={{ width, height, minWidth: width, minHeight: height }}
+      >
+        <span
+          className="font-bold leading-none"
+          style={{ fontSize: rankSize, color: "#1a1a1a" }}
+        >
+          {card.rank}
+        </span>
+        <span
+          className="leading-none"
+          style={{
+            fontSize: suitSize,
+            color: isRed ? "#b91c1c" : "#1a1a1a",
+          }}
+        >
+          {suitSymbol}
+        </span>
+      </div>
+    );
+  }
+
+  // Desktop: PNG image
   const getCardImage = (card: Card): string => {
     const suitMap: Record<string, string> = {
-      "SPADES": "S", "HEARTS": "H", "DIAMONDS": "D", "CLUBS": "C"
+      SPADES: "S",
+      HEARTS: "H",
+      DIAMONDS: "D",
+      CLUBS: "C",
     };
     const suit = suitMap[card.suit] || card.suit.charAt(0);
-    // Handle 10 specially since it's "10" not "TEN"
     const rank = card.rank === "10" ? "10" : card.rank;
     return `${rank}${suit}.png`;
   };
-
-      return (
-        <img
-          src={`/cards/${getCardImage(card)}`}
-          alt={`${card.rank}${card.suit}`}
-          className={className}
-          style={{ 
-            width: width - 2, 
-            height, 
-            objectFit: 'contain', 
-            padding: 0, 
-            margin: 0, 
-            borderRadius: '1px'
-          }}
-          onError={(e) => {
-        console.error('Card image failed to load:', getCardImage(card));
-            const target = e.target as HTMLImageElement;
-            target.style.display = 'none';
+  return (
+    <img
+      src={`/cards/${getCardImage(card)}`}
+      alt={`${card.rank}${card.suit}`}
+      className={className}
+      style={{
+        width: width - 2,
+        height,
+        objectFit: "contain",
+        padding: 0,
+        margin: 0,
+        borderRadius: "1px",
+      }}
+      onError={(e) => {
+        console.error("Card image failed to load:", getCardImage(card));
+        const target = e.target as HTMLImageElement;
+        target.style.display = "none";
       }}
     />
   );
@@ -426,21 +479,36 @@ export function PokerTable({
           </div>
         )}
 
-        {/* TOTAL POT + Community Cards - Center of table */}
+        {/* Center: when showdown with winners show who won + hand; else total pot + community cards */}
         <div 
           className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
           style={{ gap: 'var(--community-card-gap, 8px)' }}
         >
-          {/* Total pot above community cards - same chip style as player bets */}
-          <div className="flex items-center gap-2">
-            <span 
-              className="font-semibold uppercase tracking-wide text-slate-300"
-              style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}
-            >
-              TOTAL POT :
-            </span>
-            <BetChip value={pot} />
-          </div>
+          {/* Showdown: who won with what hand (replaces total pot so it's clear who won) */}
+          {showdownActive && showdownResults?.winners?.length > 0 ? (
+            <div className="flex flex-col items-center gap-1 rounded-lg border border-amber-500/60 bg-slate-900/95 px-3 py-2 text-center shadow-xl">
+              {showdownResults.winners.length === 1 ? (
+                <span className="font-bold text-amber-300" style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}>
+                  {showdownResults.winners[0].name} wins with {formatHandCategory(showdownResults.winners[0].handCategory)}
+                </span>
+              ) : (
+                <span className="font-bold text-amber-300" style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}>
+                  {showdownResults.winners.map((w: any) => w.name).join(" & ")} split with {formatHandCategory(showdownResults.winners[0]?.handCategory)}
+                </span>
+              )}
+            </div>
+          ) : (
+            /* Total pot above community cards when not showing winner */
+            <div className="flex items-center gap-2">
+              <span 
+                className="font-semibold uppercase tracking-wide text-slate-300"
+                style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}
+              >
+                TOTAL POT :
+              </span>
+              <BetChip value={pot} />
+            </div>
+          )}
           {communityCards.length > 0 && (
           <div 
             className="flex"
@@ -490,6 +558,7 @@ export function PokerTable({
                     } ${
                       isLosingCard ? 'opacity-40 grayscale' : ''
                     }`}
+                    useTextCard={windowSize.width <= 768}
                   />
                 </div>
               );
@@ -748,8 +817,10 @@ export function PokerTable({
             // During showdown, turn all active players' cards face up (unless forced face down for test layout)
             const showFaceUp = !forceSeatCardsFaceDown && (isMyPlayer || isShowdownActive);
             
-            // Get winner information for highlighting
-            const isWinner = showdownResults?.winners?.some((w: any) => w.playerId === player.id || w.userId === player.userId);
+            // Get winner information for highlighting and pot won display
+            const winnerInfo = showdownResults?.winners?.find((w: any) => w.playerId === player.id || w.userId === player.userId);
+            const isWinner = !!winnerInfo;
+            const potWon = winnerInfo?.potWon ?? 0;
             
             // Collect all winning cards from all winners (for highlighting)
             const allWinningCards: Card[] = [];
@@ -789,9 +860,16 @@ export function PokerTable({
                   zIndex: 70, // Higher than names/chips (50) but below dealer button (60)
                 }}
               >
-                {/* Bet chip above cards for seats 1-5 */}
-                {(player.contribution ?? 0) > 0 && (seatIdx + 1 <= 5) && (
-                  <BetChip value={player.contribution!} />
+                {/* Bet chip and winner +pot above cards for seats 1-5 */}
+                {(seatIdx + 1 <= 5) && (
+                  <div className="flex flex-wrap items-center justify-center gap-1">
+                    {(player.contribution ?? 0) > 0 && <BetChip value={player.contribution!} />}
+                    {isWinner && potWon > 0 && (
+                      <div className="flex items-center gap-0.5 rounded-md border-2 border-amber-400/80 bg-amber-500/30 px-1.5 py-0.5 shadow-md">
+                        <span className="font-bold text-amber-200" style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}>+{potWon.toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
                 )}
                 <div className="flex" style={{ gap: 'var(--hole-card-gap, 4px)' }}>
                   {player.holeCards.map((card, cardIdx) => {
@@ -819,14 +897,22 @@ export function PokerTable({
                             cardIsLosing ? 'opacity-40 grayscale' : ''
                           }`}
                           faceDown={!showFaceUp}
+                          useTextCard={windowSize.width <= 768}
                         />
                       </div>
                     );
                   })}
                 </div>
-                {/* Bet chip below cards for seats 6-10 */}
-                {(player.contribution ?? 0) > 0 && (seatIdx + 1 > 5) && (
-                  <BetChip value={player.contribution!} />
+                {/* Bet chip and winner +pot below cards for seats 6-10 */}
+                {(seatIdx + 1 > 5) && (
+                  <div className="flex flex-wrap items-center justify-center gap-1">
+                    {(player.contribution ?? 0) > 0 && <BetChip value={player.contribution!} />}
+                    {isWinner && potWon > 0 && (
+                      <div className="flex items-center gap-0.5 rounded-md border-2 border-amber-400/80 bg-amber-500/30 px-1.5 py-0.5 shadow-md">
+                        <span className="font-bold text-amber-200" style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}>+{potWon.toLocaleString()}</span>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             );

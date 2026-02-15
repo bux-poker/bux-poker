@@ -11,6 +11,7 @@ import PlayerStatsModal from "../../components/modals/PlayerStatsModal";
 import { api } from "../../services/api";
 import { useTournament } from "../../hooks/useTournaments";
 import { soundManager, type SoundName } from "../../utils/soundManager";
+import { getHandDescription } from "@shared/utils/handEvaluator";
 
 interface PlayerViewModel {
   id: string;
@@ -932,14 +933,30 @@ export function PokerGameView() {
           <div className="border-t border-slate-800 bg-slate-900/95 px-2 sm:px-4 py-1 sm:py-2 backdrop-blur-sm relative">
             {/* Player's own cards - bottom left, aligned with action buttons */}
             {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
-              <div className={`absolute top-4 bottom-4 left-4 z-50 flex gap-2 items-center ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ visibility: 'visible' }}>
+              <div className={`absolute top-4 bottom-4 left-4 z-50 flex flex-col gap-0.5 items-start ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ visibility: 'visible' }}>
+                <span className="text-slate-300 text-xs sm:text-sm font-medium whitespace-nowrap">
+                  {getHandDescription(myPlayer.holeCards, communityCards, gameState.street || "PREFLOP")}
+                </span>
+                <div className="flex gap-2 items-center">
                 {myPlayer.holeCards.map((card: Card, idx: number) => {
+                  const suitSymbols: Record<string, string> = { SPADES: "♠", HEARTS: "♥", DIAMONDS: "♦", CLUBS: "♣" };
+                  const isRed = card.suit === "HEARTS" || card.suit === "DIAMONDS";
+                  if (isMobileWidth) {
+                    return (
+                      <div
+                        key={idx}
+                        className="flex flex-col items-center justify-center rounded-lg border-2 border-slate-300 bg-white shadow-lg min-w-[44px] min-h-[60px] py-1 px-0.5"
+                      >
+                        <span className="font-bold leading-none text-slate-900" style={{ fontSize: 'clamp(14px, 4vw, 24px)' }}>{card.rank}</span>
+                        <span className="leading-none font-medium" style={{ fontSize: 'clamp(12px, 3.5vw, 20px)', color: isRed ? '#b91c1c' : '#1a1a1a' }}>{suitSymbols[card.suit] ?? card.suit[0]}</span>
+                      </div>
+                    );
+                  }
                   const getCardImage = (card: Card): string => {
                     const suitMap: Record<string, string> = {
                       "SPADES": "S", "HEARTS": "H", "DIAMONDS": "D", "CLUBS": "C"
                     };
                     const suit = suitMap[card.suit] || card.suit.charAt(0);
-                    // Handle 10 specially since it's "10" not "TEN"
                     const rank = card.rank === "10" ? "10" : card.rank;
                     return `${rank}${suit}.png`;
                   };
@@ -958,6 +975,7 @@ export function PokerGameView() {
                     />
                   );
                 })}
+                </div>
               </div>
             )}
               <BettingControls 

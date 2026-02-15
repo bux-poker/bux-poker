@@ -1047,15 +1047,19 @@ export function startScheduledStartPoll() {
 
 /** Every 60s, ensure every ACTIVE table in a RUNNING tournament has a hand running. Recovers stuck tables.
  *  Also triggers consolidation when tables are uneven (e.g. 8 on one table, 1 on another) so we rebalance
- *  even if showdown path didn't run. */
+ *  even if showdown path didn't run.
+ *  Tables stuck mid-hand (e.g. turn timer never started) are force-advanced after 90s. */
+const STUCK_THRESHOLD_MS = 90000; // 90 seconds - same as consolidation
+
 let _idleTablesPollInterval = null;
 export function startIdleTablesPoll() {
   if (_idleTablesPollInterval) return;
   const engine = new TournamentEngine();
   _idleTablesPollInterval = setInterval(async () => {
-    const { startHandForGame, hasActiveHand, getIO } = await import("../modules/socket-handlers/pokerHandler.js");
+    const { startHandForGame, hasActiveHand, forceStuckPlayerToAct, getIO, getTurnStartedAt } = await import("../modules/socket-handlers/pokerHandler.js");
     const socketIO = getIO();
     if (!socketIO) return;
+    const now = Date.now();
     try {
       const running = await prisma.tournament.findMany({
         where: { status: "RUNNING" },
@@ -1099,7 +1103,21 @@ export function startIdleTablesPoll() {
             continue;
           }
           if (game.players.length < 2) continue;
-          if (hasActiveHand(game.id)) continue;
+          // Recover stuck tables: same turn active for 90s -> force current player to act
+          if (hasActiveHand(game.id)) {
+            const turnStarted = getTurnStartedAt(game.id);
+            if (turnStarted > 0 && now - turnStarted >= STUCK_THRESHOLD_MS) {
+              try {
+                const ok = await forceStuckPlayerToAct(game.id, socketIO);
+                if (ok) {
+                  console.log(`[TOURNAMENT] Idle poll: table ${game.tableNumber} (game ${game.id}) was stuck - forced player to act`);
+                }
+              } catch (err) {
+                console.error(`[TOURNAMENT] Force-stuck failed for table ${game.tableNumber}:`, err?.message);
+              }
+            }
+            continue;
+          }
           try {
             await startHandForGame(game.id, socketIO);
             console.log(`[TOURNAMENT] Idle-table recovery: started hand for game ${game.id} (table ${game.tableNumber})`);
@@ -1112,5 +1130,5 @@ export function startIdleTablesPoll() {
       console.error("[TOURNAMENT] Idle tables poll error:", err);
     }
   }, 60000);
-  console.log("[TOURNAMENT] Idle tables poll running every 60s");
+  console.log("[TOURNAMENT] Idle tables poll running every 60s (stuck-table recovery after 90s)");
 }

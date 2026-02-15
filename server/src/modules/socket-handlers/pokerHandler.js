@@ -69,11 +69,22 @@ export function hasActiveHand(gameId) {
   return false;
 }
 
+/** When the current turn started (ms since epoch). 0 if no turn or no state. Used by idle poll to only force after 90s. */
+export function getTurnStartedAt(gameId) {
+  const state = tableState.get(gameId);
+  return state?.currentTurnStartedAt ?? 0;
+}
+
 /**
  * Clear all in-memory state and timers for given game IDs.
  * MUST be called before consolidation deletes/moves players, otherwise
  * pending timers will try to update deleted player records (P2025).
  */
+/** When the current turn started (ms since epoch). 0 if no turn or no state. Used by idle poll to only force after 90s. */
+export function getTurnStartedAt(gameId) {
+  const state = tableState.get(gameId);
+  return state?.currentTurnStartedAt ?? 0;
+}
 /**
  * Force a stuck hand to advance by making the current player CHECK (if legal) or FOLD.
  * Used when consolidation is waiting but a hand's turn timer failed (e.g. io was null).
@@ -1050,6 +1061,7 @@ async function _startHandForGameBody(gameId, io) {
     smallBlindSeat: sbPlayer.seatNumber,
     bigBlindSeat: bbPlayer.seatNumber,
     currentTurnUserId: utgPlayer ? utgPlayer.userId : null, // First to act; null if everyone all-in
+    currentTurnStartedAt: utgPlayer ? Date.now() : null, // When current turn started (for stuck-table recovery)
     lastRaiseUserId: null, // Track who last raised (for betting completion check)
     actedPlayersInRound: new Set(), // Track which players have acted in current betting round
     players: await Promise.all(
@@ -1128,6 +1140,7 @@ async function _startHandForGameBody(gameId, io) {
     // Everyone all-in: no one to act, advance to next street
     console.log(`[POKER] All players all-in, advancing to next street`);
     state.currentTurnUserId = null;
+    state.currentTurnStartedAt = null;
     tableState.set(gameId, state);
     await advanceToNextStreet(gameId, io);
   }
@@ -2258,6 +2271,7 @@ async function handleShowdown(gameId, io, options = {}) {
   // which waits for all hands to finish. If we haven't marked complete yet, consolidation waits
   // forever for THIS game while we're blocked in onPlayersBust = deadlock.
   state.currentTurnUserId = null;
+  state.currentTurnStartedAt = null;
   state.street = null;
   tableState.set(gameId, state);
   console.log(`[SHOWDOWN] Marked hand as complete - hasActiveHand will now return false`);
@@ -2574,6 +2588,7 @@ async function advanceToNextStreet(gameId, io) {
   
   // Clear current turn before advancing street (betting is complete)
   state.currentTurnUserId = null;
+  state.currentTurnStartedAt = null;
   
   // Clear any existing turn timer
   const existingTimer = turnTimers.get(gameId);
@@ -2761,6 +2776,7 @@ async function advanceToNextStreet(gameId, io) {
     
     console.error(`[POKER] CRITICAL ERROR: All players folded but could not find player to award pot!`);
     state.currentTurnUserId = null;
+    state.currentTurnStartedAt = null;
     return;
   }
 
@@ -2803,6 +2819,7 @@ async function advanceToNextStreet(gameId, io) {
         
         console.log(`[POKER] advanceToNextStreet: Starting new betting round on ${state.street}, first to act: seat ${firstToActPlayer.seatNumber} (${firstToActPlayer.name || firstToActPlayer.userId})`);
         state.currentTurnUserId = firstToActPlayer.userId;
+        state.currentTurnStartedAt = Date.now();
         state.lastRaiseUserId = null; // Reset last raise for new street
         startTurnTimer(gameId, firstToActPlayer.userId, io);
       } else {
@@ -2811,6 +2828,7 @@ async function advanceToNextStreet(gameId, io) {
         const fallbackPlayer = eligibleToAct[0];
         console.log(`[POKER] Using fallback eligible player: seat ${fallbackPlayer.seatNumber} (${fallbackPlayer.name || fallbackPlayer.userId})`);
         state.currentTurnUserId = fallbackPlayer.userId;
+        state.currentTurnStartedAt = Date.now();
         state.lastRaiseUserId = null;
         startTurnTimer(gameId, fallbackPlayer.userId, io);
       }
@@ -2818,10 +2836,12 @@ async function advanceToNextStreet(gameId, io) {
       // 0 or 1 eligible players with chips -> no betting round should start
       console.log(`[POKER] advanceToNextStreet: <=1 eligible players with chips, skipping betting round start`);
       state.currentTurnUserId = null;
+      state.currentTurnStartedAt = null;
     }
   } else {
     console.log(`[POKER] advanceToNextStreet: Only 1 active player remaining, skipping betting round start`);
     state.currentTurnUserId = null;
+    state.currentTurnStartedAt = null;
   }
 
   // Update community cards in database (async - don't block)
@@ -2954,6 +2974,7 @@ async function moveToNextPlayer(gameId, io) {
     winner.chips += totalPot;
     state.pot = 0;
     state.currentTurnUserId = null;
+    state.currentTurnStartedAt = null;
     state.street = null;
     tableState.set(gameId, state);
 
@@ -3009,6 +3030,7 @@ async function moveToNextPlayer(gameId, io) {
 
   if (activePlayers.length === 0) {
     state.currentTurnUserId = null;
+    state.currentTurnStartedAt = null;
     return;
   }
 
@@ -3017,6 +3039,7 @@ async function moveToNextPlayer(gameId, io) {
     // For now, just use the first active player with lowest seat number
     const sortedPlayers = [...activePlayers].sort((a, b) => a.seatNumber - b.seatNumber);
     state.currentTurnUserId = sortedPlayers[0].userId;
+    state.currentTurnStartedAt = Date.now();
     startTurnTimer(gameId, state.currentTurnUserId, io);
     return;
   }
@@ -3091,11 +3114,13 @@ async function moveToNextPlayer(gameId, io) {
     const sortedPlayers = [...activePlayers].sort((a, b) => a.seatNumber - b.seatNumber);
     if (sortedPlayers.length > 0) {
     state.currentTurnUserId = sortedPlayers[0].userId;
+    state.currentTurnStartedAt = Date.now();
     startTurnTimer(gameId, state.currentTurnUserId, io);
       console.log(`[TURN ORDER] Set turn to first active player: seat ${sortedPlayers[0].seatNumber} (${sortedPlayers[0].name || sortedPlayers[0].userId})`);
     } else {
       console.log(`[TURN ORDER] No active players found, setting currentTurnUserId to null`);
       state.currentTurnUserId = null;
+      state.currentTurnStartedAt = null;
     }
     return;
   }
@@ -3213,6 +3238,7 @@ async function moveToNextPlayer(gameId, io) {
       console.log(`[POKER] WARNING: Player selected but doesn't need to act. Betting round may be complete.`);
       // Don't start timer if player doesn't need to act - check if betting is complete and advance
       state.currentTurnUserId = null;
+      state.currentTurnStartedAt = null;
       
       // Check if betting is complete and advance if needed (use seat map to ignore ghosts)
       const activePlayerIds = state.players
@@ -3252,6 +3278,7 @@ async function moveToNextPlayer(gameId, io) {
         if (playerNeedingAction) {
           console.log(`[POKER] Found player needing action: ${playerNeedingAction.name || playerNeedingAction.userId}`);
           state.currentTurnUserId = playerNeedingAction.userId;
+          state.currentTurnStartedAt = Date.now();
           startTurnTimer(gameId, playerNeedingAction.userId, io);
         }
       }
@@ -3272,10 +3299,13 @@ async function moveToNextPlayer(gameId, io) {
     }
     
     state.currentTurnUserId = nextPlayer.userId;
+    state.currentTurnStartedAt = Date.now();
     startTurnTimer(gameId, state.currentTurnUserId, io);
   } else {
     // No player found who needs to act - betting round should be complete
     // Set currentTurnUserId to null to signal that betting is complete
+    state.currentTurnUserId = null;
+    state.currentTurnStartedAt = null;
     console.log(`[POKER] Turn rotation: No next player found from seat ${currentSeat}`);
     console.log(`[POKER] Checked seats: ${checkedSeats.join(' → ')}`);
     console.log(`[POKER] Current bet: ${currentBet}, All active players:`);
@@ -3283,7 +3313,6 @@ async function moveToNextPlayer(gameId, io) {
       const contrib = state.bettingRound?.getPlayerContribution(p.id) || 0;
       console.log(`[POKER]   Seat ${p.seatNumber} (${p.name || p.userId}): contribution=${contrib}, status=${p.status}`);
     });
-    state.currentTurnUserId = null;
     
     // Immediately check if betting is complete and advance if needed
     // Use presentPlayerIds (players in seat map) to ignore ghosts - consolidated players may still be in state
