@@ -1058,6 +1058,7 @@ async function _startHandForGameBody(gameId, io) {
 
   // Create hand state (explicitly clear showdown so client doesn't show old win/lose styling)
   const state = {
+    handEnded: false, // Guard: set true when pot is awarded so we never double-award
     showdownActive: false,
     showdownResults: null,
     street: "PREFLOP",
@@ -1674,6 +1675,11 @@ async function handleTestPlayerAction(gameId, userId, io) {
       console.log(`[TEST PLAYER] Active players after action: ${activePlayersAfterAction.length}`);
       
       if (activePlayersAfterAction.length === 1) {
+        // Guard: prevent double-award if hand already ended
+        if (newState.handEnded) {
+          console.log(`[TEST PLAYER] Single player remaining but hand already ended - skipping award`);
+          return;
+        }
         // Only one player remaining - award pot and end hand (same logic as regular player action)
         const winner = activePlayersAfterAction[0];
         const collectedPot = newState.bettingRound.getTotalPot();
@@ -1683,6 +1689,8 @@ async function handleTestPlayerAction(gameId, userId, io) {
         
         winner.chips += totalPot;
         newState.pot = 0;
+        newState.handEnded = true;
+        tableState.set(gameId, newState);
         
         console.log(`[TEST PLAYER] Single player remaining - awarding pot of ${totalPot} to ${winnerName}`);
         
@@ -1864,7 +1872,13 @@ async function handleShowdown(gameId, io, options = {}) {
   const collectedPot = state.bettingRound.getTotalPot();
   const oldPot = state.pot || 0;
   state.pot = oldPot + collectedPot;
-  
+  if (state.handEnded) {
+    console.log(`[SHOWDOWN] Hand already ended - skipping showdown distribution`);
+    return;
+  }
+  state.handEnded = true;
+  tableState.set(gameId, state);
+
   // Only include players who are still in the hand (not folded, not eliminated)
   // ALL_IN players are still in the hand and should be included for showdown
   const activePlayers = state.players.filter(p => 
@@ -2672,6 +2686,10 @@ async function advanceToNextStreet(gameId, io) {
 
   // Check if everyone folded - if so, award pot to last player who didn't fold and end hand
   if (activePlayers.length === 0) {
+    if (state.handEnded) {
+      console.log(`[POKER] advanceToNextStreet: All folded but hand already ended - skipping award`);
+      return;
+    }
     console.log(`[POKER] advanceToNextStreet: All players folded - finding last player who didn't fold to award pot`);
     
     // Find the last player who was active (not folded) - this would be the last player to fold
@@ -2691,6 +2709,8 @@ async function advanceToNextStreet(gameId, io) {
         const totalPot = state.pot;
         bbPlayer.chips += totalPot;
         state.pot = 0;
+        state.handEnded = true;
+        tableState.set(gameId, state);
         
         const winnerName = bbPlayer.name || bbPlayer.user?.username || `Player ${bbPlayer.seatNumber}`;
         console.log(`[POKER] All players folded - awarding pot of ${totalPot} to ${winnerName} (big blind)`);
@@ -2973,6 +2993,10 @@ async function moveToNextPlayer(gameId, io) {
   // Must use playersInHand: when someone goes all-in, activePlayers excludes them, but they're
   // still in the hand – the other player needs a chance to call or fold
   if (playersInHand.length === 1) {
+    if (state.handEnded) {
+      console.log(`[POKER] One player left but hand already ended - skipping award`);
+      return;
+    }
     const existingTimer = turnTimers.get(gameId);
     if (existingTimer) {
       clearTimeout(existingTimer.timerId);
@@ -2984,6 +3008,8 @@ async function moveToNextPlayer(gameId, io) {
     const totalPot = (state.pot || 0) + collectedPot;
     winner.chips += totalPot;
     state.pot = 0;
+    state.handEnded = true;
+    tableState.set(gameId, state);
     state.currentTurnUserId = null;
     state.currentTurnStartedAt = null;
     const winnerName = winner.name || winner.user?.username || `Player ${winner.seatNumber}`;
@@ -3505,6 +3531,11 @@ export function registerPokerHandlers(io) {
           // Check if there's a last raiser and only one active player remains
           // OR if someone bet/raised and everyone else folded (uncalled bet)
           if (activePlayersAfterAction.length === 1) {
+            // Guard: prevent double-award if hand already ended (e.g. from another path)
+            if (state.handEnded) {
+              console.log(`[POKER] Single player remaining but hand already ended - skipping award`);
+              return;
+            }
             // Only one player remaining - award pot and end hand
             const winner = activePlayersAfterAction[0];
             const collectedPot = state.bettingRound.getTotalPot();
@@ -3517,6 +3548,8 @@ export function registerPokerHandlers(io) {
             
             winner.chips += totalPot;
             state.pot = 0;
+            state.handEnded = true;
+            tableState.set(gameId, state);
             
             console.log(`[POKER] Single player remaining - awarding pot of ${totalPot} to ${winnerName}`);
             if (isUncalledBet) {
