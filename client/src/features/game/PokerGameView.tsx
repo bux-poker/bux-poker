@@ -950,13 +950,18 @@ export function PokerGameView() {
                   const suitSymbols: Record<string, string> = { SPADES: "♠", HEARTS: "♥", DIAMONDS: "♦", CLUBS: "♣" };
                   const isRed = card.suit === "HEARTS" || card.suit === "DIAMONDS";
                   if (isMobile) {
+                    const cardH = 64;
+                    const cardW = Math.round(cardH * (80 / 112));
+                    const rankSize = Math.max(10, Math.floor(cardH * 0.42));
+                    const suitSize = Math.max(10, Math.floor(cardH * 0.38));
                     return (
                       <div
                         key={idx}
-                        className="flex flex-col items-center justify-center rounded-lg border-2 border-slate-300 bg-white shadow min-w-[52px] min-h-[64px] sm:min-w-[56px] sm:min-h-[68px] py-1 px-0.5 flex-shrink-0"
+                        className="flex flex-col items-center justify-center rounded-lg border-2 border-slate-300 bg-white shadow py-1 px-0.5 flex-shrink-0"
+                        style={{ width: cardW, height: cardH, minWidth: cardW, minHeight: cardH }}
                       >
-                        <span className="font-bold leading-none text-slate-900 text-base">{card.rank}</span>
-                        <span className="leading-none text-sm" style={{ color: isRed ? '#b91c1c' : '#1a1a1a' }}>{suitSymbols[card.suit] ?? card.suit[0]}</span>
+                        <span className="font-bold leading-none text-slate-900" style={{ fontSize: rankSize }}>{card.rank}</span>
+                        <span className="leading-none" style={{ fontSize: suitSize, color: isRed ? '#b91c1c' : '#1a1a1a' }}>{suitSymbols[card.suit] ?? card.suit[0]}</span>
                       </div>
                     );
                   }

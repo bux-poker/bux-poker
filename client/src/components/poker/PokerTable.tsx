@@ -547,11 +547,11 @@ export function PokerTable({
             {communityCards.map((card, idx) => {
               // Read CSS variables for responsive sizing - recalculate when window size changes
               let cardWidth = typeof window !== 'undefined' 
-                ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--community-card-width')) || 80
-                : 80;
+                ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--community-card-width')) || 64
+                : 64;
               let cardHeight = typeof window !== 'undefined'
-                ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--community-card-height')) || 112
-                : 112;
+                ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--community-card-height')) || 90
+                : 90;
               
               // Collect all winning cards from all winners
               const allWinningCards: Card[] = [];
