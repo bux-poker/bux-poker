@@ -10,6 +10,7 @@ import type { Player } from "@shared/types/game";
 import PlayerStatsModal from "../../components/modals/PlayerStatsModal";
 import { api } from "../../services/api";
 import { useTournament } from "../../hooks/useTournaments";
+import { useIsMobile } from "../../hooks/useIsMobile";
 import { soundManager, type SoundName } from "../../utils/soundManager";
 import { getHandDescription } from "@shared/utils/handEvaluator";
 
@@ -99,22 +100,16 @@ export function PokerGameView() {
   const [winnerModalOpen, setWinnerModalOpen] = useState(false);
   const [consolidationWaiting, setConsolidationWaiting] = useState<string | null>(null);
   const [socketConnected, setSocketConnected] = useState(false);
-  const [chatCollapsed, setChatCollapsed] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
+  const isMobile = useIsMobile();
+  const [chatCollapsed, setChatCollapsed] = useState(() => typeof window !== 'undefined' && (window.innerWidth <= 1024 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 'ontouchstart' in window));
   const [unreadChatCount, setUnreadChatCount] = useState(0);
-  const [isMobileWidth, setIsMobileWidth] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
   const chatCollapsedRef = useRef(chatCollapsed);
+  const isMobileRef = useRef(isMobile);
   const { user } = useAuth();
 
   chatCollapsedRef.current = chatCollapsed;
+  isMobileRef.current = isMobile;
   const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
-
-  // Mobile width detection for collapsible chat
-  useEffect(() => {
-    const check = () => setIsMobileWidth(window.innerWidth <= 768);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, []);
 
   // Keep tournament data fresh (remainingPlayers, etc.) when in active game (silent = no loading flash)
   useEffect(() => {
@@ -305,7 +300,7 @@ export function PokerGameView() {
       window.dispatchEvent(new CustomEvent('gameMessage', { detail: { gameId: id, message: messageData } }));
       // If chat is collapsed on mobile and message is from another user (not dealer), increment unread
       const isUserChat = messageData && !messageData.isDealerMessage && messageData.userId !== 'DEALER' && messageData.userId !== user?.id;
-      if (isUserChat && chatCollapsedRef.current && window.innerWidth <= 768) {
+      if (isUserChat && chatCollapsedRef.current && isMobileRef.current) {
         setUnreadChatCount((c) => c + 1);
       }
     });
@@ -951,7 +946,7 @@ export function PokerGameView() {
                 {myPlayer.holeCards.map((card: Card, idx: number) => {
                   const suitSymbols: Record<string, string> = { SPADES: "♠", HEARTS: "♥", DIAMONDS: "♦", CLUBS: "♣" };
                   const isRed = card.suit === "HEARTS" || card.suit === "DIAMONDS";
-                  if (isMobileWidth) {
+                  if (isMobile) {
                     return (
                       <div
                         key={idx}
@@ -1008,7 +1003,7 @@ export function PokerGameView() {
         {user && (
           <>
             {/* Chat icon tab - mobile only, when collapsed */}
-            {isMobileWidth && chatCollapsed && (
+            {isMobile && chatCollapsed && (
               <button
                 onClick={() => {
                   setChatCollapsed(false);
@@ -1028,10 +1023,10 @@ export function PokerGameView() {
               </button>
             )}
             {/* Chat panel - hidden on mobile when collapsed */}
-            {(!isMobileWidth || !chatCollapsed) && (
+            {(!isMobile || !chatCollapsed) && (
               <div 
-                className={`border-l border-slate-800 flex-shrink-0 relative ${isMobileWidth ? 'w-72 max-w-[45%]' : ''}`}
-                style={!isMobileWidth ? { width: 'var(--chat-width, 320px)' } : undefined}
+                className={`border-l border-slate-800 flex-shrink-0 relative ${isMobile ? 'w-72 max-w-[45%]' : ''}`}
+                style={!isMobile ? { width: 'var(--chat-width, 320px)' } : undefined}
               >
                 <div className="flex flex-col h-full">
                   {/* Header: Dealer toggle + collapse button on mobile */}
@@ -1059,7 +1054,7 @@ export function PokerGameView() {
                           }}
                         />
                       </button>
-                      {isMobileWidth && (
+                      {isMobile && (
                         <button
                           onClick={() => setChatCollapsed(true)}
                           className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-600"

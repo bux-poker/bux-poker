@@ -9,6 +9,7 @@ import { BettingControls } from "../components/poker/BettingControls";
 import Chat from "@shared/components/chat/Chat";
 import { useAuth } from "@shared/features/auth/AuthContext";
 import PlayerStatsModal from "../components/modals/PlayerStatsModal";
+import { useIsMobile } from "../hooks/useIsMobile";
 import type { Card } from "@shared/types/poker";
 
 const PLACEHOLDER_CARD: Card = { suit: "HEARTS", rank: "A" };
@@ -40,16 +41,9 @@ function buildTestPlayers() {
 export function TableTestPage() {
   const players = buildTestPlayers();
   const { user } = useAuth();
-  const [chatCollapsed, setChatCollapsed] = useState(() => typeof window !== "undefined" && window.innerWidth <= 768);
+  const isMobile = useIsMobile();
+  const [chatCollapsed, setChatCollapsed] = useState(() => typeof window !== "undefined" && (window.innerWidth <= 1024 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || "ontouchstart" in window));
   const [showDealerMessages, setShowDealerMessages] = useState(true);
-  const [isMobileWidth, setIsMobileWidth] = useState(() => typeof window !== "undefined" && window.innerWidth <= 768);
-
-  useEffect(() => {
-    const check = () => setIsMobileWidth(window.innerWidth <= 768);
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
 
   const chatPlayers = players.map((p) => ({
     id: p.id,
@@ -111,7 +105,7 @@ export function TableTestPage() {
         {user ? (
           <>
             {/* Chat icon tab - mobile only, when collapsed */}
-            {isMobileWidth && chatCollapsed && (
+            {isMobile && chatCollapsed && (
               <button
                 onClick={() => setChatCollapsed(false)}
                 className="absolute right-0 top-1/2 z-40 flex h-14 w-10 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 border-slate-600 bg-slate-800/95 shadow-lg"
@@ -123,10 +117,10 @@ export function TableTestPage() {
               </button>
             )}
             {/* Chat panel - hidden on mobile when collapsed */}
-            {(!isMobileWidth || !chatCollapsed) && (
+            {(!isMobile || !chatCollapsed) && (
               <div
-                className={`relative flex-shrink-0 border-l border-slate-800 ${isMobileWidth ? "w-72 max-w-[45%]" : ""}`}
-                style={!isMobileWidth ? { width: "var(--chat-width, 320px)" } : undefined}
+                className={`relative flex-shrink-0 border-l border-slate-800 ${isMobile ? "w-72 max-w-[45%]" : ""}`}
+                style={!isMobile ? { width: "var(--chat-width, 320px)" } : undefined}
               >
                 <div className="flex h-full flex-col">
                   <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800/50 px-2 py-1">
@@ -142,7 +136,7 @@ export function TableTestPage() {
                           style={{ height: "16px", width: "16px", marginLeft: "2px" }}
                         />
                       </button>
-                      {isMobileWidth && (
+                      {isMobile && (
                         <button
                           onClick={() => setChatCollapsed(true)}
                           className="rounded p-1.5 text-slate-400 hover:bg-slate-600 hover:text-white"
@@ -177,7 +171,7 @@ export function TableTestPage() {
         ) : (
           /* Placeholder when not logged in - also collapsible on mobile */
           <>
-            {isMobileWidth && chatCollapsed && (
+            {isMobile && chatCollapsed && (
               <button
                 onClick={() => setChatCollapsed(false)}
                 className="absolute right-0 top-1/2 z-40 flex h-14 w-10 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 border-slate-600 bg-slate-800/95 shadow-lg"
@@ -188,15 +182,15 @@ export function TableTestPage() {
                 </svg>
               </button>
             )}
-            {(!isMobileWidth || !chatCollapsed) && (
+            {(!isMobile || !chatCollapsed) && (
               <div
-                className={`relative flex-shrink-0 border-l border-slate-800 ${isMobileWidth ? "w-72 max-w-[45%]" : ""}`}
-                style={!isMobileWidth ? { width: "var(--chat-width, 320px)" } : undefined}
+                className={`relative flex-shrink-0 border-l border-slate-800 ${isMobile ? "w-72 max-w-[45%]" : ""}`}
+                style={!isMobile ? { width: "var(--chat-width, 320px)" } : undefined}
               >
                 <div className="flex h-full flex-col">
                   <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800/50 px-2 py-1">
                     <span className="text-xs text-slate-300">Chat</span>
-                    {isMobileWidth && (
+                    {isMobile && (
                       <button
                         onClick={() => setChatCollapsed(true)}
                         className="rounded p-1.5 text-slate-400 hover:bg-slate-600 hover:text-white"

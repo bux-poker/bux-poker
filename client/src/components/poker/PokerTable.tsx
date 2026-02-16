@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '@shared/types/poker';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 // Chip component with color based on value
 function BetChip({ value }: { value: number }) {
@@ -264,6 +265,7 @@ export function PokerTable({
   
   // Window size state to trigger re-renders when CSS variables change
   const [windowSize, setWindowSize] = useState({ width: typeof window !== 'undefined' ? window.innerWidth : 1400 });
+  const isMobile = useIsMobile();
   
   // Track visible action overlays: { playerId: { action: string, timestamp: number } }
   const [actionOverlays, setActionOverlays] = useState<Record<string, { action: string; timestamp: number }>>({});
@@ -562,7 +564,7 @@ export function PokerTable({
                     } ${
                       isLosingCard ? 'opacity-40 grayscale' : ''
                     }`}
-                    useTextCard={windowSize.width <= 768}
+                    useTextCard={isMobile}
                   />
                 </div>
               );
@@ -901,7 +903,7 @@ export function PokerTable({
                             cardIsLosing ? 'opacity-40 grayscale' : ''
                           }`}
                           faceDown={!showFaceUp}
-                          useTextCard={windowSize.width <= 768}
+                          useTextCard={isMobile}
                         />
                       </div>
                     );
