@@ -938,7 +938,7 @@ export function PokerGameView() {
           </div>
 
           {/* Betting controls - fixed at bottom */}
-          <div className="border-t border-slate-800 bg-slate-900/95 px-2 sm:px-4 py-1.5 sm:py-2 backdrop-blur-sm relative min-h-[72px] sm:min-h-[80px] flex items-stretch">
+          <div className="border-t border-slate-800 bg-slate-900/95 px-2 sm:px-4 py-1.5 sm:py-2 backdrop-blur-sm relative min-h-[80px] sm:min-h-[88px] flex items-stretch">
             {/* Player's own cards + hand text - fill left side of panel height */}
             {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
               <div className={`absolute left-2 sm:left-4 top-0 bottom-0 z-50 flex flex-col justify-center gap-1 items-start ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ visibility: 'visible' }}>
@@ -953,10 +953,10 @@ export function PokerGameView() {
                     return (
                       <div
                         key={idx}
-                        className="flex flex-col items-center justify-center rounded-lg border-2 border-slate-300 bg-white shadow min-w-[44px] min-h-[56px] sm:min-w-[48px] sm:min-h-[60px] py-1 px-0.5 flex-shrink-0"
+                        className="flex flex-col items-center justify-center rounded-lg border-2 border-slate-300 bg-white shadow min-w-[52px] min-h-[64px] sm:min-w-[56px] sm:min-h-[68px] py-1 px-0.5 flex-shrink-0"
                       >
-                        <span className="font-bold leading-none text-slate-900 text-sm">{card.rank}</span>
-                        <span className="leading-none text-xs" style={{ color: isRed ? '#b91c1c' : '#1a1a1a' }}>{suitSymbols[card.suit] ?? card.suit[0]}</span>
+                        <span className="font-bold leading-none text-slate-900 text-base">{card.rank}</span>
+                        <span className="leading-none text-sm" style={{ color: isRed ? '#b91c1c' : '#1a1a1a' }}>{suitSymbols[card.suit] ?? card.suit[0]}</span>
                       </div>
                     );
                   }
@@ -973,7 +973,7 @@ export function PokerGameView() {
                       key={idx}
                       src={`/cards/${getCardImage(card)}`}
                       alt={`${card.rank}${card.suit}`}
-                      className="h-[56px] sm:h-[64px] w-auto max-h-[80%] object-contain rounded-lg shadow border border-white/20 flex-shrink-0"
+                      className="h-[64px] sm:h-[72px] w-auto max-h-[85%] object-contain rounded-lg shadow border border-white/20 flex-shrink-0"
                       style={{ display: 'block' }}
                       onError={(e) => {
                         console.error('Card image failed to load:', getCardImage(card), 'Full path:', `/cards/${getCardImage(card)}`);
@@ -986,19 +986,21 @@ export function PokerGameView() {
                 </div>
               </div>
             )}
-              <BettingControls 
-                onAction={handleAction} 
-                currentBet={gameState.currentBet || 0}
-                bigBlind={bigBlind}
-                myChips={myPlayer?.chips || 0}
-                street={gameState.street || 'PREFLOP'}
-                minimumRaise={gameState.minimumRaise || bigBlind}
-                isBigBlind={myPlayer?.seatNumber === gameState.bigBlindSeat}
-                isMyTurn={gameState.currentTurnUserId === user?.id}
-                myContribution={myContribution}
-                players={gameState.players}
-                myUserId={user?.id}
-              />
+              <div className="ml-auto">
+                <BettingControls 
+                  onAction={handleAction} 
+                  currentBet={gameState.currentBet || 0}
+                  bigBlind={bigBlind}
+                  myChips={myPlayer?.chips || 0}
+                  street={gameState.street || 'PREFLOP'}
+                  minimumRaise={gameState.minimumRaise || bigBlind}
+                  isBigBlind={myPlayer?.seatNumber === gameState.bigBlindSeat}
+                  isMyTurn={gameState.currentTurnUserId === user?.id}
+                  myContribution={myContribution}
+                  players={gameState.players}
+                  myUserId={user?.id}
+                />
+              </div>
           </div>
         </div>
 

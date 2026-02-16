@@ -380,19 +380,6 @@ export function PokerTable({
           className="absolute left-0 top-0 z-10 flex items-start gap-1"
           style={{ marginLeft: '6px', marginTop: '6px' }}
         >
-          {onTournamentLobbyClick != null && (
-            <button
-              type="button"
-              onClick={onTournamentLobbyClick}
-              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded border border-slate-600/60 bg-slate-900/90 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white sm:h-10 sm:w-10"
-              aria-label="Tournament lobby"
-              title="Tournament lobby"
-            >
-              <svg className="h-5 w-5 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-            </button>
-          )}
           {(topLeftBlinds != null || topLeftTimer != null) && (
             <div
               className="rounded border border-slate-600/60 bg-slate-900/90"
@@ -421,6 +408,20 @@ export function PokerTable({
                 )}
               </div>
             </div>
+          )}
+          {onTournamentLobbyClick != null && (
+            <button
+              type="button"
+              onClick={onTournamentLobbyClick}
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded border border-slate-600/60 bg-slate-900/90 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white sm:h-10 sm:w-10"
+              aria-label="Tournament info"
+              title="Tournament info"
+            >
+              <svg className="h-5 w-5 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" strokeWidth={2} />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16v-4M12 8h.01" />
+              </svg>
+            </button>
           )}
         </div>
         );
