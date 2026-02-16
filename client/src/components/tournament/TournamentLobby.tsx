@@ -705,7 +705,10 @@ export function TournamentLobby() {
               {players.length === 0 ? (
                 <p className="text-slate-400 text-center py-8">No players registered yet.</p>
               ) : (
-                players.map((player, index) => (
+                players.map((player, index) => {
+                  const place = player.position ?? index + 1;
+                  const ordinal = place === 1 ? '1st' : place === 2 ? '2nd' : place === 3 ? '3rd' : `${place}th`;
+                  return (
                   <div
                     key={player.id}
                     className={`flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/30 p-4 ${
@@ -713,9 +716,9 @@ export function TournamentLobby() {
                     }`}
                   >
                     <div className="flex items-center gap-4">
-                      {isCompleted && player.position && (
+                      {isCompleted && place && (
                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-700 text-lg font-bold text-slate-200">
-                          {player.position}
+                          {place}
                         </div>
                       )}
                       {!isCompleted && (
@@ -736,15 +739,27 @@ export function TournamentLobby() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-slate-200">
-                        {player.chips.toLocaleString()} chips
-                      </p>
-                      {isRunning && player.position && (
-                        <p className="text-xs text-slate-400">Position: {player.position}th</p>
+                      {isCompleted ? (
+                        <p className="font-semibold text-slate-200">
+                          {ordinal}
+                          {place === 1 && player.chips > 0 && (
+                            <span className="ml-2 text-emerald-400 font-normal">({player.chips.toLocaleString()} chips)</span>
+                          )}
+                        </p>
+                      ) : (
+                        <>
+                          <p className="font-semibold text-slate-200">
+                            {player.chips.toLocaleString()} chips
+                          </p>
+                          {isRunning && player.position && (
+                            <p className="text-xs text-slate-400">Position: {player.position}th</p>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}
