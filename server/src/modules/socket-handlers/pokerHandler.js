@@ -349,26 +349,44 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
       }
       
       // Only proceed with BET/RAISE if amount is still positive and would be a raise
-      // When opponent has fewer chips than min raise, bet() would throw - use short-raise path
+      // When opponent has fewer chips than min raise, or we capped for effective stack, bet() may throw - use short-raise path
       const activeCount = state.players.filter(p => p.status !== 'FOLDED' && p.status !== 'ELIMINATED').length;
       const isHeadsUpPot = activeCount === 2;
       const raiseAmount = newContribution - currentBet;
       const minRaise = state.bettingRound.minimumRaise || state.bettingRound.bigBlind || 20;
       const isShortRaise = raiseAmount > 0 && raiseAmount < minRaise;
-      if (isShortRaise && (isGoingAllIn || isHeadsUpPot)) {
-        // Allow short raise when going all-in or heads-up (opponent can't call a full raise)
-        state.bettingRound.playerBets.set(player.id, newContribution);
-        if (newContribution > state.bettingRound.currentBet) {
-          state.bettingRound.currentBet = newContribution;
+      let applied = false;
+      try {
+        if (isShortRaise && (isGoingAllIn || isHeadsUpPot)) {
+          // Allow short raise when going all-in or heads-up (opponent can't call a full raise)
+          state.bettingRound.playerBets.set(player.id, newContribution);
+          if (newContribution > state.bettingRound.currentBet) {
+            state.bettingRound.currentBet = newContribution;
+            state.lastRaiseUserId = player.userId;
+            state.actedPlayersInRound.clear();
+          }
+          state.actedPlayersInRound.add(userId);
+          applied = true;
+        } else {
+          state.bettingRound.bet(player.id, amount);
           state.lastRaiseUserId = player.userId;
           state.actedPlayersInRound.clear();
+          state.actedPlayersInRound.add(userId);
+          applied = true;
         }
-        state.actedPlayersInRound.add(userId);
-      } else {
-        state.bettingRound.bet(player.id, amount);
-        state.lastRaiseUserId = player.userId;
-        state.actedPlayersInRound.clear();
-        state.actedPlayersInRound.add(userId);
+      } catch (err) {
+        // Capped raise or all-in below min: allow it (preserve chips, side pots handle the rest)
+        if (err?.message === 'Raise below minimum raise size' && (isGoingAllIn || raiseAmount > 0)) {
+          state.bettingRound.playerBets.set(player.id, newContribution);
+          if (newContribution > state.bettingRound.currentBet) {
+            state.bettingRound.currentBet = newContribution;
+            state.lastRaiseUserId = player.userId;
+            state.actedPlayersInRound.clear();
+          }
+          state.actedPlayersInRound.add(userId);
+        } else {
+          throw err;
+        }
       }
       player.chips -= amount;
       if (player.chips < 0) {

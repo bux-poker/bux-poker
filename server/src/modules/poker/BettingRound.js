@@ -38,8 +38,10 @@ export class BettingRound {
       throw new Error("Bet must increase current bet");
     }
 
+    // Opening bet (currentBet === 0): must be at least big blind
     const raiseAmount = newContribution - this.currentBet;
-    if (raiseAmount < this.minimumRaise) {
+    const minRequired = this.currentBet === 0 ? this.bigBlind : this.minimumRaise;
+    if (raiseAmount < minRequired) {
       throw new Error("Raise below minimum raise size");
     }
 

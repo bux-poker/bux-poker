@@ -10,6 +10,7 @@ import Chat from "@shared/components/chat/Chat";
 import { useAuth } from "@shared/features/auth/AuthContext";
 import PlayerStatsModal from "../components/modals/PlayerStatsModal";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { getHandDescription } from "@shared/utils/handEvaluator";
 import type { Card } from "@shared/types/poker";
 
 const PLACEHOLDER_CARD: Card = { suit: "HEARTS", rank: "A" };
@@ -78,13 +79,59 @@ export function TableTestPage() {
               forceSeatCardsFaceDown
               topLeftBlinds="50/100"
               topLeftTimer="2:15 mins"
+              onTournamentLobbyClick={() => alert("Tournament lobby (test – check button position)")}
               topRightPosition="13th"
               topRightPlayers="28/45"
             />
           </div>
 
-          {/* Betting controls bar - same as game view */}
-          <div className="relative border-t border-slate-800 bg-slate-900/95 px-2 py-1 backdrop-blur-sm sm:px-4 sm:py-2">
+          {/* Betting controls bar - same as game view, with hole cards + hand text for layout test */}
+          <div className="relative border-t border-slate-800 bg-slate-900/95 px-2 py-1.5 backdrop-blur-sm sm:px-4 sm:py-2 min-h-[72px] sm:min-h-[80px] flex items-stretch">
+            {/* Mock "my" hole cards + hand text (player 1) - matches game view layout */}
+            {(() => {
+              const myHoleCards = players[0]?.holeCards;
+              if (!myHoleCards || !Array.isArray(myHoleCards) || myHoleCards.length === 0) return null;
+              const suitSymbols: Record<string, string> = { SPADES: "♠", HEARTS: "♥", DIAMONDS: "♦", CLUBS: "♣" };
+              const getCardImage = (card: Card): string => {
+                const suitMap: Record<string, string> = { SPADES: "S", HEARTS: "H", DIAMONDS: "D", CLUBS: "C" };
+                const suit = suitMap[card.suit] || card.suit.charAt(0);
+                const rank = card.rank === "10" ? "10" : card.rank;
+                return `${rank}${suit}.png`;
+              };
+              return (
+                <div className="absolute left-2 sm:left-4 top-0 bottom-0 z-50 flex flex-col justify-center gap-1 items-start" style={{ visibility: "visible" }}>
+                  <span className="text-slate-300 text-sm sm:text-base font-medium whitespace-nowrap leading-tight">
+                    {getHandDescription(myHoleCards, COMMUNITY_CARDS, "FLOP")}
+                  </span>
+                  <div className="flex gap-1.5 sm:gap-2 items-center flex-1 min-h-0">
+                    {myHoleCards.map((card: Card, idx: number) => {
+                      const isRed = card.suit === "HEARTS" || card.suit === "DIAMONDS";
+                      if (isMobile) {
+                        return (
+                          <div
+                            key={idx}
+                            className="flex flex-col items-center justify-center rounded-lg border-2 border-slate-300 bg-white shadow min-w-[44px] min-h-[56px] sm:min-w-[48px] sm:min-h-[60px] py-1 px-0.5 flex-shrink-0"
+                          >
+                            <span className="font-bold leading-none text-slate-900 text-sm">{card.rank}</span>
+                            <span className="leading-none text-xs" style={{ color: isRed ? "#b91c1c" : "#1a1a1a" }}>{suitSymbols[card.suit] ?? card.suit[0]}</span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <img
+                          key={idx}
+                          src={`/cards/${getCardImage(card)}`}
+                          alt={`${card.rank}${card.suit}`}
+                          className="h-[56px] sm:h-[64px] w-auto max-h-[80%] object-contain rounded-lg shadow border border-white/20 flex-shrink-0"
+                          style={{ display: "block" }}
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
             <BettingControls
               onAction={() => {}}
               currentBet={CURRENT_BET}
