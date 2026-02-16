@@ -26,12 +26,22 @@ interface PlayerRow {
   position?: number | null;
 }
 
+/** Optional game state from the table (for current blinds and live chip counts). */
+export interface GameStateForLobby {
+  smallBlind?: number;
+  bigBlind?: number;
+  players?: Array<{ userId?: string; chips?: number; status?: string }>;
+}
+
 export function TournamentLobbyModal({
   tournamentId,
   onClose,
+  gameState,
 }: {
   tournamentId: string;
   onClose: () => void;
+  /** When opened from a game table, pass game state to show current blinds and live chips */
+  gameState?: GameStateForLobby | null;
 }) {
   const { user } = useAuth();
   const { tournament, loading, error, refetch } = useTournament(tournamentId);
@@ -86,21 +96,35 @@ export function TournamentLobbyModal({
     if (!tournament) return;
     const raw = (tournament as any).players;
     if (raw && Array.isArray(raw)) {
-      const list = raw
-        .map((p: any) => ({
-          id: p.id,
-          userId: p.userId,
-          user: p.user || {},
-          chips: p.chips ?? 0,
-          status: p.status ?? '',
-          position: p.finishingPlace ?? p.position ?? null,
-        }))
-        .sort((a: PlayerRow, b: PlayerRow) => (b.chips ?? 0) - (a.chips ?? 0));
-      setPlayers(list);
+      const totalPlayers = tournament.registeredCount ?? raw.length;
+      const rows = raw.map((p: any) => ({
+        id: p.id,
+        userId: p.userId,
+        user: p.user || {},
+        chips: p.chips ?? 0,
+        status: p.status ?? '',
+        position: p.finishingPlace ?? p.position ?? null,
+      }));
+      // Merge live chips from gameState if provided (same userId)
+      const withLiveChips = gameState?.players?.length
+        ? rows.map((p: PlayerRow) => {
+            const live = gameState.players?.find((gp) => gp.userId === p.userId);
+            if (live && live.chips !== undefined) return { ...p, chips: live.chips, status: live.status ?? p.status };
+            return p;
+          })
+        : rows;
+      // Order: (1) active with chips > 0 by chips desc, (2) active with 0 chips (all-in), (3) eliminated by finishing place (first out = worst = at bottom)
+      const activeWithChips = withLiveChips.filter((p: PlayerRow) => p.status !== 'ELIMINATED' && (p.chips ?? 0) > 0);
+      const allIn = withLiveChips.filter((p: PlayerRow) => p.status !== 'ELIMINATED' && (p.chips ?? 0) === 0);
+      const eliminated = withLiveChips.filter((p: PlayerRow) => p.status === 'ELIMINATED');
+      activeWithChips.sort((a: PlayerRow, b: PlayerRow) => (b.chips ?? 0) - (a.chips ?? 0));
+      // Eliminated: first eliminated = highest finishingPlace (e.g. 13th) at bottom → sort descending
+      eliminated.sort((a: PlayerRow, b: PlayerRow) => (b.position ?? 0) - (a.position ?? 0));
+      setPlayers([...activeWithChips, ...allIn, ...eliminated]);
     } else {
       setPlayers([]);
     }
-  }, [tournament]);
+  }, [tournament, gameState?.players]);
 
   const isCompleted =
     tournament?.status === 'COMPLETED' || tournament?.status === 'CANCELLED';
@@ -108,6 +132,12 @@ export function TournamentLobbyModal({
     tournament?.status === 'RUNNING' || tournament?.status === 'ACTIVE';
   const registeredCount = tournament?.registeredCount ?? 0;
   const remainingPlayers = (tournament as any)?.remainingPlayers ?? players.filter((p) => p.status !== 'ELIMINATED').length;
+  const currentBlindLevelIndex =
+    gameState?.smallBlind != null && gameState?.bigBlind != null && blindLevels.length > 0
+      ? blindLevels.findIndex(
+          (l) => l.smallBlind === gameState.smallBlind && l.bigBlind === gameState.bigBlind
+        )
+      : -1;
 
   if (loading && !tournament) {
     return (
@@ -213,36 +243,45 @@ export function TournamentLobbyModal({
                 <p className="py-6 text-center text-slate-400">No players.</p>
               ) : (
                 players.map((player, index) => {
-                  const place = player.position ?? index + 1;
+                  const isEliminated = player.status === 'ELIMINATED';
+                  const place = player.position ?? (isEliminated ? null : index + 1);
                   const ordinal =
-                    place === 1 ? '1st' : place === 2 ? '2nd' : place === 3 ? '3rd' : `${place}th`;
+                    place === 1 ? '1st' : place === 2 ? '2nd' : place === 3 ? '3rd' : place != null ? `${place}th` : '–';
+                  const isYou = user?.id === player.userId;
                   return (
                     <div
                       key={player.id}
-                      className={`flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/30 p-3 sm:p-4 ${
-                        user?.id === player.userId ? 'border-emerald-500/50 bg-emerald-500/5' : ''
+                      className={`flex items-center justify-between rounded-lg border p-3 sm:p-4 ${
+                        isYou
+                          ? 'border-emerald-500 bg-emerald-500/15 ring-1 ring-emerald-500/50'
+                          : 'border-slate-800 bg-slate-800/30'
                       }`}
                     >
                       <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-                        {isCompleted && place && (
+                        {place != null && place > 0 ? (
                           <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-slate-700 text-sm font-bold text-slate-200 sm:h-10 sm:w-10 sm:text-lg">
                             {place}
                           </div>
-                        )}
-                        {!isCompleted && (
+                        ) : !isEliminated ? (
                           <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs font-medium text-slate-300 sm:h-10 sm:w-10 sm:text-sm">
-                            {index + 1}
+                            –
+                          </div>
+                        ) : (
+                          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-slate-700/70 text-sm font-bold text-slate-400 sm:h-10 sm:w-10 sm:text-lg">
+                            {player.position != null ? player.position : '–'}
                           </div>
                         )}
                         <div className="min-w-0">
                           <p className="truncate font-medium text-slate-200">
                             {player.user?.username || 'Player'}
-                            {user?.id === player.userId && (
-                              <span className="ml-2 text-xs text-emerald-400">(You)</span>
+                            {isYou && (
+                              <span className="ml-2 text-xs font-medium text-emerald-400">(You)</span>
                             )}
                           </p>
-                          {isRunning && (
-                            <p className="text-xs text-slate-400">Status: {player.status}</p>
+                          {isRunning && !isEliminated && (
+                            <p className="text-xs text-slate-400">
+                              {player.chips === 0 ? 'All-in' : `Status: ${player.status}`}
+                            </p>
                           )}
                         </div>
                       </div>
@@ -256,15 +295,15 @@ export function TournamentLobbyModal({
                               </span>
                             )}
                           </p>
+                        ) : isEliminated ? (
+                          <p className="font-semibold text-slate-400">{ordinal}</p>
                         ) : (
                           <>
                             <p className="font-semibold text-slate-200">
                               {player.chips.toLocaleString()} chips
                             </p>
-                            {isRunning && player.position && (
-                              <p className="text-xs text-slate-400">
-                                Position: {player.position}th
-                              </p>
+                            {player.chips === 0 && (
+                              <p className="text-xs text-amber-400/90">All-in</p>
                             )}
                           </>
                         )}
@@ -281,25 +320,35 @@ export function TournamentLobbyModal({
               {blindLevels.length === 0 ? (
                 <p className="py-6 text-center text-slate-400">No blind levels.</p>
               ) : (
-                blindLevels.map((level) => (
-                  <div
-                    key={level.level}
-                    className="rounded-lg border border-slate-800 bg-slate-800/30 p-3 sm:p-4"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-semibold text-slate-200">
-                        Level {level.level}
-                      </span>
-                      <p className="text-lg font-bold text-slate-100">
-                        {level.smallBlind} / {level.bigBlind}
-                      </p>
+                blindLevels.map((level, idx) => {
+                  const isCurrentRound = isRunning && currentBlindLevelIndex === idx;
+                  return (
+                    <div
+                      key={level.level}
+                      className={`rounded-lg border p-3 sm:p-4 ${
+                        isCurrentRound
+                          ? 'border-emerald-500 bg-emerald-500/15 ring-1 ring-emerald-500/50'
+                          : 'border-slate-800 bg-slate-800/30'
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-semibold text-slate-200">
+                          Level {level.level}
+                          {isCurrentRound && (
+                            <span className="ml-2 text-xs font-medium text-emerald-400">(current)</span>
+                          )}
+                        </span>
+                        <p className="text-lg font-bold text-slate-100">
+                          {level.smallBlind} / {level.bigBlind}
+                        </p>
+                      </div>
+                      <div className="mt-1 text-sm text-slate-400">
+                        {level.duration == null ? '∞' : `${level.duration} min`}
+                        {level.breakAfter != null && ` · ${level.breakAfter} min break`}
+                      </div>
                     </div>
-                    <div className="mt-1 text-sm text-slate-400">
-                      {level.duration == null ? '∞' : `${level.duration} min`}
-                      {level.breakAfter != null && ` · ${level.breakAfter} min break`}
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}

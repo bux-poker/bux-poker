@@ -1103,6 +1103,19 @@ export function PokerGameView() {
         <TournamentLobbyModal
           tournamentId={gameState.tournamentId}
           onClose={() => setTournamentLobbyOpen(false)}
+          gameState={
+            gameState
+              ? {
+                  smallBlind: gameState.smallBlind,
+                  bigBlind: gameState.bigBlind,
+                  players: gameState.players?.map((p) => ({
+                    userId: p.userId,
+                    chips: p.chips,
+                    status: p.status,
+                  })),
+                }
+              : null
+          }
         />
       )}
     </div>
