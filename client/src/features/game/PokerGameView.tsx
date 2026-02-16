@@ -938,7 +938,7 @@ export function PokerGameView() {
           </div>
 
           {/* Betting controls - fixed at bottom */}
-          <div className="border-t border-slate-800 bg-slate-900/95 px-2 sm:px-4 py-1.5 sm:py-2 backdrop-blur-sm relative min-h-[80px] sm:min-h-[88px] flex items-stretch">
+          <div className="border-t border-slate-800 bg-slate-900/95 px-2 sm:px-4 py-1.5 sm:py-2 backdrop-blur-sm relative min-h-[96px] sm:min-h-[108px] flex items-stretch">
             {/* Player's own cards + hand text - fill left side of panel height */}
             {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
               <div className={`absolute left-2 sm:left-4 top-0 bottom-0 z-50 flex flex-col justify-center gap-1 items-start ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ visibility: 'visible' }}>
@@ -978,7 +978,7 @@ export function PokerGameView() {
                       key={idx}
                       src={`/cards/${getCardImage(card)}`}
                       alt={`${card.rank}${card.suit}`}
-                      className="h-[72px] sm:h-[80px] w-auto max-h-[85%] object-contain rounded-lg shadow border border-white/20 flex-shrink-0"
+                      className="h-[88px] sm:h-[100px] w-auto max-h-[90%] object-contain rounded-lg shadow border border-white/20 flex-shrink-0"
                       style={{ display: 'block' }}
                       onError={(e) => {
                         console.error('Card image failed to load:', getCardImage(card), 'Full path:', `/cards/${getCardImage(card)}`);

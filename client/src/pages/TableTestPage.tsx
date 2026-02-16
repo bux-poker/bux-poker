@@ -86,7 +86,7 @@ export function TableTestPage() {
           </div>
 
           {/* Betting controls bar - same as game view, with hole cards + hand text for layout test */}
-          <div className="relative border-t border-slate-800 bg-slate-900/95 px-2 py-1.5 backdrop-blur-sm sm:px-4 sm:py-2 min-h-[80px] sm:min-h-[88px] flex items-stretch">
+          <div className="relative border-t border-slate-800 bg-slate-900/95 px-2 py-1.5 backdrop-blur-sm sm:px-4 sm:py-2 min-h-[96px] sm:min-h-[108px] flex items-stretch">
             {/* Mock "my" hole cards + hand text (player 1) - matches game view layout */}
             {(() => {
               const myHoleCards = players[0]?.holeCards;
@@ -127,7 +127,7 @@ export function TableTestPage() {
                           key={idx}
                           src={`/cards/${getCardImage(card)}`}
                           alt={`${card.rank}${card.suit}`}
-                          className="h-[72px] sm:h-[80px] w-auto max-h-[85%] object-contain rounded-lg shadow border border-white/20 flex-shrink-0"
+                          className="h-[88px] sm:h-[100px] w-auto max-h-[90%] object-contain rounded-lg shadow border border-white/20 flex-shrink-0"
                           style={{ display: "block" }}
                           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                         />
