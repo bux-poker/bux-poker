@@ -943,11 +943,11 @@ export function PokerGameView() {
           <div className="border-t border-slate-800 bg-slate-900/95 px-2 sm:px-4 py-1 sm:py-2 backdrop-blur-sm relative">
             {/* Player's own cards - bottom left, aligned with action buttons */}
             {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
-              <div className={`absolute top-4 bottom-4 left-4 z-50 flex flex-col gap-0.5 items-start ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ visibility: 'visible' }}>
+              <div className={`absolute left-4 top-1/2 z-50 flex flex-col gap-0.5 items-start -translate-y-1/2 ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ visibility: 'visible' }}>
                 <span className="text-slate-300 text-xs sm:text-sm font-medium whitespace-nowrap">
                   {getHandDescription(myPlayer.holeCards, communityCards, gameState.street || "PREFLOP")}
                 </span>
-                <div className="flex gap-2 items-center">
+                <div className="flex gap-1.5 items-center">
                 {myPlayer.holeCards.map((card: Card, idx: number) => {
                   const suitSymbols: Record<string, string> = { SPADES: "♠", HEARTS: "♥", DIAMONDS: "♦", CLUBS: "♣" };
                   const isRed = card.suit === "HEARTS" || card.suit === "DIAMONDS";
@@ -955,10 +955,10 @@ export function PokerGameView() {
                     return (
                       <div
                         key={idx}
-                        className="flex flex-col items-center justify-center rounded-lg border-2 border-slate-300 bg-white shadow-lg min-w-[44px] min-h-[60px] py-1 px-0.5"
+                        className="flex flex-col items-center justify-center rounded border-2 border-slate-300 bg-white shadow min-w-[36px] min-h-[48px] py-0.5 px-0.5"
                       >
-                        <span className="font-bold leading-none text-slate-900" style={{ fontSize: 'clamp(14px, 4vw, 24px)' }}>{card.rank}</span>
-                        <span className="leading-none font-medium" style={{ fontSize: 'clamp(12px, 3.5vw, 20px)', color: isRed ? '#b91c1c' : '#1a1a1a' }}>{suitSymbols[card.suit] ?? card.suit[0]}</span>
+                        <span className="font-bold leading-none text-slate-900 text-xs">{card.rank}</span>
+                        <span className="leading-none text-[10px]" style={{ color: isRed ? '#b91c1c' : '#1a1a1a' }}>{suitSymbols[card.suit] ?? card.suit[0]}</span>
                       </div>
                     );
                   }
@@ -975,7 +975,7 @@ export function PokerGameView() {
                       key={idx}
                       src={`/cards/${getCardImage(card)}`}
                       alt={`${card.rank}${card.suit}`}
-                      className="h-full w-auto object-contain rounded-lg shadow-lg border-2 border-white/20"
+                      className="h-16 w-auto max-h-[72px] object-contain rounded shadow border border-white/20"
                       style={{ display: 'block' }}
                       onError={(e) => {
                         console.error('Card image failed to load:', getCardImage(card), 'Full path:', `/cards/${getCardImage(card)}`);
