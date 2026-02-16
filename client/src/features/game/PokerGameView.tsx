@@ -978,7 +978,7 @@ export function PokerGameView() {
                       key={idx}
                       src={`/cards/${getCardImage(card)}`}
                       alt={`${card.rank}${card.suit}`}
-                      className="h-[64px] sm:h-[72px] w-auto max-h-[85%] object-contain rounded-lg shadow border border-white/20 flex-shrink-0"
+                      className="h-[72px] sm:h-[80px] w-auto max-h-[85%] object-contain rounded-lg shadow border border-white/20 flex-shrink-0"
                       style={{ display: 'block' }}
                       onError={(e) => {
                         console.error('Card image failed to load:', getCardImage(card), 'Full path:', `/cards/${getCardImage(card)}`);

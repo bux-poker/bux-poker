@@ -20,8 +20,7 @@ function isMobileUserAgent(): boolean {
  * True when the user is on a mobile device (phone/tablet) so we show:
  * - CSS text cards instead of PNGs
  * - Collapsible chat
- * Uses: touch capability, mobile user agent, or viewport ≤1024px so that
- * large phones and tablets get the mobile experience.
+ * Uses: touch capability or mobile user agent (real phones/tablets only), not just narrow desktop windows.
  */
 export function useIsMobile(): boolean {
   const touchOrUa =
@@ -37,5 +36,5 @@ export function useIsMobile(): boolean {
     return () => window.removeEventListener('resize', update);
   }, []);
 
-  return touchOrUa || width <= 1024;
+  return touchOrUa;
 }
