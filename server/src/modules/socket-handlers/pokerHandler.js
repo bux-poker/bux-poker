@@ -2260,6 +2260,14 @@ async function handleShowdown(gameId, io, options = {}) {
   tableState.set(gameId, state);
   console.log(`[SHOWDOWN] Marked hand as complete - hasActiveHand will now return false`);
 
+  // CRITICAL: Zero pot in memory and DB BEFORE onPlayersBust/emitIfTournamentCompleted.
+  // Otherwise audit sums player chips + game pots and sees stale pot (chip conservation violation).
+  state.pot = 0;
+  await prisma.game.update({
+    where: { id: gameId },
+    data: { pot: 0 }
+  }).catch(err => console.error(`[SHOWDOWN] Error updating game pot:`, err));
+
   // Process all busts and run consolidation once (avoids race / duplicate consolidation)
   if (game.tournament && bustedPlayerIds.length > 0) {
     await tournamentEngine.onPlayersBust(game.tournament.id, bustedPlayerIds);
@@ -2268,15 +2276,6 @@ async function handleShowdown(gameId, io, options = {}) {
   if (game?.tournament && io) {
     await emitIfTournamentCompleted(game.tournament.id, gameId, io);
   }
-
-  // Reset pot
-  state.pot = 0;
-
-  // Update game pot in database (async)
-  prisma.game.update({
-    where: { id: gameId },
-    data: { pot: 0 }
-  }).catch(err => console.error(`[SHOWDOWN] Error updating game pot:`, err));
 
   // Clear hand state after a delay (allow clients to see results clearly)
   const cleanupDelayMs = options?.cleanupDelayMs ?? 8000;
@@ -2686,11 +2685,30 @@ async function advanceToNextStreet(gameId, io) {
             winners: [{ playerId: bbPlayer.id, userId: bbPlayer.userId, name: winnerName, potWon: totalPot }]
           };
           tableState.set(gameId, state);
+        }
+
+        // Persist winner chips and game pot BEFORE tournament completion so audit sees correct totals
+        await prisma.player.update({
+          where: { id: bbPlayer.id },
+          data: { chips: bbPlayer.chips }
+        }).catch(err => {
+          if (err?.code === 'P2025') {
+            console.log(`[POKER] Player ${bbPlayer.id} already removed (consolidation), skipping chip update`);
+          } else {
+            console.error(`[POKER] Error updating chips for player ${bbPlayer.id}:`, err);
+          }
+        });
+        await prisma.game.update({
+          where: { id: gameId },
+          data: { pot: 0 }
+        }).catch(err => console.error(`[POKER] Error updating game pot:`, err));
+
+        if (io) {
           const gameForEmit = await prisma.game.findUnique({
             where: { id: gameId },
             include: { players: { include: { user: true } }, tournament: true }
           }).catch(() => null);
-          if (gameForEmit && io) {
+          if (gameForEmit) {
             io.to(`game:${gameId}`).emit("game-state", buildClientGameState(gameForEmit, state));
           }
           io.to(`game:${gameId}`).emit("winner", {
@@ -2701,24 +2719,6 @@ async function advanceToNextStreet(gameId, io) {
             await emitIfTournamentCompleted(gameForEmit.tournament.id, gameId, io);
           }
         }
-
-        // Update player chips in database
-        prisma.player.update({
-          where: { id: bbPlayer.id },
-          data: { chips: bbPlayer.chips }
-        }).catch(err => {
-          if (err?.code === 'P2025') {
-            console.log(`[POKER] Player ${bbPlayer.id} already removed (consolidation), skipping chip update`);
-          } else {
-            console.error(`[POKER] Error updating chips for player ${bbPlayer.id}:`, err);
-          }
-        });
-        
-        // Update game pot
-        prisma.game.update({
-          where: { id: gameId },
-          data: { pot: 0 }
-        }).catch(err => console.error(`[POKER] Error updating game pot:`, err));
         
         // Reset hand state after delay
         setTimeout(() => {
@@ -3528,11 +3528,15 @@ export function registerPokerHandlers(io) {
               });
             }
             
-            // Update winner chips in database (async)
-            prisma.player.update({
+            // Persist winner chips and game pot BEFORE tournament completion so audit sees correct totals
+            await prisma.player.update({
               where: { id: winner.id },
               data: { chips: winner.chips }
             }).catch(err => console.error('[POKER] Error updating winner chips:', err));
+            await prisma.game.update({
+              where: { id: gameId },
+              data: { pot: 0 }
+            }).catch(err => console.error('[POKER] Error updating game pot:', err));
 
             // Check for player elimination (though unlikely with folded players, check anyway)
             const { TournamentEngine } = await import("../../services/TournamentEngine.js");
@@ -3566,12 +3570,6 @@ export function registerPokerHandlers(io) {
               }
               await emitIfTournamentCompleted(game.tournament.id, gameId, socket.server);
             }
-            
-            // Update game pot in database (async)
-            prisma.game.update({
-            where: { id: gameId },
-              data: { pot: 0 }
-            }).catch(err => console.error('[POKER] Error updating game pot:', err));
             
             // Clear hand state after delay
             const savedPlayers = [...state.players];
