@@ -556,8 +556,8 @@ async function applyPlayerAction({ gameId, userId, action, amount, io = null }) 
     }
   });
 
-  // Persist pot to game (async - don't block)
-  prisma.game.update({
+  // Persist pot to game (await so award path cannot be overwritten by stale pot write)
+  await prisma.game.update({
     where: { id: gameId },
     data: {
       pot: state.pot

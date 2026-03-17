@@ -733,6 +733,20 @@ export class TournamentEngine {
           console.warn(`[TOURNAMENT] Cannot close table ${g.tableNumber} - has active hand (likely all-in players); skipping consolidation`);
           return games; // Abort - cannot safely close
         }
+        // CHIP CONSERVATION: If this game still has pot > 0 (e.g. hand ended without award), give it to a player
+        // before closing so we never destroy chips.
+        const orphanPot = g.pot ?? 0;
+        if (orphanPot > 0) {
+          const fromGame = allPlayers.filter((ap) => ap.gameId === g.id);
+          if (fromGame.length > 0) {
+            const recipient = fromGame[0];
+            recipient.chips = (recipient.chips ?? 0) + orphanPot;
+            recipient.player.chips = recipient.chips;
+            console.log(`[TOURNAMENT] Transferring orphan pot ${orphanPot} from closed game ${g.id} (table ${g.tableNumber}) to player ${recipient.playerId} (chips now ${recipient.chips})`);
+          } else {
+            console.error(`[TOURNAMENT] Cannot transfer pot ${orphanPot} from game ${g.id} - no players in list; chips will be lost`);
+          }
+        }
         await prisma.game.update({ where: { id: g.id }, data: { status: "COMPLETED", pot: 0 } });
       }
       games = toKeep;
