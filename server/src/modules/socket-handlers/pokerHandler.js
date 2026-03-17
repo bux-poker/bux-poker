@@ -611,10 +611,13 @@ export async function startHandForGame(gameId, io) {
 }
 
 async function _startHandForGameBody(gameId, io) {
+  // Always load only non-eliminated players with chips from the DB so we never
+  // accidentally pull busted players back into a new hand due to stale in-memory state.
   const game = await prisma.game.findUnique({
     where: { id: gameId },
     include: {
       players: {
+        where: { status: { not: "ELIMINATED" }, chips: { gt: 0 } },
         include: { user: true }
       },
       tournament: true
@@ -629,33 +632,6 @@ async function _startHandForGameBody(gameId, io) {
   }
   if (game.players.length < 2) {
     throw new Error("Not enough players");
-  }
-
-  // CRITICAL: Ensure every non-eliminated player with chips is ACTIVE for the new hand.
-  // Post-hand reset can miss players in some paths (e.g. only in-hand players reset);
-  // this guarantees all 8 (or N) are included, not just half.
-  const needActivation = game.players.filter(
-    p => p.chips > 0 && p.status !== 'ELIMINATED' && p.status !== 'ACTIVE'
-  );
-  if (needActivation.length > 0) {
-    console.log(`[POKER] Activating ${needActivation.length} players for new hand (were ${needActivation.map(p => p.status).join(', ')})`);
-    await prisma.player.updateMany({
-      where: {
-        gameId,
-        chips: { gt: 0 },
-        status: { not: 'ELIMINATED' }
-      },
-      data: { status: 'ACTIVE', holeCards: '', lastAction: null }
-    });
-    // Reload game so rest of startHandForGame sees ACTIVE status
-    const refreshed = await prisma.game.findUnique({
-      where: { id: gameId },
-      include: { players: { include: { user: true } }, tournament: true }
-    });
-    if (refreshed) {
-      game.players = refreshed.players;
-      Object.assign(game, refreshed);
-    }
   }
 
   // Skip if hand already exists
