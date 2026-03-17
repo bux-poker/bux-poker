@@ -1048,11 +1048,14 @@ async function _startHandForGameBody(gameId, io) {
     console.log(`[POKER] UTG calculation: dealer=${dealerSeat}, sb=${sbSeat}, bb=${bbSeat}, utg=${utgSeat} (${utgPlayer.user?.username || utgPlayer.userId})`);
   }
 
-  // Preserve any stale pot: if game.pot > 0 (crashed/interrupted hand), fold it into this hand's pot
-  // instead of zeroing it - zeroing would destroy chips and violate conservation.
-  const startPot = game.pot ?? 0;
-  if (startPot > 0) {
-    console.warn(`[POKER] Preserving stale game.pot ${startPot} - folding into this hand's pot (chip conservation)`);
+  // IMPORTANT: Never carry a previous game's pot into a new hand.
+  // If game.pot is non-zero here, something went wrong in the prior hand
+  // (e.g. pot not zeroed after award). Folding it into this hand would
+  // double-count that pot and CREATE chips. Instead, log loudly and zero
+  // the game pot in the DB; chip audits will flag the mismatch.
+  const previousPot = game.pot ?? 0;
+  if (previousPot > 0) {
+    console.error(`[POKER] WARNING: game ${gameId} starting new hand with non-zero pot=${previousPot}. Zeroing pot instead of carrying forward to avoid chip inflation.`);
     await prisma.game.update({ where: { id: gameId }, data: { pot: 0 } }).catch(() => {});
   }
 
@@ -1065,7 +1068,7 @@ async function _startHandForGameBody(gameId, io) {
     deck: remainingDeck,
     communityCards: [],
     bettingRound,
-    pot: startPot, // Start with 0; current betting round is added separately in buildClientGameState
+    pot: 0, // Always start each hand with 0; current betting round is added separately
     dealerSeat: dealerPlayer.seatNumber,
     smallBlindSeat: sbPlayer.seatNumber,
     bigBlindSeat: bbPlayer.seatNumber,
