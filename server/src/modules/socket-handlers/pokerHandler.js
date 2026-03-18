@@ -2309,10 +2309,11 @@ async function handleShowdown(gameId, io, options = {}) {
 
     console.log(`[SHOWDOWN] Clearing hand state for next hand`);
     // Reset only current DB players (avoids P2025 on deleted rows after consolidation)
+    // IMPORTANT: do NOT eliminate players here based on chips. Bust logic (onPlayersBust/_markPlayerBust)
+    // is the only place that should set status = 'ELIMINATED'.
     const resetPromises = gameForNextHand.players.map(p => {
       const isEliminated = p.status === 'ELIMINATED';
-      const hasNoChips = (p.chips ?? 0) <= 0;
-      const status = hasNoChips && !isEliminated ? 'ELIMINATED' : (isEliminated ? 'ELIMINATED' : 'ACTIVE');
+      const status = isEliminated ? 'ELIMINATED' : 'ACTIVE';
       return prisma.player.update({
         where: { id: p.id },
         data: { status, holeCards: '', lastAction: null }
