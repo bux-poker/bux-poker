@@ -6,6 +6,15 @@ import { PokerGameService } from "../../services/PokerGameService.js";
 import { TexasHoldem } from "../poker/TexasHoldem.js";
 import { BettingRound } from "../poker/BettingRound.js";
 import { HandEvaluator } from "../poker/HandEvaluator.js";
+import {
+  tableState,
+  turnTimers,
+  testPlayerTimers,
+  getIO,
+  hasActiveHand,
+  getTurnStartedAt,
+  clearAllStateForGames,
+} from "../poker/tableState.js";
 
 const gameService = new PokerGameService();
 const engine = new TexasHoldem({ smallBlind: 10, bigBlind: 20 });
@@ -17,69 +26,10 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// In-memory per-game state for the current hand and betting street.
-// For production you'd want this to be more robust / persisted.
-const tableState = new Map();
+// In-memory table state, timers, and IO live in ../poker/tableState.js
 
 /** Prevents two concurrent startHandForGame(gameId) from both running (e.g. idle poll + join-table). */
 const startHandLocks = new Map();
-
-// Turn timers: map of gameId -> { playerId, timeout, expiresAt }
-const turnTimers = new Map();
-
-// Test player action timeouts: map of gameId -> { playerId, timeout }
-const testPlayerTimers = new Map();
-
-// Store io instance for use by other modules
-let ioInstance = null;
-
-export function getIO() {
-  return ioInstance;
-}
-
-/**
- * Check if a game has an active hand in progress
- * A hand is considered active if:
- * - State exists AND
- * - Not in showdown (showdownActive is false or undefined) AND
- * - Has a current turn OR is in a betting round (street is set)
- * 
- * After showdown completes, the hand is no longer "active" even though state exists
- * (state is kept for a few seconds to show results, then cleared)
- */
-export function hasActiveHand(gameId) {
-  const state = tableState.get(gameId);
-  if (!state) return false;
-  
-  // Do NOT consider showdownActive as "hand complete" - we still need to update chips,
-  // process busts, and call onPlayersBust. Consolidation must wait until we've cleared state.
-  // (Previously returning false here caused consolidation to delete players mid-showdown.)
-  
-  // If there's a current turn, hand is active
-  if (state.currentTurnUserId) {
-    return true;
-  }
-  
-  // If street is set and not null, hand is in progress
-  if (state.street && state.street !== null) {
-    return true;
-  }
-  
-  // No active hand
-  return false;
-}
-
-/** When the current turn started (ms since epoch). 0 if no turn or no state. Used by idle poll to only force after 90s. */
-export function getTurnStartedAt(gameId) {
-  const state = tableState.get(gameId);
-  return state?.currentTurnStartedAt ?? 0;
-}
-
-/**
- * Clear all in-memory state and timers for given game IDs.
- * MUST be called before consolidation deletes/moves players, otherwise
- * pending timers will try to update deleted player records (P2025).
- */
 /**
  * Force a stuck hand to advance by making the current player CHECK (if legal) or FOLD.
  * Used when consolidation is waiting but a hand's turn timer failed (e.g. io was null).
