@@ -8,6 +8,9 @@ import { consolidateTables as runConsolidateTables } from "./tournament/consolid
 import { onPlayersBust as runOnPlayersBust } from "./tournament/busts.js";
 import { seatPlayers as runSeatPlayers } from "./tournament/seatPlayers.js";
 import { completeTournamentIfOneLeft as runCompleteIfOneLeft } from "./tournament/completeIfOneLeft.js";
+import { scheduleStart, doRunScheduledStart, startScheduledStartPoll as startScheduledStartPollImpl } from "./tournament/scheduledStart.js";
+import { startBlindLevelTimer as runStartBlindLevelTimer } from "./tournament/blindTimer.js";
+import { startIdleTablesPoll as startIdleTablesPollImpl } from "./tournament/idleTablesPoll.js";
 
 // Re-export for backward compatibility (poker/blindLevel, etc. import from TournamentEngine)
 export { getTournamentBlindLevelFromTime, syncBlindLevelsToTournamentTime };
@@ -126,34 +129,7 @@ export class TournamentEngine {
       where: { id: tournamentId },
       data: { startScheduledAt }
     });
-    // Start exactly when timer expires (poll every 30s would add up to 30s delay)
-    if (_scheduledStartTimers.has(tournamentId)) {
-      clearTimeout(_scheduledStartTimers.get(tournamentId).timeoutId);
-      _scheduledStartTimers.delete(tournamentId);
-    }
-    const delayMs = Math.max(0, startScheduledAt.getTime() - Date.now());
-    const timeoutId = setTimeout(() => {
-      _scheduledStartTimers.delete(tournamentId);
-      this.runScheduledStart(tournamentId).catch((err) =>
-        console.error(`[TOURNAMENT] Scheduled start timer error for ${tournamentId}:`, err)
-      );
-    }, delayMs);
-    _scheduledStartTimers.set(tournamentId, { timeoutId });
-    if (socketIO) {
-      for (const game of tournament.games || []) {
-        socketIO.to(`game:${game.id}`).emit("tournament-starting", {
-          tournamentId,
-          startTime: startScheduledAt.toISOString(),
-          countdownSeconds: 120
-        });
-      }
-      socketIO.emit("tournament-starting", {
-        tournamentId,
-        startTime: startScheduledAt.toISOString(),
-        countdownSeconds: 120
-      });
-      console.log(`[TOURNAMENT] Scheduled start at ${startScheduledAt.toISOString()} for tournament ${tournamentId} (timer in ${(delayMs / 1000).toFixed(0)}s)`);
-    }
+    scheduleStart(tournamentId, startScheduledAt, socketIO, tournament.games || [], (tid) => this.runScheduledStart(tid));
     const updatedTournament = await prisma.tournament.findUnique({
       where: { id: tournamentId },
       include: { games: { include: { players: true } } }
@@ -161,141 +137,21 @@ export class TournamentEngine {
     return { tournamentId, games: updatedTournament?.games || [] };
   }
 
-  /** Run actual start (RUNNING, hands, blind timer). Used when startScheduledAt has passed. */
+  /** Run actual start (RUNNING, hands, blind timer). Delegates to tournament/scheduledStart.js. */
   async runScheduledStart(tournamentId) {
-    if (_scheduledStartTimers.has(tournamentId)) {
-      clearTimeout(_scheduledStartTimers.get(tournamentId).timeoutId);
-      _scheduledStartTimers.delete(tournamentId);
-    }
-    const existing = await prisma.tournament.findUnique({
-      where: { id: tournamentId },
-      select: { status: true }
+    const { getIO, startHandForGame } = await import("../modules/socket-handlers/pokerHandler.js");
+    return doRunScheduledStart(tournamentId, {
+      getIO,
+      startHandForGame,
+      startBlindLevelTimer: (tid) => this.startBlindLevelTimer(tid)
     });
-    if (!existing || existing.status !== "SEATED") return;
-    const { getIO } = await import("../modules/socket-handlers/pokerHandler.js");
-    const socketIO = getIO();
-    const startedAt = new Date();
-    await prisma.tournament.update({
-      where: { id: tournamentId },
-      data: { status: "RUNNING", startedAt, startScheduledAt: null }
-    });
-    if (socketIO) {
-      socketIO.emit("tournament-started", { tournamentId, startedAt: startedAt.toISOString() });
-      console.log(`[TOURNAMENT] Started tournament ${tournamentId}`);
-    }
-    const { startHandForGame, hasActiveHand } = await import("../modules/socket-handlers/pokerHandler.js");
-    const games = await prisma.game.findMany({
-      where: { tournamentId, status: "ACTIVE" },
-      include: { players: { where: { status: { not: "ELIMINATED" }, chips: { gt: 0 } }, include: { user: true } }, tournament: true }
-    });
-    for (const game of games) {
-      const count = game.players?.length ?? 0;
-      if (count >= 2) {
-        try {
-          await startHandForGame(game.id, socketIO);
-          console.log(`[TOURNAMENT] Started hand for table ${game.tableNumber} (game ${game.id}, ${count} players)`);
-        } catch (err) {
-          console.error(`[TOURNAMENT] Error starting hand for game ${game.id} (table ${game.tableNumber}):`, err);
-        }
-      } else {
-        console.log(`[TOURNAMENT] Skipping table ${game.tableNumber}: ${count} players (need 2+)`);
-      }
-    }
-    this.startBlindLevelTimer(tournamentId);
   }
 
-  /**
-   * Start blind level progression timer for a running tournament
-   */
+  /** Start blind level progression timer. Delegates to tournament/blindTimer.js. */
   startBlindLevelTimer(tournamentId) {
-    // Clear existing timer if any
-    if (this.blindTimers && this.blindTimers.has(tournamentId)) {
-      clearInterval(this.blindTimers.get(tournamentId));
-      this.blindTimers.delete(tournamentId);
-    }
-
-    // Initialize timers map if needed
-    if (!this.blindTimers) {
-      this.blindTimers = new Map();
-    }
-
-    // Check tournament blind levels every minute
-    console.log(`[TOURNAMENT] Blind level timer started for tournament ${tournamentId}, checking every 60 seconds`);
-    const intervalId = setInterval(async () => {
-      try {
-        const tournament = await prisma.tournament.findUnique({
-          where: { id: tournamentId },
-        });
-
-        if (!tournament || tournament.status !== 'RUNNING' || !tournament.startedAt) {
-          // Tournament not running, clear timer
-          console.log(`[TOURNAMENT] Tournament ${tournamentId} not running, clearing blind timer`);
-          clearInterval(intervalId);
-          if (this.blindTimers) {
-            this.blindTimers.delete(tournamentId);
-          }
-          return;
-        }
-        
-        console.log(`[TOURNAMENT] Blind timer check for tournament ${tournamentId}`);
-
-        // Parse blind levels
-        let blindLevels = [];
-        try {
-          blindLevels = tournament.blindLevelsJson ? JSON.parse(tournament.blindLevelsJson) : [];
-        } catch (e) {
-          console.error(`[TOURNAMENT] Failed to parse blind levels for tournament ${tournamentId}:`, e);
-          return;
-        }
-
-        if (blindLevels.length === 0) return;
-
-        // Calculate elapsed time since tournament started
-        const now = new Date();
-        const startedAt = new Date(tournament.startedAt);
-        const elapsedMs = now.getTime() - startedAt.getTime();
-        let elapsedMinutes = elapsedMs / 1000 / 60;
-
-        // Determine current blind level based on elapsed time
-        let currentLevelIndex = 0;
-        for (let i = 0; i < blindLevels.length; i++) {
-          const level = blindLevels[i];
-          if (level.duration === null) {
-            // Final level (infinite duration)
-            currentLevelIndex = i;
-            break;
-          }
-          if (elapsedMinutes <= level.duration) {
-            currentLevelIndex = i;
-            break;
-          }
-          elapsedMinutes -= level.duration;
-          // Account for break after level
-          if (level.breakAfter) {
-            elapsedMinutes -= level.breakAfter;
-          }
-        }
-
-        const games = await prisma.game.findMany({
-          where: { tournamentId, status: "ACTIVE" },
-          select: { id: true, currentBlindLevel: true }
-        });
-        if (games.length === 0) return;
-
-        // Sync all tables to the level dictated by tournament elapsed time (same level for everyone)
-        const gameLevel = games[0].currentBlindLevel ?? 0;
-        if (currentLevelIndex > gameLevel) {
-          console.log(`[TOURNAMENT] Advancing blind level for tournament ${tournamentId} from ${gameLevel} to ${currentLevelIndex}`);
-          const { getIO } = await import("../modules/socket-handlers/pokerHandler.js");
-          const io = getIO();
-          await syncBlindLevelsToTournamentTime(tournamentId, io, { emitDealerMessage: true });
-        }
-      } catch (err) {
-        console.error(`[TOURNAMENT] Error in blind level timer for tournament ${tournamentId}:`, err);
-      }
-    }, 60000); // Check every minute
-
-    this.blindTimers.set(tournamentId, intervalId);
+    import("../modules/socket-handlers/pokerHandler.js").then(({ getIO }) => {
+      runStartBlindLevelTimer(tournamentId, { getIO });
+    }).catch((err) => console.error("[TOURNAMENT] Failed to get getIO for blind timer:", err));
   }
 
   /**
@@ -382,133 +238,12 @@ export class TournamentEngine {
   }
 }
 
-/** One-time timers so start runs exactly when 2 min expires (poll is backup for restarts). */
-const _scheduledStartTimers = new Map(); // tournamentId -> { timeoutId }
-
-/** Poll for tournaments that are SEATED and startScheduledAt <= now; run actual start. Survives process restart. */
-let _scheduledStartPollInterval = null;
-export function startScheduledStartPoll() {
-  if (_scheduledStartPollInterval) return;
-  const engine = new TournamentEngine();
-  _scheduledStartPollInterval = setInterval(async () => {
-    try {
-      const now = new Date();
-      const due = await prisma.tournament.findMany({
-        where: { status: "SEATED", startScheduledAt: { lte: now } },
-        select: { id: true }
-      });
-      for (const t of due) {
-        try {
-          await engine.runScheduledStart(t.id);
-        } catch (err) {
-          console.error(`[TOURNAMENT] Error running scheduled start for ${t.id}:`, err);
-        }
-      }
-    } catch (err) {
-      console.error(`[TOURNAMENT] Scheduled start poll error:`, err);
-    }
-  }, 30000);
-  console.log("[TOURNAMENT] Scheduled start poll running every 30s");
+/** Start scheduled-start poll (SEATED + startScheduledAt <= now). Pass engine or omit to create one. */
+export function startScheduledStartPoll(engine) {
+  startScheduledStartPollImpl(engine ?? new TournamentEngine());
 }
 
-/** Every 30s, ensure every ACTIVE table in a RUNNING tournament has a hand running. Recovers stuck tables.
- *  Also triggers consolidation when tables are uneven (e.g. 8 on one table, 1 on another) so we rebalance
- *  even if showdown path didn't run.
- *  Tables stuck mid-hand (e.g. turn timer never started) are force-advanced after 45s. */
-const STUCK_THRESHOLD_MS = 45000; // 45 seconds - recover faster when timers fail
-const IDLE_POLL_INTERVAL_MS = 30000; // 30 seconds
-
-let _idleTablesPollInterval = null;
-export function startIdleTablesPoll() {
-  if (_idleTablesPollInterval) return;
-  const engine = new TournamentEngine();
-  _idleTablesPollInterval = setInterval(async () => {
-    const { startHandForGame, hasActiveHand, forceStuckPlayerToAct, getIO, getTurnStartedAt } = await import("../modules/socket-handlers/pokerHandler.js");
-    const socketIO = getIO();
-    if (!socketIO) return;
-    const now = Date.now();
-    try {
-      const running = await prisma.tournament.findMany({
-        where: { status: "RUNNING" },
-        select: { id: true, seatsPerTable: true }
-      });
-      for (const t of running) {
-        const seatsPerTable = t.seatsPerTable ?? 9;
-        const games = await prisma.game.findMany({
-          where: { tournamentId: t.id, status: "ACTIVE" },
-          include: {
-            players: {
-              where: { status: { not: "ELIMINATED" }, chips: { gt: 0 } },
-              select: { id: true }
-            }
-          }
-        });
-        const totalCount = games.reduce((sum, g) => sum + (g.players?.length ?? 0), 0);
-        const tablesNeeded = Math.max(1, Math.ceil(totalCount / seatsPerTable));
-        const counts = games.map(g => g.players?.length ?? 0).filter(c => c > 0);
-        const spread = counts.length >= 2 ? Math.max(...counts) - Math.min(...counts) : 0;
-        const maxSpread = games.length > 6 ? 2 : 1;
-        const needsConsolidation = games.length > tablesNeeded || spread > maxSpread;
-        if (needsConsolidation && totalCount >= 2) {
-          try {
-            console.log(`[TOURNAMENT] Idle poll: uneven tables (${counts.join(",")}), triggering consolidation`);
-            await engine.consolidateTables(t.id);
-          } catch (err) {
-            console.error("[TOURNAMENT] Idle-poll consolidation failed:", err?.message);
-          }
-          continue;
-        }
-        for (const game of games) {
-          if (game.players.length === 0) {
-            // Never close a table with an active hand - players may all be all-in (0 chips)
-            // and filtered out; closing would strand them and lose chips
-            if (hasActiveHand(game.id)) {
-              continue;
-            }
-            await prisma.game.update({ where: { id: game.id }, data: { status: "COMPLETED", pot: 0 } });
-            console.log(`[TOURNAMENT] Closed empty table ${game.tableNumber} (game ${game.id})`);
-            continue;
-          }
-          if (game.players.length < 2) continue;
-
-          // Never start a new hand if previous pot wasn't fully awarded/zeroed.
-          // If pot > 0 here, some award path failed and chips are stranded in game.pot.
-          // Starting a new hand would either (a) leak those chips when the table closes,
-          // or (b) double-count them if some future recovery path also moves them.
-          if ((game.pot ?? 0) > 0) {
-            console.error(
-              `[TOURNAMENT] Idle-table recovery: refusing to start new hand for game ${game.id} (table ${game.tableNumber}) because pot=${game.pot} (must be 0 before next hand)`
-            );
-            continue;
-          }
-          // Recover stuck tables: same turn active for 45s -> force current player to act
-          if (hasActiveHand(game.id)) {
-            const turnStarted = getTurnStartedAt(game.id);
-            if (turnStarted > 0 && now - turnStarted >= STUCK_THRESHOLD_MS) {
-              try {
-                const ok = await forceStuckPlayerToAct(game.id, socketIO);
-                if (ok) {
-                  console.log(`[TOURNAMENT] Idle poll: table ${game.tableNumber} (game ${game.id}) was stuck - forced player to act`);
-                }
-              } catch (err) {
-                console.error(`[TOURNAMENT] Force-stuck failed for table ${game.tableNumber}:`, err?.message);
-              }
-            }
-            continue;
-          }
-          try {
-            await startHandForGame(game.id, socketIO);
-            console.log(
-              `[TOURNAMENT] Idle-table recovery: started hand for game ${game.id} (table ${game.tableNumber}) with pot=0`
-            );
-          } catch (err) {
-            console.error(`[TOURNAMENT] Idle-table start failed for game ${game.id}:`, err);
-          }
-        }
-      }
-    } catch (err) {
-      console.error("[TOURNAMENT] Idle tables poll error:", err);
-    }
-  }, IDLE_POLL_INTERVAL_MS);
-  console.log(`[TOURNAMENT] Idle tables poll running every ${IDLE_POLL_INTERVAL_MS / 1000}s (stuck-table recovery after ${STUCK_THRESHOLD_MS / 1000}s)`);
+/** Start idle/stuck tables poll. Pass engine or omit to create one. */
+export function startIdleTablesPoll(engine) {
+  startIdleTablesPollImpl(engine ?? new TournamentEngine());
 }
