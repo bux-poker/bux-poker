@@ -13,6 +13,7 @@ import {
   getIO,
   hasActiveHand,
   getTurnStartedAt,
+  setIO,
 } from "../poker/tableState.js";
 export { clearAllStateForGames } from "../poker/tableState.js";
 import { ensureHandState } from "../poker/ensureHandState.js";
@@ -23,7 +24,7 @@ import { advanceToNextStreet } from "../poker/advanceStreet.js";
 import { moveToNextPlayer } from "../poker/turnOrder.js";
 import { emitIfTournamentCompleted } from "../poker/tableTournamentHooks.js";
 import { handleShowdown } from "../poker/showdown.js";
-export { emitIfTournamentCompleted };
+export { emitIfTournamentCompleted, getIO };
 import { startTurnTimer } from "../poker/turnTimers.js";
 
 const gameService = new PokerGameService();
@@ -689,8 +690,8 @@ async function emitGameState(gameId, io, state) {
 // runCinematicAllInShowdown lives in ../poker/showdown.js (used by advanceStreet)
 
 export function registerPokerHandlers(io) {
-  // Store io instance for use by other modules
-  ioInstance = io;
+  // Store io instance for use by other modules (getIO from tableState)
+  setIO(io);
   
   io.on("connection", (socket) => {
     // eslint-disable-next-line no-console
