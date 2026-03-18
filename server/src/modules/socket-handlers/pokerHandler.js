@@ -1889,25 +1889,13 @@ async function handleShowdown(gameId, io, options = {}) {
   });
 
   if (handResults.length === 0) {
-    // Chip leak protection: if we somehow evaluated no valid hands but have a non-zero pot,
-    // split the pot between all active players so chips never disappear from the tournament economy.
+    // Fatal: we have a pot but no valid hands. Do NOT invent chip movements.
+    // Log hard and leave state as-is so we can debug the real bug without corrupting chips.
     console.error(
-      `[SHOWDOWN] No valid hands evaluated - splitting pot of ${state.pot} among ${activePlayers.length} active players to avoid chip leak`
+      `[SHOWDOWN] FATAL: No valid hands evaluated for game ${gameId} with pot=${state.pot}. ` +
+      `Refusing to distribute chips; table should be investigated and restarted.`
     );
-    totalWon = new Map();
-    const divisor = Math.max(activePlayers.length, 1);
-    const splitAmount = Math.floor(state.pot / divisor);
-    const remainder = state.pot % divisor;
-    activePlayers.forEach((p, i) => {
-      const amount = splitAmount + (i < remainder ? 1 : 0);
-      totalWon.set(p.id, amount);
-      p.chips += amount;
-    });
-    handResults = activePlayers.map(p => ({
-      player: p,
-      hand: { category: 'Split (no valid hands)', bestFive: [] },
-      strength: 0
-    }));
+    return;
   } else {
   // Find maximum strength (best hand)
   const maxStrength = Math.max(...handResults.map(r => r.strength));
