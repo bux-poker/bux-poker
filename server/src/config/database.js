@@ -1,4 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+// Import from our fixed generate path so the client is found on Render (prestart generates to server/.prisma/client)
+import { PrismaClient } from '../../.prisma/client/index.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
