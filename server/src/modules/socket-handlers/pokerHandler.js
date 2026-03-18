@@ -21,6 +21,7 @@ import { applyPlayerAction } from "../poker/actions.js";
 import { buildClientGameState } from "../poker/buildClientGameState.js";
 import { advanceToNextStreet } from "../poker/advanceStreet.js";
 import { moveToNextPlayer } from "../poker/turnOrder.js";
+import { emitIfTournamentCompleted } from "../poker/tableTournamentHooks.js";
 
 const gameService = new PokerGameService();
 const engine = new TexasHoldem({ smallBlind: 10, bigBlind: 20 });
@@ -89,27 +90,6 @@ export function clearAllStateForGames(gameIds) {
     }
   }
   console.log(`[POKER] Cleared state for ${gameIds.length} game(s) before consolidation`);
-}
-
-/**
- * If the tournament just ended (COMPLETED), emit so clients refetch and show winner modal.
- */
-async function emitIfTournamentCompleted(tournamentId, gameId, io) {
-  if (!tournamentId || !io) return;
-  try {
-    const { TournamentEngine } = await import("../../services/TournamentEngine.js");
-    await (new TournamentEngine()).completeTournamentIfOneLeft(tournamentId);
-    const t = await prisma.tournament.findUnique({
-      where: { id: tournamentId },
-      select: { status: true }
-    });
-    if (t?.status === "COMPLETED") {
-      io.emit("tournament_completed", { tournamentId });
-      console.log(`[POKER] Emitted tournament_completed for tournament ${tournamentId} (broadcast to all clients)`);
-    }
-  } catch (err) {
-    console.error("[POKER] Error in emitIfTournamentCompleted:", err);
-  }
 }
 
 /**
