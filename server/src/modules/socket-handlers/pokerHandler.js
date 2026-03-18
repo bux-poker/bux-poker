@@ -1,7 +1,7 @@
 // Socket handler for poker table events. Thin router: registers socket handlers and exports API for tournament/poker modules.
 
 import { tableState, getIO, setIO } from "../poker/tableState.js";
-export { clearAllStateForGames, hasActiveHand } from "../poker/tableState.js";
+export { clearAllStateForGames, hasActiveHand, getTurnStartedAt } from "../poker/tableState.js";
 import { applyPlayerAction } from "../poker/actions.js";
 import { moveToNextPlayer } from "../poker/turnOrder.js";
 import { emitIfTournamentCompleted } from "../poker/tableTournamentHooks.js";

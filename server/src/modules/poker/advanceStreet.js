@@ -70,6 +70,142 @@ export async function advanceToNextStreet(gameId, io) {
     return;
   }
 
+  // One player left (everyone else folded) – award pot and start next hand. Handles test-player path that calls advanceToNextStreet without calling moveToNextPlayer.
+  if (activePlayers.length === 1 && !state.handEnded) {
+    const winner = activePlayers[0];
+    const totalPot = state.pot;
+    winner.chips += totalPot;
+    state.pot = 0;
+    state.handEnded = true;
+    state.currentTurnUserId = null;
+    state.currentTurnStartedAt = null;
+    tableState.set(gameId, state);
+
+    const winnerName =
+      winner.name || winner.user?.username || `Player ${winner.seatNumber}`;
+    console.log(
+      `[POKER] advanceToNextStreet: One player left – awarding pot of ${totalPot} to ${winnerName}`
+    );
+
+    if (io) {
+      postDealerMessage(
+        gameId,
+        io,
+        `${winnerName} wins ${totalPot.toLocaleString()} (all other players folded)`
+      );
+      state.showdownActive = true;
+      state.showdownResults = {
+        winners: [
+          {
+            playerId: winner.id,
+            userId: winner.userId,
+            name: winnerName,
+            potWon: totalPot,
+          },
+        ],
+      };
+      tableState.set(gameId, state);
+    }
+
+    await prisma.player
+      .update({ where: { id: winner.id }, data: { chips: winner.chips } })
+      .catch((err) => {
+        if (err?.code === "P2025") {
+          console.log(
+            `[POKER] Player ${winner.id} already removed (consolidation), skipping chip update`
+          );
+        } else {
+          console.error(`[POKER] Error updating chips for player ${winner.id}:`, err);
+        }
+      });
+    await prisma.game
+      .update({ where: { id: gameId }, data: { pot: 0 } })
+      .catch((err) =>
+        console.error("[POKER] Error updating game pot:", err)
+      );
+
+    if (io) {
+      const gameForEmit = await prisma.game
+        .findUnique({
+          where: { id: gameId },
+          include: {
+            players: { include: { user: true } },
+            tournament: true,
+          },
+        })
+        .catch(() => null);
+      if (gameForEmit) {
+        io.to(`game:${gameId}`).emit(
+          "game-state",
+          buildClientGameState(gameForEmit, state)
+        );
+      }
+      io.to(`game:${gameId}`).emit("winner", {
+        gameId,
+        winners: [
+          {
+            playerId: winner.id,
+            userId: winner.userId,
+            name: winnerName,
+            potWon: totalPot,
+          },
+        ],
+      });
+      if (gameForEmit?.tournament?.id) {
+        await emitIfTournamentCompleted(
+          gameForEmit.tournament.id,
+          gameId,
+          io
+        );
+      }
+    }
+
+    setTimeout(() => {
+      const savedPlayers = [...state.players];
+      tableState.delete(gameId);
+      const resetPromises = savedPlayers
+        .filter((p) => p.status !== "ELIMINATED" && p.chips > 0)
+        .map((p) =>
+          prisma.player
+            .update({
+              where: { id: p.id },
+              data: { status: "ACTIVE", holeCards: "", lastAction: null },
+            })
+            .catch((err) => {
+              if (err?.code === "P2025") return;
+              console.error(`[POKER] Error resetting player ${p.id}:`, err);
+            })
+        );
+      Promise.all(resetPromises).then(async () => {
+        const gameForNextHand = await prisma.game
+          .findUnique({
+            where: { id: gameId },
+            include: {
+              players: { include: { user: true } },
+              tournament: true,
+            },
+          })
+          .catch(() => null);
+        if (
+          gameForNextHand &&
+          gameForNextHand.players.filter((p) => p.status === "ACTIVE").length >=
+            2 &&
+          io
+        ) {
+          try {
+            await startHandForGame(gameId, io);
+          } catch (err) {
+            console.error(
+              "[POKER] Error starting new hand after one-player-left:",
+              err
+            );
+          }
+        }
+      });
+    }, 3000);
+    return;
+  }
+
   if (state.street === "PREFLOP") {
     const { deck: newDeck, cards: flopCards } = engine.dealFlop(state.deck);
     state.deck = newDeck;
