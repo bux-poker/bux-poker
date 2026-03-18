@@ -2309,15 +2309,16 @@ async function handleShowdown(gameId, io, options = {}) {
     }
 
     console.log(`[SHOWDOWN] Clearing hand state for next hand`);
-    // Reset only current DB players (avoids P2025 on deleted rows after consolidation)
-    // IMPORTANT: do NOT eliminate players here based on chips. Bust logic (onPlayersBust/_markPlayerBust)
-    // is the only place that should set status = 'ELIMINATED'.
+    // Reset only current DB players (avoids P2025 on deleted rows after consolidation).
+    // CRITICAL: Any player with 0 chips at this point is treated as busted and forced to
+    // ELIMINATED here as a safety net, so they can NEVER be reset back to ACTIVE by mistake.
     const resetPromises = gameForNextHand.players.map(p => {
-      const isEliminated = p.status === 'ELIMINATED';
-      const status = isEliminated ? 'ELIMINATED' : 'ACTIVE';
+      const isBusted = p.status === 'ELIMINATED' || p.chips <= 0;
+      const status = isBusted ? 'ELIMINATED' : 'ACTIVE';
+      const chips = isBusted ? 0 : p.chips;
       return prisma.player.update({
         where: { id: p.id },
-        data: { status, holeCards: '', lastAction: null }
+        data: { status, chips, holeCards: '', lastAction: null }
       }).catch(err => {
         if (err?.code === 'P2025') {
           console.log(`[SHOWDOWN] Player ${p.id} already removed (consolidation)`);
@@ -2343,7 +2344,10 @@ async function handleShowdown(gameId, io, options = {}) {
           console.log(`[SHOWDOWN] Tournament already COMPLETED - not starting new hand`);
           return;
         }
-        const activePlayerCount = gameForNextHand.players.filter(p => p.status === 'ACTIVE').length;
+        // Active here means "still in the tournament": non-eliminated and with chips.
+        const activePlayerCount = gameForNextHand.players.filter(
+          p => p.status !== 'ELIMINATED' && p.chips > 0
+        ).length;
         
         if (activePlayerCount < 2 && gameForNextHand.tournament?.status === 'RUNNING') {
           console.log(`[SHOWDOWN] Not enough active players (${activePlayerCount}) at this table - triggering consolidation to rebalance`);
@@ -2355,7 +2359,9 @@ async function handleShowdown(gameId, io, options = {}) {
               where: { id: gameId },
               include: { players: { include: { user: true } }, tournament: true }
             });
-            const refreshedActive = refreshed?.players?.filter(p => p.status === 'ACTIVE').length ?? 0;
+            const refreshedActive = refreshed?.players?.filter(
+              p => p.status !== 'ELIMINATED' && p.chips > 0
+            ).length ?? 0;
             if (refreshed && refreshedActive >= 2 && io) {
               try {
                 await checkAndAdvanceBlindLevel(refreshed.tournament?.id, gameId, io);
