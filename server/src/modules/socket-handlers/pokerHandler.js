@@ -20,6 +20,7 @@ import { postDealerMessage } from "../poker/dealerMessages.js";
 import { applyPlayerAction } from "../poker/actions.js";
 import { buildClientGameState } from "../poker/buildClientGameState.js";
 import { advanceToNextStreet } from "../poker/advanceStreet.js";
+import { moveToNextPlayer } from "../poker/turnOrder.js";
 
 const gameService = new PokerGameService();
 const engine = new TexasHoldem({ smallBlind: 10, bigBlind: 20 });
