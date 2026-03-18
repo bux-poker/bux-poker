@@ -36,7 +36,7 @@ export function startIdleTablesPoll(engine) {
         const tablesNeeded = Math.max(1, Math.ceil(totalCount / seatsPerTable));
         const counts = games.map((g) => g.players?.length ?? 0).filter((c) => c > 0);
         const spread = counts.length >= 2 ? Math.max(...counts) - Math.min(...counts) : 0;
-        const maxSpread = games.length > 6 ? 2 : 1;
+        const maxSpread = 1;
         const needsConsolidation = games.length > tablesNeeded || spread > maxSpread;
         if (needsConsolidation && totalCount >= 2) {
           try {

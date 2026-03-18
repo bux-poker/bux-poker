@@ -79,17 +79,6 @@ export async function doConsolidateTables(tournamentId, deps) {
 
   let games = await prisma.game.findMany({
     where: { tournamentId, status: "ACTIVE" },
-    include: { players: true }
-  });
-  for (const g of games) {
-    if (await deps.hasActiveHand(g.id)) {
-      console.log(`[TOURNAMENT] Skipping consolidation: table ${g.tableNumber} (game ${g.id}) has active hand`);
-      return games;
-    }
-  }
-
-  games = await prisma.game.findMany({
-    where: { tournamentId, status: "ACTIVE" },
     include: {
       players: {
         where: { status: { not: "ELIMINATED" }, chips: { gt: 0 } },
@@ -112,29 +101,26 @@ export async function doConsolidateTables(tournamentId, deps) {
     return games;
   }
 
-  await new Promise((r) => setTimeout(r, 4000));
-
-  const gamesToWait = games.map(g => ({ id: g.id }));
-  if (gamesToWait.length > 0) {
+  const anyHasHand = await Promise.all(games.map((g) => deps.hasActiveHand(g.id))).then((arr) => arr.some(Boolean));
+  if (anyHasHand) {
+    console.log(`[TOURNAMENT] Consolidation needed (${games.length} tables, counts ${counts.join(",")}, spread ${spread}). Waiting for all hands to finish...`);
     try {
       const io = deps.getIO();
       if (io) {
-        for (const g of gamesToWait) {
-          const hasHand = await deps.hasActiveHand(g.id);
-          if (!hasHand) {
-            io.to(`game:${g.id}`).emit("consolidation-waiting", {
-              message: "Waiting for other tables to finish their hands before reseating...",
-              tournamentId
-            });
-          }
+        for (const g of games) {
+          io.to(`game:${g.id}`).emit("consolidation-waiting", {
+            message: "Waiting for other tables to finish their hands before reseating...",
+            tournamentId
+          });
         }
       }
     } catch (e) {
       console.warn("[TOURNAMENT] Could not emit consolidation-waiting:", e?.message);
     }
+    await waitForAllTablesToFinishHands(tournamentId, deps);
   }
 
-  await waitForAllTablesToFinishHands(tournamentId, deps);
+  await new Promise((r) => setTimeout(r, 2000));
 
   games = await prisma.game.findMany({
     where: { tournamentId, status: "ACTIVE" },
@@ -146,6 +132,12 @@ export async function doConsolidateTables(tournamentId, deps) {
     },
     orderBy: { tableNumber: "asc" }
   });
+
+  const hasHandAfterWait = await Promise.all(games.map((g) => deps.hasActiveHand(g.id))).then((arr) => arr.some(Boolean));
+  if (hasHandAfterWait) {
+    console.log(`[TOURNAMENT] Consolidation aborted: a hand started during wait; will retry next poll`);
+    return games;
+  }
 
   console.log(`[TOURNAMENT] Consolidation: found ${games.length} ACTIVE table(s), player counts (in-tournament):`, games.map(g => `${g.tableNumber}:${g.players?.length ?? 0}`));
 
