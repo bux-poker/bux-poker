@@ -5,6 +5,7 @@ import { postDealerMessage } from "./dealerMessages.js";
 import { buildClientGameState } from "./buildClientGameState.js";
 import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/pokerHandler.js";
 import { handleShowdown, runCinematicAllInShowdown } from "./showdown.js";
+import { startTurnTimer } from "./turnTimers.js";
 
 export async function advanceToNextStreet(gameId, io) {
   console.log(`[POKER] advanceToNextStreet called for gameId: ${gameId}`);
@@ -418,24 +419,38 @@ export async function advanceToNextStreet(gameId, io) {
     return;
   }
 
-  if (activePlayers.length > 1 && io) {
-    const game = await prisma.game
-      .findUnique({
-        where: { id: gameId },
-        include: { players: { include: { user: true } }, tournament: true },
-      })
-      .catch(() => null);
-
-    if (game) {
-      const payload = buildClientGameState(game, state);
-      io.to(`game:${gameId}`).emit("game-state", payload);
+  if (activePlayers.length > 1) {
+    // Set first to act (first active player left of button) so client enables action buttons
+    const dealerSeat = state.dealerSeat ?? Math.min(...state.players.map((p) => p.seatNumber));
+    const sorted = [...activePlayers].sort((a, b) => a.seatNumber - b.seatNumber);
+    const leftOfDealer = sorted.filter((p) => p.seatNumber < dealerSeat);
+    const firstToAct =
+      leftOfDealer.length > 0 ? leftOfDealer[leftOfDealer.length - 1] : sorted[sorted.length - 1];
+    state.currentTurnUserId = firstToAct.userId;
+    state.currentTurnStartedAt = Date.now();
+    tableState.set(gameId, state);
+    if (io) {
+      startTurnTimer(gameId, state.currentTurnUserId, io);
       console.log(
-        `[POKER] advanceToNextStreet: Emitted game state for street ${state.street}`
+        `[POKER] advanceToNextStreet: First to act on ${state.street} is seat ${firstToAct.seatNumber} (${firstToAct.name || firstToAct.userId})`
       );
-    } else {
-      console.error(
-        "[POKER] ERROR: Could not emit game state in advanceToNextStreet - game not found"
-      );
+      const game = await prisma.game
+        .findUnique({
+          where: { id: gameId },
+          include: { players: { include: { user: true } }, tournament: true },
+        })
+        .catch(() => null);
+      if (game) {
+        const payload = buildClientGameState(game, state);
+        io.to(`game:${gameId}`).emit("game-state", payload);
+        console.log(
+          `[POKER] advanceToNextStreet: Emitted game state for street ${state.street}`
+        );
+      } else {
+        console.error(
+          "[POKER] ERROR: Could not emit game state in advanceToNextStreet - game not found"
+        );
+      }
     }
   }
 }

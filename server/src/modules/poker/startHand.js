@@ -140,6 +140,9 @@ export async function startHandForGameBody(gameId, io) {
   const activePlayers = game.players.filter(p =>
     p.status === 'ACTIVE' && p.seatNumber >= 0 && p.chips > 0
   );
+  if (activePlayers.length < 2) {
+    throw new Error(`Cannot start hand: need at least 2 active players, found ${activePlayers.length}. Table may need consolidation or is finished.`);
+  }
   const isHeadsUp = activePlayers.length === 2;
 
   let sbSeat, bbSeat, sbPlayer, bbPlayer;
