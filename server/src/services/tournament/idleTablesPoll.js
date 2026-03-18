@@ -1,7 +1,7 @@
 import { prisma } from "../../config/database.js";
 
 const STUCK_THRESHOLD_MS = 45000;
-const IDLE_POLL_INTERVAL_MS = 30000;
+const IDLE_POLL_INTERVAL_MS = 15000;
 
 let idleTablesPollInterval = null;
 

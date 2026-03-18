@@ -106,7 +106,7 @@ export async function doConsolidateTables(tournamentId, deps) {
   const minC = counts.length ? Math.min(...counts) : 0;
   const spread = maxC - minC;
 
-  const maxSpread = games.length > 6 ? 2 : 1;
+  const maxSpread = 1;
   if (games.length <= tablesNeeded && spread <= maxSpread) {
     console.log(`[TOURNAMENT] Skipping consolidation: ${games.length} tables, counts ${counts.join(",")}, spread ${spread} (no rebalance needed)`);
     return games;

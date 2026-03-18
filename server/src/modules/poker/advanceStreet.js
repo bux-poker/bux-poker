@@ -175,11 +175,7 @@ export async function advanceToNextStreet(gameId, io) {
         ],
       });
       if (gameForEmit?.tournament?.id) {
-        await emitIfTournamentCompleted(
-          gameForEmit.tournament.id,
-          gameId,
-          io
-        );
+        await emitIfTournamentCompleted(gameForEmit.tournament.id, io);
       }
     }
 
@@ -373,11 +369,7 @@ export async function advanceToNextStreet(gameId, io) {
             ],
           });
           if (gameForEmit?.tournament?.id) {
-            await emitIfTournamentCompleted(
-              gameForEmit.tournament.id,
-              gameId,
-              io
-            );
+            await emitIfTournamentCompleted(gameForEmit.tournament.id, io);
           }
         }
 

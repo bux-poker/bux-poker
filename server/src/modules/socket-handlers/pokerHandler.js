@@ -42,11 +42,16 @@ export async function forceStuckPlayerToAct(gameId, io) {
   const currentBet = state.bettingRound?.currentBet || 0;
   const myContribution = state.bettingRound?.getPlayerContribution(player.id) || 0;
   const canCheck = myContribution >= currentBet;
+  const playerName = player.name || player.user?.username || "";
+  const isTestPlayer = playerName.toLowerCase().startsWith("test player");
   try {
     if (canCheck) {
       await applyPlayerAction({ gameId, userId, action: "CHECK", amount: 0, io });
-    } else {
+    } else if (isTestPlayer) {
       await applyPlayerAction({ gameId, userId, action: "FOLD", amount: 0, io });
+    } else {
+      console.log(`[POKER] Force-stuck: skipping auto-fold for real player ${playerName} (would need to call/fold) - hand remains stuck`);
+      return false;
     }
     await moveToNextPlayer(gameId, io);
     console.log(`[POKER] Force-stuck recovery: ${canCheck ? "CHECK" : "FOLD"} for ${player.name || userId} at table ${gameId}`);

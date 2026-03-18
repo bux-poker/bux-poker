@@ -68,7 +68,7 @@ export async function moveToNextPlayer(gameId, io) {
       if (playersToEliminate.length > 0) {
         io.emit("tournament_updated", { tournamentId: game.tournament.id });
       }
-      await emitIfTournamentCompleted(game.tournament.id, gameId, io);
+      await emitIfTournamentCompleted(game.tournament.id, io);
     }
   } else {
     console.log(
@@ -158,7 +158,7 @@ export async function moveToNextPlayer(gameId, io) {
         ],
       });
       if (game?.tournament?.id) {
-        await emitIfTournamentCompleted(game.tournament.id, gameId, io);
+        await emitIfTournamentCompleted(game.tournament.id, io);
       }
     }
     await prisma.player
