@@ -285,12 +285,12 @@ export async function handleTestPlayerAction(gameId, userId, io) {
       }
     }
 
+    // Use same definition as playerAction: all non-folded, non-eliminated (include ALL_IN).
+    // Excluding ALL_IN here could shrink activePlayerIds to 1 and make isBettingComplete return true,
+    // advancing to flop with unequal bets.
     const activePlayerIds = newState.players
       .filter(
-        (p) =>
-          p.status !== "FOLDED" &&
-          p.status !== "ELIMINATED" &&
-          (p.status !== "ALL_IN" || p.chips > 0)
+        (p) => p.status !== "FOLDED" && p.status !== "ELIMINATED"
       )
       .map((p) => p.id);
 

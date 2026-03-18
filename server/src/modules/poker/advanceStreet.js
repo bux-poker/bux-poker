@@ -29,6 +29,29 @@ export async function advanceToNextStreet(gameId, io) {
     `[POKER] advanceToNextStreet: Current street: ${state.street || "PREFLOP"}, active players: ${activePlayers.length}`
   );
 
+  // Guard: never advance with unequal contributions (e.g. 100 vs 150). Catches callers that wrongly said "betting complete".
+  const round = state.bettingRound;
+  if (round && activePlayers.length >= 2) {
+    const contributions = activePlayers.map((p) => ({
+      id: p.id,
+      contribution: round.getPlayerContribution(p.id),
+      chips: p.chips || 0,
+    }));
+    const maxContrib = Math.max(...contributions.map((c) => c.contribution));
+    const allEqualOrAllIn = contributions.every(
+      (c) => c.contribution === maxContrib || c.chips === 0
+    );
+    if (!allEqualOrAllIn) {
+      const contribStr = contributions
+        .map((c) => `${c.chips === 0 ? "ALL-IN" : c.contribution}`)
+        .join(", ");
+      console.error(
+        `[POKER] advanceToNextStreet: REFUSING – contributions not equal (max=${maxContrib}). [${contribStr}]. Not advancing.`
+      );
+      return;
+    }
+  }
+
   state.currentTurnUserId = null;
   state.currentTurnStartedAt = null;
 
@@ -68,15 +91,9 @@ export async function advanceToNextStreet(gameId, io) {
   );
 
   const playersWithChips = activePlayers.filter((p) => p.chips > 0);
-  const shouldAutoShowdown =
-    allPlayersAllIn || playersWithChips.length === 1;
 
-  if (shouldAutoShowdown && io) {
-    await runCinematicAllInShowdown(gameId, io, state, engine, allPlayersAllIn);
-    return;
-  }
-
-  // One player left (everyone else folded) – award pot and start next hand. Handles test-player path that calls advanceToNextStreet without calling moveToNextPlayer.
+  // One player left (everyone else folded) – award pot and start next hand. Must run BEFORE shouldAutoShowdown,
+  // otherwise we hit runCinematicAllInShowdown which returns when activePlayers.length < 2 and the pot is never awarded.
   if (activePlayers.length === 1 && !state.handEnded) {
     const winner = activePlayers[0];
     const totalPot = state.pot;
@@ -209,6 +226,13 @@ export async function advanceToNextStreet(gameId, io) {
         }
       });
     }, 3000);
+    return;
+  }
+
+  const shouldAutoShowdown =
+    allPlayersAllIn || playersWithChips.length === 1;
+  if (shouldAutoShowdown && io) {
+    await runCinematicAllInShowdown(gameId, io, state, engine, allPlayersAllIn);
     return;
   }
 
@@ -425,7 +449,8 @@ export async function advanceToNextStreet(gameId, io) {
   }
 
   if (activePlayers.length > 1) {
-    // Set first to act (first active player left of button) so client enables action buttons
+    // First to act post-flop/turn/river = first active player left of button (so client enables that player's action buttons).
+    // Bug: we used to never set currentTurnUserId here, so seat-3 (left of dealer 4) never got the turn and their buttons stayed disabled.
     const dealerSeat = state.dealerSeat ?? Math.min(...state.players.map((p) => p.seatNumber));
     const sorted = [...activePlayers].sort((a, b) => a.seatNumber - b.seatNumber);
     const leftOfDealer = sorted.filter((p) => p.seatNumber < dealerSeat);
@@ -436,8 +461,9 @@ export async function advanceToNextStreet(gameId, io) {
     tableState.set(gameId, state);
     if (io) {
       startTurnTimer(gameId, state.currentTurnUserId, io);
+      const name = firstToAct.name || firstToAct.user?.username || firstToAct.userId;
       console.log(
-        `[POKER] advanceToNextStreet: First to act on ${state.street} is seat ${firstToAct.seatNumber} (${firstToAct.name || firstToAct.userId})`
+        `[POKER] advanceToNextStreet: First to act on ${state.street} is seat ${firstToAct.seatNumber} (${name}) – currentTurnUserId set so client enables buttons`
       );
       const game = await prisma.game
         .findUnique({
