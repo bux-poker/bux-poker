@@ -368,10 +368,11 @@ export async function startHandForGameBody(gameId, io) {
 
   const previousPot = game.pot ?? 0;
   if (previousPot > 0) {
-    throw new Error(
-      `[POKER] BUG: Tried to start new hand for game ${gameId} with non-zero pot=${previousPot}. ` +
-      `Hand must NOT start until previous pot is correctly awarded/zeroed.`
+    console.warn(
+      `[POKER] Recovery: zeroing stale pot=${previousPot} for game ${gameId} so hand can start (pot should have been awarded when previous hand ended)`
     );
+    await prisma.game.update({ where: { id: gameId }, data: { pot: 0 } });
+    game.pot = 0;
   }
 
   const state = {

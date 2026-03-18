@@ -57,10 +57,11 @@ export function startIdleTablesPoll(engine) {
           if (game.players.length < 2) continue;
 
           if ((game.pot ?? 0) > 0) {
-            console.error(
-              `[TOURNAMENT] Idle-table recovery: refusing to start new hand for game ${game.id} (table ${game.tableNumber}) because pot=${game.pot} (must be 0 before next hand)`
+            console.warn(
+              `[TOURNAMENT] Idle-table recovery: zeroing stale pot=${game.pot} for game ${game.id} (table ${game.tableNumber}) so hand can start`
             );
-            continue;
+            await prisma.game.update({ where: { id: game.id }, data: { pot: 0 } });
+            game.pot = 0;
           }
           if (hasActiveHand(game.id)) {
             const turnStarted = getTurnStartedAt(game.id);

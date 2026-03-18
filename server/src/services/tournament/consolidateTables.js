@@ -45,9 +45,10 @@ export function waitForAllTablesToFinishHands(tournamentId, deps) {
           } else {
             console.log(`[TOURNAMENT] Table ${game.tableNumber} still has active hand, waiting... (${waitingFor.toFixed(0)}s)`);
           }
-          break;
+          // Do not break: force every stuck table this cycle so all make progress
+        } else {
+          activeSince.delete(game.id);
         }
-        activeSince.delete(game.id);
       }
 
       if (allHandsFinished) {
