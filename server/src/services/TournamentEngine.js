@@ -1191,6 +1191,17 @@ export function startIdleTablesPoll() {
             continue;
           }
           if (game.players.length < 2) continue;
+
+          // Never start a new hand if previous pot wasn't fully awarded/zeroed.
+          // If pot > 0 here, some award path failed and chips are stranded in game.pot.
+          // Starting a new hand would either (a) leak those chips when the table closes,
+          // or (b) double-count them if some future recovery path also moves them.
+          if ((game.pot ?? 0) > 0) {
+            console.error(
+              `[TOURNAMENT] Idle-table recovery: refusing to start new hand for game ${game.id} (table ${game.tableNumber}) because pot=${game.pot} (must be 0 before next hand)`
+            );
+            continue;
+          }
           // Recover stuck tables: same turn active for 45s -> force current player to act
           if (hasActiveHand(game.id)) {
             const turnStarted = getTurnStartedAt(game.id);
@@ -1208,7 +1219,9 @@ export function startIdleTablesPoll() {
           }
           try {
             await startHandForGame(game.id, socketIO);
-            console.log(`[TOURNAMENT] Idle-table recovery: started hand for game ${game.id} (table ${game.tableNumber})`);
+            console.log(
+              `[TOURNAMENT] Idle-table recovery: started hand for game ${game.id} (table ${game.tableNumber}) with pot=0`
+            );
           } catch (err) {
             console.error(`[TOURNAMENT] Idle-table start failed for game ${game.id}:`, err);
           }

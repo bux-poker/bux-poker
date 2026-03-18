@@ -1876,7 +1876,9 @@ async function handleShowdown(gameId, io, options = {}) {
   const chipsBeforeDist = activePlayers.reduce((s, p) => s + (p.chips || 0), 0);
   console.log(`[SHOWDOWN] Starting showdown with ${activePlayers.length} active players (excluding folded players)`);
   console.log(`[SHOWDOWN] Community cards:`, state.communityCards);
-  console.log(`[SHOWDOWN] Total pot: ${state.pot} (old: ${oldPot}, collected: ${collectedPot}), chips before dist: ${chipsBeforeDist}`);
+  console.log(
+    `[SHOWDOWN] Total pot: ${state.pot} (old: ${oldPot}, collected: ${collectedPot}), chips before dist: ${chipsBeforeDist}`
+  );
 
   // Post dealer message about showdown
   if (io) {
@@ -1937,12 +1939,15 @@ async function handleShowdown(gameId, io, options = {}) {
   });
 
   if (handResults.length === 0) {
-    // Chip leak (e.g. 26k -> 9k): we used to return here without awarding the pot. Chips had already been
-    // taken from players into state.pot; they were never given to anyone, so they left the economy. Split pot so they are not lost.
-    console.error(`[SHOWDOWN] No valid hands evaluated - splitting pot among ${activePlayers.length} active players to avoid chip leak`);
+    // Chip leak protection: if we somehow evaluated no valid hands but have a non-zero pot,
+    // split the pot between all active players so chips never disappear from the tournament economy.
+    console.error(
+      `[SHOWDOWN] No valid hands evaluated - splitting pot of ${state.pot} among ${activePlayers.length} active players to avoid chip leak`
+    );
     totalWon = new Map();
-    const splitAmount = Math.floor(state.pot / activePlayers.length);
-    const remainder = state.pot % activePlayers.length;
+    const divisor = Math.max(activePlayers.length, 1);
+    const splitAmount = Math.floor(state.pot / divisor);
+    const remainder = state.pot % divisor;
     activePlayers.forEach((p, i) => {
       const amount = splitAmount + (i < remainder ? 1 : 0);
       totalWon.set(p.id, amount);
