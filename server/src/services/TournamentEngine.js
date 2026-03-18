@@ -6,6 +6,8 @@ import {
 } from "./tournament/blindLevels.js";
 import { consolidateTables as runConsolidateTables } from "./tournament/consolidateTables.js";
 import { onPlayersBust as runOnPlayersBust } from "./tournament/busts.js";
+import { seatPlayers as runSeatPlayers } from "./tournament/seatPlayers.js";
+import { completeTournamentIfOneLeft as runCompleteIfOneLeft } from "./tournament/completeIfOneLeft.js";
 
 // Re-export for backward compatibility (poker/blindLevel, etc. import from TournamentEngine)
 export { getTournamentBlindLevelFromTime, syncBlindLevelsToTournamentTime };
@@ -48,7 +50,7 @@ export class TournamentEngine {
     console.log(`[TOURNAMENT] Calculated prize places: ${prizePlaces} (from ${registeredCount} registered players)`);
 
     // Seat players
-    const games = await this.seatPlayers(tournamentId);
+    const games = await runSeatPlayers(tournamentId);
 
     // Update status to SEATED and prize places
     const updatedTournament = await prisma.tournament.update({
@@ -297,97 +299,10 @@ export class TournamentEngine {
   }
 
   /**
-   * Seat registered players into tables with balanced distribution.
-   * All tables must be within 1 player of each other.
+   * Seat registered players into tables. Delegates to tournament/seatPlayers.js.
    */
   async seatPlayers(tournamentId) {
-    const tournament = await prisma.tournament.findUnique({
-      where: { id: tournamentId },
-      include: {
-        registrations: {
-          where: { status: "CONFIRMED" }
-        }
-      }
-    });
-
-    if (!tournament) {
-      throw new Error("Tournament not found");
-    }
-
-    const { seatsPerTable } = tournament;
-    const registrations = tournament.registrations;
-
-    if (registrations.length === 0) {
-      throw new Error("No registered players to seat");
-    }
-
-    // Shuffle players randomly
-    const shuffled = [...registrations].sort(() => Math.random() - 0.5);
-
-    // Calculate number of tables needed
-    const totalPlayers = shuffled.length;
-    const numTables = Math.ceil(totalPlayers / seatsPerTable);
-    
-    // Calculate balanced distribution
-    // Each table should have either floor(players/tables) or ceil(players/tables) players
-    const basePlayersPerTable = Math.floor(totalPlayers / numTables);
-    const extraPlayers = totalPlayers % numTables;
-    
-    // Create tables with balanced distribution
-    const tables = [];
-    let playerIndex = 0;
-    
-    for (let tableNumber = 1; tableNumber <= numTables; tableNumber++) {
-      // First 'extraPlayers' tables get one extra player
-      const playersForThisTable = tableNumber <= extraPlayers 
-        ? basePlayersPerTable + 1 
-        : basePlayersPerTable;
-      
-      const tablePlayers = shuffled.slice(playerIndex, playerIndex + playersForThisTable);
-      playerIndex += playersForThisTable;
-
-      if (tablePlayers.length === 0) {
-        // Skip empty tables
-        continue;
-      }
-
-      const game = await prisma.game.create({
-        data: {
-          tournamentId,
-          tableNumber,
-          status: "ACTIVE",
-          pot: 0,
-          communityCards: ""
-        }
-      });
-
-      for (let i = 0; i < tablePlayers.length; i++) {
-        const reg = tablePlayers[i];
-        await prisma.player.create({
-          data: {
-            gameId: game.id,
-            userId: reg.userId,
-            seatNumber: i + 1,
-            chips: tournament.startingChips,
-            holeCards: "",
-            status: "ACTIVE"
-          }
-        });
-      }
-
-      tables.push(game);
-    }
-
-    console.log(`[TOURNAMENT] Seated ${totalPlayers} players into ${tables.length} balanced tables`);
-    const gamesWithPlayers = await prisma.game.findMany({
-      where: { tournamentId },
-      include: { _count: { select: { players: true } } }
-    });
-    gamesWithPlayers.forEach((g) => {
-      console.log(`[TOURNAMENT]   Table ${g.tableNumber}: ${g._count.players} players`);
-    });
-
-    return tables;
+    return runSeatPlayers(tournamentId);
   }
 
   /**
@@ -431,51 +346,10 @@ export class TournamentEngine {
 
   /**
    * If exactly one player has chips and is not eliminated, mark tournament COMPLETED.
-   * Call after any hand that awards the pot (showdown or fold win) so we complete when
-   * the last opponent folds and we never run onPlayersBust.
+   * Delegates to tournament/completeIfOneLeft.js.
    */
   async completeTournamentIfOneLeft(tournamentId) {
-    const count = await prisma.player.count({
-      where: { game: { tournamentId }, chips: { gt: 0 }, status: { not: "ELIMINATED" } }
-    });
-    if (count !== 1) return false;
-    const winner = await prisma.player.findFirst({
-      where: { game: { tournamentId }, chips: { gt: 0 }, status: { not: "ELIMINATED" } },
-      include: { user: true, game: true }
-    });
-    if (!winner) return false;
-    const current = await prisma.tournament.findUnique({
-      where: { id: tournamentId },
-      select: { status: true }
-    });
-    if (current?.status === "COMPLETED") return true;
-    const verifyCount = await prisma.player.count({
-      where: { game: { tournamentId }, chips: { gt: 0 }, status: { not: "ELIMINATED" } }
-    });
-    if (verifyCount !== 1) return false;
-    await prisma.player.update({
-      where: { id: winner.id },
-      data: { finishingPlace: 1 }
-    });
-    await prisma.tournament.update({
-      where: { id: tournamentId },
-      data: { status: "COMPLETED" }
-    });
-    await auditChipConservation(tournamentId);
-    try {
-      const tournament = await prisma.tournament.findUnique({
-        where: { id: tournamentId },
-        include: { games: { include: { players: { include: { user: true } } } } }
-      });
-      if (tournament) {
-        const { postTournamentWinnersEmbed } = await import("../discord/bot.js");
-        await postTournamentWinnersEmbed(tournament);
-      }
-    } catch (err) {
-      console.error("[TOURNAMENT] Error posting winners embed:", err);
-    }
-    console.log(`[TOURNAMENT] Completed tournament ${tournamentId} - one player left (winner: ${winner.user?.username || winner.id})`);
-    return true;
+    return runCompleteIfOneLeft(tournamentId);
   }
 
   /** Single bust (e.g. uncalled bet). Delegates to onPlayersBust. */
