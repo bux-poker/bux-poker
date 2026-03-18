@@ -2,6 +2,24 @@ import { prisma } from "../../config/database.js";
 import { HandEvaluator } from "./HandEvaluator.js";
 import { tableState } from "./tableState.js";
 import { postDealerMessage } from "./dealerMessages.js";
+import { buildClientGameState } from "./buildClientGameState.js";
+
+const SHOWDOWN_PHASE_DELAY_MS = 1000;
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function emitGameState(gameId, io, state) {
+  if (!io) return;
+  const game = await prisma.game.findUnique({
+    where: { id: gameId },
+    include: { players: { include: { user: true } }, tournament: true },
+  });
+  if (game) {
+    const payload = buildClientGameState(game, state);
+    io.to(`game:${gameId}`).emit("game-state", payload);
+  }
+}
 
 export async function handleShowdownCore(gameId, io, options = {}) {
   const state = tableState.get(gameId);
@@ -340,4 +358,75 @@ export async function handleShowdownCore(gameId, io, options = {}) {
   }
 }
 
+/** Thin wrapper for callers that expect handleShowdown (e.g. turnTimers). */
+export async function handleShowdown(gameId, io, options = {}) {
+  return handleShowdownCore(gameId, io, options);
+}
 
+/**
+ * Cinematic all-in showdown: reveal cards, deal community cards one at a time with delays,
+ * then evaluate and highlight winner. Called when betting completes with all players all-in
+ * or only one player with chips.
+ */
+export async function runCinematicAllInShowdown(
+  gameId,
+  io,
+  state,
+  engine,
+  allPlayersAllIn
+) {
+  const activePlayers = state.players.filter(
+    (p) => p.status !== "FOLDED" && p.status !== "ELIMINATED"
+  );
+  if (activePlayers.length < 2) return;
+
+  if (allPlayersAllIn) {
+    postDealerMessage(gameId, io, "All players are all-in! Turning over cards...");
+  } else {
+    postDealerMessage(gameId, io, "Turning over cards...");
+  }
+
+  state.showdownActive = true;
+  state.showdownResults = null;
+  tableState.set(gameId, state);
+  await emitGameState(gameId, io, state);
+  await delay(SHOWDOWN_PHASE_DELAY_MS);
+
+  if (state.street === "PREFLOP") {
+    const { deck: newDeck, cards: flopCards } = engine.dealFlop(state.deck);
+    state.deck = newDeck;
+    state.communityCards = flopCards;
+    state.street = "FLOP";
+    tableState.set(gameId, state);
+    postDealerMessage(gameId, io, "Dealing the flop...");
+    await emitGameState(gameId, io, state);
+    if (state.communityCards.length !== 3) {
+      console.warn(
+        `[SHOWDOWN] Flop should have 3 cards, got ${state.communityCards.length}`
+      );
+    }
+    await delay(SHOWDOWN_PHASE_DELAY_MS);
+  }
+  if (state.street === "FLOP") {
+    const { deck: newDeck, card: turnCard } = engine.dealTurnOrRiver(state.deck);
+    state.deck = newDeck;
+    state.communityCards = [...state.communityCards, turnCard];
+    state.street = "TURN";
+    tableState.set(gameId, state);
+    postDealerMessage(gameId, io, "Dealing the turn...");
+    await emitGameState(gameId, io, state);
+    await delay(SHOWDOWN_PHASE_DELAY_MS);
+  }
+  if (state.street === "TURN") {
+    const { deck: newDeck, card: riverCard } = engine.dealTurnOrRiver(state.deck);
+    state.deck = newDeck;
+    state.communityCards = [...state.communityCards, riverCard];
+    state.street = "RIVER";
+    tableState.set(gameId, state);
+    postDealerMessage(gameId, io, "Dealing the river...");
+    await emitGameState(gameId, io, state);
+    await delay(SHOWDOWN_PHASE_DELAY_MS);
+  }
+
+  await handleShowdownCore(gameId, io, { cleanupDelayMs: SHOWDOWN_PHASE_DELAY_MS });
+}

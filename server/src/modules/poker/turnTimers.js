@@ -4,6 +4,7 @@ import { applyPlayerAction } from "./actions.js";
 import { advanceToNextStreet } from "./advanceStreet.js";
 import { moveToNextPlayer } from "./turnOrder.js";
 import { handleShowdown } from "./showdown.js";
+import { handleTestPlayerAction } from "./testPlayers.js";
 import { postDealerMessage } from "./dealerMessages.js";
 import { prisma } from "../../config/database.js";
 
@@ -128,6 +129,9 @@ export function startTurnTimer(gameId, userId, io) {
         }
         return;
       }
+
+      await handleTestPlayerAction(gameId, userId, io);
+      turnTimers.delete(gameId);
     }, timeoutMs);
 
     turnTimers.set(gameId, { timerId, userId, expiresAt, duration: timeoutMs });

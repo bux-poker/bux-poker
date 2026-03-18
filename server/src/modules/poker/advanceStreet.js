@@ -4,7 +4,7 @@ import { tableState, turnTimers } from "./tableState.js";
 import { postDealerMessage } from "./dealerMessages.js";
 import { buildClientGameState } from "./buildClientGameState.js";
 import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/pokerHandler.js";
-import { runCinematicAllInShowdown, handleShowdown } from "./showdown.js";
+import { handleShowdown, runCinematicAllInShowdown } from "./showdown.js";
 
 export async function advanceToNextStreet(gameId, io) {
   console.log(`[POKER] advanceToNextStreet called for gameId: ${gameId}`);
