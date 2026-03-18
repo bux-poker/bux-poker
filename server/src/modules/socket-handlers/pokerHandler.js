@@ -16,6 +16,7 @@ import {
   clearAllStateForGames,
 } from "../poker/tableState.js";
 import { buildClientGameState } from "../poker/buildClientGameState.js";
+import { ensureHandState } from "../poker/ensureHandState.js";
 
 const gameService = new PokerGameService();
 const engine = new TexasHoldem({ smallBlind: 10, bigBlind: 20 });
@@ -84,16 +85,6 @@ export function clearAllStateForGames(gameIds) {
     }
   }
   console.log(`[POKER] Cleared state for ${gameIds.length} game(s) before consolidation`);
-}
-
-async function ensureHandState(gameId) {
-  const state = tableState.get(gameId);
-  if (state) return state;
-
-  // No active hand - do NOT create one here. The ensureHandState fallback used to create
-  // corrupt state (wrong blinds, no dealer/blinds/UTG, dealt to eliminated players).
-  // Fail fast so the client can retry or refresh.
-  throw new Error("No active hand in progress. Please wait for the hand to start.");
 }
 
 async function applyPlayerAction({ gameId, userId, action, amount, io = null }) {
