@@ -834,12 +834,13 @@ async function _startHandForGameBody(gameId, io) {
     throw new Error(`BUG: Same player (${sbPlayer.name || sbPlayer.id}) would post both SB and BB. Dealer: ${dealerSeat}, SB: ${sbSeat}, BB: ${bbSeat}`);
   }
 
-  // Deal hole cards to ALL non-eliminated players (including 0-chip all-in from previous hand).
-  // If we only deal to chips > 0, players who are all-in at hand start get no cards and
-  // showdown fails with "invalid hole cards".
+  // Deal hole cards only to players who are still in the tournament and have chips.
+  // Using the same filter as startHandForGame (status !== 'ELIMINATED' && chips > 0) ensures
+  // that busted players NEVER get dealt into a new hand, even if some other part of the
+  // system accidentally left their status as non-eliminated.
   const deck = tournamentEngine.createShuffledDeck();
   const activeDealtPlayers = game.players
-    .filter(p => p.status !== 'ELIMINATED')
+    .filter(p => p.status !== 'ELIMINATED' && p.chips > 0)
     .sort((a, b) => a.seatNumber - b.seatNumber);
   
   if (activeDealtPlayers.length < 2) {
