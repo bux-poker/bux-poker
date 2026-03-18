@@ -1,0 +1,306 @@
+import { prisma } from "../../config/database.js";
+import { TexasHoldem } from "./TexasHoldem.js";
+import { tableState, turnTimers } from "./tableState.js";
+import { postDealerMessage } from "./dealerMessages.js";
+import { buildClientGameState } from "./buildClientGameState.js";
+import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/pokerHandler.js";
+import { runCinematicAllInShowdown, handleShowdown } from "./showdown.js";
+
+export async function advanceToNextStreet(gameId, io) {
+  console.log(`[POKER] advanceToNextStreet called for gameId: ${gameId}`);
+  const state = tableState.get(gameId);
+  if (!state) {
+    console.error(
+      `[POKER] ERROR: No state found for gameId ${gameId} in advanceToNextStreet`
+    );
+    return;
+  }
+
+  const activePlayers = state.players.filter(
+    (p) => p.status !== "FOLDED" && p.status !== "ELIMINATED"
+  );
+  console.log(
+    `[POKER] advanceToNextStreet: Current street: ${state.street || "PREFLOP"}, active players: ${activePlayers.length}`
+  );
+
+  state.currentTurnUserId = null;
+  state.currentTurnStartedAt = null;
+
+  const existingTimer = turnTimers.get(gameId);
+  if (existingTimer) {
+    clearTimeout(existingTimer.timerId);
+    if (existingTimer.graceTimerId) {
+      clearTimeout(existingTimer.graceTimerId);
+    }
+    turnTimers.delete(gameId);
+    console.log("[POKER] advanceToNextStreet: Cleared existing turn timer");
+  }
+
+  const smallBlind = state.bettingRound?.smallBlind || 10;
+  const bigBlind = state.bettingRound?.bigBlind || 20;
+  const engine = new TexasHoldem({ smallBlind, bigBlind });
+
+  const collectedPot = state.bettingRound.getTotalPot();
+  const oldPot = state.pot || 0;
+  state.pot = oldPot + collectedPot;
+
+  state.players.forEach((player) => {
+    const currentContribution =
+      state.bettingRound.getPlayerContribution(player.id);
+    player.contributions = (player.contributions || 0) + currentContribution;
+  });
+
+  state.bettingRound.playerBets.clear();
+  state.bettingRound.currentBet = 0;
+  state.lastRaiseUserId = null;
+  state.actedPlayersInRound = new Set();
+
+  const activePlayerIds = activePlayers.map((p) => p.id);
+  const allPlayersAllIn = state.bettingRound.areAllPlayersAllIn(
+    activePlayerIds,
+    state.players
+  );
+
+  const playersWithChips = activePlayers.filter((p) => p.chips > 0);
+  const shouldAutoShowdown =
+    allPlayersAllIn || playersWithChips.length === 1;
+
+  if (shouldAutoShowdown && io) {
+    await runCinematicAllInShowdown(gameId, io, state, engine, allPlayersAllIn);
+    return;
+  }
+
+  if (state.street === "PREFLOP") {
+    const { deck: newDeck, cards: flopCards } = engine.dealFlop(state.deck);
+    state.deck = newDeck;
+    state.communityCards = flopCards;
+    state.street = "FLOP";
+    postDealerMessage(gameId, io, "Dealing the flop...");
+  } else if (state.street === "FLOP") {
+    const { deck: newDeck, card: turnCard } = engine.dealTurnOrRiver(
+      state.deck
+    );
+    state.deck = newDeck;
+    state.communityCards = [...state.communityCards, turnCard];
+    state.street = "TURN";
+    postDealerMessage(gameId, io, "Dealing the turn...");
+  } else if (state.street === "TURN") {
+    const { deck: newDeck, card: riverCard } = engine.dealTurnOrRiver(
+      state.deck
+    );
+    state.deck = newDeck;
+    state.communityCards = [...state.communityCards, riverCard];
+    state.street = "RIVER";
+    postDealerMessage(gameId, io, "Dealing the river...");
+  } else if (state.street === "RIVER") {
+    await handleShowdown(gameId, io);
+    return;
+  }
+
+  if (activePlayers.length === 0) {
+    if (state.handEnded) {
+      console.log(
+        "[POKER] advanceToNextStreet: All folded but hand already ended - skipping award"
+      );
+      return;
+    }
+    console.log(
+      "[POKER] advanceToNextStreet: All players folded - finding last player who didn't fold to award pot"
+    );
+
+    const allPlayers = state.players.filter(
+      (p) => p.status !== "ELIMINATED"
+    );
+    if (allPlayers.length > 0) {
+      const bbPlayer = allPlayers.find((p) => {
+        const contribution =
+          state.bettingRound?.getPlayerContribution(p.id) || 0;
+        return contribution > 0;
+      });
+
+      if (bbPlayer) {
+        const totalPot = state.pot;
+        bbPlayer.chips += totalPot;
+        state.pot = 0;
+        state.handEnded = true;
+        tableState.set(gameId, state);
+
+        const winnerName =
+          bbPlayer.name ||
+          bbPlayer.user?.username ||
+          `Player ${bbPlayer.seatNumber}`;
+        console.log(
+          `[POKER] All players folded - awarding pot of ${totalPot} to ${winnerName} (big blind)`
+        );
+
+        if (io) {
+          postDealerMessage(
+            gameId,
+            io,
+            `${winnerName} wins ${totalPot.toLocaleString()} (all other players folded)`
+          );
+          state.showdownActive = true;
+          state.showdownResults = {
+            winners: [
+              {
+                playerId: bbPlayer.id,
+                userId: bbPlayer.userId,
+                name: winnerName,
+                potWon: totalPot,
+              },
+            ],
+          };
+          tableState.set(gameId, state);
+        }
+
+        await prisma.player
+          .update({
+            where: { id: bbPlayer.id },
+            data: { chips: bbPlayer.chips },
+          })
+          .catch((err) => {
+            if (err?.code === "P2025") {
+              console.log(
+                `[POKER] Player ${bbPlayer.id} already removed (consolidation), skipping chip update`
+              );
+            } else {
+              console.error(
+                `[POKER] Error updating chips for player ${bbPlayer.id}:`,
+                err
+              );
+            }
+          });
+        await prisma.game
+          .update({
+            where: { id: gameId },
+            data: { pot: 0 },
+          })
+          .catch((err) =>
+            console.error("[POKER] Error updating game pot:", err)
+          );
+
+        if (io) {
+          const gameForEmit = await prisma.game
+            .findUnique({
+              where: { id: gameId },
+              include: {
+                players: { include: { user: true } },
+                tournament: true,
+              },
+            })
+            .catch(() => null);
+          if (gameForEmit) {
+            io.to(`game:${gameId}`).emit(
+              "game-state",
+              buildClientGameState(gameForEmit, state)
+            );
+          }
+          io.to(`game:${gameId}`).emit("winner", {
+            gameId,
+            winners: [
+              {
+                playerId: bbPlayer.id,
+                userId: bbPlayer.userId,
+                name: winnerName,
+                potWon: totalPot,
+              },
+            ],
+          });
+          if (gameForEmit?.tournament?.id) {
+            await emitIfTournamentCompleted(
+              gameForEmit.tournament.id,
+              gameId,
+              io
+            );
+          }
+        }
+
+        setTimeout(() => {
+          const savedPlayers = [...state.players];
+          tableState.delete(gameId);
+
+          const resetPromises = savedPlayers
+            .filter((p) => p.status !== "ELIMINATED" && p.chips > 0)
+            .map((p) => {
+              return prisma.player
+                .update({
+                  where: { id: p.id },
+                  data: {
+                    status: "ACTIVE",
+                    holeCards: "",
+                    lastAction: null,
+                  },
+                })
+                .catch((err) => {
+                  if (err?.code === "P2025") return;
+                  console.error(
+                    `[POKER] Error resetting player ${p.id}:`,
+                    err
+                  );
+                });
+            });
+
+          Promise.all(resetPromises).then(async () => {
+            const gameForNextHand = await prisma.game
+              .findUnique({
+                where: { id: gameId },
+                include: {
+                  players: { include: { user: true } },
+                  tournament: true,
+                },
+              })
+              .catch(() => null);
+
+            if (
+              gameForNextHand &&
+              gameForNextHand.players.filter((p) => p.status === "ACTIVE")
+                .length >= 2
+            ) {
+              if (io) {
+                try {
+                  await startHandForGame(gameId, io);
+                } catch (err) {
+                  console.error(
+                    "[POKER] Error starting new hand after all-fold:",
+                    err
+                  );
+                }
+              }
+            }
+          });
+        }, 3000);
+
+        return;
+      }
+    }
+
+    console.error(
+      "[POKER] CRITICAL ERROR: All players folded but could not find player to award pot!"
+    );
+    state.currentTurnUserId = null;
+    state.currentTurnStartedAt = null;
+    return;
+  }
+
+  if (activePlayers.length > 1 && io) {
+    const game = await prisma.game
+      .findUnique({
+        where: { id: gameId },
+        include: { players: { include: { user: true } }, tournament: true },
+      })
+      .catch(() => null);
+
+    if (game) {
+      const payload = buildClientGameState(game, state);
+      io.to(`game:${gameId}`).emit("game-state", payload);
+      console.log(
+        `[POKER] advanceToNextStreet: Emitted game state for street ${state.street}`
+      );
+    } else {
+      console.error(
+        "[POKER] ERROR: Could not emit game state in advanceToNextStreet - game not found"
+      );
+    }
+  }
+}
+
