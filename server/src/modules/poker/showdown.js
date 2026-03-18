@@ -3,6 +3,7 @@ import { HandEvaluator } from "./HandEvaluator.js";
 import { tableState } from "./tableState.js";
 import { postDealerMessage } from "./dealerMessages.js";
 import { emitGameState } from "./emitGameState.js";
+import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/pokerHandler.js";
 
 const SHOWDOWN_PHASE_DELAY_MS = 1000;
 function delay(ms) {
@@ -344,6 +345,75 @@ export async function handleShowdownCore(gameId, io, options = {}) {
       }
     }
   }
+
+  // Persist chips and pot=0 so idle poll and next hand work; then clear state and start next hand
+  for (const p of activePlayers) {
+    await prisma.player
+      .update({ where: { id: p.id }, data: { chips: p.chips } })
+      .catch((err) => {
+        if (err?.code === "P2025") return;
+        console.error(`[SHOWDOWN] Error persisting chips for player ${p.id}:`, err);
+      });
+  }
+  await prisma.game
+    .update({ where: { id: gameId }, data: { pot: 0 } })
+    .catch((err) => console.error("[SHOWDOWN] Error zeroing game pot:", err));
+  state.pot = 0;
+  tableState.set(gameId, state);
+
+  if (io) {
+    await emitGameState(gameId, io, state);
+    const winnerPayload = handResults.map((r) => ({
+      playerId: r.player.id,
+      userId: r.player.userId,
+      name: r.player.name || r.player.user?.username || r.player.userId,
+      potWon: totalWon.get(r.player.id) || 0,
+    }));
+    io.to(`game:${gameId}`).emit("winner", { gameId, winners: winnerPayload });
+    const game = await prisma.game
+      .findUnique({
+        where: { id: gameId },
+        include: { players: { include: { user: true } }, tournament: true },
+      })
+      .catch(() => null);
+    if (game?.tournament?.id) {
+      await emitIfTournamentCompleted(game.tournament.id, gameId, io);
+    }
+  }
+
+  setTimeout(() => {
+    const savedPlayers = [...state.players];
+    tableState.delete(gameId);
+    const resetPromises = savedPlayers
+      .filter((p) => p.status !== "ELIMINATED" && p.chips > 0)
+      .map((p) =>
+        prisma.player
+          .update({
+            where: { id: p.id },
+            data: { status: "ACTIVE", holeCards: "", lastAction: null },
+          })
+          .catch(() => {})
+      );
+    Promise.all(resetPromises).then(async () => {
+      const gameForNextHand = await prisma.game
+        .findUnique({
+          where: { id: gameId },
+          include: { players: true, tournament: true },
+        })
+        .catch(() => null);
+      if (
+        gameForNextHand &&
+        gameForNextHand.players.filter((p) => p.status === "ACTIVE").length >= 2 &&
+        io
+      ) {
+        try {
+          await startHandForGame(gameId, io);
+        } catch (err) {
+          console.error("[SHOWDOWN] Error starting next hand after showdown:", err);
+        }
+      }
+    });
+  }, options.cleanupDelayMs ?? 3000);
 }
 
 /** Thin wrapper for callers that expect handleShowdown (e.g. turnTimers). */

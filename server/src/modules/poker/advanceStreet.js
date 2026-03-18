@@ -17,6 +17,11 @@ export async function advanceToNextStreet(gameId, io) {
     return;
   }
 
+  if (state.handEnded) {
+    console.log("[POKER] advanceToNextStreet: Hand already ended, skipping (avoid double run)");
+    return;
+  }
+
   const activePlayers = state.players.filter(
     (p) => p.status !== "FOLDED" && p.status !== "ELIMINATED"
   );
