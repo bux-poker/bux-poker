@@ -174,9 +174,19 @@ export function startTurnTimer(gameId, userId, io) {
 
 async function autoFoldPlayer(gameId, userId, io) {
   try {
-    let state;
+    const state = tableState.get(gameId);
+    if (!state || state.currentTurnUserId !== userId) {
+      console.log(
+        `[POKER] autoFoldPlayer: skipping – not ${userId}'s turn (currentTurn=${state?.currentTurnUserId})`
+      );
+      if (state?.currentTurnUserId) {
+        startTurnTimer(gameId, state.currentTurnUserId, io);
+      }
+      return;
+    }
+    let stateAfter;
     try {
-      state = await applyPlayerAction({
+      stateAfter = await applyPlayerAction({
         gameId,
         userId,
         action: "FOLD",
@@ -204,7 +214,8 @@ async function autoFoldPlayer(gameId, userId, io) {
 
     await moveToNextPlayer(gameId, io);
 
-    const payload = buildClientGameState(game, state);
+    const stateNow = tableState.get(gameId);
+    const payload = buildClientGameState(game, stateNow || stateAfter);
     io.to(`game:${gameId}`).emit("game-state", payload);
   } catch (err) {
     console.error("[POKER] Error auto-folding player:", err);

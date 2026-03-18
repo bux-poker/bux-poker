@@ -510,8 +510,8 @@ export function PokerTable({
           className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
           style={{ gap: 'var(--community-card-gap, 8px)' }}
         >
-          {/* Showdown: who won with what hand (replaces total pot so it's clear who won) */}
-          {showdownActive && showdownResults?.winners?.length > 0 ? (
+          {/* Winner message: show for both real showdown and fold wins (fold wins have no handCategory, no card reveal) */}
+          {showdownResults?.winners?.length > 0 ? (
             <div className="flex flex-col items-center gap-1 rounded-lg border border-amber-500/60 bg-slate-900/95 px-3 py-2 text-center shadow-xl">
               {showdownResults.winners.length === 1 ? (
                 <span className="font-bold text-amber-300" style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}>
@@ -566,7 +566,7 @@ export function PokerTable({
               const isWinningCard = allWinningCards.some((wc: Card) => wc.rank === card.rank && wc.suit === card.suit);
               
               // Only shrink/gray losing cards when we have winner highlight (not during reveal/flop/turn/river phases)
-              const hasWinnerHighlight = showdownResults?.winners && showdownResults.winners.length > 0;
+              const hasWinnerHighlight = showdownActive && showdownResults?.winners && showdownResults.winners.length > 0;
               const isLosingCard = hasWinnerHighlight && !isWinningCard;
               const showdownScale = isLosingCard ? 0.75 : 1; // Make losing cards 75% size
               
@@ -904,7 +904,7 @@ export function PokerTable({
                 <div className="flex" style={{ gap: 'var(--hole-card-gap, 4px)' }}>
                   {player.holeCards.map((card, cardIdx) => {
                     // Only shrink/gray losing cards when we have winner highlight (not during reveal phases)
-                    const hasWinnerHighlight = showdownResults?.winners && showdownResults.winners.length > 0;
+                    const hasWinnerHighlight = showdownActive && showdownResults?.winners && showdownResults.winners.length > 0;
                     const cardIsWinning = hasWinnerHighlight && !isFolded && isWinningCard(card);
                     const cardIsLosing = hasWinnerHighlight && !isFolded && !isWinningCard(card);
                     const cardScale = cardIsLosing ? 0.75 : 1; // Losing cards at 75% size

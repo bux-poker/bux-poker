@@ -65,6 +65,9 @@ export async function moveToNextPlayer(gameId, io) {
       }
     }
     if (game?.tournament && io) {
+      if (playersToEliminate.length > 0) {
+        io.emit("tournament_updated", { tournamentId: game.tournament.id });
+      }
       await emitIfTournamentCompleted(game.tournament.id, gameId, io);
     }
   } else {
@@ -119,7 +122,7 @@ export async function moveToNextPlayer(gameId, io) {
         io,
         `${winnerName} wins ${totalPot.toLocaleString()} (all other players folded)`
       );
-      state.showdownActive = true;
+      // Do not set showdownActive so cards are not turned over (fold win, no showdown)
       state.showdownResults = {
         winners: [
           {

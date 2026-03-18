@@ -359,15 +359,46 @@ export async function handleShowdownCore(gameId, io, options = {}) {
     .update({ where: { id: gameId }, data: { pot: 0 } })
     .catch((err) => console.error("[SHOWDOWN] Error zeroing game pot:", err));
   state.pot = 0;
+
+  // Set showdownResults with hand category and winning cards for client + dealer messages
+  const maxStrength = Math.max(...handResults.map((r) => r.strength));
+  const showdownWinners = handResults
+    .filter((r) => r.strength === maxStrength)
+    .map((r) => {
+      const potWon = totalWon.get(r.player.id) || 0;
+      const name = r.player.name || r.player.user?.username || r.player.userId;
+      return {
+        playerId: r.player.id,
+        userId: r.player.userId,
+        name,
+        potWon,
+        handCategory: r.hand?.category || null,
+        hand: r.hand ? { category: r.hand.category, cards: r.hand.bestFive || [] } : null,
+      };
+    });
+  state.showdownResults = { winners: showdownWinners };
   tableState.set(gameId, state);
 
   if (io) {
+    // Dealer messages: who won, how much, and with what hand
+    const formatCategory = (cat) =>
+      (cat || "")
+        .split("_")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(" ");
+    for (const w of showdownWinners) {
+      const msg = w.handCategory
+        ? `${w.name} wins ${w.potWon.toLocaleString()} with ${formatCategory(w.handCategory)}`
+        : `${w.name} wins ${w.potWon.toLocaleString()}`;
+      postDealerMessage(gameId, io, msg);
+    }
+
     await emitGameState(gameId, io, state);
-    const winnerPayload = handResults.map((r) => ({
-      playerId: r.player.id,
-      userId: r.player.userId,
-      name: r.player.name || r.player.user?.username || r.player.userId,
-      potWon: totalWon.get(r.player.id) || 0,
+    const winnerPayload = showdownWinners.map((w) => ({
+      playerId: w.playerId,
+      userId: w.userId,
+      name: w.name,
+      potWon: w.potWon,
     }));
     io.to(`game:${gameId}`).emit("winner", { gameId, winners: winnerPayload });
     const game = await prisma.game
@@ -376,7 +407,27 @@ export async function handleShowdownCore(gameId, io, options = {}) {
         include: { players: { include: { user: true } }, tournament: true },
       })
       .catch(() => null);
+
+    // Mark 0-chip players as eliminated after showdown so client gets tournament_updated and shows popup
     if (game?.tournament?.id) {
+      const { TournamentEngine } = await import("../../services/TournamentEngine.js");
+      const tournamentEngine = new TournamentEngine();
+      const busted = state.players.filter((p) => p.chips <= 0 && p.status !== "ELIMINATED");
+      for (const p of busted) {
+        p.status = "ELIMINATED";
+        await prisma.player
+          .update({ where: { id: p.id }, data: { status: "ELIMINATED", chips: 0 } })
+          .catch((err) => {
+            if (err?.code === "P2025") return;
+            console.error(`[SHOWDOWN] Error marking busted player ${p.id}:`, err);
+          });
+        await tournamentEngine.onPlayerBust(game.tournament.id, p.id).catch((err) => {
+          console.error("[SHOWDOWN] Error notifying tournament of player bust:", err);
+        });
+      }
+      if (busted.length > 0) {
+        io.emit("tournament_updated", { tournamentId: game.tournament.id });
+      }
       await emitIfTournamentCompleted(game.tournament.id, gameId, io);
     }
   }

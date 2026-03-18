@@ -158,6 +158,9 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
                 }
               });
             }
+            if (bustedPlayers.length > 0) {
+              socket.server.emit("tournament_updated", { tournamentId: game.tournament.id });
+            }
             await emitIfTournamentCompleted(game.tournament.id, socket.server);
           }
 
@@ -195,7 +198,7 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
             }
           }, 3000);
 
-          state.showdownActive = true;
+          // Do not set showdownActive so cards are not turned over (fold win, no showdown)
           state.showdownResults = {
             winners: [{ playerId: winner.id, userId: winner.userId, name: winnerName, potWon: totalPot }]
           };

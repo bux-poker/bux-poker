@@ -116,7 +116,7 @@ export async function advanceToNextStreet(gameId, io) {
         io,
         `${winnerName} wins ${totalPot.toLocaleString()} (all other players folded)`
       );
-      state.showdownActive = true;
+      // Do not set showdownActive so cards are not turned over (fold win, no showdown)
       state.showdownResults = {
         winners: [
           {
