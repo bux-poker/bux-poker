@@ -1,142 +1,15 @@
 import { prisma } from "../config/database.js";
+import { auditChipConservation } from "./tournament/chipAudit.js";
+import {
+  getTournamentBlindLevelFromTime,
+  syncBlindLevelsToTournamentTime
+} from "./tournament/blindLevels.js";
+
+// Re-export for backward compatibility (poker/blindLevel, etc. import from TournamentEngine)
+export { getTournamentBlindLevelFromTime, syncBlindLevelsToTournamentTime };
 
 const _onPlayersBustLocks = new Map();
-
-/** Module-level lock per tournament - prevents concurrent consolidation from different TournamentEngine instances. */
 const _consolidationLocks = new Map();
-
-/**
- * Audit chip conservation: total chips in tournament must equal expected (registrations * startingChips).
- * Logs error if mismatch - chips must NEVER be created or destroyed.
- */
-async function auditChipConservation(tournamentId) {
-  const tournament = await prisma.tournament.findUnique({
-    where: { id: tournamentId },
-    include: {
-      registrations: { where: { status: "CONFIRMED" } },
-      games: { include: { players: true } }
-    }
-  });
-  if (!tournament) return;
-  const expectedTotal = tournament.registrations.length * tournament.startingChips;
-  let playerChipsTotal = 0;
-  let gamePotTotal = 0;
-  for (const game of tournament.games || []) {
-    gamePotTotal += game.pot ?? 0;
-    for (const p of game.players || []) {
-      playerChipsTotal += p.chips ?? 0;
-    }
-  }
-  const actualTotal = playerChipsTotal + gamePotTotal;
-  if (actualTotal !== expectedTotal) {
-    console.error(`[TOURNAMENT] CHIP CONSERVATION VIOLATION: tournament ${tournamentId} has ${actualTotal} chips (players: ${playerChipsTotal}, game pots: ${gamePotTotal}), expected ${expectedTotal} (${tournament.registrations.length} players × ${tournament.startingChips} starting). Difference: ${actualTotal - expectedTotal}`);
-  } else {
-    console.log(`[TOURNAMENT] Chip audit OK: ${actualTotal} chips (expected ${expectedTotal})`);
-  }
-}
-
-// TournamentEngine: manages tables, seating, and basic progression.
-// This is intentionally simplified but provides real table assignment
-// and consolidation hooks.
-
-/**
- * Compute current blind level index from tournament start time and blind level durations.
- * Returns { currentLevelIndex, blindLevels } or null if tournament/blinds invalid.
- */
-export function getTournamentBlindLevelFromTime(tournament) {
-  if (!tournament?.startedAt) return null;
-  let blindLevels = [];
-  try {
-    blindLevels = tournament.blindLevelsJson ? JSON.parse(tournament.blindLevelsJson) : [];
-  } catch (e) {
-    return null;
-  }
-  if (blindLevels.length === 0) return null;
-  const startedAt = new Date(tournament.startedAt);
-  const elapsedMs = Date.now() - startedAt.getTime();
-  let elapsedMinutes = elapsedMs / 1000 / 60;
-  let currentLevelIndex = 0;
-  for (let i = 0; i < blindLevels.length; i++) {
-    const level = blindLevels[i];
-    if (level.duration == null) {
-      currentLevelIndex = i;
-      break;
-    }
-    if (elapsedMinutes <= level.duration) {
-      currentLevelIndex = i;
-      break;
-    }
-    elapsedMinutes -= level.duration;
-    if (level.breakAfter) elapsedMinutes -= level.breakAfter;
-  }
-  return { currentLevelIndex, blindLevels };
-}
-
-/**
- * Sync all ACTIVE games in a RUNNING tournament to the same blind level (from tournament elapsed time).
- * Call after consolidation so all tables resume with the same blinds; also used by blind timer.
- * Optionally emits dealer message to each table.
- */
-export async function syncBlindLevelsToTournamentTime(tournamentId, io, options = { emitDealerMessage: true }) {
-  const tournament = await prisma.tournament.findUnique({
-    where: { id: tournamentId }
-  });
-  if (!tournament || tournament.status !== "RUNNING" || !tournament.startedAt) return null;
-  const result = getTournamentBlindLevelFromTime(tournament);
-  if (!result) return null;
-  const { currentLevelIndex, blindLevels } = result;
-  const newLevel = blindLevels[currentLevelIndex];
-  if (!newLevel) return null;
-
-  const games = await prisma.game.findMany({
-    where: { tournamentId, status: "ACTIVE" },
-    select: { id: true, tableNumber: true, currentBlindLevel: true }
-  });
-  if (games.length === 0) return null;
-
-  const updateData = {
-    currentBlindLevel: currentLevelIndex,
-    ...(newLevel.smallBlind != null && { smallBlind: newLevel.smallBlind }),
-    ...(newLevel.bigBlind != null && { bigBlind: newLevel.bigBlind })
-  };
-
-  for (const game of games) {
-    await prisma.game.update({
-      where: { id: game.id },
-      data: updateData
-    }).catch((err) => {
-      if (err.message?.includes("Unknown argument")) {
-        return prisma.game.update({
-          where: { id: game.id },
-          data: { currentBlindLevel: currentLevelIndex }
-        });
-      }
-      throw err;
-    });
-  }
-
-  if (options.emitDealerMessage && io && newLevel.smallBlind != null && newLevel.bigBlind != null) {
-    const msg = `Blinds ${newLevel.smallBlind.toLocaleString()}/${newLevel.bigBlind.toLocaleString()}`;
-    for (const game of games) {
-      io.to(`game:${game.id}`).emit("game_message", {
-        gameId: game.id,
-        message: {
-          id: `dealer-${Date.now()}-${game.id}`,
-          userId: "DEALER",
-          userName: "Dealer",
-          message: msg,
-          timestamp: Date.now(),
-          isGameMessage: true,
-          isDealerMessage: true
-        }
-      });
-    }
-  }
-
-  const tableIds = games.map(g => `T${g.tableNumber}`).join(",");
-  console.log(`[TOURNAMENT] Synced blind level to ${currentLevelIndex} for ${games.length} table(s) (${tableIds}) (${newLevel.smallBlind}/${newLevel.bigBlind})`);
-  return { currentLevelIndex, newLevel, games };
-}
 
 export class TournamentEngine {
   /**

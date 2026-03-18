@@ -2,23 +2,11 @@ import { prisma } from "../../config/database.js";
 import { HandEvaluator } from "./HandEvaluator.js";
 import { tableState } from "./tableState.js";
 import { postDealerMessage } from "./dealerMessages.js";
-import { buildClientGameState } from "./buildClientGameState.js";
+import { emitGameState } from "./emitGameState.js";
 
 const SHOWDOWN_PHASE_DELAY_MS = 1000;
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function emitGameState(gameId, io, state) {
-  if (!io) return;
-  const game = await prisma.game.findUnique({
-    where: { id: gameId },
-    include: { players: { include: { user: true } }, tournament: true },
-  });
-  if (game) {
-    const payload = buildClientGameState(game, state);
-    io.to(`game:${gameId}`).emit("game-state", payload);
-  }
 }
 
 export async function handleShowdownCore(gameId, io, options = {}) {
