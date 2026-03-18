@@ -1025,15 +1025,17 @@ async function _startHandForGameBody(gameId, io) {
     console.log(`[POKER] UTG calculation: dealer=${dealerSeat}, sb=${sbSeat}, bb=${bbSeat}, utg=${utgSeat} (${utgPlayer.user?.username || utgPlayer.userId})`);
   }
 
-  // IMPORTANT: Never carry a previous game's pot into a new hand.
-  // If game.pot is non-zero here, something went wrong in the prior hand
-  // (e.g. pot not zeroed after award). Folding it into this hand would
-  // double-count that pot and CREATE chips. Instead, log loudly and zero
-  // the game pot in the DB; chip audits will flag the mismatch.
+  // IMPORTANT: Never silently mutate a non-zero pot when starting a new hand.
+  // If game.pot is non-zero here, a previous hand failed to award/zero the pot.
+  // Zeroing it destroys chips (what you're seeing as chip conservation violations).
+  // Instead of "fixing" it, abort starting the hand and surface a hard error so the
+  // bug is visible and the table cannot continue in a broken state.
   const previousPot = game.pot ?? 0;
   if (previousPot > 0) {
-    console.error(`[POKER] WARNING: game ${gameId} starting new hand with non-zero pot=${previousPot}. Zeroing pot instead of carrying forward to avoid chip inflation.`);
-    await prisma.game.update({ where: { id: gameId }, data: { pot: 0 } }).catch(() => {});
+    throw new Error(
+      `[POKER] BUG: Tried to start new hand for game ${gameId} with non-zero pot=${previousPot}. ` +
+      `Hand must NOT start until previous pot is correctly awarded/zeroed.`
+    );
   }
 
   // Create hand state (explicitly clear showdown so client doesn't show old win/lose styling)
