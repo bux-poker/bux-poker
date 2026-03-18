@@ -3,7 +3,7 @@ import { tableState, turnTimers, hasActiveHand } from "./tableState.js";
 import { postDealerMessage } from "./dealerMessages.js";
 import { buildClientGameState } from "./buildClientGameState.js";
 import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/pokerHandler.js";
-import { startTurnTimer } from "../socket-handlers/pokerHandler.js";
+import { startTurnTimer } from "./turnTimers.js";
 
 export async function moveToNextPlayer(gameId, io) {
   const state = tableState.get(gameId);
