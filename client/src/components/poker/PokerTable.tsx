@@ -719,55 +719,49 @@ export function PokerTable({
                             </div>
                           )}
                           
-                          {/* Action Overlay - shows when player acts (takes priority over timer) */}
+                          {/* Seat overlay: strict exclusivity between action text and timer */}
                           {(() => {
                             const playerId = player.id || player.userId || '';
                             const overlay = actionOverlays[playerId];
-                            // Show action overlay if player acted - takes priority over timer
-                            if (overlay) {
+                            const now = Date.now();
+                            const hasOverlay = !!overlay;
+                            const age = hasOverlay ? now - overlay.timestamp : 0;
+                            const permanent = hasOverlay ? isPermanentAction(overlay.action) : false;
+                            const actionOpacity = hasOverlay ? (permanent ? 1 : Math.max(0, 1 - (age / ACTION_FADE_MS))) : 0;
+
+                            // First priority: action overlay when active/visible.
+                            if (hasOverlay && actionOpacity > 0) {
                               const actionInfo = getActionInfo(overlay.action);
-                              const age = Date.now() - overlay.timestamp;
-                              const permanent = isPermanentAction(overlay.action);
-                              const opacity = permanent ? 1 : Math.max(0, 1 - (age / ACTION_FADE_MS)); // Fade out over 2s
                               const risePx = permanent ? 0 : Math.min(10, age / 80);
-                              if (opacity > 0) {
-                                return (
-                                  <div 
-                                    className="absolute inset-0 flex items-center justify-center rounded-full"
+                              return (
+                                <div
+                                  className="absolute inset-0 flex items-center justify-center rounded-full"
+                                  style={{
+                                    background: `linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.6) 100%)`,
+                                    opacity: actionOpacity,
+                                    transition: 'opacity 0.1s ease-out',
+                                    pointerEvents: 'none',
+                                    zIndex: 15
+                                  }}
+                                >
+                                  <span
+                                    className="font-bold drop-shadow-lg text-center px-1"
                                     style={{
-                                      background: `linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.6) 100%)`,
-                                      opacity: opacity,
-                                      transition: 'opacity 0.1s ease-out',
-                                      pointerEvents: 'none',
-                                      zIndex: 15 // Higher than timer overlay
+                                      color: actionInfo.color,
+                                      fontSize: 'var(--player-name-size, 15px)',
+                                      textShadow: '0 2px 4px rgba(0,0,0,0.8)',
+                                      transform: `translateY(${-risePx}px)`,
+                                      transition: permanent ? 'none' : 'transform 0.1s linear'
                                     }}
                                   >
-                                    <span 
-                                      className="font-bold drop-shadow-lg text-center px-1"
-                                      style={{ 
-                                        color: actionInfo.color,
-                                        fontSize: 'var(--player-name-size, 15px)',
-                                        textShadow: '0 2px 4px rgba(0,0,0,0.8)',
-                                        transform: `translateY(${-risePx}px)`,
-                                        transition: permanent ? 'none' : 'transform 0.1s linear'
-                                      }}
-                                    >
-                                      {actionInfo.text}
-                                    </span>
-                                  </div>
-                                );
-                              }
+                                    {actionInfo.text}
+                                  </span>
+                                </div>
+                              );
                             }
-                            return null;
-                          })()}
-                          
-                          {/* Timer Overlay - only shows when player hasn't acted yet */}
-                          {(() => {
-                            const playerId = player.id || player.userId || '';
-                            const overlay = actionOverlays[playerId];
-                            const hasActionOverlay = !!overlay && (isPermanentAction(overlay.action) || (Date.now() - overlay.timestamp < ACTION_FADE_MS));
-                            // Only show timer if player hasn't acted recently
-                            if (hasActiveTimer && timerRemaining !== null && !hasActionOverlay) {
+
+                            // Second priority: timer only when there is no visible action overlay.
+                            if (hasActiveTimer && timerRemaining !== null) {
                               return (
                                 <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full" style={{ zIndex: 10 }}>
                                   <span 
