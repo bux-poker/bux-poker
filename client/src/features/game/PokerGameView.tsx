@@ -1001,6 +1001,7 @@ export function PokerGameView() {
                 userId: p.userId,
                 contribution: p.contribution || 0,
                 status: p.status,
+                lastAction: p.lastAction || null,
               }))}
               communityCards={communityCards}
               pot={gameState.pot}
