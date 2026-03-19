@@ -283,6 +283,7 @@ export function PokerTable({
     const normalized = action.toUpperCase();
     return normalized === 'FOLD' || normalized === 'ALL_IN' || normalized === 'ALLIN';
   };
+  const normalizeAction = (action: string) => action.toUpperCase().replace('_', '');
   
   // Helper function to get action text and color
   const getActionInfo = (action: string): { text: string; color: string } => {
@@ -328,6 +329,37 @@ export function PokerTable({
 
       lastSeenActionKeyRef.current = nextSeenKeys;
       return newOverlays;
+    });
+  }, [players]);
+
+  // Clear permanent overlays as soon as player state no longer matches them (e.g. new hand reset to ACTIVE).
+  useEffect(() => {
+    const playerById: Record<string, { status?: string; chips: number }> = {};
+    players.forEach((p) => {
+      const playerId = p.id || p.userId || '';
+      playerById[playerId] = { status: p.status, chips: p.chips ?? 0 };
+    });
+
+    setActionOverlays((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((playerId) => {
+        const overlay = next[playerId];
+        if (!isPermanentAction(overlay.action)) return;
+        const player = playerById[playerId];
+        if (!player) {
+          delete next[playerId];
+          return;
+        }
+
+        const action = normalizeAction(overlay.action);
+        const status = (player.status || '').toUpperCase();
+        const keepFold = action === 'FOLD' && status === 'FOLDED';
+        const keepAllIn = action === 'ALLIN' && (status === 'ALL_IN' || player.chips === 0);
+        if (!keepFold && !keepAllIn) {
+          delete next[playerId];
+        }
+      });
+      return next;
     });
   }, [players]);
   
