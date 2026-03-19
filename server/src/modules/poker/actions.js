@@ -119,6 +119,10 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
             );
             player.chips = 0;
           }
+          if (player.chips === 0) {
+            player.status = "ALL_IN";
+            effectiveAction = "ALL_IN";
+          }
         }
         state.actedPlayersInRound.add(userId);
         if (io) {
@@ -228,6 +232,7 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
 
       if (player.chips === 0) {
         player.status = "ALL_IN";
+        effectiveAction = "ALL_IN";
         console.log(`[ACTION] Player ${playerName} is now ALL_IN after CALL`);
       }
 
