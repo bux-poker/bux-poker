@@ -36,7 +36,17 @@ export function hasActiveHand(gameId) {
   const state = tableState.get(gameId);
   if (!state) return false;
 
+  // A table with fewer than 2 active contenders should not block consolidation.
+  const activeContenders = (state.players || []).filter(
+    (p) => p.status !== "FOLDED" && p.status !== "ELIMINATED"
+  ).length;
+  if (activeContenders < 2) return false;
+
+  // Hand explicitly ended (winner awarded / cleanup pending) should not block consolidation.
+  if (state.handEnded) return false;
+
   if (state.currentTurnUserId) return true;
+  if (state.showdownActive) return true;
   if (state.street && state.street !== null) return true;
   return false;
 }
