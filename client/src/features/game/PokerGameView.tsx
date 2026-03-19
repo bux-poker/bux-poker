@@ -66,9 +66,9 @@ function parseCommunityCards(encoded: string): Card[] {
 function isHandActive(state: GameStatePayload | null): boolean {
   if (!state) return false;
   const hasTurn = !!state.currentTurnUserId;
-  const hasBoardCards = parseCommunityCards(state.communityCards).length > 0;
-  const hasAnyContribution = (state.players || []).some((p) => (p.contribution || 0) > 0);
-  return !!state.showdownActive || hasTurn || hasBoardCards || hasAnyContribution;
+  // For consolidation UI gating, only treat truly in-progress phases as active.
+  // Board cards/contributions can linger briefly after a hand ends and should not hide the wait popup.
+  return !!state.showdownActive || hasTurn;
 }
 
 // Helper to play sound effects using queued playback to avoid overlaps
