@@ -124,6 +124,7 @@ export function PokerGameView() {
   const latestGameTournamentIdRef = useRef<string | undefined>(undefined);
   const latestTournamentIdRef = useRef<string | undefined>(undefined);
   const { user } = useAuth();
+  const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
 
   useEffect(() => {
     latestGameStateRef.current = gameState;
@@ -144,7 +145,6 @@ export function PokerGameView() {
 
   chatCollapsedRef.current = chatCollapsed;
   isMobileRef.current = isMobile;
-  const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
 
   // Keep tournament data fresh (remainingPlayers, etc.) when in active game (silent = no loading flash)
   useEffect(() => {
