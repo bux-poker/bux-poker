@@ -298,7 +298,6 @@ export function PokerGameView() {
         return prev;
       });
       if (isNewHand) setShowdownResults(null);
-      setConsolidationWaiting(null);
       setConnecting(false);
       setError(null);
     });
@@ -346,16 +345,26 @@ export function PokerGameView() {
     });
 
     socket.on("consolidation-waiting", (payload: { message: string; tournamentId: string }) => {
-      setConsolidationWaiting(payload.message);
+      const matchesGameState = payload.tournamentId === gameState?.tournamentId;
+      const matchesTournament = payload.tournamentId === tournament?.id;
+      if (matchesGameState || matchesTournament) {
+        setConsolidationWaiting(payload.message);
+      }
     });
 
-    socket.on("tournament_updated", () => {
-      setConsolidationWaiting(null);
+    socket.on("tournament_updated", (payload?: { tournamentId?: string }) => {
+      // Ignore updates from other tournaments to prevent random wait-popup flicker.
+      if (payload?.tournamentId) {
+        const matchesGameState = payload.tournamentId === gameState?.tournamentId;
+        const matchesTournament = payload.tournamentId === tournament?.id;
+        if (!matchesGameState && !matchesTournament) return;
+      }
       refetchTournament({ silent: true });
     });
     // Only redirect when tables were rebalanced (consolidation), not on every tournament_updated
     socket.on("consolidation-complete", async (payload: { tournamentId: string }) => {
       if (payload.tournamentId !== gameState?.tournamentId && payload.tournamentId !== tournament?.id) return;
+      setConsolidationWaiting(null);
       refetchTournament({ silent: true });
       if (!user?.id) return;
       try {
