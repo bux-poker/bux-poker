@@ -354,8 +354,12 @@ export function PokerTable({
         const action = normalizeAction(overlay.action);
         const status = (player.status || '').toUpperCase();
         const keepFold = action === 'FOLD' && status === 'FOLDED';
-        // ALL IN must remain visible for the entire hand; it is cleared by new-hand reset logic.
-        const keepAllIn = action === 'ALLIN';
+        // ALL IN for the current hand only — clear when seat resets like FOLD (new hand / not all-in anymore).
+        const keepAllIn =
+          action === 'ALLIN' &&
+          status !== 'ELIMINATED' &&
+          status !== 'FOLDED' &&
+          (status === 'ALL_IN' || player.chips === 0);
         if (!keepFold && !keepAllIn) {
           delete next[playerId];
         }
@@ -391,6 +395,7 @@ export function PokerTable({
       (communityCards?.length || 0) === 0 &&
       players.every((p) => (p.contribution || 0) === 0);
     if (isLikelyNewHand) {
+      lastSeenActionKeyRef.current = {};
       setActionOverlays({});
     }
   }, [showdownActive, currentBet, communityCards, players]);
