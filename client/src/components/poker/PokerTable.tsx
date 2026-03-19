@@ -276,6 +276,11 @@ export function PokerTable({
   
   // Track visible action overlays: { playerId: { action: string, timestamp: number } }
   const [actionOverlays, setActionOverlays] = useState<Record<string, { action: string; timestamp: number }>>({});
+  const ACTION_FADE_MS = 2000;
+  const isPermanentAction = (action: string) => {
+    const normalized = action.toUpperCase();
+    return normalized === 'FOLD' || normalized === 'ALL_IN' || normalized === 'ALLIN';
+  };
   
   // Helper function to get action text and color
   const getActionInfo = (action: string): { text: string; color: string } => {
@@ -292,7 +297,7 @@ export function PokerTable({
         return { text: 'RAISE', color: '#059669' }; // emerald-600
       case 'ALL_IN':
       case 'ALLIN':
-        return { text: 'ALL IN', color: '#b91c1c' }; // red-700
+        return { text: 'ALL IN', color: '#059669' }; // emerald-600 (per spec)
       default:
         return { text: action, color: '#64748b' }; // slate-500
     }
@@ -315,8 +320,8 @@ export function PokerTable({
             timestamp: now
           };
         } else {
-          // Keep existing overlay if it's still fresh (less than 3 seconds old)
-          if (now - existingOverlay.timestamp < 3000) {
+          // Keep permanent overlays, or temporary overlays while still in fade window.
+          if (isPermanentAction(existingOverlay.action) || now - existingOverlay.timestamp < ACTION_FADE_MS) {
             newOverlays[playerId] = existingOverlay;
           }
         }
@@ -333,7 +338,8 @@ export function PokerTable({
       setActionOverlays(prev => {
         const updated = { ...prev };
         Object.keys(updated).forEach(playerId => {
-          if (now - updated[playerId].timestamp >= 3000) {
+          const overlay = updated[playerId];
+          if (!isPermanentAction(overlay.action) && now - overlay.timestamp >= ACTION_FADE_MS) {
             delete updated[playerId];
           }
         });
@@ -721,7 +727,9 @@ export function PokerTable({
                             if (overlay) {
                               const actionInfo = getActionInfo(overlay.action);
                               const age = Date.now() - overlay.timestamp;
-                              const opacity = Math.max(0, 1 - (age / 3000)); // Fade out over 3 seconds
+                              const permanent = isPermanentAction(overlay.action);
+                              const opacity = permanent ? 1 : Math.max(0, 1 - (age / ACTION_FADE_MS)); // Fade out over 2s
+                              const risePx = permanent ? 0 : Math.min(10, age / 80);
                               if (opacity > 0) {
                                 return (
                                   <div 
@@ -739,7 +747,9 @@ export function PokerTable({
                                       style={{ 
                                         color: actionInfo.color,
                                         fontSize: 'var(--player-name-size, 15px)',
-                                        textShadow: '0 2px 4px rgba(0,0,0,0.8)'
+                                        textShadow: '0 2px 4px rgba(0,0,0,0.8)',
+                                        transform: `translateY(${-risePx}px)`,
+                                        transition: permanent ? 'none' : 'transform 0.1s linear'
                                       }}
                                     >
                                       {actionInfo.text}
@@ -754,7 +764,8 @@ export function PokerTable({
                           {/* Timer Overlay - only shows when player hasn't acted yet */}
                           {(() => {
                             const playerId = player.id || player.userId || '';
-                            const hasActionOverlay = actionOverlays[playerId] && (Date.now() - actionOverlays[playerId].timestamp < 3000);
+                            const overlay = actionOverlays[playerId];
+                            const hasActionOverlay = !!overlay && (isPermanentAction(overlay.action) || (Date.now() - overlay.timestamp < ACTION_FADE_MS));
                             // Only show timer if player hasn't acted recently
                             if (hasActiveTimer && timerRemaining !== null && !hasActionOverlay) {
                               return (
