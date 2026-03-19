@@ -7,6 +7,7 @@ import { moveToNextPlayer } from "../../poker/turnOrder.js";
 import { advanceToNextStreet } from "../../poker/advanceStreet.js";
 import { emitIfTournamentCompleted } from "../../poker/tableTournamentHooks.js";
 import { checkAndAdvanceBlindLevel } from "../../poker/blindLevel.js";
+import { cleanupHandAndStartNext } from "../../poker/handCleanup.js";
 
 /**
  * Register the player-action socket handler.
@@ -85,7 +86,8 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
 
         if (activePlayersAfterAction.length === 1) {
           if (state.handEnded) {
-            console.log(`[POKER] Single player remaining but hand already ended - skipping award`);
+            console.log(`[POKER] Single player remaining but hand already ended - clearing state and starting next hand`);
+            cleanupHandAndStartNext(gameId, io, state, startHandForGame);
             return;
           }
           const winner = activePlayersAfterAction[0];

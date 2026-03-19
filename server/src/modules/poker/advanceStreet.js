@@ -5,6 +5,7 @@ import { postDealerMessage } from "./dealerMessages.js";
 import { buildClientGameState } from "./buildClientGameState.js";
 import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/pokerHandler.js";
 import { handleShowdown, runCinematicAllInShowdown } from "./showdown.js";
+import { cleanupHandAndStartNext } from "./handCleanup.js";
 import { startTurnTimer } from "./turnTimers.js";
 
 export async function advanceToNextStreet(gameId, io) {
@@ -262,8 +263,9 @@ export async function advanceToNextStreet(gameId, io) {
   if (activePlayers.length === 0) {
     if (state.handEnded) {
       console.log(
-        "[POKER] advanceToNextStreet: All folded but hand already ended - skipping award"
+        "[POKER] advanceToNextStreet: All folded but hand already ended - clearing state and starting next hand"
       );
+      cleanupHandAndStartNext(gameId, io, state, startHandForGame);
       return;
     }
     console.log(

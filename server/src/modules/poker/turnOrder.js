@@ -4,6 +4,7 @@ import { postDealerMessage } from "./dealerMessages.js";
 import { buildClientGameState } from "./buildClientGameState.js";
 import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/pokerHandler.js";
 import { startTurnTimer } from "./turnTimers.js";
+import { cleanupHandAndStartNext } from "./handCleanup.js";
 
 export async function moveToNextPlayer(gameId, io) {
   const state = tableState.get(gameId);
@@ -91,8 +92,9 @@ export async function moveToNextPlayer(gameId, io) {
   if (playersInHand.length === 1) {
     if (state.handEnded) {
       console.log(
-        "[POKER] One player left but hand already ended - skipping award"
+        "[POKER] One player left but hand already ended - clearing state and starting next hand"
       );
+      cleanupHandAndStartNext(gameId, io, state, startHandForGame);
       return;
     }
     const existingTimer = turnTimers.get(gameId);
