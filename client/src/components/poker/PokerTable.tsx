@@ -172,7 +172,7 @@ function PokerCardImage({
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.15, ease: "easeOut" }}
-      onError={(e) => {
+      onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
         console.error("Card image failed to load:", getCardImage(card));
         const target = e.target as HTMLImageElement;
         target.style.display = "none";
@@ -962,7 +962,7 @@ export function PokerTable({
                   transform: 'translate(-50%, -50%)',
                 }}
               >
-                <BetChip value={player.contribution} />
+                <BetChip value={player.contribution ?? 0} />
               </div>
             );
           }
