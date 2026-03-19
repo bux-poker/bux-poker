@@ -66,33 +66,21 @@ function parseCommunityCards(encoded: string): Card[] {
 }
 
 /**
- * True while this table's hand is meaningfully in progress (betting, board dealt, blinds posted, etc.).
- * Used only for consolidation wait UI — avoids flicker when optimistic updates clear currentTurnUserId.
- * When the table is fully idle (no pot, no board, no contributions, no turn), show wait overlay even if street lags.
+ * True while a real betting round / showdown is in progress (something we must not cover with the wait popup).
+ * Intentionally does NOT use pot or per-player contributions — those can stay stale in game-state after a hand
+ * ends and would hide the consolidation overlay forever.
  */
-function isTableHandInProgress(
+function handBlocksConsolidationWaitOverlay(
   state: GameStatePayload | null,
   optimisticActionPendingRef?: { current: boolean }
 ): boolean {
   if (optimisticActionPendingRef?.current) return true;
   if (!state) return false;
-
-  const boardLen = parseCommunityCards(state.communityCards).length;
-  const anyContribution = (state.players || []).some((p) => (p.contribution ?? 0) > 0);
-  const pot = state.pot ?? 0;
-  const currentBet = state.currentBet ?? 0;
-
-  const completelyIdle =
-    !state.showdownActive &&
-    !state.currentTurnUserId &&
-    currentBet === 0 &&
-    boardLen === 0 &&
-    !anyContribution &&
-    pot === 0;
-
-  if (completelyIdle) return false;
-
-  return true;
+  if (state.showdownActive) return true;
+  if (state.currentTurnUserId) return true;
+  if ((state.currentBet ?? 0) > 0) return true;
+  if (parseCommunityCards(state.communityCards).length > 0) return true;
+  return false;
 }
 
 // Helper to play sound effects using queued playback to avoid overlaps
@@ -401,7 +389,7 @@ export function PokerGameView() {
       const matchesTournament = payload.tournamentId === latestTournamentIdRef.current;
       if (matchesGameState || matchesTournament) {
         const currentState = latestGameStateRef.current;
-        if (isTableHandInProgress(currentState, handActionPendingRef)) {
+        if (handBlocksConsolidationWaitOverlay(currentState, handActionPendingRef)) {
           // Defer popup while hand is active; show it as soon as hand ends.
           setPendingConsolidationWaiting(payload.message);
         } else {
@@ -839,7 +827,7 @@ export function PokerGameView() {
   // If consolidation-waiting arrived during an active hand, surface it immediately after hand ends.
   useEffect(() => {
     if (!pendingConsolidationWaiting) return;
-    if (!isTableHandInProgress(gameState, handActionPendingRef)) {
+    if (!handBlocksConsolidationWaitOverlay(gameState, handActionPendingRef)) {
       setConsolidationWaiting(pendingConsolidationWaiting);
       setPendingConsolidationWaiting(null);
     }
@@ -954,7 +942,7 @@ export function PokerGameView() {
       : consolidationWaiting;
   const showConsolidationOverlay =
     !!effectiveConsolidationMessage &&
-    !isTableHandInProgress(gameState, handActionPendingRef);
+    !handBlocksConsolidationWaitOverlay(gameState, handActionPendingRef);
 
   // Show landscape prompt if in portrait mode
   if (isPortrait) {

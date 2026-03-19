@@ -122,6 +122,18 @@ export async function doConsolidateTables(tournamentId, deps) {
             tournamentId
           });
         }
+        // Push game-state so clients get consolidationWaitingMessage (socket event alone is easy to miss;
+        // startHand is blocked so nothing else emits until hands finish).
+        try {
+          const { emitGameState } = await import("../../modules/poker/emitGameState.js");
+          const { tableState } = await import("../../modules/poker/tableState.js");
+          for (const g of games) {
+            const st = tableState.get(g.id);
+            await emitGameState(g.id, io, st ?? null);
+          }
+        } catch (e) {
+          console.warn("[TOURNAMENT] Could not emit game-state during consolidation wait:", e?.message);
+        }
       }
       await waitForAllTablesToFinishHands(tournamentId, deps);
       await new Promise((r) => setTimeout(r, 2000));

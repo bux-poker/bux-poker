@@ -9,6 +9,7 @@ import { BettingRound } from "./BettingRound.js";
 import { tableState } from "./tableState.js";
 import { postDealerMessage } from "./dealerMessages.js";
 import { buildClientGameState } from "./buildClientGameState.js";
+import { emitGameState } from "./emitGameState.js";
 import { startTurnTimer } from "./turnTimers.js";
 import { advanceToNextStreet } from "./advanceStreet.js";
 import { emitIfTournamentCompleted } from "./tableTournamentHooks.js";
@@ -42,6 +43,10 @@ export async function startHandForGameBody(gameId, io) {
   }
 
   if (game.tournament?.id && isTournamentConsolidationWaiting(game.tournament.id)) {
+    if (io) {
+      const st = tableState.get(gameId);
+      await emitGameState(gameId, io, st ?? null);
+    }
     return;
   }
 
