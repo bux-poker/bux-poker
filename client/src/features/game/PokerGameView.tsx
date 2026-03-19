@@ -63,6 +63,14 @@ function parseCommunityCards(encoded: string): Card[] {
   return [];
 }
 
+function isHandActive(state: GameStatePayload | null): boolean {
+  if (!state) return false;
+  const hasTurn = !!state.currentTurnUserId;
+  const hasBoardCards = parseCommunityCards(state.communityCards).length > 0;
+  const hasAnyContribution = (state.players || []).some((p) => (p.contribution || 0) > 0);
+  return !!state.showdownActive || hasTurn || hasBoardCards || hasAnyContribution;
+}
+
 // Helper to play sound effects using queued playback to avoid overlaps
 function playSound(soundNameOrFile: string, volume: number = 0.7) {
   if (typeof window === 'undefined') return;
@@ -877,6 +885,7 @@ export function PokerGameView() {
   const myChipRank = myPlayer ? sortedByChips.findIndex(p => p.id === myPlayer.id) + 1 : null;
   const myPosition = myChipRank && myChipRank > 0 ? myChipRank : null;
   const myContribution = myPlayer?.contribution || 0;
+  const showConsolidationOverlay = !!consolidationWaiting && !isHandActive(gameState);
 
   // Show landscape prompt if in portrait mode
   if (isPortrait) {
@@ -975,7 +984,7 @@ export function PokerGameView() {
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">
           {/* Table area - takes most of the space */}
           <div className="relative flex-1 overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900 min-h-0">
-            {consolidationWaiting && (
+            {showConsolidationOverlay && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm" style={{ zIndex: 100 }}>
                 <div className="rounded-xl bg-slate-800/95 border border-slate-600 px-8 py-6 text-center max-w-md shadow-2xl">
                   <p className="text-lg font-medium text-slate-200">{consolidationWaiting}</p>
