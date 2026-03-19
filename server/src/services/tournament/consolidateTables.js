@@ -4,6 +4,13 @@ import { syncBlindLevelsToTournamentTime } from "./blindLevels.js";
 
 const _consolidationLocks = new Map();
 
+/** Tournament IDs for which we are currently waiting for all hands to finish (so do not start new hands). */
+const _consolidationWaitTournamentIds = new Set();
+
+export function isTournamentConsolidationWaiting(tournamentId) {
+  return _consolidationWaitTournamentIds.has(tournamentId);
+}
+
 /**
  * Wait for all tables to finish their current hands. If a hand is stuck 90s+, force current player to act.
  * @param {string} tournamentId
@@ -105,6 +112,7 @@ export async function doConsolidateTables(tournamentId, deps) {
   const anyHasHand = await Promise.all(games.map((g) => deps.hasActiveHand(g.id))).then((arr) => arr.some(Boolean));
   if (anyHasHand) {
     console.log(`[TOURNAMENT] Consolidation needed (${games.length} tables, counts ${counts.join(",")}, spread ${spread}). Waiting for all hands to finish...`);
+    _consolidationWaitTournamentIds.add(tournamentId);
     try {
       const io = deps.getIO();
       if (io) {
@@ -115,13 +123,16 @@ export async function doConsolidateTables(tournamentId, deps) {
           });
         }
       }
+      await waitForAllTablesToFinishHands(tournamentId, deps);
+      await new Promise((r) => setTimeout(r, 2000));
     } catch (e) {
-      console.warn("[TOURNAMENT] Could not emit consolidation-waiting:", e?.message);
+      console.warn("[TOURNAMENT] Consolidation wait error:", e?.message);
+    } finally {
+      _consolidationWaitTournamentIds.delete(tournamentId);
     }
-    await waitForAllTablesToFinishHands(tournamentId, deps);
+  } else {
+    await new Promise((r) => setTimeout(r, 2000));
   }
-
-  await new Promise((r) => setTimeout(r, 2000));
 
   games = await prisma.game.findMany({
     where: { tournamentId, status: "ACTIVE" },

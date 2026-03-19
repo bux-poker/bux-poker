@@ -12,6 +12,7 @@ import { buildClientGameState } from "./buildClientGameState.js";
 import { startTurnTimer } from "./turnTimers.js";
 import { advanceToNextStreet } from "./advanceStreet.js";
 import { emitIfTournamentCompleted } from "./tableTournamentHooks.js";
+import { isTournamentConsolidationWaiting } from "../../services/tournament/consolidateTables.js";
 
 export async function startHandForGameBody(gameId, io) {
   const game = await prisma.game.findUnique({
@@ -36,6 +37,10 @@ export async function startHandForGameBody(gameId, io) {
   }
 
   if (tableState.get(gameId)) {
+    return;
+  }
+
+  if (game.tournament?.id && isTournamentConsolidationWaiting(game.tournament.id)) {
     return;
   }
 
