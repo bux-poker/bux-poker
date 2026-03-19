@@ -609,9 +609,9 @@ export function PokerGameView() {
   useEffect(() => {
     if (!gameState || !prevGameState || !user) return;
 
-    // 1. Turn sound: Play when it becomes my turn
-    const prevWasMyTurn = prevGameState.currentTurnUserId === user.id;
-    const nowIsMyTurn = gameState.currentTurnUserId === user.id;
+    // 1. Turn sound: Play when it becomes my turn (string compare for id type consistency)
+    const prevWasMyTurn = String(prevGameState.currentTurnUserId ?? "") === String(user.id ?? "");
+    const nowIsMyTurn = String(gameState.currentTurnUserId ?? "") === String(user.id ?? "");
     if (!prevWasMyTurn && nowIsMyTurn) {
       soundManager.play('your-turn');
     }
@@ -650,8 +650,8 @@ export function PokerGameView() {
       const prevPlayer = prevPlayers.get(currentPlayer.id);
       if (!prevPlayer) return;
 
-      // Skip if this is me (don't play sounds for my own actions)
-      const isMyPlayer = currentPlayer.userId === user.id || currentPlayer.id === user.id;
+      // Skip if this is me (don't play sounds for my own actions; string compare for id consistency)
+      const isMyPlayer = String(currentPlayer.userId ?? "") === String(user.id ?? "") || String(currentPlayer.id ?? "") === String(user.id ?? "");
 
       // Fold sound: Player status changed to FOLDED
       if (prevPlayer.status !== 'FOLDED' && currentPlayer.status === 'FOLDED') {
@@ -681,7 +681,7 @@ export function PokerGameView() {
       if (contributionIncreased && currentPlayer.status === 'ACTIVE' && !isMyPlayer) {
         const prevBet = prevGameState.currentBet || 0;
         const currentBet = gameState.currentBet || 0;
-        const wasCurrentTurn = prevGameState.currentTurnUserId === currentPlayer.userId || prevGameState.currentTurnUserId === currentPlayer.id;
+        const wasCurrentTurn = String(prevGameState.currentTurnUserId ?? "") === String(currentPlayer.userId ?? "") || String(prevGameState.currentTurnUserId ?? "") === String(currentPlayer.id ?? "");
         
         // Raise: Bet increased and this player was the one who raised
         if (currentBet > prevBet && wasCurrentTurn) {
@@ -703,8 +703,8 @@ export function PokerGameView() {
       }
 
       // Check sound: Player was the current turn, now they're not, contribution didn't change, and currentBet is 0
-      const wasCurrentTurn = prevGameState.currentTurnUserId === currentPlayer.userId || prevGameState.currentTurnUserId === currentPlayer.id;
-      const isNotCurrentTurn = gameState.currentTurnUserId !== currentPlayer.userId && gameState.currentTurnUserId !== currentPlayer.id;
+      const wasCurrentTurn = String(prevGameState.currentTurnUserId ?? "") === String(currentPlayer.userId ?? "") || String(prevGameState.currentTurnUserId ?? "") === String(currentPlayer.id ?? "");
+      const isNotCurrentTurn = String(gameState.currentTurnUserId ?? "") !== String(currentPlayer.userId ?? "") && String(gameState.currentTurnUserId ?? "") !== String(currentPlayer.id ?? "");
       const contributionUnchanged = currentContribution === prevContribution;
       const noCurrentBet = (gameState.currentBet || 0) === 0;
       
@@ -728,6 +728,10 @@ export function PokerGameView() {
 
   const handleAction = (action: string, amount: number) => {
     if (!id || !gameState || !user) return;
+    if (action === "FOLD") soundManager.play("fold");
+    else if (action === "CHECK") soundManager.play("check");
+    else if (action === "CALL") soundManager.play("call");
+    else if (action === "RAISE" || action === "BET" || amount > 0) soundManager.play("raise");
     const socket = getSocket();
     socket.emit("player-action", {
       gameId: id,
@@ -1000,7 +1004,7 @@ export function PokerGameView() {
                   street={gameState.street || 'PREFLOP'}
                   minimumRaise={gameState.minimumRaise || bigBlind}
                   isBigBlind={myPlayer?.seatNumber === gameState.bigBlindSeat}
-                  isMyTurn={gameState.currentTurnUserId === user?.id}
+                  isMyTurn={String(gameState.currentTurnUserId ?? '') === String(user?.id ?? '')}
                   myContribution={myContribution}
                   players={gameState.players}
                   myUserId={user?.id}

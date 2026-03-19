@@ -604,9 +604,9 @@ export function PokerTable({
           const radiusPercent = 45; // Position at 45% from center (near edge)
           const angleRad = (position.angle * Math.PI) / 180;
           
-          const isMyPlayer = player && (myUserId === player.id || myUserId === player.userId);
-          const isCurrentTurn = player && (currentPlayer === player.id || currentPlayer === player.userId);
-          const hasActiveTimer = turnTimer && player && (player.userId === turnTimer.userId || player.id === turnTimer.userId);
+          const isMyPlayer = player && (String(myUserId ?? "") === String(player.id ?? "") || String(myUserId ?? "") === String(player.userId ?? ""));
+          const isCurrentTurn = player && (String(currentPlayer ?? "") === String(player.id ?? "") || String(currentPlayer ?? "") === String(player.userId ?? ""));
+          const hasActiveTimer = turnTimer && player && (String(player.userId ?? "") === String(turnTimer.userId ?? "") || String(player.id ?? "") === String(turnTimer.userId ?? ""));
           const timerRemaining = hasActiveTimer 
             ? Math.max(0, Math.ceil((turnTimer.expiresAt - currentTime) / 1000))
             : null;

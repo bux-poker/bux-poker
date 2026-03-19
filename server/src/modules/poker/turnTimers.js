@@ -184,6 +184,18 @@ async function autoFoldPlayer(gameId, userId, io) {
       }
       return;
     }
+
+    const player = state.players.find((p) => p.userId === userId);
+    const playerName = player?.name || player?.user?.username || "";
+    const isTestPlayer = playerName.toLowerCase().startsWith("test player");
+    if (!isTestPlayer) {
+      console.log(
+        `[POKER] autoFoldPlayer: skipping – ${playerName || userId} is a human player; never auto-fold. Restarting turn timer.`
+      );
+      startTurnTimer(gameId, userId, io);
+      return;
+    }
+
     let stateAfter;
     try {
       stateAfter = await applyPlayerAction({
