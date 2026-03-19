@@ -45,6 +45,7 @@ export function buildClientGameState(game, state) {
         status: p.status,
         avatarUrl: p.user?.avatarUrl || null,
         lastAction: p.lastAction || null,
+        lastActionSeq: p.lastActionSeq || 0,
         holeCards: (() => {
           if (!p.holeCards) return null;
           if (typeof p.holeCards === "object") return p.holeCards;

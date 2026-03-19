@@ -337,6 +337,7 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
 
   // Keep in-memory state authoritative for real-time clients.
   player.lastAction = effectiveAction;
+  player.lastActionSeq = (player.lastActionSeq || 0) + 1;
 
   prisma.player
     .update({

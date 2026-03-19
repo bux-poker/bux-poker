@@ -26,6 +26,8 @@ interface PlayerViewModel {
   avatarUrl?: string;
   userId?: string;
   contribution?: number;
+  lastAction?: string | null;
+  lastActionSeq?: number;
 }
 
 interface GameStatePayload {
@@ -999,6 +1001,7 @@ export function PokerGameView() {
                 contribution: p.contribution || 0,
                 status: p.status,
                 lastAction: p.lastAction || null,
+                lastActionSeq: p.lastActionSeq || 0,
               }))}
               communityCards={communityCards}
               pot={gameState.pot}

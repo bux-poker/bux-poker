@@ -199,6 +199,7 @@ interface PokerTableProps {
     contribution?: number;
     status?: string;
     lastAction?: string;
+    lastActionSeq?: number;
   }>;
   communityCards: Card[];
   pot: number;
@@ -314,8 +315,8 @@ export function PokerTable({
       players.forEach((player) => {
         const playerId = player.id || player.userId || '';
         const lastAction = player.lastAction || '';
-        // Dedupe key ensures repeated game-state payloads do not retrigger wrong/repeated overlays.
-        const actionKey = lastAction ? `${lastAction}:${player.contribution || 0}:${player.status || ''}` : '';
+        // Dedupe key must represent one real action event, not state re-renders.
+        const actionKey = lastAction ? `${player.lastActionSeq || 0}` : '';
         nextSeenKeys[playerId] = actionKey;
         if (lastAction && actionKey && actionKey !== lastSeenActionKeyRef.current[playerId]) {
           newOverlays[playerId] = {
