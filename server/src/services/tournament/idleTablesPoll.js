@@ -13,7 +13,7 @@ let idleTablesPollInterval = null;
 export function startIdleTablesPoll(engine) {
   if (idleTablesPollInterval) return;
   idleTablesPollInterval = setInterval(async () => {
-    const { startHandForGame, hasActiveHand, forceStuckPlayerToAct, getIO, getTurnStartedAt } = await import("../../modules/socket-handlers/pokerHandler.js");
+    const { startHandForGame, hasActiveHand, forceStuckPlayerToAct, getIO, getTurnStartedAt, clearAllStateForGames } = await import("../../modules/socket-handlers/pokerHandler.js");
     const socketIO = getIO();
     if (!socketIO) return;
     const now = Date.now();
@@ -55,7 +55,12 @@ export function startIdleTablesPoll(engine) {
             console.log(`[TOURNAMENT] Closed empty table ${game.tableNumber} (game ${game.id})`);
             continue;
           }
-          if (game.players.length < 2) continue;
+          if (game.players.length < 2) {
+            // Single-player tables should not retain stale in-memory hand state;
+            // this can block consolidation and leave players stranded.
+            clearAllStateForGames([game.id]);
+            continue;
+          }
 
           if ((game.pot ?? 0) > 0) {
             console.warn(
