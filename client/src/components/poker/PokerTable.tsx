@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { Card } from '@shared/types/poker';
 import { useIsMobile } from '../../hooks/useIsMobile';
 
@@ -156,7 +157,7 @@ function PokerCardImage({
     return `${rank}${suit}.png`;
   };
   return (
-    <img
+    <motion.img
       src={`/cards/${getCardImage(card)}`}
       alt={`${card.rank}${card.suit}`}
       className={className}
@@ -168,6 +169,9 @@ function PokerCardImage({
         margin: 0,
         borderRadius: "1px",
       }}
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.15, ease: "easeOut" }}
       onError={(e) => {
         console.error("Card image failed to load:", getCardImage(card));
         const target = e.target as HTMLImageElement;

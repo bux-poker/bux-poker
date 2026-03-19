@@ -3,6 +3,7 @@ import { app, server, io, PORT } from "./config/server.js";
 import { registerSocketHandlers } from "./modules/socket-handlers/index.js";
 import { initializeDiscordBot } from "./discord/bot.js";
 import { startScheduledStartPoll, startIdleTablesPoll } from "./services/TournamentEngine.js";
+import { connectRedis } from "./config/redis.js";
 
 dotenv.config();
 
@@ -17,8 +18,16 @@ initializeDiscordBot().catch((err) => {
   console.error("[DISCORD BOT] Failed to initialize:", err);
 });
 
-server.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`BUX Poker server listening on port ${PORT}`);
-});
+async function start() {
+  if (process.env.REDIS_URL) {
+    await connectRedis().catch((err) => {
+      console.warn("[REDIS] Session store unavailable, using memory:", err?.message);
+    });
+  }
+  server.listen(PORT, () => {
+    // eslint-disable-next-line no-console
+    console.log(`BUX Poker server listening on port ${PORT}`);
+  });
+}
+start();
 

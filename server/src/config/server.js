@@ -4,11 +4,13 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import dotenv from "dotenv";
 import session from "express-session";
+import { RedisStore } from "connect-redis";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import passport from "./passport.js";
 import apiRouter from "../routes/index.js";
+import { redisClient } from "./redis.js";
 
 dotenv.config();
 
@@ -74,20 +76,23 @@ app.use("/uploads", express.static(uploadsRoot));
 // API routes
 app.use("/api", apiRouter);
 
-// Session configuration
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "fallback-session-secret",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: process.env.NODE_ENV === "production",
-      httpOnly: true,
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
-  })
-);
+// Session configuration: use Redis when REDIS_URL is set (persistent sessions, multi-instance safe)
+const sessionConfig = {
+  secret: process.env.SESSION_SECRET || "fallback-session-secret",
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === "production",
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+};
+if (process.env.REDIS_URL && redisClient) {
+  sessionConfig.store = new RedisStore({ client: redisClient, prefix: "bux-poker:sess:" });
+  console.log("[SESSION] Using Redis store");
+}
+app.use(session(sessionConfig));
 
 // Passport middleware
 app.use(passport.initialize());

@@ -69,9 +69,28 @@ class SoundManager {
   private totalSounds: number = Object.keys(SOUND_CONFIGS).length;
   private queue: { name: SoundName; volume?: number }[] = [];
   private isQueuePlaying: boolean = false;
+  /** Set to true after first user gesture so autoplay policy allows playback. */
+  private unlocked: boolean = false;
 
   constructor() {
     this.preloadSounds();
+  }
+
+  /**
+   * Call on first user interaction (e.g. click/touch) to unlock audio.
+   * Browsers block sound until the user has interacted with the page.
+   */
+  unlock(): void {
+    if (this.unlocked) return;
+    this.unlocked = true;
+    // Play and immediately pause the first preloaded sound to satisfy autoplay policy
+    const first = Object.keys(SOUND_CONFIGS)[0] as SoundName;
+    const audio = this.audioCache.get(first);
+    if (audio) {
+      const clone = audio.cloneNode() as HTMLAudioElement;
+      clone.volume = 0;
+      clone.play().then(() => clone.pause()).catch(() => {});
+    }
   }
 
   /**
@@ -106,6 +125,7 @@ class SoundManager {
    */
   play(soundName: SoundName, volumeOverride?: number): void {
     if (!this.isEnabled) return;
+    this.unlock();
 
     const audio = this.audioCache.get(soundName);
     if (!audio) {

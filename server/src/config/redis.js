@@ -55,7 +55,4 @@ async function connectRedis() {
   }
 }
 
-// Connect in background
-connectRedis();
-
-export { redisClient };
+export { redisClient, connectRedis };

@@ -12,7 +12,8 @@ import { api } from "../../services/api";
 import { useTournament } from "../../hooks/useTournaments";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { TournamentLobbyModal } from "../../components/tournament/TournamentLobbyModal";
-import { soundManager, type SoundName } from "../../utils/soundManager";
+import { soundManager, SOUND_CONFIGS, type SoundName } from "../../utils/soundManager";
+import { preloadCards } from "../../utils/cardPreloader";
 import { getHandDescription } from "@shared/utils/handEvaluator";
 
 interface PlayerViewModel {
@@ -107,7 +108,19 @@ export function PokerGameView() {
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const chatCollapsedRef = useRef(chatCollapsed);
   const isMobileRef = useRef(isMobile);
+  const soundUnlockedRef = useRef(false);
   const { user } = useAuth();
+
+  // Preload card images when entering a game so they render instantly
+  useEffect(() => {
+    if (id) preloadCards();
+  }, [id]);
+
+  const handleSoundUnlock = () => {
+    if (soundUnlockedRef.current) return;
+    soundUnlockedRef.current = true;
+    soundManager.unlock();
+  };
 
   chatCollapsedRef.current = chatCollapsed;
   isMobileRef.current = isMobile;
@@ -734,12 +747,37 @@ export function PokerGameView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState, user]); // Only run when gameState changes, prevGameState is captured in closure
 
+  /** Optimistic update: apply local state immediately so UI feels instant; server will send authoritative game-state. */
+  const applyOptimisticState = (prev: GameStatePayload, userId: string, action: string, betAmount: number): GameStatePayload => {
+    const myPlayer = prev.players.find((p) => p.userId === userId || p.id === userId);
+    if (!myPlayer) return prev;
+
+    const nextPlayers = prev.players.map((p) => {
+      if (p.userId !== userId && p.id !== userId) return p;
+      if (action === "FOLD") return { ...p, status: "FOLDED" as const };
+      const contribution = (p.contribution ?? 0) + betAmount;
+      const chips = p.chips - betAmount;
+      return { ...p, contribution, chips: Math.max(0, chips) };
+    });
+    const potIncrease = action === "FOLD" ? 0 : betAmount;
+    return {
+      ...prev,
+      pot: prev.pot + potIncrease,
+      players: nextPlayers,
+      currentTurnUserId: undefined, // Clear so "your turn" disappears immediately; server sends real next turn
+    };
+  };
+
   const handleAction = (action: string, amount: number) => {
     if (!id || !gameState || !user) return;
     if (action === "FOLD") soundManager.play("fold");
     else if (action === "CHECK") soundManager.play("check");
     else if (action === "CALL") soundManager.play("call");
     else if (action === "RAISE" || action === "BET" || amount > 0) soundManager.play("raise");
+
+    const betAmount = action === "FOLD" || action === "CHECK" ? 0 : amount;
+    setGameState((prev) => (prev ? applyOptimisticState(prev, user.id, action, betAmount) : prev));
+
     const socket = getSocket();
     socket.emit("player-action", {
       gameId: id,
@@ -839,7 +877,10 @@ export function PokerGameView() {
   };
 
   return (
-    <div className="flex h-[100dvh] min-h-screen w-screen flex-col bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden">
+    <div
+      className="flex h-[100dvh] min-h-screen w-screen flex-col bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden"
+      onPointerDown={handleSoundUnlock}
+    >
       {!socketConnected && gameState && (
         <div className="flex items-center justify-between gap-4 bg-amber-500/20 border-b border-amber-500/40 px-4 py-2 text-amber-200 text-sm shrink-0">
           <span>Connection lost. Game may be out of date.</span>
