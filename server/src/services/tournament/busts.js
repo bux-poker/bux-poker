@@ -2,6 +2,9 @@ import { prisma } from "../../config/database.js";
 import { auditChipConservation } from "./chipAudit.js";
 
 const _onPlayersBustLocks = new Map();
+// Idempotency guard to avoid processing the same bust repeatedly in race windows.
+const _recentBustMarks = new Map(); // key: `${tournamentId}:${playerId}` -> timestamp ms
+const RECENT_BUST_WINDOW_MS = 30000;
 
 /**
  * Mark a single player as bust - only updates DB. Handles P2025 (player already removed by consolidation).
@@ -10,11 +13,41 @@ const _onPlayersBustLocks = new Map();
  * @param {number|null} finishingPlace - explicit place when multiple bust same hand
  */
 export async function markPlayerBust(tournamentId, playerId, finishingPlace = null) {
+  const now = Date.now();
+  const dedupeKey = `${tournamentId}:${playerId}`;
+  const seenAt = _recentBustMarks.get(dedupeKey);
+  if (seenAt && now - seenAt < RECENT_BUST_WINDOW_MS) {
+    console.log(`[TOURNAMENT] Skipping duplicate bust for ${playerId} (${Math.floor((now - seenAt) / 1000)}s since last)`);
+    return;
+  }
+
+  const current = await prisma.player.findUnique({
+    where: { id: playerId },
+    select: { id: true, chips: true, status: true }
+  });
+  if (!current) {
+    console.log(`[TOURNAMENT] Player ${playerId} not found, skipping bust update`);
+    return;
+  }
+  // Critical guard: never eliminate a player that currently has chips.
+  if ((current.chips ?? 0) > 0) {
+    console.warn(`[TOURNAMENT] Guard: refusing to bust chip-positive player ${playerId} (chips=${current.chips})`);
+    return;
+  }
+  if (current.status === "ELIMINATED") {
+    _recentBustMarks.set(dedupeKey, now);
+    return;
+  }
+
   try {
-    await prisma.player.update({
-      where: { id: playerId },
+    const result = await prisma.player.updateMany({
+      where: { id: playerId, chips: { lte: 0 }, status: { not: "ELIMINATED" } },
       data: { status: "ELIMINATED", chips: 0 }
     });
+    if (!result.count) {
+      console.warn(`[TOURNAMENT] Bust skipped for ${playerId}: chips/status changed before update`);
+      return;
+    }
   } catch (err) {
     if (err?.code === "P2025") {
       console.log(`[TOURNAMENT] Player ${playerId} already removed (consolidation), skipping bust update`);
@@ -32,6 +65,7 @@ export async function markPlayerBust(tournamentId, playerId, finishingPlace = nu
     if (err?.code === "P2025") return;
     console.error(`[TOURNAMENT] Error setting finishingPlace for player ${playerId}:`, err);
   });
+  _recentBustMarks.set(dedupeKey, now);
 }
 
 /**
@@ -42,15 +76,16 @@ export async function markPlayerBust(tournamentId, playerId, finishingPlace = nu
  */
 export async function doOnPlayersBust(tournamentId, playerIds, deps) {
   if (!playerIds || playerIds.length === 0) return;
+  const uniquePlayerIds = [...new Set(playerIds)];
 
   const remainingBeforeBust = await prisma.player.count({
     where: { game: { tournamentId }, chips: { gt: 0 }, status: { not: "ELIMINATED" } }
   });
   const basePlace = remainingBeforeBust + 1;
-  console.log(`[TOURNAMENT] onPlayersBust: ${playerIds.length} busted, remainingBeforeBust=${remainingBeforeBust}, basePlace=${basePlace}`);
+  console.log(`[TOURNAMENT] onPlayersBust: ${uniquePlayerIds.length} busted, remainingBeforeBust=${remainingBeforeBust}, basePlace=${basePlace}`);
 
-  for (let i = 0; i < playerIds.length; i++) {
-    await markPlayerBust(tournamentId, playerIds[i], basePlace + i);
+  for (let i = 0; i < uniquePlayerIds.length; i++) {
+    await markPlayerBust(tournamentId, uniquePlayerIds[i], basePlace + i);
   }
 
   const remainingAfterBust = await prisma.player.count({

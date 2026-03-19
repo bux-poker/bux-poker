@@ -1,5 +1,5 @@
 import { prisma } from "../../config/database.js";
-import { auditChipConservation } from "./chipAudit.js";
+import { auditChipConservation, reconcileChipConservationOnCompletion } from "./chipAudit.js";
 
 /**
  * If exactly one player has chips and is not eliminated, mark tournament COMPLETED.
@@ -38,6 +38,7 @@ export async function completeTournamentIfOneLeft(tournamentId) {
     where: { id: tournamentId },
     data: { status: "COMPLETED" }
   });
+  await reconcileChipConservationOnCompletion(tournamentId);
   await auditChipConservation(tournamentId);
 
   try {
