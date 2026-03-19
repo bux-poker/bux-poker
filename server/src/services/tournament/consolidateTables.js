@@ -127,13 +127,13 @@ export async function doConsolidateTables(tournamentId, deps) {
       await new Promise((r) => setTimeout(r, 2000));
     } catch (e) {
       console.warn("[TOURNAMENT] Consolidation wait error:", e?.message);
-    } finally {
-      _consolidationWaitTournamentIds.delete(tournamentId);
     }
+    // Keep flag set until we finish rebalance and start hands (or abort) – prevents a table's setTimeout from starting a new hand before we're done
   } else {
     await new Promise((r) => setTimeout(r, 2000));
   }
 
+  try {
   games = await prisma.game.findMany({
     where: { tournamentId, status: "ACTIVE" },
     include: {
@@ -334,6 +334,9 @@ export async function doConsolidateTables(tournamentId, deps) {
   }
 
   return updatedGames;
+  } finally {
+    if (anyHasHand) _consolidationWaitTournamentIds.delete(tournamentId);
+  }
 }
 
 /**
