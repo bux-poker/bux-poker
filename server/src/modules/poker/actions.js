@@ -48,6 +48,7 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
       p.chips > 0
   );
   const isHeadsUpPot = activeNonFoldedPlayers.length === 2;
+  let effectiveAction = action;
 
   const getEffectiveCap = () => {
     const myContribution = state.bettingRound.getPlayerContribution(player.id);
@@ -89,6 +90,7 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
         console.log(
           `[ACTION] ${action} amount is ${amount} after capping - converting to CHECK for ${playerName}`
         );
+        effectiveAction = "CHECK";
         console.log("[ACTION] After CHECK: no change to contributions");
         state.actedPlayersInRound.add(userId);
         if (io) {
@@ -104,6 +106,7 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
         console.log(
           `[ACTION] ${action} amount ${amount} would result in contribution ${newContribution} which doesn't exceed current bet ${currentBet} - converting to CALL for ${playerName}`
         );
+        effectiveAction = "CALL";
         const toCall = currentBet - myContribution;
         const callAmount = Math.min(toCall, player.chips);
         if (callAmount > 0) {
@@ -332,13 +335,16 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
       throw new Error("Unknown action");
   }
 
+  // Keep in-memory state authoritative for real-time clients.
+  player.lastAction = effectiveAction;
+
   prisma.player
     .update({
       where: { id: player.id },
       data: {
         chips: player.chips,
         status: player.status,
-        lastAction: action,
+        lastAction: effectiveAction,
       },
     })
     .catch((err) => {

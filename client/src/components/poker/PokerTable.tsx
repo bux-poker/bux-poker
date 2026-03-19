@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Card } from '@shared/types/poker';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -276,6 +276,7 @@ export function PokerTable({
   
   // Track visible action overlays: { playerId: { action: string, timestamp: number } }
   const [actionOverlays, setActionOverlays] = useState<Record<string, { action: string; timestamp: number }>>({});
+  const prevPlayerSnapshotRef = useRef<Record<string, { contribution: number; status: string; lastAction: string }>>({});
   const ACTION_FADE_MS = 2000;
   const isPermanentAction = (action: string) => {
     const normalized = action.toUpperCase();
@@ -305,31 +306,44 @@ export function PokerTable({
   
   // Track player actions and show overlays
   useEffect(() => {
-    const now = Date.now();
-    const newOverlays: Record<string, { action: string; timestamp: number }> = {};
-    
-    players.forEach(player => {
-      if (player.lastAction && player.lastAction !== '') {
+    setActionOverlays((prev) => {
+      const now = Date.now();
+      const newOverlays: Record<string, { action: string; timestamp: number }> = {};
+      const nextSnapshot: Record<string, { contribution: number; status: string; lastAction: string }> = {};
+
+      players.forEach((player) => {
         const playerId = player.id || player.userId || '';
-        // Check if this is a new action (player's lastAction changed)
-        const existingOverlay = actionOverlays[playerId];
-        if (!existingOverlay || existingOverlay.action !== player.lastAction) {
-          // New action - show overlay
-          newOverlays[playerId] = {
-            action: player.lastAction,
-            timestamp: now
-          };
-        } else {
-          // Keep permanent overlays, or temporary overlays while still in fade window.
-          if (isPermanentAction(existingOverlay.action) || now - existingOverlay.timestamp < ACTION_FADE_MS) {
+        const contribution = player.contribution || 0;
+        const status = player.status || '';
+        const lastAction = player.lastAction || '';
+        const prevSnapshot = prevPlayerSnapshotRef.current[playerId];
+        const contributionChanged = !!prevSnapshot && contribution !== prevSnapshot.contribution;
+        const statusChanged = !!prevSnapshot && status !== prevSnapshot.status;
+        const lastActionChanged = !!lastAction && !!prevSnapshot && lastAction !== prevSnapshot.lastAction;
+
+        if (lastAction && lastAction !== '') {
+          const existingOverlay = prev[playerId];
+          if (!existingOverlay || existingOverlay.action !== lastAction || contributionChanged || statusChanged || lastActionChanged) {
+            newOverlays[playerId] = {
+              action: lastAction,
+              timestamp: now
+            };
+          } else if (isPermanentAction(existingOverlay.action) || now - existingOverlay.timestamp < ACTION_FADE_MS) {
             newOverlays[playerId] = existingOverlay;
           }
         }
-      }
+
+        nextSnapshot[playerId] = {
+          contribution,
+          status,
+          lastAction,
+        };
+      });
+
+      prevPlayerSnapshotRef.current = nextSnapshot;
+      return newOverlays;
     });
-    
-    setActionOverlays(newOverlays);
-  }, [players.map(p => p.lastAction).join(',')]); // Only track lastAction changes
+  }, [players]);
   
   // Clean up old overlays after fade duration
   useEffect(() => {
