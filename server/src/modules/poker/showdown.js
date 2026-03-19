@@ -232,42 +232,24 @@ export async function handleShowdownCore(gameId, io, options = {}) {
     totalWon = new Map();
     activePlayers.forEach((p) => totalWon.set(p.id, 0));
 
-    const isHeadsUp = handResults.length === 2;
-    const overallWinner = isHeadsUp
-      ? handResults.reduce(
-          (best, r) => (r.strength > best.strength ? r : best),
-          handResults[0]
-        )
-      : null;
-
     for (const pot of sidePots) {
       if (pot.amount <= 0) continue;
       let potWinners;
-      if (isHeadsUp && overallWinner) {
-        potWinners = [overallWinner];
-        console.log(
-          `[SHOWDOWN] Side pot ${pot.level}: heads-up, awarding ${pot.amount} chips to overall winner`
+      const eligibleHandResults = handResults.filter((r) =>
+        pot.eligiblePlayerIds.includes(r.player.id)
+      );
+      if (eligibleHandResults.length === 0) {
+        console.warn(
+          `[SHOWDOWN] Side pot ${pot.level}: no eligible players found, skipping this pot distribution`
         );
+        continue;
       } else {
-        const eligibleHandResults = handResults.filter((r) =>
-          pot.eligiblePlayerIds.includes(r.player.id)
+        const maxStrength = Math.max(
+          ...eligibleHandResults.map((r) => r.strength)
         );
-        if (eligibleHandResults.length === 0) {
-          console.warn(
-            `[SHOWDOWN] Side pot ${pot.level}: no eligible players (bug?), awarding to max-strength winner(s) to preserve chips`
-          );
-          const maxStrength = Math.max(...handResults.map((r) => r.strength));
-          potWinners = handResults.filter(
-            (r) => r.strength === maxStrength
-          );
-        } else {
-          const maxStrength = Math.max(
-            ...eligibleHandResults.map((r) => r.strength)
-          );
-          potWinners = eligibleHandResults.filter(
-            (r) => r.strength === maxStrength
-          );
-        }
+        potWinners = eligibleHandResults.filter(
+          (r) => r.strength === maxStrength
+        );
       }
       const potPerWinner = Math.floor(pot.amount / potWinners.length);
       const remainder = pot.amount % potWinners.length;
