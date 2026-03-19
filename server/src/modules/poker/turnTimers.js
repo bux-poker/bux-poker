@@ -25,7 +25,9 @@ export function startTurnTimer(gameId, userId, io) {
   if (!player) return;
 
   const playerName = player.name || player.user?.username || "";
-  const isTestPlayer = playerName.toLowerCase().startsWith("test player");
+  const isTestPlayer =
+    (player.user?.email || "").toLowerCase().endsWith("@test.buxpoker.local") ||
+    playerName.toLowerCase().startsWith("test player");
 
   console.log(
     `[POKER] startTurnTimer for player ${playerName} (userId: ${userId}): isTestPlayer=${isTestPlayer}`
@@ -155,7 +157,7 @@ export function startTurnTimer(gameId, userId, io) {
     });
 
     const timeoutTimerId = setTimeout(() => {
-      autoFoldPlayer(gameId, userId, io);
+      autoFoldPlayer(gameId, userId, io, timeoutTimerId);
     }, countdownMs);
 
     turnTimers.set(gameId, {
@@ -167,8 +169,18 @@ export function startTurnTimer(gameId, userId, io) {
   }
 }
 
-async function autoFoldPlayer(gameId, userId, io) {
+async function autoFoldPlayer(gameId, userId, io, timerId) {
   try {
+    const timerState = turnTimers.get(gameId);
+    // Guard against stale timer callbacks from previous turns.
+    if (!timerState || timerState.timerId !== timerId || timerState.userId !== userId) {
+      return;
+    }
+    // Extra safety: never fold early if timeout callback fired ahead of recorded expiry.
+    if (Date.now() < (timerState.expiresAt || 0) - 50) {
+      return;
+    }
+
     const state = tableState.get(gameId);
     if (!state || state.currentTurnUserId !== userId) {
       console.log(

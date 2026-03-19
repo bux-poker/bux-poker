@@ -211,20 +211,9 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
       break;
     }
     case "CALL": {
-      // When last raise was a short all-in (< min raise), callers only need to put min bid (big blind)
-      // unless heads-up with the raiser as the only other player (already all-in) — then call full amount
-      const bigBlind = state.bettingRound.bigBlind || 20;
-      const activeNonFolded = state.players.filter(
-        (p) => p.status !== "FOLDED" && p.status !== "ELIMINATED"
-      );
-      const headsUpOnlyOtherAllIn =
-        activeNonFolded.length === 2 &&
-        activeNonFolded.filter((p) => p.userId !== userId).every((p) => p.chips === 0);
-      const maxCallStack =
-        state.lastRaiseWasShortAllIn && !headsUpOnlyOtherAllIn
-          ? Math.min(player.chips, bigBlind)
-          : player.chips;
-      const spent = state.bettingRound.call(player.id, maxCallStack);
+      // Always call what is currently on the table (or go all-in if short).
+      // Short all-ins still set currentBet, and action cannot continue until players match it.
+      const spent = state.bettingRound.call(player.id, player.chips);
       player.chips -= spent;
       if (player.chips < 0) {
         console.error(

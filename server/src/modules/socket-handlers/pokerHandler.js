@@ -43,7 +43,9 @@ export async function forceStuckPlayerToAct(gameId, io) {
   const myContribution = state.bettingRound?.getPlayerContribution(player.id) || 0;
   const canCheck = myContribution >= currentBet;
   const playerName = player.name || player.user?.username || "";
-  const isTestPlayer = playerName.toLowerCase().startsWith("test player");
+  const isTestPlayer =
+    (player.user?.email || "").toLowerCase().endsWith("@test.buxpoker.local") ||
+    playerName.toLowerCase().startsWith("test player");
   try {
     if (canCheck) {
       await applyPlayerAction({ gameId, userId, action: "CHECK", amount: 0, io });

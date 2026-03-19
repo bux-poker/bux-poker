@@ -102,7 +102,7 @@ export default function ChatModular({
 
   return (
     <>
-      <div className="flex flex-col h-full bg-gray-800 border-l border-gray-600">
+      <div className="flex flex-col h-full min-h-0 bg-gray-800 border-l border-gray-600">
         {/* Chat Header */}
         <ChatHeader
           activeTab={activeTab}
@@ -115,11 +115,11 @@ export default function ChatModular({
         />
 
         {/* Chat Content */}
-        <div className={`flex-1 flex flex-col ${isEmojiPickerOpen ? 'overflow-visible' : 'overflow-hidden'}`}>
+        <div className={`flex-1 min-h-0 flex flex-col ${isEmojiPickerOpen ? 'overflow-visible' : 'overflow-hidden'}`}>
           {activeTab === 'chat' ? (
             <>
               {/* Chat Messages - takes remaining space */}
-              <div className={`flex-1 ${isEmojiPickerOpen ? 'overflow-visible' : 'overflow-hidden'}`}>
+              <div className={`flex-1 min-h-0 ${isEmojiPickerOpen ? 'overflow-visible' : 'overflow-hidden'}`}>
                 <ChatMessages
                   messages={messages}
                   isMobile={isMobile}

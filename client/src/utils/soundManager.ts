@@ -102,14 +102,20 @@ class SoundManager {
         const audio = new Audio(`/sounds/${config.file}`);
         audio.preload = 'auto';
         audio.volume = config.volume * this.masterVolume;
+        audio.load();
         
         // Track loading progress
-        audio.addEventListener('canplaythrough', () => {
+        let counted = false;
+        const onReady = () => {
+          if (counted) return;
+          counted = true;
           this.loadedCount++;
           if (this.loadedCount === this.totalSounds) {
             console.log('[SOUND] All sounds preloaded');
           }
-        }, { once: true });
+        };
+        audio.addEventListener('canplaythrough', onReady, { once: true });
+        audio.addEventListener('loadeddata', onReady, { once: true });
         
         audio.addEventListener('error', (e) => {
           console.warn(`[SOUND] Failed to load ${name}:`, e);
@@ -129,12 +135,20 @@ class SoundManager {
 
     const audio = this.audioCache.get(soundName);
     if (!audio) {
-      console.warn(`[SOUND] Sound not found: ${soundName}`);
-      return;
+      // Fallback: lazily create the sound if preload missed or failed.
+      const config = SOUND_CONFIGS[soundName];
+      if (!config) return;
+      const lazyAudio = new Audio(`/sounds/${config.file}`);
+      lazyAudio.preload = 'auto';
+      lazyAudio.volume = config.volume * this.masterVolume;
+      lazyAudio.load();
+      this.audioCache.set(soundName, lazyAudio);
     }
 
     // Clone the audio element to allow overlapping sounds
-    const audioClone = audio.cloneNode() as HTMLAudioElement;
+    const sourceAudio = this.audioCache.get(soundName);
+    if (!sourceAudio) return;
+    const audioClone = sourceAudio.cloneNode() as HTMLAudioElement;
     audioClone.volume = volumeOverride !== undefined 
       ? volumeOverride * this.masterVolume 
       : audio.volume;

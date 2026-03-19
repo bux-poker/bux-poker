@@ -270,7 +270,8 @@ export function PokerGameView() {
       if (payload.id && id && payload.id !== id) return;
 
       // Start of new hand: clear any cached/stale card data so we never show previous hand's cards
-      const isNewHand = (payload.street === "PREFLOP" || !payload.street) && !payload.showdownActive;
+      const hasWinnerPayload = (payload.showdownResults?.winners?.length ?? 0) > 0;
+      const isNewHand = (payload.street === "PREFLOP" || !payload.street) && !payload.showdownActive && !hasWinnerPayload;
       const normalized: GameStatePayload = isNewHand
         ? {
             ...payload,
