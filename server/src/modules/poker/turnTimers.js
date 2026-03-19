@@ -143,31 +143,26 @@ export function startTurnTimer(gameId, userId, io) {
       duration: timeoutMs,
     });
   } else {
-    const gracePeriodMs = 10000;
+    // Human: start 10s countdown immediately so UI timer matches turn (no grace delay)
     const countdownMs = 10000;
-    const totalTimeoutMs = gracePeriodMs + countdownMs;
-    const expiresAt = Date.now() + totalTimeoutMs;
+    const expiresAt = Date.now() + countdownMs;
 
-    const graceTimerId = setTimeout(() => {
-      io.to(`game:${gameId}`).emit("turn-timer-start", {
-        gameId,
-        userId,
-        expiresAt,
-        duration: countdownMs,
-      });
-    }, gracePeriodMs);
-
-    const timeoutTimerId = setTimeout(() => {
-      autoFoldPlayer(gameId, userId, io);
-    }, totalTimeoutMs);
-
-    turnTimers.set(gameId, {
-      timerId: timeoutTimerId,
-      graceTimerId,
+    io.to(`game:${gameId}`).emit("turn-timer-start", {
+      gameId,
       userId,
       expiresAt,
       duration: countdownMs,
-      gracePeriodMs,
+    });
+
+    const timeoutTimerId = setTimeout(() => {
+      autoFoldPlayer(gameId, userId, io);
+    }, countdownMs);
+
+    turnTimers.set(gameId, {
+      timerId: timeoutTimerId,
+      userId,
+      expiresAt,
+      duration: countdownMs,
     });
   }
 }
@@ -187,15 +182,8 @@ async function autoFoldPlayer(gameId, userId, io) {
 
     const player = state.players.find((p) => p.userId === userId);
     const playerName = player?.name || player?.user?.username || "";
-    const isTestPlayer = playerName.toLowerCase().startsWith("test player");
-    if (!isTestPlayer) {
-      console.log(
-        `[POKER] autoFoldPlayer: skipping – ${playerName || userId} is a human player; never auto-fold. Restarting turn timer.`
-      );
-      startTurnTimer(gameId, userId, io);
-      return;
-    }
 
+    // Auto-fold when timer reaches 0 (humans and test players)
     let stateAfter;
     try {
       stateAfter = await applyPlayerAction({

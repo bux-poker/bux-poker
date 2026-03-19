@@ -137,36 +137,8 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
             data: { pot: 0 }
           }).catch(err => console.error("[POKER] Error updating game pot:", err));
 
-          const { TournamentEngine } = await import("../../../services/TournamentEngine.js");
-          const tournamentEngine = new TournamentEngine();
-          const game = await prisma.game.findUnique({
-            where: { id: gameId },
-            include: { tournament: true }
-          });
-          if (game?.tournament) {
-            const bustedPlayers = state.players.filter(p => p.chips <= 0 && p.status === "ACTIVE");
-            for (const busted of bustedPlayers) {
-              console.log(`[POKER] Player ${busted.name || busted.userId} busted with 0 chips after pot award`);
-              await tournamentEngine.onPlayerBust(game.tournament.id, busted.id).catch(() => {});
-              busted.status = "ELIMINATED";
-              await prisma.player.update({
-                where: { id: busted.id },
-                data: { status: "ELIMINATED", chips: 0 }
-              }).catch(err => {
-                if (err?.code === "P2025") {
-                  console.log(`[POKER] Player ${busted.id} already removed (consolidation), skipping bust update`);
-                } else {
-                  console.error(`[POKER] Error updating busted player ${busted.id}:`, err);
-                }
-              });
-            }
-            if (bustedPlayers.length > 0) {
-              socket.server.emit("tournament_updated", { tournamentId: game.tournament.id });
-            }
-            await emitIfTournamentCompleted(game.tournament.id, socket.server);
-          }
-
           const savedPlayers = [...state.players];
+          // Schedule cleanup BEFORE onPlayerBust: bust can trigger consolidateTables; if we hadn't scheduled this yet we'd deadlock.
           setTimeout(async () => {
             tableState.delete(gameId);
 
@@ -199,6 +171,35 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
               }
             }
           }, 3000);
+
+          const { TournamentEngine } = await import("../../../services/TournamentEngine.js");
+          const tournamentEngine = new TournamentEngine();
+          const game = await prisma.game.findUnique({
+            where: { id: gameId },
+            include: { tournament: true }
+          });
+          if (game?.tournament) {
+            const bustedPlayers = state.players.filter(p => p.chips <= 0 && p.status === "ACTIVE");
+            for (const busted of bustedPlayers) {
+              console.log(`[POKER] Player ${busted.name || busted.userId} busted with 0 chips after pot award`);
+              await tournamentEngine.onPlayerBust(game.tournament.id, busted.id).catch(() => {});
+              busted.status = "ELIMINATED";
+              await prisma.player.update({
+                where: { id: busted.id },
+                data: { status: "ELIMINATED", chips: 0 }
+              }).catch(err => {
+                if (err?.code === "P2025") {
+                  console.log(`[POKER] Player ${busted.id} already removed (consolidation), skipping bust update`);
+                } else {
+                  console.error(`[POKER] Error updating busted player ${busted.id}:`, err);
+                }
+              });
+            }
+            if (bustedPlayers.length > 0) {
+              socket.server.emit("tournament_updated", { tournamentId: game.tournament.id });
+            }
+            await emitIfTournamentCompleted(game.tournament.id, socket.server);
+          }
 
           // Do not set showdownActive so cards are not turned over (fold win, no showdown)
           state.showdownResults = {

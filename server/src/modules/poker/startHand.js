@@ -396,6 +396,7 @@ export async function startHandForGameBody(gameId, io) {
     currentTurnUserId: utgPlayer ? utgPlayer.userId : null,
     currentTurnStartedAt: utgPlayer ? Date.now() : null,
     lastRaiseUserId: null,
+    lastRaiseWasShortAllIn: false,
     actedPlayersInRound: new Set(),
     players: await (async () => {
       const result = [];

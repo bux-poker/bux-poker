@@ -151,12 +151,14 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
           if (newContribution > state.bettingRound.currentBet) {
             state.bettingRound.currentBet = newContribution;
             state.lastRaiseUserId = player.userId;
+            state.lastRaiseWasShortAllIn = true;
             state.actedPlayersInRound.clear();
           }
           state.actedPlayersInRound.add(userId);
         } else {
           state.bettingRound.bet(player.id, amount);
           state.lastRaiseUserId = player.userId;
+          state.lastRaiseWasShortAllIn = false;
           state.actedPlayersInRound.clear();
           state.actedPlayersInRound.add(userId);
         }
@@ -169,6 +171,7 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
           if (newContribution > state.bettingRound.currentBet) {
             state.bettingRound.currentBet = newContribution;
             state.lastRaiseUserId = player.userId;
+            state.lastRaiseWasShortAllIn = true;
             state.actedPlayersInRound.clear();
           }
           state.actedPlayersInRound.add(userId);
@@ -208,7 +211,20 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
       break;
     }
     case "CALL": {
-      const spent = state.bettingRound.call(player.id, player.chips);
+      // When last raise was a short all-in (< min raise), callers only need to put min bid (big blind)
+      // unless heads-up with the raiser as the only other player (already all-in) — then call full amount
+      const bigBlind = state.bettingRound.bigBlind || 20;
+      const activeNonFolded = state.players.filter(
+        (p) => p.status !== "FOLDED" && p.status !== "ELIMINATED"
+      );
+      const headsUpOnlyOtherAllIn =
+        activeNonFolded.length === 2 &&
+        activeNonFolded.filter((p) => p.userId !== userId).every((p) => p.chips === 0);
+      const maxCallStack =
+        state.lastRaiseWasShortAllIn && !headsUpOnlyOtherAllIn
+          ? Math.min(player.chips, bigBlind)
+          : player.chips;
+      const spent = state.bettingRound.call(player.id, maxCallStack);
       player.chips -= spent;
       if (player.chips < 0) {
         console.error(
@@ -298,12 +314,14 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
         if (raiseAmount >= minRaise) {
           state.bettingRound.bet(player.id, allInAmount);
           state.lastRaiseUserId = player.userId;
+          state.lastRaiseWasShortAllIn = false;
           state.actedPlayersInRound.clear();
         } else {
           state.bettingRound.playerBets.set(player.id, allInContribution);
           if (allInContribution > state.bettingRound.currentBet) {
             state.bettingRound.currentBet = allInContribution;
             state.lastRaiseUserId = player.userId;
+            state.lastRaiseWasShortAllIn = true;
             state.actedPlayersInRound.clear();
           }
         }

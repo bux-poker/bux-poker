@@ -83,6 +83,7 @@ export async function advanceToNextStreet(gameId, io) {
   state.bettingRound.playerBets.clear();
   state.bettingRound.currentBet = 0;
   state.lastRaiseUserId = null;
+  state.lastRaiseWasShortAllIn = false;
   state.actedPlayersInRound = new Set();
 
   const activePlayerIds = activePlayers.map((p) => p.id);

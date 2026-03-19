@@ -275,6 +275,14 @@ export function PokerGameView() {
         if (prev) setPrevGameState(prev);
         return normalized;
       });
+      // Clear turn timer when it's no longer this player's turn so we don't show timer after they acted
+      const currentTurn = (normalized as { currentTurnUserId?: string | null }).currentTurnUserId ?? null;
+      setTurnTimer((prev) => {
+        if (prev == null) return prev;
+        if (currentTurn === null) return null;
+        if (String(prev.userId) !== String(currentTurn)) return null;
+        return prev;
+      });
       if (isNewHand) setShowdownResults(null);
       setConsolidationWaiting(null);
       setConnecting(false);

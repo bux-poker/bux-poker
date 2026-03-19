@@ -409,31 +409,10 @@ export async function handleShowdownCore(gameId, io, options = {}) {
       })
       .catch(() => null);
 
-    // Mark 0-chip players as eliminated after showdown so client gets tournament_updated and shows popup
-    if (game?.tournament?.id) {
-      const { TournamentEngine } = await import("../../services/TournamentEngine.js");
-      const tournamentEngine = new TournamentEngine();
-      const busted = state.players.filter((p) => p.chips <= 0 && p.status !== "ELIMINATED");
-      for (const p of busted) {
-        p.status = "ELIMINATED";
-        await prisma.player
-          .update({ where: { id: p.id }, data: { status: "ELIMINATED", chips: 0 } })
-          .catch((err) => {
-            if (err?.code === "P2025") return;
-            console.error(`[SHOWDOWN] Error marking busted player ${p.id}:`, err);
-          });
-        await tournamentEngine.onPlayerBust(game.tournament.id, p.id).catch((err) => {
-          console.error("[SHOWDOWN] Error notifying tournament of player bust:", err);
-        });
-      }
-      if (busted.length > 0) {
-        io.emit("tournament_updated", { tournamentId: game.tournament.id });
-      }
-      await emitIfTournamentCompleted(game.tournament.id, io);
-    }
-  }
-
-  setTimeout(() => {
+    // Schedule cleanup BEFORE onPlayerBust: bust can trigger consolidateTables which waits for
+    // all hands to finish. If we hadn't scheduled this yet, this table would still have state
+    // and we'd never return to schedule it – deadlock.
+    setTimeout(() => {
     const savedPlayers = [...state.players];
     tableState.delete(gameId);
     const resetPromises = savedPlayers
@@ -466,6 +445,29 @@ export async function handleShowdownCore(gameId, io, options = {}) {
       }
     });
   }, options.cleanupDelayMs ?? 3000);
+
+    if (game?.tournament?.id) {
+      const { TournamentEngine } = await import("../../services/TournamentEngine.js");
+      const tournamentEngine = new TournamentEngine();
+      const busted = state.players.filter((p) => p.chips <= 0 && p.status !== "ELIMINATED");
+      for (const p of busted) {
+        p.status = "ELIMINATED";
+        await prisma.player
+          .update({ where: { id: p.id }, data: { status: "ELIMINATED", chips: 0 } })
+          .catch((err) => {
+            if (err?.code === "P2025") return;
+            console.error(`[SHOWDOWN] Error marking busted player ${p.id}:`, err);
+          });
+        await tournamentEngine.onPlayerBust(game.tournament.id, p.id).catch((err) => {
+          console.error("[SHOWDOWN] Error notifying tournament of player bust:", err);
+        });
+      }
+      if (busted.length > 0) {
+        io.emit("tournament_updated", { tournamentId: game.tournament.id });
+      }
+      await emitIfTournamentCompleted(game.tournament.id, io);
+    }
+  }
 }
 
 /** Thin wrapper for callers that expect handleShowdown (e.g. turnTimers). */
