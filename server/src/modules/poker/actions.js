@@ -269,6 +269,7 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
     }
     case "FOLD": {
       player.status = "FOLDED";
+      state.actedPlayersInRound.add(userId);
       console.log(
         "[ACTION] After FOLD: player status=FOLDED, holeCards kept for display"
       );

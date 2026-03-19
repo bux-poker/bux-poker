@@ -171,20 +171,31 @@ export function startTurnTimer(gameId, userId, io) {
 
 async function autoFoldPlayer(gameId, userId, io, timerId) {
   try {
+    const uidStr = String(userId);
     const timerState = turnTimers.get(gameId);
     // Guard against stale timer callbacks from previous turns.
-    if (!timerState || timerState.timerId !== timerId || timerState.userId !== userId) {
+    if (
+      !timerState ||
+      timerState.timerId !== timerId ||
+      String(timerState.userId) !== uidStr
+    ) {
       return;
     }
-    // Extra safety: never fold early if timeout callback fired ahead of recorded expiry.
-    if (Date.now() < (timerState.expiresAt || 0) - 50) {
+    // If the OS/event loop fires slightly before expiresAt, retry at the real deadline (old code returned and never folded).
+    const msUntilExpiry = (timerState.expiresAt || 0) - Date.now();
+    if (msUntilExpiry > 0) {
+      setTimeout(() => {
+        autoFoldPlayer(gameId, userId, io, timerId);
+      }, msUntilExpiry);
       return;
     }
 
     const state = tableState.get(gameId);
-    if (!state || state.currentTurnUserId !== userId) {
+    const turnStr =
+      state?.currentTurnUserId != null ? String(state.currentTurnUserId) : "";
+    if (!state || turnStr !== uidStr) {
       console.log(
-        `[POKER] autoFoldPlayer: skipping – not ${userId}'s turn (currentTurn=${state?.currentTurnUserId})`
+        `[POKER] autoFoldPlayer: skipping – not ${uidStr}'s turn (currentTurn=${state?.currentTurnUserId})`
       );
       if (state?.currentTurnUserId) {
         startTurnTimer(gameId, state.currentTurnUserId, io);
@@ -192,7 +203,9 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
       return;
     }
 
-    const player = state.players.find((p) => p.userId === userId);
+    const player = state.players.find(
+      (p) => p.userId === userId || String(p.userId) === uidStr
+    );
     const playerName = player?.name || player?.user?.username || "";
 
     // Auto-fold when timer reaches 0 (humans and test players)

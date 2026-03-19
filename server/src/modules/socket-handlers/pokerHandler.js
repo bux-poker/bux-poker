@@ -43,17 +43,12 @@ export async function forceStuckPlayerToAct(gameId, io) {
   const myContribution = state.bettingRound?.getPlayerContribution(player.id) || 0;
   const canCheck = myContribution >= currentBet;
   const playerName = player.name || player.user?.username || "";
-  const isTestPlayer =
-    (player.user?.email || "").toLowerCase().endsWith("@test.buxpoker.local") ||
-    playerName.toLowerCase().startsWith("test player");
   try {
     if (canCheck) {
       await applyPlayerAction({ gameId, userId, action: "CHECK", amount: 0, io });
-    } else if (isTestPlayer) {
-      await applyPlayerAction({ gameId, userId, action: "FOLD", amount: 0, io });
     } else {
-      console.log(`[POKER] Force-stuck: skipping auto-fold for real player ${playerName} (would need to call/fold) - hand remains stuck`);
-      return false;
+      // Must fold when facing a bet (same as turn timer expiry) — same chips as manual fold.
+      await applyPlayerAction({ gameId, userId, action: "FOLD", amount: 0, io });
     }
     await moveToNextPlayer(gameId, io);
     console.log(`[POKER] Force-stuck recovery: ${canCheck ? "CHECK" : "FOLD"} for ${player.name || userId} at table ${gameId}`);
