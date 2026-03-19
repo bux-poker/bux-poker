@@ -276,7 +276,7 @@ export function PokerTable({
   
   // Track visible action overlays: { playerId: { action: string, timestamp: number } }
   const [actionOverlays, setActionOverlays] = useState<Record<string, { action: string; timestamp: number }>>({});
-  const prevPlayerSnapshotRef = useRef<Record<string, { contribution: number; status: string; lastAction: string }>>({});
+  const lastSeenActionKeyRef = useRef<Record<string, string>>({});
   const ACTION_FADE_MS = 2000;
   const isPermanentAction = (action: string) => {
     const normalized = action.toUpperCase();
@@ -308,39 +308,24 @@ export function PokerTable({
   useEffect(() => {
     setActionOverlays((prev) => {
       const now = Date.now();
-      const newOverlays: Record<string, { action: string; timestamp: number }> = {};
-      const nextSnapshot: Record<string, { contribution: number; status: string; lastAction: string }> = {};
+      const newOverlays: Record<string, { action: string; timestamp: number }> = { ...prev };
+      const nextSeenKeys: Record<string, string> = {};
 
       players.forEach((player) => {
         const playerId = player.id || player.userId || '';
-        const contribution = player.contribution || 0;
-        const status = player.status || '';
         const lastAction = player.lastAction || '';
-        const prevSnapshot = prevPlayerSnapshotRef.current[playerId];
-        const contributionChanged = !!prevSnapshot && contribution !== prevSnapshot.contribution;
-        const statusChanged = !!prevSnapshot && status !== prevSnapshot.status;
-        const lastActionChanged = !!lastAction && !!prevSnapshot && lastAction !== prevSnapshot.lastAction;
-
-        if (lastAction && lastAction !== '') {
-          const existingOverlay = prev[playerId];
-          if (!existingOverlay || existingOverlay.action !== lastAction || contributionChanged || statusChanged || lastActionChanged) {
-            newOverlays[playerId] = {
-              action: lastAction,
-              timestamp: now
-            };
-          } else if (isPermanentAction(existingOverlay.action) || now - existingOverlay.timestamp < ACTION_FADE_MS) {
-            newOverlays[playerId] = existingOverlay;
-          }
+        // Dedupe key ensures repeated game-state payloads do not retrigger wrong/repeated overlays.
+        const actionKey = lastAction ? `${lastAction}:${player.contribution || 0}:${player.status || ''}` : '';
+        nextSeenKeys[playerId] = actionKey;
+        if (lastAction && actionKey && actionKey !== lastSeenActionKeyRef.current[playerId]) {
+          newOverlays[playerId] = {
+            action: lastAction,
+            timestamp: now,
+          };
         }
-
-        nextSnapshot[playerId] = {
-          contribution,
-          status,
-          lastAction,
-        };
       });
 
-      prevPlayerSnapshotRef.current = nextSnapshot;
+      lastSeenActionKeyRef.current = nextSeenKeys;
       return newOverlays;
     });
   }, [players]);
@@ -363,6 +348,18 @@ export function PokerTable({
     
     return () => clearInterval(interval);
   }, []);
+
+  // Reset overlays at clear new-hand boundary so stale permanent actions do not carry over.
+  useEffect(() => {
+    const isLikelyNewHand =
+      !showdownActive &&
+      currentBet === 0 &&
+      (communityCards?.length || 0) === 0 &&
+      players.every((p) => (p.contribution || 0) === 0);
+    if (isLikelyNewHand) {
+      setActionOverlays({});
+    }
+  }, [showdownActive, currentBet, communityCards, players]);
   
   // Update timer every second
   useEffect(() => {
