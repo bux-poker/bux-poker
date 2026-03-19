@@ -19,16 +19,21 @@ export function getTournamentBlindLevelFromTime(tournament) {
   let currentLevelIndex = 0;
   for (let i = 0; i < blindLevels.length; i++) {
     const level = blindLevels[i];
-    if (level.duration == null) {
+    if (level.duration == null || level.duration === undefined) {
       currentLevelIndex = i;
       break;
     }
-    if (elapsedMinutes <= level.duration) {
+    const levelMinutes = Number(level.duration);
+    const dur = Number.isFinite(levelMinutes) && levelMinutes >= 0 ? levelMinutes : 0;
+    if (elapsedMinutes <= dur) {
       currentLevelIndex = i;
       break;
     }
-    elapsedMinutes -= level.duration;
-    if (level.breakAfter) elapsedMinutes -= level.breakAfter;
+    elapsedMinutes -= dur;
+    const breakMins = level.breakAfter != null ? Number(level.breakAfter) : 0;
+    if (Number.isFinite(breakMins) && breakMins > 0) {
+      elapsedMinutes -= breakMins;
+    }
   }
   return { currentLevelIndex, blindLevels };
 }

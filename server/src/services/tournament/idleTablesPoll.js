@@ -1,5 +1,6 @@
 import { prisma } from "../../config/database.js";
 import { awardStalePotAndZeroGame } from "./stalePotRecovery.js";
+import { getTournamentBlindLevelFromTime, syncBlindLevelsToTournamentTime } from "./blindLevels.js";
 
 const STUCK_THRESHOLD_MS = 45000;
 const IDLE_POLL_INTERVAL_MS = 15000;
@@ -15,7 +16,6 @@ export function startIdleTablesPoll(engine) {
   idleTablesPollInterval = setInterval(async () => {
     const { startHandForGame, hasActiveHand, forceStuckPlayerToAct, getIO, getTurnStartedAt, clearAllStateForGames } = await import("../../modules/socket-handlers/pokerHandler.js");
     const socketIO = getIO();
-    if (!socketIO) return;
     const now = Date.now();
     try {
       const running = await prisma.tournament.findMany({
@@ -23,6 +23,35 @@ export function startIdleTablesPoll(engine) {
         select: { id: true, seatsPerTable: true }
       });
       for (const t of running) {
+        // Backup blind advancement: wall clock vs DB (covers lost timers after deploy / missed ticks).
+        try {
+          const fullTournament = await prisma.tournament.findUnique({ where: { id: t.id } });
+          if (fullTournament?.startedAt) {
+            const blindResult = getTournamentBlindLevelFromTime(fullTournament);
+            if (blindResult) {
+              const activeGames = await prisma.game.findMany({
+                where: { tournamentId: t.id, status: "ACTIVE" },
+                select: { currentBlindLevel: true }
+              });
+              if (activeGames.length > 0) {
+                const gl = activeGames[0].currentBlindLevel ?? 0;
+                if (blindResult.currentLevelIndex > gl) {
+                  console.log(
+                    `[TOURNAMENT] Idle poll: syncing blinds for ${t.id} (game level ${gl} -> time-based ${blindResult.currentLevelIndex})`
+                  );
+                  await syncBlindLevelsToTournamentTime(t.id, socketIO ?? null, {
+                    emitDealerMessage: !!socketIO
+                  });
+                }
+              }
+            }
+          }
+        } catch (blindErr) {
+          console.warn(`[TOURNAMENT] Idle poll blind sync failed for ${t.id}:`, blindErr?.message);
+        }
+
+        if (!socketIO) continue;
+
         const seatsPerTable = t.seatsPerTable ?? 9;
         const games = await prisma.game.findMany({
           where: { tournamentId: t.id, status: "ACTIVE" },

@@ -4,10 +4,17 @@ import { registerSocketHandlers } from "./modules/socket-handlers/index.js";
 import { initializeDiscordBot } from "./discord/bot.js";
 import { startScheduledStartPoll, startIdleTablesPoll } from "./services/TournamentEngine.js";
 import { connectRedis } from "./config/redis.js";
+import { resumeBlindLevelTimersForRunningTournaments } from "./services/tournament/blindTimer.js";
+import { getIO } from "./modules/poker/tableState.js";
 
 dotenv.config();
 
 registerSocketHandlers(io);
+
+// Blind timers live in memory — restore them after deploy so levels keep advancing.
+resumeBlindLevelTimersForRunningTournaments({ getIO }).catch((err) =>
+  console.error("[TOURNAMENT] resumeBlindLevelTimersForRunningTournaments:", err)
+);
 
 // Poll for tournaments whose 2-min start time has passed (survives process restart)
 startScheduledStartPoll();
