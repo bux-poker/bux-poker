@@ -278,10 +278,7 @@ export function PokerGameView() {
             communityCards: "[]",
             showdownActive: false,
             showdownResults: null,
-            players: (payload.players || []).map((p) => ({
-              ...p,
-              lastAction: null,
-            })),
+            players: payload.players || [],
           }
         : payload;
 
