@@ -674,8 +674,20 @@ export function PokerGameView() {
       soundManager.play('hand-start');
     }
 
-    // 5. Detect player actions by comparing previous and current state
+    // 5. Detect player actions using authoritative lastAction changes first.
+    // Fallback to contribution/status diff when lastAction is unavailable.
     const prevPlayers = new Map(prevGameState.players.map(p => [p.id, p]));
+    const mapActionToSound = (action?: string | null): SoundName | null => {
+      if (!action) return null;
+      const normalized = action.toUpperCase();
+      if (normalized === "FOLD") return "fold";
+      if (normalized === "CHECK") return "check";
+      if (normalized === "CALL") return "call";
+      if (normalized === "BET") return "bet";
+      if (normalized === "RAISE") return "raise";
+      if (normalized === "ALL_IN" || normalized === "ALLIN") return "allin";
+      return null;
+    };
     
     gameState.players.forEach(currentPlayer => {
       const prevPlayer = prevPlayers.get(currentPlayer.id);
@@ -683,6 +695,14 @@ export function PokerGameView() {
 
       // Skip if this is me (don't play sounds for my own actions; string compare for id consistency)
       const isMyPlayer = String(currentPlayer.userId ?? "") === String(user.id ?? "") || String(currentPlayer.id ?? "") === String(user.id ?? "");
+      const lastActionChanged = currentPlayer.lastAction && currentPlayer.lastAction !== prevPlayer.lastAction;
+      if (lastActionChanged && !isMyPlayer) {
+        const actionSound = mapActionToSound(currentPlayer.lastAction);
+        if (actionSound) {
+          soundManager.play(actionSound);
+          return;
+        }
+      }
 
       // Fold sound: Player status changed to FOLDED
       if (prevPlayer.status !== 'FOLDED' && currentPlayer.status === 'FOLDED') {
