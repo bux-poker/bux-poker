@@ -13,6 +13,7 @@ import { startTurnTimer } from "./turnTimers.js";
 import { advanceToNextStreet } from "./advanceStreet.js";
 import { emitIfTournamentCompleted } from "./tableTournamentHooks.js";
 import { isTournamentConsolidationWaiting } from "../../services/tournament/consolidateTables.js";
+import { awardStalePotAndZeroGame } from "../../services/tournament/stalePotRecovery.js";
 
 export async function startHandForGameBody(gameId, io) {
   const game = await prisma.game.findUnique({
@@ -374,9 +375,9 @@ export async function startHandForGameBody(gameId, io) {
   const previousPot = game.pot ?? 0;
   if (previousPot > 0) {
     console.warn(
-      `[POKER] Recovery: zeroing stale pot=${previousPot} for game ${gameId} so hand can start (pot should have been awarded when previous hand ended)`
+      `[POKER] Recovery: awarding stale pot=${previousPot} to players at game ${gameId} then zeroing (pot should have been awarded when previous hand ended)`
     );
-    await prisma.game.update({ where: { id: gameId }, data: { pot: 0 } });
+    await awardStalePotAndZeroGame(gameId, previousPot);
     game.pot = 0;
   }
 

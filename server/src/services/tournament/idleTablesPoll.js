@@ -1,4 +1,5 @@
 import { prisma } from "../../config/database.js";
+import { awardStalePotAndZeroGame } from "./stalePotRecovery.js";
 
 const STUCK_THRESHOLD_MS = 45000;
 const IDLE_POLL_INTERVAL_MS = 15000;
@@ -58,9 +59,9 @@ export function startIdleTablesPoll(engine) {
 
           if ((game.pot ?? 0) > 0) {
             console.warn(
-              `[TOURNAMENT] Idle-table recovery: zeroing stale pot=${game.pot} for game ${game.id} (table ${game.tableNumber}) so hand can start`
+              `[TOURNAMENT] Idle-table recovery: awarding stale pot=${game.pot} to players at game ${game.id} (table ${game.tableNumber}) then zeroing so hand can start`
             );
-            await prisma.game.update({ where: { id: game.id }, data: { pot: 0 } });
+            await awardStalePotAndZeroGame(game.id, game.pot);
             game.pot = 0;
           }
           if (hasActiveHand(game.id)) {

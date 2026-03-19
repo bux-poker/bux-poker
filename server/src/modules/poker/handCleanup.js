@@ -13,11 +13,12 @@ import { tableState } from "./tableState.js";
  * @param {number} delayMs - delay before cleanup (default 500)
  */
 export function cleanupHandAndStartNext(gameId, io, state, startHandForGame, delayMs = 500) {
-  prisma.game
-    .update({ where: { id: gameId }, data: { pot: 0 } })
-    .catch(() => {});
+  (async () => {
+    await prisma.game
+      .update({ where: { id: gameId }, data: { pot: 0 } })
+      .catch((err) => console.error("[POKER] handCleanup: failed to zero pot:", err?.message));
 
-  setTimeout(() => {
+    setTimeout(() => {
     const savedPlayers = [...state.players];
     tableState.delete(gameId);
 
@@ -57,4 +58,5 @@ export function cleanupHandAndStartNext(gameId, io, state, startHandForGame, del
       }
     });
   }, delayMs);
+  })();
 }
