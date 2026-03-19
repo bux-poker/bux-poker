@@ -354,7 +354,8 @@ export function PokerTable({
         const action = normalizeAction(overlay.action);
         const status = (player.status || '').toUpperCase();
         const keepFold = action === 'FOLD' && status === 'FOLDED';
-        const keepAllIn = action === 'ALLIN' && (status === 'ALL_IN' || player.chips === 0);
+        // ALL IN must remain visible for the entire hand; it is cleared by new-hand reset logic.
+        const keepAllIn = action === 'ALLIN';
         if (!keepFold && !keepAllIn) {
           delete next[playerId];
         }
