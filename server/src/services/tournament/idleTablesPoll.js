@@ -71,7 +71,17 @@ export function startIdleTablesPoll(engine) {
           }
           if (hasActiveHand(game.id)) {
             const turnStarted = getTurnStartedAt(game.id);
-            if (turnStarted > 0 && now - turnStarted >= STUCK_THRESHOLD_MS) {
+            if (turnStarted <= 0) {
+              // Recovery path: hand exists but no tracked turn start (e.g. stale state with null turn).
+              try {
+                const ok = await forceStuckPlayerToAct(game.id, socketIO);
+                if (ok) {
+                  console.log(`[TOURNAMENT] Idle poll: recovered no-turn active hand at table ${game.tableNumber} (game ${game.id})`);
+                }
+              } catch (err) {
+                console.error(`[TOURNAMENT] No-turn recovery failed for table ${game.tableNumber}:`, err?.message);
+              }
+            } else if (now - turnStarted >= STUCK_THRESHOLD_MS) {
               try {
                 const ok = await forceStuckPlayerToAct(game.id, socketIO);
                 if (ok) {
