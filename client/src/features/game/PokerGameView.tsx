@@ -111,6 +111,7 @@ export function PokerGameView() {
   const [eliminationInfo, setEliminationInfo] = useState<{ place: number | null } | null>(null);
   const [winnerModalOpen, setWinnerModalOpen] = useState(false);
   const [consolidationWaiting, setConsolidationWaiting] = useState<string | null>(null);
+  const [pendingConsolidationWaiting, setPendingConsolidationWaiting] = useState<string | null>(null);
   const [socketConnected, setSocketConnected] = useState(false);
   const [tournamentLobbyOpen, setTournamentLobbyOpen] = useState(false);
   const isMobile = useIsMobile();
@@ -119,7 +120,16 @@ export function PokerGameView() {
   const chatCollapsedRef = useRef(chatCollapsed);
   const isMobileRef = useRef(isMobile);
   const soundUnlockedRef = useRef(false);
+  const latestGameStateRef = useRef<GameStatePayload | null>(null);
+  const latestGameTournamentIdRef = useRef<string | undefined>(undefined);
+  const latestTournamentIdRef = useRef<string | undefined>(undefined);
   const { user } = useAuth();
+
+  useEffect(() => {
+    latestGameStateRef.current = gameState;
+    latestGameTournamentIdRef.current = gameState?.tournamentId;
+    latestTournamentIdRef.current = tournament?.id;
+  }, [gameState, tournament?.id]);
 
   // Preload card images when entering a game so they render instantly
   useEffect(() => {
@@ -352,10 +362,16 @@ export function PokerGameView() {
     });
 
     socket.on("consolidation-waiting", (payload: { message: string; tournamentId: string }) => {
-      const matchesGameState = payload.tournamentId === gameState?.tournamentId;
-      const matchesTournament = payload.tournamentId === tournament?.id;
+      const matchesGameState = payload.tournamentId === latestGameTournamentIdRef.current;
+      const matchesTournament = payload.tournamentId === latestTournamentIdRef.current;
       if (matchesGameState || matchesTournament) {
-        setConsolidationWaiting(payload.message);
+        const currentState = latestGameStateRef.current;
+        if (isHandActive(currentState)) {
+          // Defer popup while hand is active; show it as soon as hand ends.
+          setPendingConsolidationWaiting(payload.message);
+        } else {
+          setConsolidationWaiting(payload.message);
+        }
       }
     });
 
@@ -372,6 +388,7 @@ export function PokerGameView() {
     socket.on("consolidation-complete", async (payload: { tournamentId: string }) => {
       if (payload.tournamentId !== gameState?.tournamentId && payload.tournamentId !== tournament?.id) return;
       setConsolidationWaiting(null);
+      setPendingConsolidationWaiting(null);
       refetchTournament({ silent: true });
       if (!user?.id) return;
       try {
@@ -783,6 +800,15 @@ export function PokerGameView() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState, user]); // Only run when gameState changes, prevGameState is captured in closure
+
+  // If consolidation-waiting arrived during an active hand, surface it immediately after hand ends.
+  useEffect(() => {
+    if (!pendingConsolidationWaiting) return;
+    if (!isHandActive(gameState)) {
+      setConsolidationWaiting(pendingConsolidationWaiting);
+      setPendingConsolidationWaiting(null);
+    }
+  }, [gameState, pendingConsolidationWaiting]);
 
   /** Optimistic update: apply local state immediately so UI feels instant; server will send authoritative game-state. */
   const applyOptimisticState = (prev: GameStatePayload, userId: string, action: string, betAmount: number): GameStatePayload => {
