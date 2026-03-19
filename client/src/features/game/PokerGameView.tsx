@@ -48,6 +48,8 @@ interface GameStatePayload {
   minimumRaise?: number;
   showdownActive?: boolean;
   showdownResults?: any;
+  /** Server-driven: tournament is waiting for all tables to finish before reseat (authoritative vs one-shot socket). */
+  consolidationWaitingMessage?: string | null;
 }
 
 function parseCommunityCards(encoded: string): Card[] {
@@ -63,12 +65,34 @@ function parseCommunityCards(encoded: string): Card[] {
   return [];
 }
 
-function isHandActive(state: GameStatePayload | null): boolean {
+/**
+ * True while this table's hand is meaningfully in progress (betting, board dealt, blinds posted, etc.).
+ * Used only for consolidation wait UI — avoids flicker when optimistic updates clear currentTurnUserId.
+ * When the table is fully idle (no pot, no board, no contributions, no turn), show wait overlay even if street lags.
+ */
+function isTableHandInProgress(
+  state: GameStatePayload | null,
+  optimisticActionPendingRef?: { current: boolean }
+): boolean {
+  if (optimisticActionPendingRef?.current) return true;
   if (!state) return false;
-  const hasTurn = !!state.currentTurnUserId;
-  // For consolidation UI gating, only treat truly in-progress phases as active.
-  // Board cards/contributions can linger briefly after a hand ends and should not hide the wait popup.
-  return !!state.showdownActive || hasTurn;
+
+  const boardLen = parseCommunityCards(state.communityCards).length;
+  const anyContribution = (state.players || []).some((p) => (p.contribution ?? 0) > 0);
+  const pot = state.pot ?? 0;
+  const currentBet = state.currentBet ?? 0;
+
+  const completelyIdle =
+    !state.showdownActive &&
+    !state.currentTurnUserId &&
+    currentBet === 0 &&
+    boardLen === 0 &&
+    !anyContribution &&
+    pot === 0;
+
+  if (completelyIdle) return false;
+
+  return true;
 }
 
 // Helper to play sound effects using queued playback to avoid overlaps
@@ -123,6 +147,8 @@ export function PokerGameView() {
   const latestGameStateRef = useRef<GameStatePayload | null>(null);
   const latestGameTournamentIdRef = useRef<string | undefined>(undefined);
   const latestTournamentIdRef = useRef<string | undefined>(undefined);
+  /** True after we emit player-action until the next authoritative game-state (avoids wait overlay during optimistic gap). */
+  const handActionPendingRef = useRef(false);
   const { user } = useAuth();
   const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
 
@@ -302,6 +328,15 @@ export function PokerGameView() {
           }
         : payload;
 
+      handActionPendingRef.current = false;
+      if (
+        Object.prototype.hasOwnProperty.call(payload, "consolidationWaitingMessage") &&
+        !payload.consolidationWaitingMessage
+      ) {
+        setConsolidationWaiting(null);
+        setPendingConsolidationWaiting(null);
+      }
+
       setGameState((prev) => {
         if (prev) setPrevGameState(prev);
         return normalized;
@@ -366,7 +401,7 @@ export function PokerGameView() {
       const matchesTournament = payload.tournamentId === latestTournamentIdRef.current;
       if (matchesGameState || matchesTournament) {
         const currentState = latestGameStateRef.current;
-        if (isHandActive(currentState)) {
+        if (isTableHandInProgress(currentState, handActionPendingRef)) {
           // Defer popup while hand is active; show it as soon as hand ends.
           setPendingConsolidationWaiting(payload.message);
         } else {
@@ -804,7 +839,7 @@ export function PokerGameView() {
   // If consolidation-waiting arrived during an active hand, surface it immediately after hand ends.
   useEffect(() => {
     if (!pendingConsolidationWaiting) return;
-    if (!isHandActive(gameState)) {
+    if (!isTableHandInProgress(gameState, handActionPendingRef)) {
       setConsolidationWaiting(pendingConsolidationWaiting);
       setPendingConsolidationWaiting(null);
     }
@@ -833,6 +868,7 @@ export function PokerGameView() {
 
   const handleAction = (action: string, amount: number) => {
     if (!id || !gameState || !user) return;
+    handActionPendingRef.current = true;
     if (action === "FOLD") soundManager.play("fold");
     else if (action === "CHECK") soundManager.play("check");
     else if (action === "CALL") soundManager.play("call");
@@ -911,7 +947,14 @@ export function PokerGameView() {
   const myChipRank = myPlayer ? sortedByChips.findIndex(p => p.id === myPlayer.id) + 1 : null;
   const myPosition = myChipRank && myChipRank > 0 ? myChipRank : null;
   const myContribution = myPlayer?.contribution || 0;
-  const showConsolidationOverlay = !!consolidationWaiting && !isHandActive(gameState);
+  const effectiveConsolidationMessage =
+    gameState.consolidationWaitingMessage != null &&
+    String(gameState.consolidationWaitingMessage).trim().length > 0
+      ? gameState.consolidationWaitingMessage
+      : consolidationWaiting;
+  const showConsolidationOverlay =
+    !!effectiveConsolidationMessage &&
+    !isTableHandInProgress(gameState, handActionPendingRef);
 
   // Show landscape prompt if in portrait mode
   if (isPortrait) {
@@ -1013,7 +1056,7 @@ export function PokerGameView() {
             {showConsolidationOverlay && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm" style={{ zIndex: 100 }}>
                 <div className="rounded-xl bg-slate-800/95 border border-slate-600 px-8 py-6 text-center max-w-md shadow-2xl">
-                  <p className="text-lg font-medium text-slate-200">{consolidationWaiting}</p>
+                  <p className="text-lg font-medium text-slate-200">{effectiveConsolidationMessage}</p>
                   <p className="mt-2 text-sm text-slate-400">Please wait...</p>
                 </div>
               </div>
