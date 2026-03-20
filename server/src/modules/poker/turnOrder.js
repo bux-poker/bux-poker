@@ -214,6 +214,45 @@ export async function moveToNextPlayer(gameId, io) {
   }
 
   if (activePlayers.length === 0) {
+    // No one left who can bet (everyone still in the hand is all-in or has 0 chips).
+    // If we only null the turn, the hand becomes a zombie: street is set, no turn, hasActiveHand stays true
+    // forever and the idle poll loops on "recovered no-turn active hand" (see Render logs).
+    if (playersInHand.length >= 2 && state.bettingRound && !state.handEnded) {
+      const activePlayerIds = state.players
+        .filter((p) => p.status !== "FOLDED" && p.status !== "ELIMINATED")
+        .map((p) => p.id);
+      const bettingComplete = state.bettingRound.isBettingComplete(
+        activePlayerIds,
+        state.lastRaiseUserId,
+        state.currentTurnUserId,
+        state.players,
+        state.actedPlayersInRound || new Set()
+      );
+      if (bettingComplete) {
+        console.log(
+          `[POKER] moveToNextPlayer: no players can bet but betting complete — advancing street/showdown (game ${gameId})`
+        );
+        tableState.set(gameId, state);
+        try {
+          if (state.street === "RIVER") {
+            const { handleShowdown } = await import("./showdown.js");
+            await handleShowdown(gameId, io);
+          } else {
+            const { advanceToNextStreet } = await import("./advanceStreet.js");
+            await advanceToNextStreet(gameId, io);
+          }
+        } catch (e) {
+          console.error(
+            `[POKER] moveToNextPlayer: failed to advance all-in runout for ${gameId}:`,
+            e?.message
+          );
+        }
+        return;
+      }
+      console.warn(
+        `[POKER] moveToNextPlayer: no one can bet but betting not complete (game ${gameId}) — leaving turn null`
+      );
+    }
     state.currentTurnUserId = null;
     state.currentTurnStartedAt = null;
     return;

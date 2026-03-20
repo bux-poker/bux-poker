@@ -97,6 +97,19 @@ cd client && npm run dev
 
 ## Deployment Notes
 
+### Render: fetch server logs (CLI)
+
+```bash
+# List services (once logged in: render login)
+render services -o json
+
+# Recent logs for the API service (replace with your service id from JSON)
+render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 200 -o text
+
+# Filter by substring
+render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 200 -o text --text TOURNAMENT
+```
+
 - Use a persistent backend process for websockets (Railway works well).
 - Set `CLIENT_URL` correctly in backend env for CORS.
 - Set `REDIS_URL` in production for Redis session storage.
