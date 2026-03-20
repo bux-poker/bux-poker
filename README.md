@@ -34,8 +34,50 @@ bux-poker/
 ├── server/        # Express + Socket.IO backend
 ├── shared/        # Shared types/components/utils
 ├── prisma/        # Prisma schema and migrations
-└── docs/          # Supplemental docs
+└── docs/          # Supplemental docs (see docs/MODULE_MAP.md)
 ```
+
+## Modular stack map (troubleshooting)
+
+Authoritative detail and refactor queue: **`docs/MODULE_MAP.md`**.
+
+### Client (`client/src`)
+
+| Area | Role |
+|------|------|
+| `features/game/PokerGameView.tsx` | Table route: socket wiring, optimistic actions, tournament modals |
+| `components/poker/PokerTable.tsx` | Felt, seats, cards, pot, motion |
+| `components/poker/BettingControls.tsx` | Raise/call/fold UI + sizing math |
+| `components/tournament/*` | Lobby, list, modals, timestamps |
+| `services/socket.ts`, `services/api.ts` | Transport |
+| `hooks/*` | Tournaments, admin, layout |
+| `utils/soundManager.ts`, `utils/cardPreloader.ts` | Assets / UX |
+
+**Largest files (split first):** `PokerGameView.tsx`, `PokerTable.tsx`, `TournamentLobby.tsx` (see MODULE_MAP).
+
+### Server (`server/src`)
+
+| Area | Role |
+|------|------|
+| `modules/poker/*` | Hand engine: `actions`, `startHand`, `advanceStreet`, `turnOrder`, `showdown`, `BettingRound`, `tableState` |
+| `modules/socket-handlers/*` | Socket entry: `pokerHandler`, `playerAction`, `joinTable`, … |
+| `services/tournament/*` | Consolidation, busts, blinds, idle poll, chip audit |
+| `services/TournamentEngine.js` | Orchestrates tournament lifecycle |
+| `routes/*`, `middleware/*` | HTTP API |
+| `discord/bot.js` | Discord integration |
+
+**Largest files (split first):** `discord/bot.js`, `routes/admin.js`, `showdown.js`, `startHand.js`, `advanceStreet.js`, `testPlayers.js`, `turnOrder.js`.
+
+### Shared (`shared/`)
+
+Types (`types/poker`, `types/game`), auth context, chat UI, `handEvaluator` — **single source** for client + Vite aliases; keep server eval logic consistent with shared rules.
+
+### Known overlap / conflict hotspots
+
+- **In-memory `hasActiveHand` vs DB `game.pot`** during tournament consolidation — both guards matter.
+- **Tournament end:** `completeIfOneLeft.js` and `busts.js` (chip audit / reconcile).
+- **Hand cleanup:** `safeHandCleanupDb.js` + `handCleanup.js` + street/showdown paths (never resurrect `ELIMINATED`).
+- **Evaluators:** shared utils vs `server/.../HandEvaluator.js` — verify parity when changing rules.
 
 ## Local Setup
 
