@@ -135,15 +135,18 @@ export async function tryAdvanceBlindsIfDue(tournamentId, io, options = { emitDe
 
   for (const g of games) {
     if (hasActiveHand(g.id)) {
-      const msg =
-        "Waiting for all tables to finish the current hand before blinds increase.";
-      if (io) {
-        for (const gg of games) {
-          io.to(`game:${gg.id}`).emit("blind-level-waiting", {
-            tournamentId,
-            message: msg,
-            pendingLevelIndex: currentLevelIndex,
-          });
+      // Single-table tournaments: no "wait for other tables" UX — blinds sync as soon as this hand ends.
+      if (games.length > 1) {
+        const msg =
+          "Waiting for all tables to finish the current hand before blinds increase.";
+        if (io) {
+          for (const gg of games) {
+            io.to(`game:${gg.id}`).emit("blind-level-waiting", {
+              tournamentId,
+              message: msg,
+              pendingLevelIndex: currentLevelIndex,
+            });
+          }
         }
       }
       return { advanced: false, waiting: true };

@@ -6,6 +6,7 @@ import { emitGameState } from "./emitGameState.js";
 import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/pokerHandler.js";
 import { startTurnTimer } from "./turnTimers.js";
 import { cleanupHandAndStartNext } from "./handCleanup.js";
+import { normalizeUserId } from "./normalizeUserId.js";
 
 export async function moveToNextPlayer(gameId, io) {
   const state = tableState.get(gameId);
@@ -253,7 +254,7 @@ export async function moveToNextPlayer(gameId, io) {
     const sortedPlayers = [...activePlayers].sort(
       (a, b) => a.seatNumber - b.seatNumber
     );
-    state.currentTurnUserId = sortedPlayers[0].userId;
+    state.currentTurnUserId = normalizeUserId(sortedPlayers[0].userId);
     state.currentTurnStartedAt = Date.now();
     startTurnTimer(gameId, state.currentTurnUserId, io);
     return;
@@ -263,13 +264,14 @@ export async function moveToNextPlayer(gameId, io) {
   const minSeat = Math.min(...allSeatNumbers);
   const maxSeat = Math.max(...allSeatNumbers);
 
+  const turnUid = normalizeUserId(state.currentTurnUserId);
   const currentPlayer = activePlayers.find(
-    (p) => p.userId === state.currentTurnUserId
+    (p) => normalizeUserId(p.userId) === turnUid
   );
 
   if (!currentPlayer) {
     const allPlayersCurrent = state.players.find(
-      (p) => p.userId === state.currentTurnUserId
+      (p) => normalizeUserId(p.userId) === turnUid
     );
 
     console.log(
@@ -301,7 +303,9 @@ export async function moveToNextPlayer(gameId, io) {
         if (playerAtSeat) {
           const contribution =
             state.bettingRound?.getPlayerContribution(playerAtSeat.id) || 0;
-          const hasActed = state.actedPlayersInRound.has(playerAtSeat.userId);
+          const hasActed = state.actedPlayersInRound.has(
+            normalizeUserId(playerAtSeat.userId)
+          );
           const isAllIn =
             playerAtSeat.status === "ALL_IN" || playerAtSeat.chips === 0;
           let needsToAct = false;
@@ -327,7 +331,7 @@ export async function moveToNextPlayer(gameId, io) {
       }
 
       if (nextPlayer) {
-        state.currentTurnUserId = nextPlayer.userId;
+        state.currentTurnUserId = normalizeUserId(nextPlayer.userId);
         state.currentTurnStartedAt = Date.now();
         startTurnTimer(gameId, state.currentTurnUserId, io);
         return;
@@ -343,7 +347,7 @@ export async function moveToNextPlayer(gameId, io) {
       (a, b) => a.seatNumber - b.seatNumber
     );
     if (sortedPlayers.length > 0) {
-      state.currentTurnUserId = sortedPlayers[0].userId;
+      state.currentTurnUserId = normalizeUserId(sortedPlayers[0].userId);
       state.currentTurnStartedAt = Date.now();
       startTurnTimer(gameId, state.currentTurnUserId, io);
       console.log(
@@ -378,7 +382,9 @@ export async function moveToNextPlayer(gameId, io) {
       const contribution =
         state.bettingRound?.getPlayerContribution(candidate.id) || 0;
       const currentBet = state.bettingRound?.currentBet || 0;
-      const hasActed = state.actedPlayersInRound?.has(candidate.userId);
+      const hasActed = state.actedPlayersInRound?.has(
+        normalizeUserId(candidate.userId)
+      );
       let needsToAct = false;
       if (candidate.status !== "ALL_IN" && candidate.chips > 0) {
         needsToAct =
@@ -405,7 +411,7 @@ export async function moveToNextPlayer(gameId, io) {
     return;
   }
 
-  state.currentTurnUserId = nextPlayer.userId;
+  state.currentTurnUserId = normalizeUserId(nextPlayer.userId);
   state.currentTurnStartedAt = Date.now();
   startTurnTimer(gameId, state.currentTurnUserId, io);
 }

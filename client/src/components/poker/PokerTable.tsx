@@ -321,7 +321,15 @@ export function PokerTable({
           
           const isMyPlayer = player && (String(myUserId ?? "") === String(player.id ?? "") || String(myUserId ?? "") === String(player.userId ?? ""));
           const isCurrentTurn = player && (String(currentPlayer ?? "") === String(player.id ?? "") || String(currentPlayer ?? "") === String(player.userId ?? ""));
-          const hasActiveTimer = turnTimer && player && (String(player.userId ?? "") === String(turnTimer.userId ?? "") || String(player.id ?? "") === String(turnTimer.userId ?? ""));
+          // Timer events can arrive out of order with game-state; only pulse when timer matches server's current turn.
+          const timerMatchesServerTurn =
+            turnTimer != null &&
+            String(turnTimer.userId ?? "") === String(currentPlayer ?? "");
+          const hasActiveTimer =
+            timerMatchesServerTurn &&
+            player &&
+            (String(player.userId ?? "") === String(turnTimer.userId ?? "") ||
+              String(player.id ?? "") === String(turnTimer.userId ?? ""));
           const rawTimerRemaining = hasActiveTimer
             ? Math.max(0, Math.ceil((turnTimer.expiresAt - currentTime) / 1000))
             : null;

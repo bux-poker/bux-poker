@@ -269,6 +269,11 @@ export function PokerGameView() {
         setPendingConsolidationWaiting(null);
       }
 
+      // Never keep the blind-sync modal over an active betting round (stale socket event vs game-state).
+      if (handBlocksConsolidationWaitOverlay(normalized, handActionPendingRef)) {
+        setBlindWaitMessage(null);
+      }
+
       setGameState((prev) => {
         if (prev) setPrevGameState(prev);
         return normalized;
@@ -822,6 +827,11 @@ export function PokerGameView() {
     !!effectiveConsolidationMessage &&
     !handBlocksConsolidationWaitOverlay(gameState, handActionPendingRef);
 
+  const showBlindWaitOverlay =
+    !!blindWaitMessage &&
+    !showConsolidationOverlay &&
+    !handBlocksConsolidationWaitOverlay(gameState, handActionPendingRef);
+
   // Show landscape prompt if in portrait mode
   if (isPortrait) {
     return (
@@ -927,7 +937,7 @@ export function PokerGameView() {
                 </div>
               </div>
             )}
-            {blindWaitMessage && !showConsolidationOverlay && (
+            {showBlindWaitOverlay && (
               <div
                 className="absolute inset-0 flex items-center justify-center bg-black/55 backdrop-blur-sm"
                 style={{ zIndex: 95 }}

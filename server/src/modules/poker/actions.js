@@ -1,6 +1,7 @@
 import { prisma } from "../../config/database.js";
 import { ensureHandState } from "./ensureHandState.js";
 import { postDealerMessage } from "./dealerMessages.js";
+import { normalizeUserId } from "./normalizeUserId.js";
 
 export async function applyPlayerAction({ gameId, userId, action, amount, io = null }) {
   const state = await ensureHandState(gameId);
@@ -9,9 +10,17 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
     state.actedPlayersInRound = new Set();
   }
 
-  const player = state.players.find((p) => p.userId === userId);
+  const uid = normalizeUserId(userId);
+  const player = state.players.find(
+    (p) => normalizeUserId(p.userId) === uid
+  );
   if (!player) {
     throw new Error("Player not at this table");
+  }
+
+  const expectedTurn = normalizeUserId(state.currentTurnUserId);
+  if (expectedTurn == null || expectedTurn !== uid) {
+    throw new Error("Not your turn to act");
   }
 
   if (player.status === "ELIMINATED") {
@@ -58,7 +67,7 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
         );
         effectiveAction = "CHECK";
         console.log("[ACTION] After CHECK: no change to contributions");
-        state.actedPlayersInRound.add(userId);
+        state.actedPlayersInRound.add(uid);
         if (io) {
           postDealerMessage(gameId, io, `${playerName} checks`);
         }
@@ -90,7 +99,7 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
             effectiveAction = "ALL_IN";
           }
         }
-        state.actedPlayersInRound.add(userId);
+        state.actedPlayersInRound.add(uid);
         if (io) {
           if (player.chips === 0 && callAmount > 0) {
             postDealerMessage(
@@ -120,17 +129,17 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
           state.bettingRound.playerBets.set(player.id, newContribution);
           if (newContribution > state.bettingRound.currentBet) {
             state.bettingRound.currentBet = newContribution;
-            state.lastRaiseUserId = player.userId;
+            state.lastRaiseUserId = normalizeUserId(player.userId);
             state.lastRaiseWasShortAllIn = true;
             state.actedPlayersInRound.clear();
           }
-          state.actedPlayersInRound.add(userId);
+          state.actedPlayersInRound.add(uid);
         } else {
           state.bettingRound.bet(player.id, amount);
-          state.lastRaiseUserId = player.userId;
+          state.lastRaiseUserId = normalizeUserId(player.userId);
           state.lastRaiseWasShortAllIn = false;
           state.actedPlayersInRound.clear();
-          state.actedPlayersInRound.add(userId);
+          state.actedPlayersInRound.add(uid);
         }
       } catch (err) {
         if (
@@ -140,11 +149,11 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
           state.bettingRound.playerBets.set(player.id, newContribution);
           if (newContribution > state.bettingRound.currentBet) {
             state.bettingRound.currentBet = newContribution;
-            state.lastRaiseUserId = player.userId;
+            state.lastRaiseUserId = normalizeUserId(player.userId);
             state.lastRaiseWasShortAllIn = true;
             state.actedPlayersInRound.clear();
           }
-          state.actedPlayersInRound.add(userId);
+          state.actedPlayersInRound.add(uid);
         } else {
           throw err;
         }
@@ -203,7 +212,7 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
       console.log(
         `[ACTION] After CALL: playerContribution=${newContribution}, spent=${spent}`
       );
-      state.actedPlayersInRound.add(userId);
+      state.actedPlayersInRound.add(uid);
 
       if (io) {
         if (player.chips === 0 && spent > 0) {
@@ -224,7 +233,7 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
     }
     case "CHECK": {
       console.log("[ACTION] After CHECK: no change to contributions");
-      state.actedPlayersInRound.add(userId);
+      state.actedPlayersInRound.add(uid);
       if (io) {
         postDealerMessage(gameId, io, `${playerName} checks`);
       }
@@ -232,7 +241,7 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
     }
     case "FOLD": {
       player.status = "FOLDED";
-      state.actedPlayersInRound.add(userId);
+      state.actedPlayersInRound.add(uid);
       console.log(
         "[ACTION] After FOLD: player status=FOLDED, holeCards kept for display"
       );
@@ -265,7 +274,7 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
             player.chips = 0;
           }
         } else {
-          state.actedPlayersInRound.add(userId);
+          state.actedPlayersInRound.add(uid);
         }
       } else {
         const raiseAmount = allInContribution - state.bettingRound.currentBet;
@@ -274,14 +283,14 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
 
         if (raiseAmount >= minRaise) {
           state.bettingRound.bet(player.id, allInAmount);
-          state.lastRaiseUserId = player.userId;
+          state.lastRaiseUserId = normalizeUserId(player.userId);
           state.lastRaiseWasShortAllIn = false;
           state.actedPlayersInRound.clear();
         } else {
           state.bettingRound.playerBets.set(player.id, allInContribution);
           if (allInContribution > state.bettingRound.currentBet) {
             state.bettingRound.currentBet = allInContribution;
-            state.lastRaiseUserId = player.userId;
+            state.lastRaiseUserId = normalizeUserId(player.userId);
             state.lastRaiseWasShortAllIn = true;
             state.actedPlayersInRound.clear();
           }
@@ -289,7 +298,7 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
         player.chips = 0;
       }
 
-      state.actedPlayersInRound.add(userId);
+      state.actedPlayersInRound.add(uid);
 
       if (io) {
         postDealerMessage(

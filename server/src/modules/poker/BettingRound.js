@@ -1,6 +1,8 @@
 // BettingRound: encapsulates betting logic for a single street
 // (preflop, flop, turn, river) at a single table.
 
+import { normalizeUserId } from "./normalizeUserId.js";
+
 export class BettingRound {
   constructor({ smallBlind, bigBlind, startingPot = 0 }) {
     this.smallBlind = smallBlind;
@@ -180,7 +182,7 @@ export class BettingRound {
         if (isAllIn) {
           return true; // All-in players can't act, so they're considered "done"
         }
-        return actedPlayersInRound.has(userId); // Non-all-in players must have acted
+        return actedPlayersInRound.has(normalizeUserId(userId)); // Non-all-in players must have acted
       });
       
       if (allHaveActedOrAllIn) {
@@ -189,7 +191,10 @@ export class BettingRound {
       } else {
         // Still have players who haven't acted and aren't all-in - they still need to act
         const notActed = activePlayerInfo
-          .filter(({ userId, isAllIn }) => !isAllIn && !actedPlayersInRound.has(userId))
+          .filter(
+            ({ userId, isAllIn }) =>
+              !isAllIn && !actedPlayersInRound.has(normalizeUserId(userId))
+          )
           .map(({ userId }) => userId);
         console.log(`[BETTING] Not complete: all contributed equally, no raises, but players haven't acted: ${notActed.join(', ')}`);
         return false;
@@ -204,19 +209,26 @@ export class BettingRound {
       // 2. All remaining players are all-in and can't act further
       
       // Find the last raiser
-      const lastRaiser = allPlayers.find(p => p.userId === lastRaiseUserId);
+      const lastRaiser = allPlayers.find(
+        (p) => normalizeUserId(p.userId) === normalizeUserId(lastRaiseUserId)
+      );
       if (!lastRaiser) {
         console.log(`[BETTING] Not complete: no current turn and last raiser not found`);
         return false;
       }
       
       // Check if the last raiser has acted (they should be in actedPlayersInRound)
-      const lastRaiserHasActed = actedPlayersInRound.has(lastRaiseUserId);
+      const lastRaiserHasActed = actedPlayersInRound.has(
+        normalizeUserId(lastRaiseUserId)
+      );
       
       // Check if all other active players (excluding the last raiser) are all-in or have acted
-      const otherActivePlayers = contributions.filter(c => {
-        const player = allPlayers.find(p => p.id === c.id);
-        return player && player.userId !== lastRaiseUserId;
+      const otherActivePlayers = contributions.filter((c) => {
+        const player = allPlayers.find((p) => p.id === c.id);
+        return (
+          player &&
+          normalizeUserId(player.userId) !== normalizeUserId(lastRaiseUserId)
+        );
       });
       
       // All other active players must be either:
@@ -227,7 +239,10 @@ export class BettingRound {
           return true; // All-in players can't act further
         }
         const player = allPlayers.find(p => p.id === c.id);
-        return player && actedPlayersInRound.has(player.userId);
+        return (
+          player &&
+          actedPlayersInRound.has(normalizeUserId(player.userId))
+        );
       });
       
       // If the last raiser has acted AND all others can't act (all-in or already acted),
@@ -242,8 +257,12 @@ export class BettingRound {
     }
     
     // Find the last raiser and current turn player
-    const lastRaiser = allPlayers.find(p => p.userId === lastRaiseUserId);
-    const currentTurnPlayer = allPlayers.find(p => p.userId === currentTurnUserId);
+    const lastRaiser = allPlayers.find(
+      (p) => normalizeUserId(p.userId) === normalizeUserId(lastRaiseUserId)
+    );
+    const currentTurnPlayer = allPlayers.find(
+      (p) => normalizeUserId(p.userId) === normalizeUserId(currentTurnUserId)
+    );
     
     if (!lastRaiser || !currentTurnPlayer) {
       console.log(`[BETTING] Not complete: players not found. lastRaiser: ${!!lastRaiser}, currentTurnPlayer: ${!!currentTurnPlayer}`);
@@ -252,10 +271,15 @@ export class BettingRound {
     
     // If current turn is the last raiser, betting is complete ONLY if all other players are all-in (can't act).
     // Otherwise action needs to come back to the last raiser.
-    if (currentTurnUserId === lastRaiseUserId) {
-      const otherActivePlayers = contributions.filter(c => {
-        const player = allPlayers.find(p => p.id === c.id);
-        return player && player.userId !== lastRaiseUserId;
+    if (
+      normalizeUserId(currentTurnUserId) === normalizeUserId(lastRaiseUserId)
+    ) {
+      const otherActivePlayers = contributions.filter((c) => {
+        const player = allPlayers.find((p) => p.id === c.id);
+        return (
+          player &&
+          normalizeUserId(player.userId) !== normalizeUserId(lastRaiseUserId)
+        );
       });
       const allOthersAllIn = otherActivePlayers.length > 0 && otherActivePlayers.every(c => c.isAllIn);
       if (allOthersAllIn) {
