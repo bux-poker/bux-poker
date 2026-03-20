@@ -2,7 +2,7 @@ import { prisma } from "../../config/database.js";
 import { tableState, turnTimers, hasActiveHand } from "./tableState.js";
 import { resetPlayerRowIfNotEliminated } from "./safeHandCleanupDb.js";
 import { postDealerMessage } from "./dealerMessages.js";
-import { buildClientGameState } from "./buildClientGameState.js";
+import { emitGameState } from "./emitGameState.js";
 import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/pokerHandler.js";
 import { startTurnTimer } from "./turnTimers.js";
 import { cleanupHandAndStartNext } from "./handCleanup.js";
@@ -137,18 +137,15 @@ export async function moveToNextPlayer(gameId, io) {
         ],
       };
       tableState.set(gameId, state);
+      // Always emit winner state for fold-wins, even if DB read is temporarily unavailable.
+      await emitGameState(gameId, io, state);
+
       const game = await prisma.game
         .findUnique({
           where: { id: gameId },
           include: { players: { include: { user: true } }, tournament: true },
         })
         .catch(() => null);
-      if (game) {
-        io.to(`game:${gameId}`).emit(
-          "game-state",
-          buildClientGameState(game, state)
-        );
-      }
       io.to(`game:${gameId}`).emit("winner", {
         gameId,
         winners: [
