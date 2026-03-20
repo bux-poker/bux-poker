@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { PokerTableProps } from "./pokerTableTypes";
-import { ACTION_OVERLAY_FADE_MS, isPermanentAction, normalizeAction } from "./pokerTableActionOverlayUtils";
+import {
+  ACTION_OVERLAY_FADE_MS,
+  getActionInfo,
+  isPermanentAction,
+  normalizeAction,
+} from "./pokerTableActionOverlayUtils";
 
 type Player = PokerTableProps["players"][number];
 
