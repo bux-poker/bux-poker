@@ -8,6 +8,28 @@ import { startTurnTimer } from "./turnTimers.js";
 import { cleanupHandAndStartNext } from "./handCleanup.js";
 import { normalizeUserId } from "./normalizeUserId.js";
 
+/** Prisma/JSON sometimes yields string seats; strict === skipped real players (zombie no-turn hands). */
+function seatNum(s) {
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
+}
+
+function playerCanBetThisRound(p) {
+  return (
+    p.status !== "ALL_IN" &&
+    (p.chips ?? 0) > 0
+  );
+}
+
+function computeNeedsToAct(p, state) {
+  if (!playerCanBetThisRound(p)) return false;
+  const currentBet = state.bettingRound?.currentBet || 0;
+  const contribution = state.bettingRound?.getPlayerContribution(p.id) || 0;
+  const hasActed = state.actedPlayersInRound?.has(normalizeUserId(p.userId));
+  if (currentBet === 0) return !hasActed;
+  return contribution < currentBet || !hasActed;
+}
+
 export async function moveToNextPlayer(gameId, io) {
   const state = tableState.get(gameId);
   if (!state) return;
@@ -252,7 +274,7 @@ export async function moveToNextPlayer(gameId, io) {
 
   if (!state.currentTurnUserId) {
     const sortedPlayers = [...activePlayers].sort(
-      (a, b) => a.seatNumber - b.seatNumber
+      (a, b) => seatNum(a.seatNumber) - seatNum(b.seatNumber)
     );
     state.currentTurnUserId = normalizeUserId(sortedPlayers[0].userId);
     state.currentTurnStartedAt = Date.now();
@@ -260,9 +282,11 @@ export async function moveToNextPlayer(gameId, io) {
     return;
   }
 
-  const allSeatNumbers = state.players.map((p) => p.seatNumber);
-  const minSeat = Math.min(...allSeatNumbers);
-  const maxSeat = Math.max(...allSeatNumbers);
+  const allSeatNums = state.players
+    .map((p) => seatNum(p.seatNumber))
+    .filter(Number.isFinite);
+  const minSeat = Math.min(...allSeatNums);
+  const maxSeat = Math.max(...allSeatNums);
 
   const turnUid = normalizeUserId(state.currentTurnUserId);
   const currentPlayer = activePlayers.find(
@@ -281,12 +305,12 @@ export async function moveToNextPlayer(gameId, io) {
     );
 
     if (allPlayersCurrent) {
-      const foldedSeat = allPlayersCurrent.seatNumber;
+      const foldedSeat = seatNum(allPlayersCurrent.seatNumber);
       const seatMap = new Map();
       activePlayers.forEach((p) => {
-        seatMap.set(p.seatNumber, p);
+        const sn = seatNum(p.seatNumber);
+        if (Number.isFinite(sn)) seatMap.set(sn, p);
       });
-      const currentBet = state.bettingRound?.currentBet || 0;
       if (!state.actedPlayersInRound) {
         state.actedPlayersInRound = new Set();
       }
@@ -301,20 +325,7 @@ export async function moveToNextPlayer(gameId, io) {
       while (attempts < totalSeats) {
         const playerAtSeat = seatMap.get(nextSeat);
         if (playerAtSeat) {
-          const contribution =
-            state.bettingRound?.getPlayerContribution(playerAtSeat.id) || 0;
-          const hasActed = state.actedPlayersInRound.has(
-            normalizeUserId(playerAtSeat.userId)
-          );
-          const isAllIn =
-            playerAtSeat.status === "ALL_IN" || playerAtSeat.chips === 0;
-          let needsToAct = false;
-          if (!isAllIn) {
-            needsToAct =
-              currentBet === 0
-                ? !hasActed
-                : contribution < currentBet || !hasActed;
-          }
+          const needsToAct = computeNeedsToAct(playerAtSeat, state);
           if (needsToAct) {
             nextPlayer = playerAtSeat;
             console.log(
@@ -344,7 +355,7 @@ export async function moveToNextPlayer(gameId, io) {
 
     console.log("[TURN ORDER] Falling back to first active player");
     const sortedPlayers = [...activePlayers].sort(
-      (a, b) => a.seatNumber - b.seatNumber
+      (a, b) => seatNum(a.seatNumber) - seatNum(b.seatNumber)
     );
     if (sortedPlayers.length > 0) {
       state.currentTurnUserId = normalizeUserId(sortedPlayers[0].userId);
@@ -365,11 +376,13 @@ export async function moveToNextPlayer(gameId, io) {
     return;
   }
 
-  const seatNumbers = activePlayers.map((p) => p.seatNumber);
-  const minActiveSeat = Math.min(...seatNumbers);
-  const maxActiveSeat = Math.max(...seatNumbers);
+  const activeSeatNums = activePlayers
+    .map((p) => seatNum(p.seatNumber))
+    .filter(Number.isFinite);
+  const minActiveSeat = Math.min(...activeSeatNums);
+  const maxActiveSeat = Math.max(...activeSeatNums);
 
-  let nextSeat = currentPlayer.seatNumber - 1;
+  let nextSeat = seatNum(currentPlayer.seatNumber) - 1;
   if (nextSeat < minActiveSeat) nextSeat = maxActiveSeat;
 
   let attempts = 0;
@@ -377,29 +390,44 @@ export async function moveToNextPlayer(gameId, io) {
   const totalActiveSeats = maxActiveSeat - minActiveSeat + 1;
 
   while (attempts < totalActiveSeats) {
-    const candidate = activePlayers.find((p) => p.seatNumber === nextSeat);
-    if (candidate) {
-      const contribution =
-        state.bettingRound?.getPlayerContribution(candidate.id) || 0;
-      const currentBet = state.bettingRound?.currentBet || 0;
-      const hasActed = state.actedPlayersInRound?.has(
-        normalizeUserId(candidate.userId)
-      );
-      let needsToAct = false;
-      if (candidate.status !== "ALL_IN" && candidate.chips > 0) {
-        needsToAct =
-          currentBet === 0
-            ? !hasActed
-            : contribution < currentBet || !hasActed;
-      }
-      if (needsToAct) {
-        nextPlayer = candidate;
-        break;
-      }
+    const candidate = activePlayers.find(
+      (p) => seatNum(p.seatNumber) === nextSeat
+    );
+    if (candidate && computeNeedsToAct(candidate, state)) {
+      nextPlayer = candidate;
+      break;
     }
     nextSeat = nextSeat - 1;
     if (nextSeat < minActiveSeat) nextSeat = maxActiveSeat;
     attempts++;
+  }
+
+  if (!nextPlayer) {
+    // Fallback: orbit walk from current seat over anyone who still needs to act.
+    const owed = activePlayers.filter((p) => computeNeedsToAct(p, state));
+    if (owed.length > 0) {
+      const owedSeats = new Set(
+        owed.map((p) => seatNum(p.seatNumber)).filter(Number.isFinite)
+      );
+      const c = seatNum(currentPlayer.seatNumber);
+      let s = c - 1;
+      if (s < minActiveSeat) s = maxActiveSeat;
+      for (let i = 0; i < totalActiveSeats + 1; i++) {
+        if (owedSeats.has(s)) {
+          nextPlayer = owed.find((p) => seatNum(p.seatNumber) === s) ?? null;
+          break;
+        }
+        s -= 1;
+        if (s < minActiveSeat) s = maxActiveSeat;
+      }
+      if (nextPlayer) {
+        console.warn(
+          `[TURN ORDER] Seat-walk missed next actor; orbit fallback seat ${seatNum(
+            nextPlayer.seatNumber
+          )} (${nextPlayer.name || nextPlayer.userId})`
+        );
+      }
+    }
   }
 
   if (!nextPlayer) {
