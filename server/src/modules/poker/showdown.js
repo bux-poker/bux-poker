@@ -4,6 +4,7 @@ import { tableState } from "./tableState.js";
 import { postDealerMessage } from "./dealerMessages.js";
 import { emitGameState } from "./emitGameState.js";
 import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/pokerHandler.js";
+import { resetPlayerRowIfNotEliminated } from "./safeHandCleanupDb.js";
 
 const SHOWDOWN_PHASE_DELAY_MS = 1000;
 function delay(ms) {
@@ -399,14 +400,7 @@ export async function handleShowdownCore(gameId, io, options = {}) {
     tableState.delete(gameId);
     const resetPromises = savedPlayers
       .filter((p) => p.status !== "ELIMINATED" && p.chips > 0)
-      .map((p) =>
-        prisma.player
-          .update({
-            where: { id: p.id },
-            data: { status: "ACTIVE", holeCards: "", lastAction: null },
-          })
-          .catch(() => {})
-      );
+      .map((p) => resetPlayerRowIfNotEliminated(p.id).catch(() => {}));
     Promise.all(resetPromises).then(async () => {
       const gameForNextHand = await prisma.game
         .findUnique({

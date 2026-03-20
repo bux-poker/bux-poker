@@ -1,5 +1,5 @@
 import { prisma } from "../../config/database.js";
-import { auditChipConservation } from "./chipAudit.js";
+import { auditChipConservation, reconcileChipConservationOnCompletion } from "./chipAudit.js";
 
 const _onPlayersBustLocks = new Map();
 // Idempotency guard to avoid processing the same bust repeatedly in race windows.
@@ -121,6 +121,7 @@ export async function doOnPlayersBust(tournamentId, playerIds, deps) {
         where: { id: tournamentId },
         data: { status: "COMPLETED" }
       });
+      await reconcileChipConservationOnCompletion(tournamentId);
       await auditChipConservation(tournamentId);
       try {
         const tournament = await prisma.tournament.findUnique({

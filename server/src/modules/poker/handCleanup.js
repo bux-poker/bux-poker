@@ -4,6 +4,7 @@
  */
 import { prisma } from "../../config/database.js";
 import { tableState } from "./tableState.js";
+import { resetPlayerRowIfNotEliminated } from "./safeHandCleanupDb.js";
 
 /**
  * @param {string} gameId
@@ -25,15 +26,9 @@ export function cleanupHandAndStartNext(gameId, io, state, startHandForGame, del
     const resetPromises = savedPlayers
       .filter((p) => p.status !== "ELIMINATED" && p.chips > 0)
       .map((p) =>
-        prisma.player
-          .update({
-            where: { id: p.id },
-            data: { status: "ACTIVE", holeCards: "", lastAction: null },
-          })
-          .catch((err) => {
-            if (err?.code === "P2025") return;
-            console.error(`[POKER] Error resetting player ${p.id} in hand cleanup:`, err?.message);
-          })
+        resetPlayerRowIfNotEliminated(p.id).catch((err) => {
+          console.error(`[POKER] Error resetting player ${p.id} in hand cleanup:`, err?.message);
+        })
       );
 
     Promise.all(resetPromises).then(async () => {

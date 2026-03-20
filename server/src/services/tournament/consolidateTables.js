@@ -109,10 +109,14 @@ export async function doConsolidateTables(tournamentId, deps) {
     return games;
   }
 
+  // Block new hands for this tournament for the whole consolidation window (not only when we first
+  // saw an active hand). Otherwise idle poll can start a hand during the 2s delay / DB work and
+  // we clear tableState mid-hand → chip loss (see hasActiveHand false-negatives + DB/async races).
+  _consolidationWaitTournamentIds.add(tournamentId);
+  try {
   const anyHasHand = await Promise.all(games.map((g) => deps.hasActiveHand(g.id))).then((arr) => arr.some(Boolean));
   if (anyHasHand) {
     console.log(`[TOURNAMENT] Consolidation needed (${games.length} tables, counts ${counts.join(",")}, spread ${spread}). Waiting for all hands to finish...`);
-    _consolidationWaitTournamentIds.add(tournamentId);
     try {
       const io = deps.getIO();
       if (io) {
@@ -140,12 +144,10 @@ export async function doConsolidateTables(tournamentId, deps) {
     } catch (e) {
       console.warn("[TOURNAMENT] Consolidation wait error:", e?.message);
     }
-    // Keep flag set until we finish rebalance and start hands (or abort) – prevents a table's setTimeout from starting a new hand before we're done
   } else {
     await new Promise((r) => setTimeout(r, 2000));
   }
 
-  try {
   games = await prisma.game.findMany({
     where: { tournamentId, status: "ACTIVE" },
     include: {
@@ -248,6 +250,17 @@ export async function doConsolidateTables(tournamentId, deps) {
     }
   }
 
+  const gamesWithDbPot = await prisma.game.findMany({
+    where: { id: { in: allActiveGameIdsForClear }, pot: { gt: 0 } },
+    select: { id: true, pot: true, tableNumber: true }
+  });
+  if (gamesWithDbPot.length > 0) {
+    console.warn(
+      `[TOURNAMENT] Aborting consolidation: DB pot > 0 (hand may still be settling): ${gamesWithDbPot.map((g) => `table${g.tableNumber}:${g.pot}`).join(", ")}`
+    );
+    return games;
+  }
+
   try {
     deps.clearAllStateForGames(allActiveGameIdsForClear);
   } catch (e) {
@@ -313,6 +326,8 @@ export async function doConsolidateTables(tournamentId, deps) {
   try {
     const io = deps.getIO();
     if (io) {
+      // Allow hands to start again (startHandForGame refuses while this flag is set).
+      _consolidationWaitTournamentIds.delete(tournamentId);
       let started = 0;
       for (const g of updatedGames) {
         if (g.players.length >= 2 && !(await deps.hasActiveHand(g.id))) {
@@ -347,7 +362,7 @@ export async function doConsolidateTables(tournamentId, deps) {
 
   return updatedGames;
   } finally {
-    if (anyHasHand) _consolidationWaitTournamentIds.delete(tournamentId);
+    _consolidationWaitTournamentIds.delete(tournamentId);
   }
 }
 

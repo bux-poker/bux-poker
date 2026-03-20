@@ -7,6 +7,7 @@ import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/
 import { handleShowdown, runCinematicAllInShowdown } from "./showdown.js";
 import { cleanupHandAndStartNext } from "./handCleanup.js";
 import { startTurnTimer } from "./turnTimers.js";
+import { resetPlayerRowIfNotEliminated } from "./safeHandCleanupDb.js";
 
 export async function advanceToNextStreet(gameId, io) {
   console.log(`[POKER] advanceToNextStreet called for gameId: ${gameId}`);
@@ -187,15 +188,9 @@ export async function advanceToNextStreet(gameId, io) {
       const resetPromises = savedPlayers
         .filter((p) => p.status !== "ELIMINATED" && p.chips > 0)
         .map((p) =>
-          prisma.player
-            .update({
-              where: { id: p.id },
-              data: { status: "ACTIVE", holeCards: "", lastAction: null },
-            })
-            .catch((err) => {
-              if (err?.code === "P2025") return;
-              console.error(`[POKER] Error resetting player ${p.id}:`, err);
-            })
+          resetPlayerRowIfNotEliminated(p.id).catch((err) => {
+            console.error(`[POKER] Error resetting player ${p.id}:`, err);
+          })
         );
       Promise.all(resetPromises).then(async () => {
         const gameForNextHand = await prisma.game
@@ -382,24 +377,11 @@ export async function advanceToNextStreet(gameId, io) {
 
           const resetPromises = savedPlayers
             .filter((p) => p.status !== "ELIMINATED" && p.chips > 0)
-            .map((p) => {
-              return prisma.player
-                .update({
-                  where: { id: p.id },
-                  data: {
-                    status: "ACTIVE",
-                    holeCards: "",
-                    lastAction: null,
-                  },
-                })
-                .catch((err) => {
-                  if (err?.code === "P2025") return;
-                  console.error(
-                    `[POKER] Error resetting player ${p.id}:`,
-                    err
-                  );
-                });
-            });
+            .map((p) =>
+              resetPlayerRowIfNotEliminated(p.id).catch((err) => {
+                console.error(`[POKER] Error resetting player ${p.id}:`, err);
+              })
+            );
 
           Promise.all(resetPromises).then(async () => {
             const gameForNextHand = await prisma.game

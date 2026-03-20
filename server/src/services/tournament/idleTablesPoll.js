@@ -1,6 +1,7 @@
 import { prisma } from "../../config/database.js";
 import { awardStalePotAndZeroGame } from "./stalePotRecovery.js";
 import { getTournamentBlindLevelFromTime, syncBlindLevelsToTournamentTime } from "./blindLevels.js";
+import { isTournamentConsolidationWaiting } from "./consolidateTables.js";
 
 const STUCK_THRESHOLD_MS = 45000;
 const IDLE_POLL_INTERVAL_MS = 15000;
@@ -92,6 +93,12 @@ export function startIdleTablesPoll(engine) {
           }
 
           if ((game.pot ?? 0) > 0) {
+            if (isTournamentConsolidationWaiting(t.id)) {
+              console.log(
+                `[TOURNAMENT] Skipping stale-pot recovery for game ${game.id} — consolidation in progress for tournament ${t.id}`
+              );
+              continue;
+            }
             console.warn(
               `[TOURNAMENT] Idle-table recovery: awarding stale pot=${game.pot} to players at game ${game.id} (table ${game.tableNumber}) then zeroing so hand can start`
             );

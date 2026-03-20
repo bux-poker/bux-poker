@@ -8,6 +8,10 @@ import { advanceToNextStreet } from "../../poker/advanceStreet.js";
 import { emitIfTournamentCompleted } from "../../poker/tableTournamentHooks.js";
 import { checkAndAdvanceBlindLevel } from "../../poker/blindLevel.js";
 import { cleanupHandAndStartNext } from "../../poker/handCleanup.js";
+import {
+  clearHoleCardsIfEliminated,
+  resetPlayerRowIfNotEliminated,
+} from "../../poker/safeHandCleanupDb.js";
 
 /**
  * Register the player-action socket handler.
@@ -142,19 +146,16 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
           setTimeout(async () => {
             tableState.delete(gameId);
 
-            savedPlayers.forEach(p => {
-              const isEliminated = p.status === "ELIMINATED";
-              prisma.player.update({
-                where: { id: p.id },
-                data: {
-                  status: isEliminated ? "ELIMINATED" : "ACTIVE",
-                  holeCards: "",
-                  lastAction: null
-                }
-              }).catch(err => {
-                if (err?.code === "P2025") return;
-                console.error(`[POKER] Error resetting player ${p.id}:`, err);
-              });
+            savedPlayers.forEach((p) => {
+              if (p.status === "ELIMINATED") {
+                clearHoleCardsIfEliminated(p.id).catch((err) =>
+                  console.error(`[POKER] Error clearing holes for eliminated ${p.id}:`, err)
+                );
+              } else {
+                resetPlayerRowIfNotEliminated(p.id).catch((err) =>
+                  console.error(`[POKER] Error resetting player ${p.id}:`, err)
+                );
+              }
             });
 
             const gameForNext = await prisma.game.findUnique({
@@ -179,7 +180,10 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
             include: { tournament: true }
           });
           if (game?.tournament) {
-            const bustedPlayers = state.players.filter(p => p.chips <= 0 && p.status === "ACTIVE");
+            // Any non-eliminated player with 0 chips is out (includes FOLDED after losing last chips).
+            const bustedPlayers = state.players.filter(
+              (p) => p.chips <= 0 && p.status !== "ELIMINATED"
+            );
             for (const busted of bustedPlayers) {
               console.log(`[POKER] Player ${busted.name || busted.userId} busted with 0 chips after pot award`);
               await tournamentEngine.onPlayerBust(game.tournament.id, busted.id).catch(() => {});

@@ -1,5 +1,6 @@
 import { prisma } from "../../config/database.js";
 import { tableState, turnTimers, hasActiveHand } from "./tableState.js";
+import { resetPlayerRowIfNotEliminated } from "./safeHandCleanupDb.js";
 import { postDealerMessage } from "./dealerMessages.js";
 import { buildClientGameState } from "./buildClientGameState.js";
 import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/pokerHandler.js";
@@ -175,14 +176,7 @@ export async function moveToNextPlayer(gameId, io) {
       tableState.delete(gameId);
       const resetPromises = savedPlayers
         .filter((p) => p.status !== "ELIMINATED" && p.chips > 0)
-        .map((p) =>
-          prisma.player
-            .update({
-              where: { id: p.id },
-              data: { status: "ACTIVE", holeCards: "", lastAction: null },
-            })
-            .catch(() => {})
-        );
+        .map((p) => resetPlayerRowIfNotEliminated(p.id).catch(() => {}));
       Promise.all(resetPromises).then(async () => {
         const gameForNextHand = await prisma.game
           .findUnique({

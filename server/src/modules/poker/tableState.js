@@ -36,17 +36,23 @@ export function hasActiveHand(gameId) {
   const state = tableState.get(gameId);
   if (!state) return false;
 
-  // A table with fewer than 2 active contenders should not block consolidation.
+  // Hand explicitly ended (winner awarded / cleanup pending) should not block consolidation.
+  if (state.handEnded) return false;
+
+  // Chips still in the pot means the hand is not fully settled in memory (e.g. awarding/showdown).
+  // Must run BEFORE the activeContenders shortcut — that shortcut can false-negative during
+  // fold-win or broken state (e.g. consolidation cleared other fields but async path still running).
+  if ((state.pot ?? 0) > 0) return true;
+
+  if (state.showdownActive) return true;
+
+  // A table with fewer than 2 active contenders should not block consolidation (once pot is 0).
   const activeContenders = (state.players || []).filter(
     (p) => p.status !== "FOLDED" && p.status !== "ELIMINATED"
   ).length;
   if (activeContenders < 2) return false;
 
-  // Hand explicitly ended (winner awarded / cleanup pending) should not block consolidation.
-  if (state.handEnded) return false;
-
   if (state.currentTurnUserId) return true;
-  if (state.showdownActive) return true;
   if (state.street && state.street !== null) return true;
   return false;
 }
