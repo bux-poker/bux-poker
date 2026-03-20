@@ -40,6 +40,15 @@ model Tournament {
   blindLevelsJson String // JSON config for blinds structure
   prizePlaces     Int
 
+  /// Start of the current blind-level playing period (synchronized across tables).
+  blindPeriodAnchorAt DateTime?
+  /// When set and in the future, tournament is in a scheduled break (no new hands).
+  tournamentBreakUntilAt DateTime?
+  /// After a level/break transition, wait until all qualifying tables start a hand before advancing the clock.
+  awaitingHandsForBlindClock Boolean @default(false)
+  /// Incremented on each transition; games acknowledge by setting blindBarrierAck to this value after starting a hand.
+  blindScheduleBarrier Int @default(0)
+
   createdById String
   createdBy   User   @relation(fields: [createdById], references: [id])
 
@@ -85,6 +94,9 @@ model Game {
   // Current blind amounts (for non-tournament games or fallback)
   smallBlind Int?
   bigBlind   Int?
+
+  /// Last acknowledged tournament.blindScheduleBarrier after starting a hand (blind clock sync).
+  blindBarrierAck Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

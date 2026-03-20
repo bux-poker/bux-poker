@@ -50,6 +50,18 @@ export async function startHandForGameBody(gameId, io) {
     return;
   }
 
+  const breakUntil = game.tournament?.tournamentBreakUntilAt;
+  if (game.tournamentId && breakUntil && new Date(breakUntil).getTime() > Date.now()) {
+    if (io) {
+      const st = tableState.get(gameId);
+      await emitGameState(gameId, io, st ?? null);
+    }
+    console.log(
+      `[POKER] Tournament ${game.tournamentId} scheduled break until ${breakUntil} — not starting hand`
+    );
+    return;
+  }
+
   const playersWithChips = game.players.filter(p => p.status !== 'ELIMINATED' && p.chips > 0);
   if (playersWithChips.length < 2) {
     console.log(`[POKER] Not enough players with chips to start hand (${playersWithChips.length}), skipping. Tournament may be complete.`);
@@ -476,6 +488,13 @@ export async function startHandForGameBody(gameId, io) {
   }
 
   console.log(`[POKER] Started hand for game ${gameId}: dealer=${dealerPlayer.seatNumber}, sb=${sbPlayer.seatNumber}, bb=${bbPlayer.seatNumber}, utg=${utgPlayer ? utgPlayer.seatNumber : 'none'}`);
+
+  if (game.tournamentId) {
+    const { onTournamentHandStartedForBlindClock } = await import(
+      "../../services/tournament/blindLevels.js"
+    );
+    await onTournamentHandStartedForBlindClock(game.tournamentId, gameId, io);
+  }
 
   return state;
 }

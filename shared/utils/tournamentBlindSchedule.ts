@@ -70,6 +70,68 @@ export function getBlindScheduleFromElapsedMs(
   };
 }
 
+export type TournamentAnchorClockInput = {
+  blindPeriodAnchorAt: string | Date | null | undefined;
+  awaitingHandsForBlindClock?: boolean | null | undefined;
+  tournamentBreakUntilAt?: string | Date | null | undefined;
+  currentLevelIndex: number;
+  blindLevels: BlindLevelRow[];
+  nowMs?: number;
+};
+
+export type AnchorClockResult = {
+  label: string;
+  phase: "break" | "level" | "aligning" | "final";
+  msUntilNext: number | null;
+};
+
+/**
+ * Blind/break countdown for RUNNING tournaments using server anchor + break end time.
+ * When `awaitingHandsForBlindClock` or anchor is missing (during hand sync), show aligning phase.
+ */
+export function getBlindCountdownFromTournamentSchedule(
+  input: TournamentAnchorClockInput
+): AnchorClockResult {
+  const nowMs = input.nowMs ?? Date.now();
+  const breakUntil = input.tournamentBreakUntilAt
+    ? new Date(input.tournamentBreakUntilAt).getTime()
+    : null;
+
+  if (breakUntil != null && nowMs < breakUntil) {
+    const ms = Math.max(0, breakUntil - nowMs);
+    const minutes = Math.floor(ms / 60000);
+    const seconds = Math.floor((ms % 60000) / 1000);
+    return {
+      label: `${minutes}:${seconds.toString().padStart(2, "0")}`,
+      phase: "break",
+      msUntilNext: ms,
+    };
+  }
+
+  if (input.awaitingHandsForBlindClock || input.blindPeriodAnchorAt == null) {
+    return { label: "0:00", phase: "aligning", msUntilNext: 0 };
+  }
+
+  const anchorMs = new Date(input.blindPeriodAnchorAt).getTime();
+  const level = input.blindLevels[input.currentLevelIndex];
+  if (!level || level.duration == null || level.duration === undefined) {
+    return { label: "∞", phase: "final", msUntilNext: null };
+  }
+
+  const levelMinutes = Number(level.duration);
+  const durMs =
+    (Number.isFinite(levelMinutes) && levelMinutes >= 0 ? levelMinutes : 0) * 60 * 1000;
+  const end = anchorMs + durMs;
+  const ms = Math.max(0, end - nowMs);
+  const minutes = Math.floor(ms / 60000);
+  const seconds = Math.floor((ms % 60000) / 1000);
+  return {
+    label: `${minutes}:${seconds.toString().padStart(2, "0")}`,
+    phase: "level",
+    msUntilNext: ms,
+  };
+}
+
 export function getBlindScheduleForTournament(
   startedAt: string | Date,
   blindLevelsJson: string,

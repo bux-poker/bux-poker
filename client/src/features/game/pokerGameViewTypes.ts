@@ -20,6 +20,8 @@ export interface GameStatePayload {
   id: string;
   tournamentId?: string;
   tableNumber?: number;
+  /** Tournament blind structure index (for synchronized blind clock UI). */
+  currentBlindLevel?: number;
   pot: number;
   communityCards: string;
   players: PlayerViewModel[];

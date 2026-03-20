@@ -18,7 +18,11 @@ import { getHandDescription } from "@shared/utils/handEvaluator";
 import type { GameStatePayload } from "./pokerGameViewTypes";
 import { handBlocksConsolidationWaitOverlay } from "./handBlocksConsolidationWaitOverlay";
 import { parseCommunityCards } from "./parseCommunityCards";
-import { getBlindScheduleForTournament } from "@shared/utils/tournamentBlindSchedule";
+import {
+  getBlindScheduleForTournament,
+  getBlindCountdownFromTournamentSchedule,
+  type BlindLevelRow,
+} from "@shared/utils/tournamentBlindSchedule";
 
 export function PokerGameView() {
   const { id } = useParams<{ id: string }>();
@@ -38,6 +42,24 @@ export function PokerGameView() {
   const [consolidationWaiting, setConsolidationWaiting] = useState<string | null>(null);
   /** Server asks all tables to wait until hands finish before blinds go up */
   const [blindWaitMessage, setBlindWaitMessage] = useState<string | null>(null);
+  /** Popups for synchronized level-up and scheduled breaks */
+  const [scheduleModal, setScheduleModal] = useState<
+    | {
+        kind: "BREAK";
+        tournamentId: string;
+        breakEndsAt: string;
+        message: string;
+      }
+    | {
+        kind: "LEVEL_UP";
+        tournamentId: string;
+        message: string;
+        smallBlind?: number | null;
+        bigBlind?: number | null;
+      }
+    | null
+  >(null);
+  const [breakRemainSec, setBreakRemainSec] = useState(0);
   const [pendingConsolidationWaiting, setPendingConsolidationWaiting] = useState<string | null>(null);
   const [socketConnected, setSocketConnected] = useState(false);
   const [tournamentLobbyOpen, setTournamentLobbyOpen] = useState(false);
@@ -225,6 +247,52 @@ export function PokerGameView() {
       }
     };
     socket.on('blind-level-waiting', onBlindLevelWaiting);
+
+    const onScheduleAnnouncement = (payload: {
+      tournamentId: string;
+      type: "BREAK" | "LEVEL_UP";
+      breakEndsAt?: string;
+      message?: string;
+      smallBlind?: number;
+      bigBlind?: number;
+    }) => {
+      if (
+        payload.tournamentId !== latestGameTournamentIdRef.current &&
+        payload.tournamentId !== latestTournamentIdRef.current
+      ) {
+        return;
+      }
+      if (payload.type === "BREAK" && payload.breakEndsAt) {
+        setScheduleModal({
+          kind: "BREAK",
+          tournamentId: payload.tournamentId,
+          breakEndsAt: payload.breakEndsAt,
+          message: payload.message || "Tournament break",
+        });
+      } else if (payload.type === "LEVEL_UP") {
+        soundManager.play("blind-level-up");
+        setScheduleModal({
+          kind: "LEVEL_UP",
+          tournamentId: payload.tournamentId,
+          message: payload.message || "Blind level increased",
+          smallBlind: payload.smallBlind,
+          bigBlind: payload.bigBlind,
+        });
+      }
+    };
+    socket.on("tournament-schedule-announcement", onScheduleAnnouncement);
+
+    const onBlindClockStarted = (payload: { tournamentId?: string }) => {
+      if (
+        payload.tournamentId &&
+        payload.tournamentId !== latestGameTournamentIdRef.current &&
+        payload.tournamentId !== latestTournamentIdRef.current
+      ) {
+        return;
+      }
+      void refetchTournament({ silent: true });
+    };
+    socket.on("tournament-blind-clock-started", onBlindClockStarted);
 
     const emitJoinTable = () => {
       socket.emit("join-table", { gameId: id });
@@ -428,6 +496,8 @@ export function PokerGameView() {
       socket.off("tournament-started", handleTournamentStarted);
       socket.off("tournament_completed");
       socket.off("blind-level-waiting", onBlindLevelWaiting);
+      socket.off("tournament-schedule-announcement", onScheduleAnnouncement);
+      socket.off("tournament-blind-clock-started", onBlindClockStarted);
     };
   }, [id, user?.id, refetchTournament, navigate]);
 
@@ -483,51 +553,114 @@ export function PokerGameView() {
     });
   }, [tournament?.status, (tournament as any)?.startScheduledAt]);
 
-  // Next blind countdown — same schedule as server (includes breakAfter between levels)
+  // Next blind / break countdown — anchor-based when server provides schedule fields (else legacy elapsed-time)
   useEffect(() => {
     if (!tournament) {
-      setNextBlindTime('--:--');
+      setNextBlindTime("--:--");
       return;
     }
 
     if (!tournament.startedAt) {
-      setNextBlindTime('--:--');
+      setNextBlindTime("--:--");
       return;
     }
 
-    if (tournament.status !== 'RUNNING' && tournament.status !== 'ACTIVE') {
-      setNextBlindTime('--:--');
+    if (tournament.status !== "RUNNING" && tournament.status !== "ACTIVE") {
+      setNextBlindTime("--:--");
       return;
     }
 
     const tick = () => {
       const json =
-        typeof tournament.blindLevels === 'string'
+        typeof tournament.blindLevels === "string"
           ? tournament.blindLevels
           : JSON.stringify((tournament as any).blindLevels ?? []);
+      const tt = tournament as any;
+      const useAnchor =
+        tt.awaitingHandsForBlindClock === true ||
+        tt.blindPeriodAnchorAt != null ||
+        tt.tournamentBreakUntilAt != null;
+
+      if (useAnchor) {
+        let blindLevels: BlindLevelRow[] = [];
+        try {
+          blindLevels = Array.isArray(tournament.blindLevels)
+            ? tournament.blindLevels
+            : JSON.parse(json || "[]");
+        } catch {
+          blindLevels = [];
+        }
+        if (!Array.isArray(blindLevels) || blindLevels.length === 0) {
+          setNextBlindTime("--:--");
+          return;
+        }
+        const levelIdx =
+          typeof gameState?.currentBlindLevel === "number"
+            ? gameState.currentBlindLevel
+            : 0;
+        const clock = getBlindCountdownFromTournamentSchedule({
+          blindPeriodAnchorAt: tt.blindPeriodAnchorAt,
+          awaitingHandsForBlindClock: !!tt.awaitingHandsForBlindClock,
+          tournamentBreakUntilAt: tt.tournamentBreakUntilAt,
+          currentLevelIndex: levelIdx,
+          blindLevels,
+          nowMs: Date.now(),
+        });
+        setNextBlindTime(clock.label);
+        return;
+      }
+
       const sched = getBlindScheduleForTournament(
         (tournament as any).startedAt,
         json,
         Date.now()
       );
       if (!sched) {
-        setNextBlindTime('--:--');
+        setNextBlindTime("--:--");
         return;
       }
       if (sched.atLastLevel || sched.msUntilNextLevel == null) {
-        setNextBlindTime(sched.atLastLevel ? '∞' : '--:--');
+        setNextBlindTime(sched.atLastLevel ? "∞" : "--:--");
         return;
       }
       const ms = sched.msUntilNextLevel;
       const minutes = Math.floor(ms / 60000);
       const seconds = Math.floor((ms % 60000) / 1000);
-      setNextBlindTime(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+      setNextBlindTime(`${minutes}:${seconds.toString().padStart(2, "0")}`);
     };
 
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [tournament]);
+  }, [tournament, gameState?.currentBlindLevel]);
+
+  useEffect(() => {
+    if (!scheduleModal || scheduleModal.kind !== "LEVEL_UP") return;
+    const t = setTimeout(() => setScheduleModal(null), 14000);
+    return () => clearTimeout(t);
+  }, [scheduleModal]);
+
+  useEffect(() => {
+    if (!scheduleModal || scheduleModal.kind !== "BREAK") return;
+    const end = new Date(scheduleModal.breakEndsAt).getTime();
+    let iv: ReturnType<typeof setInterval> | null = null;
+    let closed = false;
+    const tick = () => {
+      const s = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+      setBreakRemainSec(s);
+      if (s <= 0 && !closed) {
+        closed = true;
+        if (iv != null) clearInterval(iv);
+        setScheduleModal(null);
+        void refetchTournament({ silent: true });
+      }
+    };
+    tick();
+    iv = setInterval(tick, 250);
+    return () => {
+      if (iv != null) clearInterval(iv);
+    };
+  }, [scheduleModal, refetchTournament]);
 
   // Detect when the local user is eliminated from the tournament or wins it,
   // and show a simple modal with their final position / winner announcement.
@@ -894,6 +1027,65 @@ export function PokerGameView() {
                 Close Table
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Synchronized blind level / scheduled break (server-driven) */}
+      {scheduleModal && (
+        <div
+          className="fixed inset-0 z-[106] flex items-center justify-center bg-black/75 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="schedule-modal-title"
+        >
+          <div className="w-full max-w-md rounded-xl border border-slate-600 bg-slate-900/98 p-6 text-center shadow-2xl">
+            {scheduleModal.kind === "BREAK" ? (
+              <>
+                <h2 id="schedule-modal-title" className="text-xl font-bold text-sky-200">
+                  Tournament break
+                </h2>
+                <p className="mt-2 text-slate-300">{scheduleModal.message}</p>
+                <p className="mt-4 font-mono text-4xl font-semibold tabular-nums text-white">
+                  {Math.floor(breakRemainSec / 60)}:
+                  {(breakRemainSec % 60).toString().padStart(2, "0")}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">No new hands until the break ends.</p>
+                <button
+                  type="button"
+                  className="mt-6 rounded-lg bg-slate-700 px-5 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600"
+                  onClick={() => {
+                    setScheduleModal(null);
+                    void refetchTournament({ silent: true });
+                  }}
+                >
+                  Dismiss
+                </button>
+              </>
+            ) : (
+              <>
+                <h2 id="schedule-modal-title" className="text-xl font-bold text-amber-200">
+                  Blind level up
+                </h2>
+                <p className="mt-2 text-lg text-slate-200">{scheduleModal.message}</p>
+                {scheduleModal.smallBlind != null && scheduleModal.bigBlind != null && (
+                  <p className="mt-2 text-slate-400">
+                    New blinds: {Number(scheduleModal.smallBlind).toLocaleString()} /{" "}
+                    {Number(scheduleModal.bigBlind).toLocaleString()}
+                  </p>
+                )}
+                <p className="mt-3 text-sm text-slate-500">
+                  The blind timer restarts once every table has started the next hand.
+                </p>
+                <button
+                  type="button"
+                  className="mt-6 rounded-lg bg-amber-600 px-5 py-2 text-sm font-medium text-white hover:bg-amber-500"
+                  onClick={() => setScheduleModal(null)}
+                >
+                  OK
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

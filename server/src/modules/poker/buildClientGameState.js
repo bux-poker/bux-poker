@@ -50,6 +50,7 @@ export function buildClientGameState(game, state) {
     id: game.id,
     tournamentId: game.tournamentId,
     tableNumber: game.tableNumber,
+    currentBlindLevel: game.currentBlindLevel ?? 0,
     pot: totalPot,
     consolidationWaitingMessage,
     communityCards: communityCardsEncoded,

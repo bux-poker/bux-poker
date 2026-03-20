@@ -71,7 +71,19 @@ export async function doRunScheduledStart(tournamentId, deps) {
   const startedAt = new Date();
   await prisma.tournament.update({
     where: { id: tournamentId },
-    data: { status: "RUNNING", startedAt, startScheduledAt: null }
+    data: {
+      status: "RUNNING",
+      startedAt,
+      startScheduledAt: null,
+      blindPeriodAnchorAt: null,
+      tournamentBreakUntilAt: null,
+      awaitingHandsForBlindClock: true,
+      blindScheduleBarrier: 1,
+    },
+  });
+  await prisma.game.updateMany({
+    where: { tournamentId },
+    data: { blindBarrierAck: 0 },
   });
   if (socketIO) {
     socketIO.emit("tournament-started", { tournamentId, startedAt: startedAt.toISOString() });

@@ -1,6 +1,6 @@
 import { prisma } from "../../config/database.js";
 import { auditChipConservation } from "./chipAudit.js";
-import { syncBlindLevelsToTournamentTime } from "./blindLevels.js";
+import { resyncGamesToMaxBlindLevel } from "./blindLevels.js";
 
 const _consolidationLocks = new Map();
 
@@ -318,7 +318,7 @@ export async function doConsolidateTables(tournamentId, deps) {
 
   try {
     const io = deps.getIO();
-    await syncBlindLevelsToTournamentTime(tournamentId, io, { emitDealerMessage: false });
+    await resyncGamesToMaxBlindLevel(tournamentId, io, { emitDealerMessage: false });
   } catch (e) {
     console.warn("[TOURNAMENT] Could not sync blind levels after rebalancing:", e?.message);
   }
