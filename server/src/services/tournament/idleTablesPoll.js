@@ -86,8 +86,17 @@ export function startIdleTablesPoll(engine) {
             continue;
           }
           if (game.players.length < 2) {
-            // Single-player tables should not retain stale in-memory hand state;
-            // this can block consolidation and leave players stranded.
+            // IMPORTANT: in heads-up all-in, one player's DB chips can be 0 while the hand is still active.
+            // In that state, this query returns only one chip-positive player; clearing state here would
+            // kill the live hand and leave the table stuck.
+            const handActive = hasActiveHand(game.id);
+            if (handActive || (game.pot ?? 0) > 0) {
+              console.log(
+                `[TOURNAMENT] Idle poll: preserving state for short-handed table ${game.tableNumber} (game ${game.id}) because hand is still settling (active=${handActive}, pot=${game.pot ?? 0})`
+              );
+              continue;
+            }
+            // Truly idle single-player table: clear stale state so future consolidation/start logic is unblocked.
             clearAllStateForGames([game.id]);
             continue;
           }
