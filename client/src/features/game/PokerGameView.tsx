@@ -12,100 +12,12 @@ import { api } from "../../services/api";
 import { useTournament } from "../../hooks/useTournaments";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { TournamentLobbyModal } from "../../components/tournament/TournamentLobbyModal";
-import { soundManager, SOUND_CONFIGS, type SoundName } from "../../utils/soundManager";
+import { soundManager, type SoundName } from "../../utils/soundManager";
 import { preloadCards } from "../../utils/cardPreloader";
 import { getHandDescription } from "@shared/utils/handEvaluator";
-
-interface PlayerViewModel {
-  id: string;
-  name: string;
-  chips: number;
-  seatNumber: number;
-  status: string;
-  holeCards?: Card[];
-  avatarUrl?: string;
-  userId?: string;
-  contribution?: number;
-  lastAction?: string | null;
-  lastActionSeq?: number;
-}
-
-interface GameStatePayload {
-  id: string;
-  tournamentId?: string;
-  tableNumber?: number;
-  pot: number;
-  communityCards: string;
-  players: PlayerViewModel[];
-  smallBlind?: number;
-  bigBlind?: number;
-  dealerSeat?: number;
-  smallBlindSeat?: number;
-  bigBlindSeat?: number;
-  currentTurnUserId?: string;
-  street?: string;
-  currentBet?: number;
-  minimumRaise?: number;
-  showdownActive?: boolean;
-  showdownResults?: any;
-  /** Server-driven: tournament is waiting for all tables to finish before reseat (authoritative vs one-shot socket). */
-  consolidationWaitingMessage?: string | null;
-}
-
-function parseCommunityCards(encoded: string): Card[] {
-  if (!encoded) return [];
-  try {
-    const parsed = JSON.parse(encoded);
-    if (Array.isArray(parsed)) {
-      return parsed;
-    }
-  } catch {
-    // ignore
-  }
-  return [];
-}
-
-/**
- * True while a real betting round / showdown is in progress (something we must not cover with the wait popup).
- * Intentionally does NOT use pot or per-player contributions — those can stay stale in game-state after a hand
- * ends and would hide the consolidation overlay forever.
- */
-function handBlocksConsolidationWaitOverlay(
-  state: GameStatePayload | null,
-  optimisticActionPendingRef?: { current: boolean }
-): boolean {
-  if (optimisticActionPendingRef?.current) return true;
-  if (!state) return false;
-  if (state.showdownActive) return true;
-  if (state.currentTurnUserId) return true;
-  if ((state.currentBet ?? 0) > 0) return true;
-  if (parseCommunityCards(state.communityCards).length > 0) return true;
-  return false;
-}
-
-// Helper to play sound effects using queued playback to avoid overlaps
-function playSound(soundNameOrFile: string, volume: number = 0.7) {
-  if (typeof window === 'undefined') return;
-
-  // Support old file-based calls for backward compatibility
-  const legacyMap: Record<string, SoundName> = {
-    'turn.mp3': 'your-turn',
-    'fold.wav': 'fold',
-    'bet.wav': 'bet',
-    'check.wav': 'check',
-  };
-
-  let soundName: SoundName;
-  if ((soundNameOrFile as SoundName) in SOUND_CONFIGS) {
-    soundName = soundNameOrFile as SoundName;
-  } else if (legacyMap[soundNameOrFile]) {
-    soundName = legacyMap[soundNameOrFile];
-  } else {
-    soundName = soundNameOrFile.replace(/\.(mp3|wav)$/, '') as SoundName;
-  }
-
-  soundManager.playQueued(soundName, volume);
-}
+import type { GameStatePayload } from "./pokerGameViewTypes";
+import { handBlocksConsolidationWaitOverlay } from "./handBlocksConsolidationWaitOverlay";
+import { parseCommunityCards } from "./parseCommunityCards";
 
 export function PokerGameView() {
   const { id } = useParams<{ id: string }>();

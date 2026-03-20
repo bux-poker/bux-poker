@@ -6,9 +6,9 @@ Line counts are **non-blank lines** (approximate). Use `wc -l <file>` for raw li
 
 | File | ~lines | Suggested split (purpose-named modules) |
 |------|--------|----------------------------------------|
-| `features/game/PokerGameView.tsx` | 1184+ | `gameStateTypes.ts` (payloads/VMs), `parseCommunityCards.ts`, `handBlocksConsolidationWaitOverlay.ts`, `usePokerSocketState.ts` (listeners + merge), `useOptimisticPokerActions.ts`, `PokerGameViewLayout.tsx` (shell only) |
+| `features/game/PokerGameView.tsx` | ~1100+ | **Done (phase 1):** `pokerGameViewTypes.ts`, `parseCommunityCards.ts`, `handBlocksConsolidationWaitOverlay.ts`. **Next:** `usePokerGameSocket.ts`, blind timer helpers, `PokerGameViewLayout.tsx`. |
 | `components/tournament/TournamentLobby.tsx` | 885+ | `useTournamentLobbyState.ts`, `TournamentLobbyHeader.tsx`, `TournamentLobbyTableList.tsx`, `tournamentLobbyFormatters.ts` |
-| `components/poker/PokerTable.tsx` | 999+ | `BetChip.tsx`, `pokerTableConstants.ts` (suits, motion presets), `CommunityCards.tsx`, `PlayerSeat.tsx`, `PotDisplay.tsx`, `usePokerTableLayout.ts` |
+| `components/poker/PokerTable.tsx` | ~670 (after split) | **Done (phase 1):** `table/BetChip.tsx`, `table/PokerCardImage.tsx`, `table/formatHandCategory.ts`, `table/pokerTableConstants.ts`, `table/pokerTableTypes.ts`, `table/pokerTableActionOverlayUtils.ts`, `table/usePokerTableActionOverlays.ts`. **Next:** corner HUD, community row, seat renderer. |
 | `components/admin/CreateTournament.tsx` | 516+ | Form sections per step + `createTournamentSchema.ts` |
 | `components/tournament/TournamentList.tsx` | 481+ | Row/card components + `useTournamentListFilters.ts` |
 | `components/tournament/TournamentLobbyModal.tsx` | 396+ | Modal frame vs tab content components |

@@ -46,7 +46,9 @@ Authoritative detail and refactor queue: **`docs/MODULE_MAP.md`**.
 | Area | Role |
 |------|------|
 | `features/game/PokerGameView.tsx` | Table route: socket wiring, optimistic actions, tournament modals |
-| `components/poker/PokerTable.tsx` | Felt, seats, cards, pot, motion |
+| `features/game/pokerGameViewTypes.ts` + `parseCommunityCards.ts` + `handBlocksConsolidationWaitOverlay.ts` | Game-state types & consolidation-overlay guard |
+| `components/poker/PokerTable.tsx` | Felt, seats, cards, pot, motion (shell) |
+| `components/poker/table/*` | `BetChip`, `PokerCardImage`, seat action overlays hook, constants, props types |
 | `components/poker/BettingControls.tsx` | Raise/call/fold UI + sizing math |
 | `components/tournament/*` | Lobby, list, modals, timestamps |
 | `services/socket.ts`, `services/api.ts` | Transport |

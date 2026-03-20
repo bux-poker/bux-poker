@@ -1,7 +1,7 @@
 /**
  * Test page for table position adjustments.
  * Mirrors the real game screen: header (top bar), table, action buttons, chat.
- * Open /table-test to tweak PLAYER_POSITIONS in PokerTable.tsx while viewing.
+ * Open /table-test to tweak PLAYER_POSITIONS in components/poker/table/pokerTableConstants.ts while viewing.
  */
 import { useState, useEffect } from "react";
 import { PokerTable } from "../components/poker/PokerTable";
