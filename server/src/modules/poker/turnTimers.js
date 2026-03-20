@@ -208,13 +208,18 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
     );
     const playerName = player?.name || player?.user?.username || "";
 
-    // Auto-fold when timer reaches 0 (humans and test players)
+    const currentBet = state.bettingRound?.currentBet || 0;
+    const myContribution =
+      state.bettingRound?.getPlayerContribution(player.id) || 0;
+    const canCheck = myContribution >= currentBet;
+
+    // Human timer expiry policy: CHECK if no bet to call, otherwise FOLD.
     let stateAfter;
     try {
       stateAfter = await applyPlayerAction({
         gameId,
         userId,
-        action: "FOLD",
+        action: canCheck ? "CHECK" : "FOLD",
         amount: 0,
         io,
       });
@@ -225,6 +230,10 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
       }
       throw err;
     }
+
+    console.log(
+      `[POKER] turn-timer expiry auto-action: ${canCheck ? "CHECK" : "FOLD"} for ${playerName || userId} (currentBet=${currentBet}, contribution=${myContribution})`
+    );
 
     const game = await prisma.game.findUnique({
       where: { id: gameId },
