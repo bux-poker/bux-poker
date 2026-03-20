@@ -109,55 +109,105 @@ export class TournamentService {
     }
   }
 
-  async getTournamentById(id) {
-    try {
-      const tournament = await prisma.tournament.findUnique({
-        where: { id },
+  /**
+   * Load tournament + games + players. If the single deep query fails (engine/timeout),
+   * fall back to tournament row + separate games query so the lobby can still load.
+   */
+  async _fetchTournamentWithRelations(id) {
+    const fullInclude = {
+      registrations: {
         include: {
-          registrations: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              avatarUrl: true,
+              discordId: true,
+            },
+          },
+        },
+      },
+      games: {
+        orderBy: { tableNumber: "asc" },
+        include: {
+          players: {
             include: {
               user: {
                 select: {
                   id: true,
                   username: true,
                   avatarUrl: true,
-                  discordId: true,
                 },
               },
             },
           },
-          games: {
-            include: {
-              players: {
-                include: {
-                  user: {
-                    select: {
-                      id: true,
-                      username: true,
-                      avatarUrl: true,
-                    },
+        },
+      },
+      posts: {
+        include: {
+          server: true,
+        },
+      },
+      createdBy: {
+        select: {
+          id: true,
+          username: true,
+          avatarUrl: true,
+        },
+      },
+    };
+
+    try {
+      return await prisma.tournament.findUnique({
+        where: { id },
+        include: fullInclude,
+      });
+    } catch (primaryErr) {
+      console.error(
+        `[TOURNAMENT SERVICE] Primary findUnique failed for ${id}:`,
+        primaryErr?.message || primaryErr
+      );
+      try {
+        const base = await prisma.tournament.findUnique({
+          where: { id },
+          include: {
+            registrations: fullInclude.registrations,
+            posts: fullInclude.posts,
+            createdBy: fullInclude.createdBy,
+          },
+        });
+        if (!base) return null;
+        const games = await prisma.game.findMany({
+          where: { tournamentId: id },
+          orderBy: { tableNumber: "asc" },
+          include: {
+            players: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    avatarUrl: true,
                   },
                 },
               },
             },
-            orderBy: {
-              tableNumber: 'asc',
-            },
           },
-          posts: {
-            include: {
-              server: true,
-            },
-          },
-          createdBy: {
-            select: {
-              id: true,
-              username: true,
-              avatarUrl: true,
-            },
-          },
-        },
-      });
+        });
+        return { ...base, games };
+      } catch (fallbackErr) {
+        console.error(
+          `[TOURNAMENT SERVICE] Fallback fetch also failed for ${id}:`,
+          fallbackErr?.message || fallbackErr
+        );
+        throw primaryErr;
+      }
+    }
+  }
+
+  async getTournamentById(id) {
+    try {
+      const tournament = await this._fetchTournamentWithRelations(id);
 
       if (!tournament) return null;
 

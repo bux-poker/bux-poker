@@ -9,32 +9,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-// ULTRA-OPTIMIZED: Maximum performance database configuration
+// Standard Prisma client — avoid undocumented __internal engine overrides (can break Prisma 5+ / 6+).
+// Tune pooling via DATABASE_URL query params (e.g. ?connection_limit=10&pool_timeout=20) on hosted Postgres.
 const prisma = new PrismaClient({
-  log: [], // NO LOGGING AT ALL
+  log:
+    process.env.NODE_ENV === "production"
+      ? ["error"]
+      : ["warn", "error"],
   datasources: {
     db: {
-      url: process.env.DATABASE_URL
-    }
+      url: process.env.DATABASE_URL,
+    },
   },
-  // ULTRA-OPTIMIZED: Maximum connection pooling and performance
-  __internal: {
-    engine: {
-      binaryTargets: ['native'],
-      connectionLimit: 50, // Increased from 20
-      poolTimeout: 30000, // Increased from 20000
-      queryTimeout: 15000, // Increased from 10000
-      connectionTimeout: 10000, // Added connection timeout
-      maxConnections: 50, // Added max connections
-      minConnections: 5, // Added min connections
-      acquireTimeoutMillis: 10000, // Added acquire timeout
-      createTimeoutMillis: 10000, // Added create timeout
-      destroyTimeoutMillis: 5000, // Added destroy timeout
-      idleTimeoutMillis: 30000, // Added idle timeout
-      reapIntervalMillis: 1000, // Added reap interval
-      createRetryIntervalMillis: 200 // Added retry interval
-    }
-  }
 });
 
 // NOTE: Removed previous hard guard that forcibly blocked Game.status='FINISHED'.

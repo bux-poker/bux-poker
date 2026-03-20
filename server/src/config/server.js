@@ -98,6 +98,27 @@ app.use(session(sessionConfig));
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Last: never return Express default HTML for /api — clients expect JSON
+app.use((err, req, res, next) => {
+  console.error("[API] Unhandled error:", err?.name, err?.message);
+  if (err?.stack && process.env.NODE_ENV !== "production") {
+    console.error(err.stack);
+  }
+  if (res.headersSent) {
+    return next(err);
+  }
+  const statusRaw = Number(err?.status ?? err?.statusCode);
+  const status =
+    statusRaw >= 400 && statusRaw < 600 ? statusRaw : 500;
+  const isApi = req.originalUrl?.startsWith("/api");
+  if (isApi) {
+    return res.status(status).json({
+      error: err?.message || "Internal Server Error",
+    });
+  }
+  return res.status(status).send(err?.message || "Internal Server Error");
+});
+
 // Socket.IO configuration
 const io = new Server(server, {
   cors: corsOptions,

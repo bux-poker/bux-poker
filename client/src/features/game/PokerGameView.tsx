@@ -203,13 +203,22 @@ export function PokerGameView() {
     
     socket.on('tournament-started', handleTournamentStarted);
     
-    // Ensure socket is connected
+    const emitJoinTable = () => {
+      socket.emit("join-table", { gameId: id });
+    };
+
+    // One join per connection: avoid double emit (mount + connect) racing startHand on the server
+    const onSocketConnect = () => {
+      setSocketConnected(true);
+      emitJoinTable();
+    };
+    socket.on("connect", onSocketConnect);
     if (!socket.connected) {
       socket.connect();
+    } else {
+      setSocketConnected(true);
+      emitJoinTable();
     }
-
-    // Use default namespace - backend handles routing
-    socket.emit("join-table", { gameId: id });
 
     socket.on("game-state", (payload: GameStatePayload) => {
       // Ignore game-state for other tables (user may receive stale msgs if room leave was delayed)
@@ -259,13 +268,10 @@ export function PokerGameView() {
       setConnecting(false);
     });
 
-    socket.on("connect", () => {
-      setSocketConnected(true);
-      socket.emit("join-table", { gameId: id });
-    });
-    socket.on("disconnect", () => {
+    const onSocketDisconnect = () => {
       setSocketConnected(false);
-    });
+    };
+    socket.on("disconnect", onSocketDisconnect);
     setSocketConnected(socket.connected);
 
     socket.on("game_message", (data: { gameId: string; message: any }) => {
@@ -405,8 +411,8 @@ export function PokerGameView() {
     return () => {
       socket.off("game-state");
       socket.off("error");
-      socket.off("connect");
-      socket.off("disconnect");
+      socket.off("connect", onSocketConnect);
+      socket.off("disconnect", onSocketDisconnect);
       socket.off("game_message");
       socket.off("turn-timer-start");
       socket.off("showdown");

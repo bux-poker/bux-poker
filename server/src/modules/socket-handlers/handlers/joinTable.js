@@ -35,7 +35,8 @@ export function registerJoinTable(socket, io, { startHandForGame }) {
       if (!state && game.status === "ACTIVE" && game.players.length >= 2) {
         if (game.tournament && game.tournament.status === "RUNNING") {
           try {
-            state = await startHandForGame(gameId, socket.server);
+            // Use namespace server (io) — socket.server can be missing on some Socket.IO builds
+            state = await startHandForGame(gameId, io);
           } catch (handError) {
             console.error("[POKER] Error auto-starting hand:", handError);
           }
@@ -48,10 +49,10 @@ export function registerJoinTable(socket, io, { startHandForGame }) {
       socket.emit("game-state", payload);
 
       if (state) {
-        socket.server.to(`game:${gameId}`).emit("game-state", payload);
+        io.to(`game:${gameId}`).emit("game-state", payload);
       }
     } catch (err) {
-      console.error("join-table error", err);
+      console.error("join-table error", err?.message || err, err?.stack || err);
       socket.emit("error", { message: "Failed to join table" });
     }
   });

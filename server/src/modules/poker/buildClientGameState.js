@@ -6,10 +6,31 @@ import { isTournamentConsolidationWaiting } from "../../services/tournament/cons
 const CONSOLIDATION_WAIT_MESSAGE =
   "Waiting for other tables to finish their hands before reseating...";
 
+/** In-memory state can rarely have a plain-object bettingRound (no class methods) — never throw on join. */
+function safeBettingRoundTotalPot(round) {
+  if (!round || typeof round.getTotalPot !== "function") return 0;
+  try {
+    const n = round.getTotalPot();
+    return typeof n === "number" && !Number.isNaN(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function safePlayerContribution(round, playerId) {
+  if (!round || typeof round.getPlayerContribution !== "function") return 0;
+  try {
+    const n = round.getPlayerContribution(playerId);
+    return typeof n === "number" && !Number.isNaN(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export function buildClientGameState(game, state) {
   // Calculate total pot: state.pot (accumulated from previous streets) + current betting round
   const totalPot = state
-    ? (state.pot || 0) + (state.bettingRound?.getTotalPot() || 0)
+    ? (state.pot || 0) + safeBettingRoundTotalPot(state.bettingRound)
     : game.pot || 0;
 
   // Start of new hand: never send stale card data from previous hand
@@ -74,8 +95,7 @@ export function buildClientGameState(game, state) {
           }
           return null;
         })(),
-        contribution: state?.bettingRound?.getPlayerContribution(p.id) || 0,
+        contribution: safePlayerContribution(state?.bettingRound, p.id),
       })),
   };
 }
-

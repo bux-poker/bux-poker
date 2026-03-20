@@ -67,7 +67,12 @@ export async function startHandForGame(gameId, io) {
   if (tableState.get(gameId)) return;
   let lock = startHandLocks.get(gameId);
   if (lock) {
-    await lock;
+    // Don't let a rejected lock (failed startHand from another caller) crash this join-table
+    try {
+      await lock;
+    } catch {
+      // ignore — join will still emit DB-backed game-state
+    }
     return;
   }
   lock = (async () => {
