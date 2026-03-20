@@ -14,7 +14,8 @@ export function buildClientGameState(game, state) {
 
   // Start of new hand: never send stale card data from previous hand
   const street = state?.street || "PREFLOP";
-  const isNewHand = street === "PREFLOP" && !state?.showdownActive;
+  const hasWinners = (state?.showdownResults?.winners?.length || 0) > 0;
+  const isNewHand = street === "PREFLOP" && !state?.showdownActive && !hasWinners;
   const communityCardsEncoded = isNewHand
     ? "[]"
     : JSON.stringify(state?.communityCards ?? []);

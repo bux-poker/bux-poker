@@ -145,26 +145,40 @@ export function startTurnTimer(gameId, userId, io) {
       duration: timeoutMs,
     });
   } else {
-    // Human: start 10s countdown immediately so UI timer matches turn (no grace delay)
-    const countdownMs = 10000;
-    const expiresAt = Date.now() + countdownMs;
-
-    io.to(`game:${gameId}`).emit("turn-timer-start", {
-      gameId,
-      userId,
-      expiresAt,
-      duration: countdownMs,
-    });
+    // Human timing policy:
+    // - 20s total action window on the backend
+    // - show UI countdown only for the final 10s
+    const totalActionMs = 20000;
+    const uiCountdownMs = 10000;
+    const autoActionExpiresAt = Date.now() + totalActionMs;
 
     const timeoutTimerId = setTimeout(() => {
       autoFoldPlayer(gameId, userId, io, timeoutTimerId);
-    }, countdownMs);
+    }, totalActionMs);
+
+    const uiCountdownTimerId = setTimeout(() => {
+      const timerState = turnTimers.get(gameId);
+      if (
+        !timerState ||
+        timerState.timerId !== timeoutTimerId ||
+        String(timerState.userId) !== String(userId)
+      ) {
+        return;
+      }
+      io.to(`game:${gameId}`).emit("turn-timer-start", {
+        gameId,
+        userId,
+        expiresAt: Date.now() + uiCountdownMs,
+        duration: uiCountdownMs,
+      });
+    }, totalActionMs - uiCountdownMs);
 
     turnTimers.set(gameId, {
       timerId: timeoutTimerId,
+      graceTimerId: uiCountdownTimerId,
       userId,
-      expiresAt,
-      duration: countdownMs,
+      expiresAt: autoActionExpiresAt,
+      duration: totalActionMs,
     });
   }
 }
@@ -206,6 +220,13 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
     const player = state.players.find(
       (p) => p.userId === userId || String(p.userId) === uidStr
     );
+    if (!player) {
+      console.log(
+        `[POKER] autoFoldPlayer: player not found for ${uidStr}, moving turn`
+      );
+      await moveToNextPlayer(gameId, io);
+      return;
+    }
     const playerName = player?.name || player?.user?.username || "";
 
     const currentBet = state.bettingRound?.currentBet || 0;
