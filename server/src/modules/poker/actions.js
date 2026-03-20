@@ -40,27 +40,7 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
     `[ACTION] Before: currentBet=${currentBetBefore}, playerContribution=${playerContributionBefore}, lastRaiseUserId=${state.lastRaiseUserId || "null"}`
   );
 
-  const activeNonFoldedPlayers = state.players.filter(
-    (p) =>
-      p.status !== "FOLDED" &&
-      p.status !== "ELIMINATED" &&
-      p.status !== "ALL_IN" &&
-      p.chips > 0
-  );
-  const isHeadsUpPot = activeNonFoldedPlayers.length === 2;
   let effectiveAction = action;
-
-  const getEffectiveCap = () => {
-    const myContribution = state.bettingRound.getPlayerContribution(player.id);
-    const currentBet = state.bettingRound.currentBet || 0;
-    const othersWithChips = activeNonFoldedPlayers.filter(
-      (p) => p.userId !== userId && p.chips > 0
-    );
-    if (othersWithChips.length === 0) return myContribution + player.chips;
-    const minOpponentChips = Math.min(...othersWithChips.map((o) => o.chips));
-    const sidePotRoom = currentBet + minOpponentChips;
-    return Math.min(myContribution + player.chips, sidePotRoom);
-  };
 
   switch (action) {
     case "BET":
@@ -71,20 +51,6 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
 
       const myContribution = state.bettingRound.getPlayerContribution(player.id);
       const isGoingAllIn = amount >= player.chips;
-
-      if (!isGoingAllIn) {
-        const effectiveCap = getEffectiveCap();
-        const desiredNewContribution = myContribution + amount;
-        if (desiredNewContribution > effectiveCap) {
-          const cappedAmount = Math.max(0, effectiveCap - myContribution);
-          if (cappedAmount < amount) {
-            console.log(
-              `[ACTION] Capping ${action} amount for ${playerName} from ${amount} to ${cappedAmount} based on effective stack`
-            );
-            amount = cappedAmount;
-          }
-        }
-      }
 
       if (amount <= 0) {
         console.log(
@@ -143,17 +109,14 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
         break;
       }
 
-      const activeCount = state.players.filter(
-        (p) => p.status !== "FOLDED" && p.status !== "ELIMINATED"
-      ).length;
-      const isHeadsUp = activeCount === 2;
       const raiseAmount = newContribution - currentBet;
       const minRaise =
         state.bettingRound.minimumRaise || state.bettingRound.bigBlind || 20;
       const isShortRaise = raiseAmount > 0 && raiseAmount < minRaise;
 
       try {
-        if (isShortRaise && (isGoingAllIn || isHeadsUp)) {
+        // Short all-in only: sub-minimum raises are not legal in NLHE just because it's heads-up.
+        if (isShortRaise && isGoingAllIn) {
           state.bettingRound.playerBets.set(player.id, newContribution);
           if (newContribution > state.bettingRound.currentBet) {
             state.bettingRound.currentBet = newContribution;
@@ -172,7 +135,7 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
       } catch (err) {
         if (
           err?.message === "Raise below minimum raise size" &&
-          (isGoingAllIn || raiseAmount > 0)
+          isGoingAllIn
         ) {
           state.bettingRound.playerBets.set(player.id, newContribution);
           if (newContribution > state.bettingRound.currentBet) {
