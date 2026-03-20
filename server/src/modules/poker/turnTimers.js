@@ -9,17 +9,25 @@ import { postDealerMessage } from "./dealerMessages.js";
 import { prisma } from "../../config/database.js";
 
 export function startTurnTimer(gameId, userId, io) {
+  const state = tableState.get(gameId);
+  if (!state) return;
+
   const existingTimer = turnTimers.get(gameId);
   if (existingTimer) {
+    const sameUser = String(existingTimer.userId) === String(userId);
+    const stillTheirTurn =
+      String(state.currentTurnUserId ?? "") === String(userId ?? "");
+    const notExpired = (existingTimer.expiresAt || 0) > Date.now();
+    // Prevent repeated timer resets for the same player/turn (this extends deadline and feels like "stuck after 0").
+    if (sameUser && stillTheirTurn && notExpired) {
+      return;
+    }
     clearTimeout(existingTimer.timerId);
     if (existingTimer.graceTimerId) {
       clearTimeout(existingTimer.graceTimerId);
     }
     turnTimers.delete(gameId);
   }
-
-  const state = tableState.get(gameId);
-  if (!state) return;
 
   const player = state.players.find((p) => p.userId === userId);
   if (!player) return;
