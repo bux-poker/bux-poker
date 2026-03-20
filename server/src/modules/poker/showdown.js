@@ -427,6 +427,11 @@ export async function handleShowdownCore(gameId, io, options = {}) {
       const tournamentEngine = new TournamentEngine();
       const busted = state.players.filter((p) => p.chips <= 0 && p.status !== "ELIMINATED");
       for (const p of busted) {
+        // onPlayerBust → markPlayerBust must run BEFORE prisma sets ELIMINATED; otherwise
+        // markPlayerBust returns early and never writes finishingPlace (lobby shows wrong rank).
+        await tournamentEngine.onPlayerBust(game.tournament.id, p.id).catch((err) => {
+          console.error("[SHOWDOWN] Error notifying tournament of player bust:", err);
+        });
         p.status = "ELIMINATED";
         await prisma.player
           .update({ where: { id: p.id }, data: { status: "ELIMINATED", chips: 0 } })
@@ -434,9 +439,6 @@ export async function handleShowdownCore(gameId, io, options = {}) {
             if (err?.code === "P2025") return;
             console.error(`[SHOWDOWN] Error marking busted player ${p.id}:`, err);
           });
-        await tournamentEngine.onPlayerBust(game.tournament.id, p.id).catch((err) => {
-          console.error("[SHOWDOWN] Error notifying tournament of player bust:", err);
-        });
       }
       if (busted.length > 0) {
         io.emit("tournament_updated", { tournamentId: game.tournament.id });

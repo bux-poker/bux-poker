@@ -23,7 +23,7 @@ export async function markPlayerBust(tournamentId, playerId, finishingPlace = nu
 
   const current = await prisma.player.findUnique({
     where: { id: playerId },
-    select: { id: true, chips: true, status: true }
+    select: { id: true, chips: true, status: true, finishingPlace: true }
   });
   if (!current) {
     console.log(`[TOURNAMENT] Player ${playerId} not found, skipping bust update`);
@@ -36,6 +36,23 @@ export async function markPlayerBust(tournamentId, playerId, finishingPlace = nu
   }
   if (current.status === "ELIMINATED") {
     _recentBustMarks.set(dedupeKey, now);
+    if (
+      finishingPlace != null &&
+      (current.finishingPlace == null || current.finishingPlace === undefined)
+    ) {
+      await prisma.player
+        .update({
+          where: { id: playerId },
+          data: { finishingPlace },
+        })
+        .catch((err) => {
+          if (err?.code === "P2025") return;
+          console.error(
+            `[TOURNAMENT] Error backfilling finishingPlace for already-eliminated ${playerId}:`,
+            err
+          );
+        });
+    }
     return;
   }
 
@@ -78,11 +95,14 @@ export async function doOnPlayersBust(tournamentId, playerIds, deps) {
   if (!playerIds || playerIds.length === 0) return;
   const uniquePlayerIds = [...new Set(playerIds)];
 
-  const remainingBeforeBust = await prisma.player.count({
-    where: { game: { tournamentId }, chips: { gt: 0 }, status: { not: "ELIMINATED" } }
+  // Count everyone still in the event (not eliminated), including 0-chip players who are
+  // busting this pass — chips>0 alone wrongly gave basePlace when the loser was already 0.
+  const stillCompeting = await prisma.player.count({
+    where: { game: { tournamentId }, status: { not: "ELIMINATED" } }
   });
-  const basePlace = remainingBeforeBust + 1;
-  console.log(`[TOURNAMENT] onPlayersBust: ${uniquePlayerIds.length} busted, remainingBeforeBust=${remainingBeforeBust}, basePlace=${basePlace}`);
+  const k = uniquePlayerIds.length;
+  const basePlace = Math.max(1, stillCompeting - k + 1);
+  console.log(`[TOURNAMENT] onPlayersBust: ${k} busted, stillCompeting=${stillCompeting}, basePlace=${basePlace}`);
 
   for (let i = 0; i < uniquePlayerIds.length; i++) {
     await markPlayerBust(tournamentId, uniquePlayerIds[i], basePlace + i);
