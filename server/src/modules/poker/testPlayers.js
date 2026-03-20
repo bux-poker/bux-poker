@@ -6,6 +6,22 @@ import { advanceToNextStreet } from "./advanceStreet.js";
 import { handleShowdownCore } from "./showdown.js";
 import { emitIfTournamentCompleted } from "./tableTournamentHooks.js";
 import { prisma } from "../../config/database.js";
+import { normalizeUserId } from "./normalizeUserId.js";
+
+/** Clients only see dealer chat unless we emit game-state (matches player-action handler). */
+async function emitGameStateForGame(gameId, io) {
+  if (!io) return;
+  const stateNow = tableState.get(gameId);
+  if (!stateNow) return;
+  const game = await prisma.game
+    .findUnique({
+      where: { id: gameId },
+      include: { players: { include: { user: true } }, tournament: true },
+    })
+    .catch(() => null);
+  if (!game) return;
+  io.to(`game:${gameId}`).emit("game-state", buildClientGameState(game, stateNow));
+}
 
 export async function handleTestPlayerAction(gameId, userId, io) {
   try {
@@ -26,7 +42,7 @@ export async function handleTestPlayerAction(gameId, userId, io) {
       return;
     }
 
-    if (state.currentTurnUserId !== userId) {
+    if (normalizeUserId(state.currentTurnUserId) !== normalizeUserId(userId)) {
       console.log(
         `[POKER] handleTestPlayerAction: It's no longer ${userId}'s turn (currentTurn=${state.currentTurnUserId}). State may have changed.`
       );
@@ -45,6 +61,7 @@ export async function handleTestPlayerAction(gameId, userId, io) {
         );
         try {
           await moveToNextPlayer(gameId, io);
+          await emitGameStateForGame(gameId, io);
         } catch (err) {
           console.error(
             "[POKER] Error in moveToNextPlayer after stale timer:",
@@ -55,7 +72,9 @@ export async function handleTestPlayerAction(gameId, userId, io) {
       return;
     }
 
-    const player = state.players.find((p) => p.userId === userId);
+    const player = state.players.find(
+      (p) => normalizeUserId(p.userId) === normalizeUserId(userId)
+    );
     if (!player) {
       console.log(
         `[POKER] Player not found in state for userId: ${userId} - they may have been eliminated`
@@ -70,6 +89,7 @@ export async function handleTestPlayerAction(gameId, userId, io) {
       }
       try {
         await moveToNextPlayer(gameId, io);
+        await emitGameStateForGame(gameId, io);
       } catch (err) {
         console.error(
           "[POKER] Error moving to next player after player not found:",
@@ -94,6 +114,7 @@ export async function handleTestPlayerAction(gameId, userId, io) {
       }
       try {
         await moveToNextPlayer(gameId, io);
+        await emitGameStateForGame(gameId, io);
       } catch (err) {
         console.error(
           `[POKER] Error moving to next player after ${player.status} player:`,
@@ -109,7 +130,7 @@ export async function handleTestPlayerAction(gameId, userId, io) {
         } is all-in (0 chips), skipping action and advancing`
       );
       if (player.status !== "ALL_IN") player.status = "ALL_IN";
-      state.actedPlayersInRound.add(userId);
+      state.actedPlayersInRound.add(normalizeUserId(userId));
       tableState.set(gameId, state);
       const existingTimer = turnTimers.get(gameId);
       if (existingTimer) {
@@ -119,6 +140,7 @@ export async function handleTestPlayerAction(gameId, userId, io) {
       }
       try {
         await moveToNextPlayer(gameId, io);
+        await emitGameStateForGame(gameId, io);
       } catch (err) {
         console.error(
           "[POKER] Error moving to next player after all-in:",
@@ -285,6 +307,8 @@ export async function handleTestPlayerAction(gameId, userId, io) {
       }
     }
 
+    await emitGameStateForGame(gameId, io);
+
     // Use same definition as playerAction: all non-folded, non-eliminated (include ALL_IN).
     // Excluding ALL_IN here could shrink activePlayerIds to 1 and make isBettingComplete return true,
     // advancing to flop with unequal bets.
@@ -331,6 +355,7 @@ export async function handleTestPlayerAction(gameId, userId, io) {
 
       try {
         await moveToNextPlayer(gameId, io);
+        await emitGameStateForGame(gameId, io);
       } catch (moveError) {
         console.error(
           "[TEST PLAYER] ERROR in recovery moveToNextPlayer:",
