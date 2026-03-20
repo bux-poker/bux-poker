@@ -7,6 +7,7 @@ import { getSocket } from '../../services/socket';
 import { TournamentTimestamp } from './TournamentTimestamp';
 import { AddToHomeScreen } from '../AddToHomeScreen';
 import api from '../../services/api';
+import { getBlindScheduleForTournament } from '@shared/utils/tournamentBlindSchedule';
 
 type Tab = 'players' | 'blinds' | 'prizes' | 'tables';
 
@@ -174,47 +175,26 @@ export function TournamentLobby() {
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       setRunningTime(`${hours}h ${minutes}m`);
 
-      // Calculate current blind level and time to next level using the same logic as the table
+      // Same schedule math as server (includes breakAfter between levels)
       if (blindLevels.length > 0 && (tournament as any).startedAt) {
-        let elapsedMinutes = diff / 1000 / 60;
-        let currentLevelIndex = 0;
-
-        for (let i = 0; i < blindLevels.length; i++) {
-          const level = blindLevels[i];
-          if (level.duration === null) {
-            currentLevelIndex = i;
-            elapsedMinutes = 0;
-            break;
-          }
-          const levelDuration = level.duration || 0;
-          if (elapsedMinutes <= levelDuration) {
-            currentLevelIndex = i;
-            break;
-          }
-          elapsedMinutes -= levelDuration;
-        }
-
-        if (currentLevelIndex < blindLevels.length) {
-          const currentLevel = blindLevels[currentLevelIndex];
-          setCurrentBlindLevel(currentLevel);
-
-          if (currentLevelIndex + 1 < blindLevels.length) {
-            const nextLevel = blindLevels[currentLevelIndex + 1];
-            setNextBlindLevel(nextLevel);
-
-            const levelDuration = currentLevel.duration || 0;
-            const remainingMinutes = Math.max(0, levelDuration - elapsedMinutes);
-            const timeUntilNext = remainingMinutes * 60 * 1000;
-            if (timeUntilNext > 0) {
-              const mins = Math.floor(timeUntilNext / (1000 * 60));
-              const secs = Math.floor((timeUntilNext % (1000 * 60)) / 1000);
-              setNextBlindIn(`${mins}:${secs.toString().padStart(2, '0')}`);
-            } else {
-              setNextBlindIn('0:00');
-            }
-          } else {
+        const json =
+          typeof tournament.blindLevels === 'string'
+            ? tournament.blindLevels
+            : JSON.stringify(blindLevels.length ? blindLevels : []);
+        const sched = getBlindScheduleForTournament((tournament as any).startedAt, json, Date.now());
+        if (sched) {
+          const currentLevel = blindLevels[sched.currentLevelIndex];
+          setCurrentBlindLevel(currentLevel ?? null);
+          if (sched.atLastLevel || sched.msUntilNextLevel == null) {
             setNextBlindLevel(null);
-            setNextBlindIn('∞');
+            setNextBlindIn(sched.atLastLevel ? '∞' : '--:--');
+          } else {
+            const nextIdx = sched.currentLevelIndex + 1;
+            setNextBlindLevel(blindLevels[nextIdx] ?? null);
+            const ms = sched.msUntilNextLevel;
+            const mins = Math.floor(ms / 60000);
+            const secs = Math.floor((ms % 60000) / 1000);
+            setNextBlindIn(`${mins}:${secs.toString().padStart(2, '0')}`);
           }
         }
       }
@@ -231,47 +211,29 @@ export function TournamentLobby() {
         }
 
         if (data?.players) {
-          // Active players sorted by chip count descending
-          const active = data.players.filter((p: any) => p.status !== 'ELIMINATED');
-          const eliminated = data.players.filter((p: any) => p.status === 'ELIMINATED');
+          // API returns full standings: still-in by chips, then eliminated by finishing place (first out last)
+          const rows: Player[] = (data.players as any[]).map((p: any) => ({
+            id: p.id,
+            userId: p.userId,
+            user: p.user,
+            chips: p.chips,
+            status: p.status,
+            position: p.finishingPlace ?? null,
+          }));
+          setPlayers(rows);
 
-          const activeSorted: Player[] = active
-            .map((p: any) => ({
-              id: p.id,
-              userId: p.userId,
-              user: p.user,
-              chips: p.chips,
-              status: p.status,
-              position: null as number | null,
-            }))
-            .sort((a: Player, b: Player) => b.chips - a.chips);
+          const nonElim = rows.filter((p) => p.status !== 'ELIMINATED');
+          setRemainingPlayers((data as any).remainingPlayers ?? nonElim.length);
 
-          // Eliminated players – `position` will be wired up from the backend
-          // when we start storing final standings per player.
-          const eliminatedWithPosition: Player[] = eliminated
-            .map((p: any) => ({
-              id: p.id,
-              userId: p.userId,
-              user: p.user,
-              chips: p.chips,
-              status: p.status,
-              // Use finishingPlace from API as the player's final position
-              position: p.finishingPlace ?? null,
-            }))
-            .sort((a: Player, b: Player) => (a.position || 0) - (b.position || 0));
-
-          setPlayers([...activeSorted, ...eliminatedWithPosition]);
-
-          // Remaining players = use API value if available, else non-eliminated count
-          setRemainingPlayers((data as any).remainingPlayers ?? active.length);
-
-          // Current position for logged-in user (1 = most chips among remaining, otherwise final position)
           if (user) {
-            const meActiveIndex = activeSorted.findIndex(p => p.userId === user.id);
+            const activeSorted = [...nonElim].sort((a, b) => b.chips - a.chips);
+            const meActiveIndex = activeSorted.findIndex((p) => p.userId === user.id);
             if (meActiveIndex >= 0) {
               setCurrentPosition(meActiveIndex + 1);
             } else {
-              const meEliminated = eliminatedWithPosition.find(p => p.userId === user.id);
+              const meEliminated = rows.find(
+                (p) => p.userId === user.id && p.status === 'ELIMINATED'
+              );
               setCurrentPosition(meEliminated?.position ?? null);
             }
           }
@@ -304,16 +266,14 @@ export function TournamentLobby() {
         } else if (tournament.status === 'COMPLETED') {
           const response = await api.get(`/api/tournaments/${id}`);
           if (response.data?.players && response.data.players.length > 0) {
-            const finalPlayers = response.data.players
-              .map((p: any) => ({
-                id: p.id,
-                userId: p.userId,
-                user: p.user,
-                chips: p.chips,
-                status: p.status,
-                position: p.finishingPlace ?? null,
-              }))
-              .sort((a: Player, b: Player) => (a.position ?? 999) - (b.position ?? 999));
+            const finalPlayers = response.data.players.map((p: any) => ({
+              id: p.id,
+              userId: p.userId,
+              user: p.user,
+              chips: p.chips,
+              status: p.status,
+              position: p.finishingPlace ?? null,
+            }));
             setPlayers(finalPlayers);
           } else if (response.data?.registrations) {
             setPlayers(response.data.registrations

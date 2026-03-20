@@ -1,5 +1,44 @@
 import { prisma } from "../config/database.js";
 
+/** All registered players appear; first eliminated (worst finishing place) near bottom. */
+function mergeRegistrationsIntoStandings(livePlayers, registrations) {
+  const seen = new Set(livePlayers.map((p) => p.userId));
+  const out = [...livePlayers];
+  for (const r of registrations || []) {
+    if (r.status !== "CONFIRMED" && r.status !== "PENDING") continue;
+    if (seen.has(r.userId)) continue;
+    seen.add(r.userId);
+    out.push({
+      id: `registration-${r.id}`,
+      userId: r.userId,
+      user: r.user,
+      chips: 0,
+      status: "REGISTERED",
+      gameId: null,
+      tableNumber: null,
+      seatNumber: null,
+      finishingPlace: null,
+    });
+  }
+  return out;
+}
+
+function sortTournamentStandings(rows) {
+  const registered = rows.filter((r) => r.status === "REGISTERED");
+  const eliminated = rows.filter((r) => r.status === "ELIMINATED");
+  const active = rows.filter(
+    (r) => r.status !== "ELIMINATED" && r.status !== "REGISTERED"
+  );
+  active.sort((a, b) => (b.chips ?? 0) - (a.chips ?? 0));
+  eliminated.sort(
+    (a, b) => (a.finishingPlace ?? 999) - (b.finishingPlace ?? 999)
+  );
+  registered.sort((a, b) =>
+    (a.user?.username || "").localeCompare(b.user?.username || "")
+  );
+  return [...active, ...eliminated, ...registered];
+}
+
 export class TournamentService {
   async listTournaments() {
     try {
@@ -274,7 +313,13 @@ export class TournamentService {
             }
           }
         }
-        
+
+        livePlayers = mergeRegistrationsIntoStandings(
+          livePlayers,
+          tournament.registrations
+        );
+        livePlayers = sortTournamentStandings(livePlayers);
+
         return {
           ...tournament,
           startedAt: tournament.startedAt, // Include startedAt for blind timer

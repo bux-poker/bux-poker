@@ -1,6 +1,6 @@
 import { prisma } from "../../config/database.js";
 import { awardStalePotAndZeroGame } from "./stalePotRecovery.js";
-import { getTournamentBlindLevelFromTime, syncBlindLevelsToTournamentTime } from "./blindLevels.js";
+import { tryAdvanceBlindsIfDue } from "./blindLevels.js";
 import { isTournamentConsolidationWaiting } from "./consolidateTables.js";
 
 const STUCK_THRESHOLD_MS = 45000;
@@ -26,27 +26,9 @@ export function startIdleTablesPoll(engine) {
       for (const t of running) {
         // Backup blind advancement: wall clock vs DB (covers lost timers after deploy / missed ticks).
         try {
-          const fullTournament = await prisma.tournament.findUnique({ where: { id: t.id } });
-          if (fullTournament?.startedAt) {
-            const blindResult = getTournamentBlindLevelFromTime(fullTournament);
-            if (blindResult) {
-              const activeGames = await prisma.game.findMany({
-                where: { tournamentId: t.id, status: "ACTIVE" },
-                select: { currentBlindLevel: true }
-              });
-              if (activeGames.length > 0) {
-                const gl = activeGames[0].currentBlindLevel ?? 0;
-                if (blindResult.currentLevelIndex > gl) {
-                  console.log(
-                    `[TOURNAMENT] Idle poll: syncing blinds for ${t.id} (game level ${gl} -> time-based ${blindResult.currentLevelIndex})`
-                  );
-                  await syncBlindLevelsToTournamentTime(t.id, socketIO ?? null, {
-                    emitDealerMessage: !!socketIO
-                  });
-                }
-              }
-            }
-          }
+          await tryAdvanceBlindsIfDue(t.id, socketIO ?? null, {
+            emitDealerMessage: !!socketIO,
+          });
         } catch (blindErr) {
           console.warn(`[TOURNAMENT] Idle poll blind sync failed for ${t.id}:`, blindErr?.message);
         }

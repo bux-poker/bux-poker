@@ -1,5 +1,5 @@
 import { prisma } from "../../config/database.js";
-import { getTournamentBlindLevelFromTime, syncBlindLevelsToTournamentTime } from "./blindLevels.js";
+import { tryAdvanceBlindsIfDue } from "./blindLevels.js";
 
 const blindTimers = new Map(); // tournamentId -> intervalId
 
@@ -16,23 +16,7 @@ export async function resumeBlindLevelTimersForRunningTournaments(deps) {
     });
     const io = getIO();
     for (const t of running) {
-      const tournament = await prisma.tournament.findUnique({ where: { id: t.id } });
-      const result = getTournamentBlindLevelFromTime(tournament);
-      if (result) {
-        const games = await prisma.game.findMany({
-          where: { tournamentId: t.id, status: "ACTIVE" },
-          select: { currentBlindLevel: true }
-        });
-        if (games.length > 0) {
-          const gameLevel = games[0].currentBlindLevel ?? 0;
-          if (result.currentLevelIndex > gameLevel) {
-            console.log(
-              `[TOURNAMENT] Startup blind catch-up for ${t.id}: ${gameLevel} -> ${result.currentLevelIndex}`
-            );
-            await syncBlindLevelsToTournamentTime(t.id, io, { emitDealerMessage: !!io });
-          }
-        }
-      }
+      await tryAdvanceBlindsIfDue(t.id, io, { emitDealerMessage: !!io });
       startBlindLevelTimer(t.id, deps);
       console.log(`[TOURNAMENT] Resumed blind level timer for tournament ${t.id}`);
     }
@@ -53,7 +37,7 @@ export function startBlindLevelTimer(tournamentId, deps) {
   }
 
   const { getIO } = deps;
-  console.log(`[TOURNAMENT] Blind level timer started for tournament ${tournamentId}, checking every 60 seconds`);
+  console.log(`[TOURNAMENT] Blind level timer started for tournament ${tournamentId}, checking every 10 seconds`);
   const intervalId = setInterval(async () => {
     try {
       const tournament = await prisma.tournament.findUnique({
@@ -67,28 +51,12 @@ export function startBlindLevelTimer(tournamentId, deps) {
         return;
       }
 
-      console.log(`[TOURNAMENT] Blind timer check for tournament ${tournamentId}`);
-
-      const result = getTournamentBlindLevelFromTime(tournament);
-      if (!result) return;
-      const { currentLevelIndex } = result;
-
-      const games = await prisma.game.findMany({
-        where: { tournamentId, status: "ACTIVE" },
-        select: { id: true, currentBlindLevel: true }
-      });
-      if (games.length === 0) return;
-
-      const gameLevel = games[0].currentBlindLevel ?? 0;
-      if (currentLevelIndex > gameLevel) {
-        console.log(`[TOURNAMENT] Advancing blind level for tournament ${tournamentId} from ${gameLevel} to ${currentLevelIndex}`);
-        const io = getIO();
-        await syncBlindLevelsToTournamentTime(tournamentId, io, { emitDealerMessage: true });
-      }
+      const io = getIO();
+      await tryAdvanceBlindsIfDue(tournamentId, io, { emitDealerMessage: true });
     } catch (err) {
       console.error(`[TOURNAMENT] Error in blind level timer for tournament ${tournamentId}:`, err);
     }
-  }, 60000);
+  }, 10000);
 
   blindTimers.set(tournamentId, intervalId);
 }

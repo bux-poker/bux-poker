@@ -18,6 +18,7 @@ import { getHandDescription } from "@shared/utils/handEvaluator";
 import type { GameStatePayload } from "./pokerGameViewTypes";
 import { handBlocksConsolidationWaitOverlay } from "./handBlocksConsolidationWaitOverlay";
 import { parseCommunityCards } from "./parseCommunityCards";
+import { getBlindScheduleForTournament } from "@shared/utils/tournamentBlindSchedule";
 
 export function PokerGameView() {
   const { id } = useParams<{ id: string }>();
@@ -35,6 +36,8 @@ export function PokerGameView() {
   const [eliminationInfo, setEliminationInfo] = useState<{ place: number | null } | null>(null);
   const [winnerModalOpen, setWinnerModalOpen] = useState(false);
   const [consolidationWaiting, setConsolidationWaiting] = useState<string | null>(null);
+  /** Server asks all tables to wait until hands finish before blinds go up */
+  const [blindWaitMessage, setBlindWaitMessage] = useState<string | null>(null);
   const [pendingConsolidationWaiting, setPendingConsolidationWaiting] = useState<string | null>(null);
   const [socketConnected, setSocketConnected] = useState(false);
   const [tournamentLobbyOpen, setTournamentLobbyOpen] = useState(false);
@@ -193,16 +196,36 @@ export function PokerGameView() {
     
     // Listen for tournament-started socket event to refetch immediately
     const handleTournamentStarted = (data: { tournamentId: string; startedAt: string }) => {
-      if (data.tournamentId === gameState?.tournamentId || data.tournamentId === tournament?.id) {
+      if (data.tournamentId === latestGameTournamentIdRef.current || data.tournamentId === latestTournamentIdRef.current) {
         console.log('[BLIND TIMER] Tournament started event received, refetching tournament data...');
-        // Stop polling immediately when tournament starts
         pollingActiveRef.current = false;
         refetchTournament();
+        setTournamentCountdown(null);
+        soundManager.play('tournament-start');
       }
     };
-    
+
     socket.on('tournament-started', handleTournamentStarted);
-    
+
+    const onBlindLevelWaiting = (payload: {
+      tournamentId: string;
+      message: string | null;
+      clear?: boolean;
+    }) => {
+      if (
+        payload.tournamentId !== latestGameTournamentIdRef.current &&
+        payload.tournamentId !== latestTournamentIdRef.current
+      ) {
+        return;
+      }
+      if (payload.clear || payload.message == null || payload.message === '') {
+        setBlindWaitMessage(null);
+      } else {
+        setBlindWaitMessage(payload.message);
+      }
+    };
+    socket.on('blind-level-waiting', onBlindLevelWaiting);
+
     const emitJoinTable = () => {
       socket.emit("join-table", { gameId: id });
     };
@@ -317,17 +340,20 @@ export function PokerGameView() {
     });
 
     socket.on("tournament_updated", (payload?: { tournamentId?: string }) => {
-      // Ignore updates from other tournaments to prevent random wait-popup flicker.
       if (payload?.tournamentId) {
-        const matchesGameState = payload.tournamentId === gameState?.tournamentId;
-        const matchesTournament = payload.tournamentId === tournament?.id;
+        const matchesGameState = payload.tournamentId === latestGameTournamentIdRef.current;
+        const matchesTournament = payload.tournamentId === latestTournamentIdRef.current;
         if (!matchesGameState && !matchesTournament) return;
       }
       refetchTournament({ silent: true });
     });
-    // Only redirect when tables were rebalanced (consolidation), not on every tournament_updated
     socket.on("consolidation-complete", async (payload: { tournamentId: string }) => {
-      if (payload.tournamentId !== gameState?.tournamentId && payload.tournamentId !== tournament?.id) return;
+      if (
+        payload.tournamentId !== latestGameTournamentIdRef.current &&
+        payload.tournamentId !== latestTournamentIdRef.current
+      ) {
+        return;
+      }
       setConsolidationWaiting(null);
       setPendingConsolidationWaiting(null);
       refetchTournament({ silent: true });
@@ -356,10 +382,9 @@ export function PokerGameView() {
     // Listen for tournament starting countdown
     socket.on("tournament-starting", (payload: { tournamentId: string; startTime: string; countdownSeconds: number }) => {
       console.log('[TOURNAMENT COUNTDOWN] Received tournament-starting event:', payload);
-      // Check if this tournament matches our game (check both gameState and tournament object)
-      const matchesGameState = payload.tournamentId === gameState?.tournamentId;
-      const matchesTournament = payload.tournamentId === tournament?.id;
-      
+      const matchesGameState = payload.tournamentId === latestGameTournamentIdRef.current;
+      const matchesTournament = payload.tournamentId === latestTournamentIdRef.current;
+
       if (matchesGameState || matchesTournament) {
         console.log('[TOURNAMENT COUNTDOWN] Setting countdown:', payload);
         setTournamentCountdown({
@@ -375,38 +400,12 @@ export function PokerGameView() {
       }
     });
 
-    // Listen for tournament started (clear countdown)
-    socket.on("tournament-started", (payload: { tournamentId: string }) => {
-      // Check if this tournament matches our game (check both gameState and tournament object)
-      const matchesGameState = payload.tournamentId === gameState?.tournamentId;
-      const matchesTournament = payload.tournamentId === tournament?.id;
-      
-      if (matchesGameState || matchesTournament) {
-        console.log('[TOURNAMENT COUNTDOWN] Tournament started, clearing countdown');
-        setTournamentCountdown(null);
-        soundManager.play('tournament-start');
-      }
-    });
-
     // Tournament ended – refetch so winner modal and COMPLETED status show
     socket.on("tournament_completed", (payload: { tournamentId: string }) => {
-      if (payload.tournamentId === gameState?.tournamentId || payload.tournamentId === tournament?.id) {
+      if (payload.tournamentId === latestGameTournamentIdRef.current || payload.tournamentId === latestTournamentIdRef.current) {
         refetchTournament();
       }
     });
-
-    // Update timer every second to keep it synced
-    const timerInterval = setInterval(() => {
-      setTurnTimer((prev) => {
-        if (prev) {
-          const remaining = prev.expiresAt - Date.now();
-          if (remaining <= 0) {
-            return null;
-          }
-        }
-        return prev;
-      });
-    }, 100);
 
     return () => {
       socket.off("game-state");
@@ -421,11 +420,24 @@ export function PokerGameView() {
       socket.off("consolidation-complete");
       socket.off("winner");
       socket.off("tournament-starting");
-      socket.off("tournament-started");
+      socket.off("tournament-started", handleTournamentStarted);
       socket.off("tournament_completed");
-      clearInterval(timerInterval);
+      socket.off("blind-level-waiting", onBlindLevelWaiting);
     };
-  }, [id, turnTimer, gameState?.tournamentId, tournament?.id, user?.id]);
+  }, [id, user?.id, refetchTournament, navigate]);
+
+  // Turn timer expiry display: do NOT put turnTimer in the socket effect deps (would tear down listeners).
+  useEffect(() => {
+    if (!turnTimer) return;
+    const iv = setInterval(() => {
+      setTurnTimer((prev) => {
+        if (!prev) return prev;
+        if (prev.expiresAt - Date.now() <= 0) return null;
+        return prev;
+      });
+    }, 100);
+    return () => clearInterval(iv);
+  }, [turnTimer]);
 
   // Update countdown timer every second (separate from socket setup).
   // IMPORTANT: Countdown is driven only by server \"tournament-starting\" /
@@ -466,101 +478,49 @@ export function PokerGameView() {
     });
   }, [tournament?.status, (tournament as any)?.startScheduledAt]);
 
-  // Calculate next blind timer based on tournament.startedAt and blind level durations
+  // Next blind countdown — same schedule as server (includes breakAfter between levels)
   useEffect(() => {
     if (!tournament) {
       setNextBlindTime('--:--');
       return;
     }
-    
+
     if (!tournament.startedAt) {
       setNextBlindTime('--:--');
       return;
     }
-    
-    // Timer only works when tournament is RUNNING/ACTIVE (after Start Tournament is clicked)
-    // This sets startedAt and status to RUNNING (or ACTIVE in some flows)
+
     if (tournament.status !== 'RUNNING' && tournament.status !== 'ACTIVE') {
       setNextBlindTime('--:--');
       return;
     }
-    
-    const calculateNextBlind = () => {
-      if (!tournament.startedAt) {
+
+    const tick = () => {
+      const json =
+        typeof tournament.blindLevels === 'string'
+          ? tournament.blindLevels
+          : JSON.stringify((tournament as any).blindLevels ?? []);
+      const sched = getBlindScheduleForTournament(
+        (tournament as any).startedAt,
+        json,
+        Date.now()
+      );
+      if (!sched) {
         setNextBlindTime('--:--');
         return;
       }
-      
-      const now = new Date();
-      const startedAt = new Date(tournament.startedAt);
-      const elapsedMs = now.getTime() - startedAt.getTime();
-      let elapsedMinutes = elapsedMs / 1000 / 60;
-      
-      if (elapsedMs < 0) {
-        // Tournament hasn't started yet
-        setNextBlindTime('--:--');
+      if (sched.atLastLevel || sched.msUntilNextLevel == null) {
+        setNextBlindTime(sched.atLastLevel ? '∞' : '--:--');
         return;
       }
-
-      // Support both parsed arrays (from API) and raw JSON strings
-      let blindLevels: any[] = [];
-      try {
-        if (Array.isArray(tournament.blindLevels)) {
-          blindLevels = tournament.blindLevels;
-        } else if (typeof tournament.blindLevels === 'string') {
-          blindLevels = JSON.parse(tournament.blindLevels || '[]');
-        }
-      } catch (e) {
-        console.error('[BLIND TIMER] Failed to parse blindLevels in PokerGameView:', e);
-        blindLevels = [];
-      }
-      if (blindLevels.length === 0) {
-        setNextBlindTime('--:--');
-        return;
-      }
-
-      // Find current blind level and minutes into that level (ignore breaks for timer simplicity)
-      let currentLevelIndex = 0;
-      let minutesIntoCurrentLevel = elapsedMinutes;
-      for (let i = 0; i < blindLevels.length; i++) {
-        const level = blindLevels[i];
-        if (level.duration === null) {
-          // Final level (infinite duration)
-          currentLevelIndex = i;
-          minutesIntoCurrentLevel = 0;
-          break;
-        }
-        const levelDuration = level.duration || 0;
-        if (minutesIntoCurrentLevel <= levelDuration) {
-          currentLevelIndex = i;
-          break;
-        }
-        minutesIntoCurrentLevel -= levelDuration;
-      }
-
-      // Calculate time until next level (based only on level.duration)
-      if (currentLevelIndex + 1 < blindLevels.length) {
-        const currentLevel = blindLevels[currentLevelIndex];
-        const levelDuration = currentLevel.duration || 0;
-        const remainingMinutes = Math.max(0, levelDuration - minutesIntoCurrentLevel);
-        const timeUntilNext = remainingMinutes * 60 * 1000;
-
-        if (timeUntilNext > 0) {
-          const minutes = Math.floor(timeUntilNext / 60000);
-          const seconds = Math.floor((timeUntilNext % 60000) / 1000);
-          setNextBlindTime(`${minutes}:${seconds.toString().padStart(2, '0')}`);
-        } else {
-          setNextBlindTime('0:00');
-        }
-      } else {
-        // Final level
-        setNextBlindTime('∞');
-      }
+      const ms = sched.msUntilNextLevel;
+      const minutes = Math.floor(ms / 60000);
+      const seconds = Math.floor((ms % 60000) / 1000);
+      setNextBlindTime(`${minutes}:${seconds.toString().padStart(2, '0')}`);
     };
 
-    calculateNextBlind();
-    const interval = setInterval(calculateNextBlind, 1000); // Update every second
-
+    tick();
+    const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [tournament]);
 
@@ -964,6 +924,19 @@ export function PokerGameView() {
                 <div className="rounded-xl bg-slate-800/95 border border-slate-600 px-8 py-6 text-center max-w-md shadow-2xl">
                   <p className="text-lg font-medium text-slate-200">{effectiveConsolidationMessage}</p>
                   <p className="mt-2 text-sm text-slate-400">Please wait...</p>
+                </div>
+              </div>
+            )}
+            {blindWaitMessage && !showConsolidationOverlay && (
+              <div
+                className="absolute inset-0 flex items-center justify-center bg-black/55 backdrop-blur-sm"
+                style={{ zIndex: 95 }}
+              >
+                <div className="max-w-md rounded-xl border border-amber-500/50 bg-slate-800/95 px-8 py-6 text-center shadow-2xl">
+                  <p className="text-lg font-medium text-amber-100">{blindWaitMessage}</p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    Blinds will go up together when every table finishes the current hand.
+                  </p>
                 </div>
               </div>
             )}

@@ -14,14 +14,6 @@ export function startTurnTimer(gameId, userId, io) {
 
   const existingTimer = turnTimers.get(gameId);
   if (existingTimer) {
-    const sameUser = String(existingTimer.userId) === String(userId);
-    const stillTheirTurn =
-      String(state.currentTurnUserId ?? "") === String(userId ?? "");
-    const notExpired = (existingTimer.expiresAt || 0) > Date.now();
-    // Prevent repeated timer resets for the same player/turn (this extends deadline and feels like "stuck after 0").
-    if (sameUser && stillTheirTurn && notExpired) {
-      return;
-    }
     clearTimeout(existingTimer.timerId);
     if (existingTimer.graceTimerId) {
       clearTimeout(existingTimer.graceTimerId);
@@ -199,6 +191,9 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
       }, msUntilExpiry);
       return;
     }
+
+    // Release this turn's slot before actions / moveToNextPlayer (which starts a new timer).
+    turnTimers.delete(gameId);
 
     const state = tableState.get(gameId);
     const turnStr =

@@ -1,4 +1,5 @@
 import { prisma } from "../../config/database.js";
+import { hasActiveHand } from "../../modules/poker/tableState.js";
 
 /**
  * Compute current blind level index from tournament start time and blind level durations.
@@ -101,4 +102,64 @@ export async function syncBlindLevelsToTournamentTime(tournamentId, io, options 
   const tableIds = games.map(g => `T${g.tableNumber}`).join(",");
   console.log(`[TOURNAMENT] Synced blind level to ${currentLevelIndex} for ${games.length} table(s) (${tableIds}) (${newLevel.smallBlind}/${newLevel.bigBlind})`);
   return { currentLevelIndex, newLevel, games };
+}
+
+/**
+ * Advance tournament blinds when wall-clock schedule is ahead of DB, but only when
+ * no table has an active hand (same moment for all tables). Otherwise emit a waiting notice.
+ */
+export async function tryAdvanceBlindsIfDue(tournamentId, io, options = { emitDealerMessage: true }) {
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+  });
+  if (!tournament || tournament.status !== "RUNNING" || !tournament.startedAt) {
+    return { advanced: false, waiting: false };
+  }
+
+  const result = getTournamentBlindLevelFromTime(tournament);
+  if (!result) return { advanced: false, waiting: false };
+  const { currentLevelIndex } = result;
+
+  const games = await prisma.game.findMany({
+    where: { tournamentId, status: "ACTIVE" },
+    select: { id: true, tableNumber: true, currentBlindLevel: true },
+  });
+  if (games.length === 0) return { advanced: false, waiting: false };
+
+  const gameLevels = games.map((g) => g.currentBlindLevel ?? 0);
+  const minGameLevel = Math.min(...gameLevels);
+
+  if (currentLevelIndex <= minGameLevel) {
+    return { advanced: false, waiting: false };
+  }
+
+  for (const g of games) {
+    if (hasActiveHand(g.id)) {
+      const msg =
+        "Waiting for all tables to finish the current hand before blinds increase.";
+      if (io) {
+        for (const gg of games) {
+          io.to(`game:${gg.id}`).emit("blind-level-waiting", {
+            tournamentId,
+            message: msg,
+            pendingLevelIndex: currentLevelIndex,
+          });
+        }
+      }
+      return { advanced: false, waiting: true };
+    }
+  }
+
+  await syncBlindLevelsToTournamentTime(tournamentId, io, options);
+  if (io) {
+    io.emit("tournament_updated", { tournamentId });
+    for (const g of games) {
+      io.to(`game:${g.id}`).emit("blind-level-waiting", {
+        tournamentId,
+        message: null,
+        clear: true,
+      });
+    }
+  }
+  return { advanced: true, waiting: false };
 }
