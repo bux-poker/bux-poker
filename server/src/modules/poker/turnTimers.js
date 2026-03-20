@@ -149,33 +149,21 @@ export function startTurnTimer(gameId, userId, io) {
     // - 20s total action window on the backend
     // - show UI countdown only for the final 10s
     const totalActionMs = 20000;
-    const uiCountdownMs = 10000;
     const autoActionExpiresAt = Date.now() + totalActionMs;
-
     const timeoutTimerId = setTimeout(() => {
       autoFoldPlayer(gameId, userId, io, timeoutTimerId);
     }, totalActionMs);
 
-    const uiCountdownTimerId = setTimeout(() => {
-      const timerState = turnTimers.get(gameId);
-      if (
-        !timerState ||
-        timerState.timerId !== timeoutTimerId ||
-        String(timerState.userId) !== String(userId)
-      ) {
-        return;
-      }
-      io.to(`game:${gameId}`).emit("turn-timer-start", {
-        gameId,
-        userId,
-        expiresAt: Date.now() + uiCountdownMs,
-        duration: uiCountdownMs,
-      });
-    }, totalActionMs - uiCountdownMs);
+    // Emit immediately so client always has a timer anchor; client renders only last 10s for humans.
+    io.to(`game:${gameId}`).emit("turn-timer-start", {
+      gameId,
+      userId,
+      expiresAt: autoActionExpiresAt,
+      duration: totalActionMs,
+    });
 
     turnTimers.set(gameId, {
       timerId: timeoutTimerId,
-      graceTimerId: uiCountdownTimerId,
       userId,
       expiresAt: autoActionExpiresAt,
       duration: totalActionMs,
