@@ -28,7 +28,16 @@ export const authenticateToken = (req, res, next) => {
       return res.status(403).json({ error: errorMessage });
     }
     req.user = decoded; // Store full user object for admin checks
-    req.userId = decoded.userId;
+    const rawId = decoded.userId ?? decoded.id ?? decoded.sub;
+    const userId =
+      rawId === undefined || rawId === null ? "" : String(rawId).trim();
+    if (!userId) {
+      console.error("[AUTH MIDDLEWARE] JWT payload missing user id", {
+        keys: decoded && typeof decoded === "object" ? Object.keys(decoded) : [],
+      });
+      return res.status(403).json({ error: "Invalid token: missing user id" });
+    }
+    req.userId = userId;
     next();
   });
 };

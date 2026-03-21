@@ -58,15 +58,20 @@ router.get(
 // Return current user profile based on JWT
 router.get("/profile", authenticateToken, async (req, res, next) => {
   try {
+    const userId = req.userId;
+    if (!userId || typeof userId !== "string") {
+      return res.status(403).json({ error: "Invalid authentication" });
+    }
+
     const user = await prisma.user.findUnique({
-      where: { id: req.userId },
+      where: { id: userId },
       select: {
         id: true,
         username: true,
         email: true,
         avatarUrl: true,
-        discordId: true
-      }
+        discordId: true,
+      },
     });
 
     if (!user) {
@@ -75,6 +80,18 @@ router.get("/profile", authenticateToken, async (req, res, next) => {
 
     res.json({ user });
   } catch (err) {
+    const code = err && typeof err === "object" ? err.code : undefined;
+    const name = err && typeof err === "object" ? err.name : undefined;
+    if (typeof code === "string" && code.startsWith("P")) {
+      console.error("[AUTH] /profile Prisma error:", code, err?.message);
+      if (code === "P1001" || code === "P1017") {
+        return res.status(503).json({ error: "Database temporarily unavailable" });
+      }
+    }
+    if (name === "PrismaClientValidationError") {
+      console.error("[AUTH] /profile Prisma validation:", err?.message);
+      return res.status(400).json({ error: "Invalid request" });
+    }
     next(err);
   }
 });

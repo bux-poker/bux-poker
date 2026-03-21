@@ -57,8 +57,9 @@ export const useAuthMethods = ({ setUser, setError, setLoading }: UseAuthMethods
       }
     } catch (error: any) {
       console.error('Profile fetch error:', error);
-      if (error.response?.status === 401) {
-        // Token is invalid, clear it
+      const status = error.response?.status;
+      // 401/403: bad or expired token; clear so user can re-login (avoids infinite 500 loops from bad payloads)
+      if (status === 401 || status === 403) {
         localStorage.removeItem('sessionToken');
         localStorage.removeItem('userData');
         setUser(null);
