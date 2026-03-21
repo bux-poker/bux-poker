@@ -81,7 +81,7 @@ export type TournamentAnchorClockInput = {
 
 export type AnchorClockResult = {
   label: string;
-  phase: "break" | "level" | "aligning" | "final";
+  phase: "break" | "level" | "aligning" | "final" | "nextHand";
   msUntilNext: number | null;
 };
 
@@ -109,7 +109,7 @@ export function getBlindCountdownFromTournamentSchedule(
   }
 
   if (input.awaitingHandsForBlindClock || input.blindPeriodAnchorAt == null) {
-    return { label: "0:00", phase: "aligning", msUntilNext: 0 };
+    return { label: "next hand", phase: "nextHand", msUntilNext: 0 };
   }
 
   const anchorMs = new Date(input.blindPeriodAnchorAt).getTime();
@@ -123,6 +123,9 @@ export function getBlindCountdownFromTournamentSchedule(
     (Number.isFinite(levelMinutes) && levelMinutes >= 0 ? levelMinutes : 0) * 60 * 1000;
   const end = anchorMs + durMs;
   const ms = Math.max(0, end - nowMs);
+  if (ms <= 0) {
+    return { label: "next hand", phase: "nextHand", msUntilNext: 0 };
+  }
   const minutes = Math.floor(ms / 60000);
   const seconds = Math.floor((ms % 60000) / 1000);
   return {

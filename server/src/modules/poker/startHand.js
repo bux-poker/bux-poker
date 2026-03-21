@@ -16,16 +16,18 @@ import { emitIfTournamentCompleted } from "./tableTournamentHooks.js";
 import { isTournamentConsolidationWaiting } from "../../services/tournament/consolidateTables.js";
 import { awardStalePotAndZeroGame } from "../../services/tournament/stalePotRecovery.js";
 
+const gameStartInclude = {
+  players: {
+    where: { status: { not: "ELIMINATED" }, chips: { gt: 0 } },
+    include: { user: true },
+  },
+  tournament: true,
+};
+
 export async function startHandForGameBody(gameId, io) {
-  const game = await prisma.game.findUnique({
+  let game = await prisma.game.findUnique({
     where: { id: gameId },
-    include: {
-      players: {
-        where: { status: { not: "ELIMINATED" }, chips: { gt: 0 } },
-        include: { user: true }
-      },
-      tournament: true
-    }
+    include: gameStartInclude,
   });
 
   if (!game) {
@@ -48,6 +50,38 @@ export async function startHandForGameBody(gameId, io) {
       await emitGameState(gameId, io, st ?? null);
     }
     return;
+  }
+
+  if (game.tournamentId) {
+    const { tryAdvanceBlindsIfDue } = await import(
+      "../../services/tournament/blindLevels.js"
+    );
+    const adv = await tryAdvanceBlindsIfDue(game.tournamentId, io, {
+      emitDealerMessage: true,
+    });
+    if (adv.waiting) {
+      if (io) {
+        const st = tableState.get(gameId);
+        await emitGameState(gameId, io, st ?? null);
+      }
+      console.log(
+        `[POKER] Tournament ${game.tournamentId}: blind period ended — waiting for all tables to finish current hand before starting next hand (game ${gameId})`
+      );
+      return;
+    }
+    game = await prisma.game.findUnique({
+      where: { id: gameId },
+      include: gameStartInclude,
+    });
+    if (!game || game.status !== "ACTIVE") {
+      return;
+    }
+    if (game.players.length < 2) {
+      console.log(
+        `[POKER] After blind sync, not enough chip-positive players for game ${gameId}`
+      );
+      return;
+    }
   }
 
   const breakUntil = game.tournament?.tournamentBreakUntilAt;

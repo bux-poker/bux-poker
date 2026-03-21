@@ -624,6 +624,10 @@ export function PokerGameView() {
         return;
       }
       const ms = sched.msUntilNextLevel;
+      if (ms <= 0) {
+        setNextBlindTime("next hand");
+        return;
+      }
       const minutes = Math.floor(ms / 60000);
       const seconds = Math.floor((ms % 60000) / 1000);
       setNextBlindTime(`${minutes}:${seconds.toString().padStart(2, "0")}`);

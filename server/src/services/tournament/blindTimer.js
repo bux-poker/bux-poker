@@ -40,7 +40,7 @@ export function startBlindLevelTimer(tournamentId, deps) {
   }
 
   const { getIO } = deps;
-  console.log(`[TOURNAMENT] Blind level timer started for tournament ${tournamentId}, checking every 10 seconds`);
+  console.log(`[TOURNAMENT] Blind level timer started for tournament ${tournamentId}, checking every 5 seconds`);
   const intervalId = setInterval(async () => {
     try {
       const tournament = await prisma.tournament.findUnique({
@@ -69,7 +69,7 @@ export function startBlindLevelTimer(tournamentId, deps) {
         );
       }
     }
-  }, 10000);
+  }, 5000);
 
   blindTimers.set(tournamentId, intervalId);
 }
