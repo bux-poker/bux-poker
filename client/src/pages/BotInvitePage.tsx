@@ -1,7 +1,7 @@
 /**
  * Unlisted page for founders — not linked in nav.
- * In Discord DMs, share **https://www.bux-poker.pro/discord-founders.html** (static file = correct embed).
- * Open **/discord-bot** in the browser for the full React page. /bot-invite redirects to /discord-bot.
+ * In Discord DMs, share https://www.bux-poker.pro/discord-founders.html (static file = correct embed).
+ * In the browser, open the discord-bot route for the full React page; bot-invite redirects there.
  */
 const DISCORD_BOT_INVITE_URL =
   import.meta.env.VITE_DISCORD_BOT_INVITE_URL ??
