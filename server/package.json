@@ -6,13 +6,13 @@
   "main": "src/index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "prestart": "echo '[PRESTART] Starting Prisma setup...' && echo '[PRESTART] Running migrations...' && npx prisma migrate deploy --schema=../prisma/schema.prisma && echo '[PRESTART] Generating Prisma client...' && npx prisma generate --schema=../prisma/schema.prisma && echo '[PRESTART] Prisma setup complete!' || (echo '[PRESTART] Prisma setup failed!'; exit 1)",
+    "prestart": "echo '[PRESTART] Starting Prisma setup...' && echo '[PRESTART] Running migrations...' && node scripts/prisma-migrate-deploy-or-repair.mjs && echo '[PRESTART] Generating Prisma client...' && npx prisma generate --schema=../prisma/schema.prisma && echo '[PRESTART] Prisma setup complete!' || (echo '[PRESTART] Prisma setup failed!'; exit 1)",
     "start": "node src/index.js",
     "build": "tsc",
     "prisma:generate": "npx prisma generate --schema=../prisma/schema.prisma",
     "prisma:migrate": "npx prisma migrate dev --schema=../prisma/schema.prisma",
     "prisma:migrate:deploy": "npx prisma migrate deploy --schema=../prisma/schema.prisma",
-    "postinstall": "npx prisma migrate deploy --schema=../prisma/schema.prisma && npx prisma generate --schema=../prisma/schema.prisma || echo 'Prisma setup failed in postinstall'"
+    "postinstall": "node scripts/prisma-migrate-deploy-or-repair.mjs && npx prisma generate --schema=../prisma/schema.prisma || echo 'Prisma setup failed in postinstall'"
   },
   "dependencies": {
     "@prisma/client": "^6.19.2",

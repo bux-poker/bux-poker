@@ -22,6 +22,18 @@ Running Prisma locally **does not** ping Render. After the DB is fixed, you **mu
 
 Usually **`startScheduledAt` already exists** on `"Tournament"` (added manually, copy-paste SQL, or an old deploy). Postgres then errors with “column already exists” and Prisma marks the migration as **failed**.
 
+## Auto-repair on Render (no laptop)
+
+The server’s **`prestart`** and **`postinstall`** run `node server/scripts/prisma-migrate-deploy-or-repair.mjs` before `prisma generate`.
+
+If `migrate deploy` fails with **P3009** and mentions **`20260207120000_add_tournament_start_scheduled_at`**, that script:
+
+1. Ensures the column with `ADD COLUMN IF NOT EXISTS` (`server/scripts/sql/ensure-start-scheduled-at.sql`)
+2. Runs `prisma migrate resolve --applied` for that migration
+3. Runs `migrate deploy` again
+
+Any other error still fails the deploy (so you are not silently masking broken migrations). Push the commit that includes this script and trigger a **Manual Deploy** (or rely on auto-deploy).
+
 ## Fix (production Supabase DB)
 
 ### Step 1 — Confirm column (optional)
