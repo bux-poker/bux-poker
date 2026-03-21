@@ -432,9 +432,19 @@ async function handleUnregisterButton(interaction, tournamentId) {
 }
 
 // Helper function to build tournament embed with buttons
+/** Hostname for copy (e.g. bux-poker.pro) from CLIENT_URL */
+function siteHostnameFromClientUrl(clientUrl) {
+  try {
+    return new URL(clientUrl).hostname.replace(/^www\./i, '');
+  } catch {
+    return 'bux-poker.pro';
+  }
+}
+
 async function buildTournamentEmbed(tournament, discordUserId = null) {
   const startTime = new Date(tournament.startTime);
   const clientUrl = process.env.CLIENT_URL || 'https://bux-poker.pro';
+  const siteHost = siteHostnameFromClientUrl(clientUrl);
   const logoUrl = `${clientUrl}/images/bux-poker.png`;
   const tournamentUrl = `${clientUrl}/tournaments/${tournament.id}`;
   
@@ -499,6 +509,17 @@ async function buildTournamentEmbed(tournament, discordUserId = null) {
     )
     .setColor(tournament.status === 'SEATED' ? 0xFFD700 : (tournament.status === 'RUNNING' || tournament.status === 'ACTIVE' ? 0x00FF00 : 0x00AE86))
     .setTimestamp();
+
+  const registrationOpen =
+    tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING';
+  if (registrationOpen) {
+    embed.addFields({
+      name: '📱 Mobile — fullscreen',
+      value:
+        `For the best fullscreen experience on **phone or tablet**, add **${siteHost}** to your home screen. Use the **Add to Home** section on the homepage for **iOS and Android** steps.\n\n` +
+        `**Do not use Discord's in-app browser** — open **${clientUrl}** in **Safari** or **Chrome** first, then add to home screen. Links opened only inside Discord usually **cannot** be installed to your home screen.`,
+    });
+  }
 
   const isFull = registrationCount >= tournament.maxPlayers;
   // Can register only if SCHEDULED or REGISTERING and not full and not SEATED
