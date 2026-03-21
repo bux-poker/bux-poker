@@ -94,7 +94,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <div 
-      className="border-t border-gray-800"
+      className="shrink-0 border-t border-gray-800 bg-gray-800"
       style={{
         padding: `${8 * scale}px`
       }}

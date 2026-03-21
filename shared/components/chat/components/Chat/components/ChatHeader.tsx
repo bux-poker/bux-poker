@@ -34,7 +34,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
   return (
     <div 
-      className="flex items-center justify-between bg-gray-900 border-b border-gray-600"
+      className="flex shrink-0 items-center justify-between bg-gray-900 border-b border-gray-600"
       style={{
         padding: `${8 * scale}px`,
         fontSize: `${14 * scale}px`

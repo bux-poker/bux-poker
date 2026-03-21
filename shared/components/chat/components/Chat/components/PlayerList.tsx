@@ -156,7 +156,7 @@ export const PlayerList: React.FC<PlayerListProps> = ({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-2" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+    <div className="min-h-0 flex-1 overflow-y-auto p-2">
       {/* Players Section */}
       {players.length > 0 && (
         <div className="mb-4">

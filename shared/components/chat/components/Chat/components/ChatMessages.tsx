@@ -99,7 +99,7 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
 
   return (
     <div
-      className={`flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-4 ${isMobile ? 'gap-y-2' : 'gap-y-4'}`}
+      className={`flex h-full min-h-0 w-full flex-col overflow-y-auto overscroll-contain p-4 ${isMobile ? "gap-y-2" : "gap-y-4"}`}
     >
       {messages.map((message, index) => {
         // Ensure message.message is a string, not an object

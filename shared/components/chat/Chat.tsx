@@ -115,7 +115,7 @@ export default function Chat({
 
   return (
     <>
-      <div className="flex min-h-0 flex-1 flex-col bg-gray-800 border-l border-gray-600">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-gray-800 border-l border-gray-600">
         {/* Chat Header */}
         <ChatHeader
           activeTab={activeTab}
@@ -126,12 +126,11 @@ export default function Chat({
           isMobile={isMobile}
         />
 
-        {/* Chat Content */}
-        <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+        {/* Chat Content — column fills sidebar; messages scroll, input stays pinned */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {activeTab === 'chat' ? (
             <>
-              {/* Chat Messages — flex + min-h-0 so inner overflow-y-auto can scroll */}
-              <div className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 overflow-hidden">
                 <ChatMessages
                   messages={messages}
                   isMobile={isMobile}
@@ -146,8 +145,6 @@ export default function Chat({
                   onUnblockUser={unblockUser}
                 />
               </div>
-
-              {/* Chat Input - fixed at bottom */}
               <ChatInput
                 newMessage={newMessage}
                 setNewMessage={setNewMessage}
@@ -162,7 +159,6 @@ export default function Chat({
               />
             </>
           ) : (
-            /* Player List */
             <PlayerList
               players={players}
               spectators={spectators}

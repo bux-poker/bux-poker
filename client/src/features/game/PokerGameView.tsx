@@ -1174,7 +1174,7 @@ export function PokerGameView() {
         </div>
       )}
       {/* Main game area - table + controls | chat (no header; info in table corners) */}
-      <div className="relative z-20 flex flex-1 overflow-hidden min-h-0">
+      <div className="relative z-20 flex min-h-0 flex-1 items-stretch overflow-hidden">
         {/* Left side - Table and controls */}
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">
           {/* Table area - takes most of the space */}
@@ -1299,8 +1299,8 @@ export function PokerGameView() {
             />
           </div>
 
-          {/* Betting controls - fixed at bottom */}
-          <div className="border-t border-slate-800 bg-slate-900/95 px-2 sm:px-4 py-1.5 sm:py-2 backdrop-blur-sm relative min-h-[96px] sm:min-h-[108px] flex items-stretch">
+          {/* Betting controls - fixed height so layout does not jump when controls are hidden */}
+          <div className="relative flex h-[208px] w-full shrink-0 items-stretch overflow-hidden border-t border-slate-800 bg-slate-900/95 px-2 py-1.5 backdrop-blur-sm sm:h-[216px] sm:px-4 sm:py-2">
             {/* Player's own cards + hand text - fill left side of panel height */}
             {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
               <div className={`absolute left-2 sm:left-4 top-0 bottom-0 z-50 flex flex-col justify-center gap-1 items-start ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ visibility: 'visible' }}>
@@ -1353,7 +1353,7 @@ export function PokerGameView() {
                 </div>
               </div>
             )}
-              <div className="ml-auto flex flex-col items-end gap-3">
+              <div className="ml-auto flex h-full min-h-0 flex-col items-end justify-center gap-3">
                 {gameState.showdownNeedsChoice && (
                   <div className="flex flex-col items-end gap-1">
                     <p className="text-xs font-medium text-slate-400">Show your cards?</p>
@@ -1444,10 +1444,10 @@ export function PokerGameView() {
             {/* Chat panel - hidden on mobile when collapsed */}
             {(!isMobile || !chatCollapsed) && (
               <div 
-                className={`border-l border-slate-800 flex h-full min-h-0 flex-shrink-0 flex-col relative ${isMobile ? 'w-72 max-w-[45%]' : ''}`}
-                style={!isMobile ? { width: 'var(--chat-width, 320px)' } : undefined}
+                className={`relative flex min-h-0 shrink-0 flex-col self-stretch overflow-hidden border-l border-slate-800 ${isMobile ? "w-72 max-w-[45%]" : ""}`}
+                style={!isMobile ? { width: "var(--chat-width, 320px)" } : undefined}
               >
-                <div className="flex min-h-0 flex-1 flex-col">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                   {/* Header: Dealer toggle + collapse button on mobile */}
                   <div className="px-2 py-1 border-b border-slate-700 flex items-center justify-between bg-slate-800/50">
                     <span className="text-xs text-slate-300">Dealer Messages</span>
