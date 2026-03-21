@@ -35,8 +35,19 @@ export function usePokerTableActionOverlays(
         const actionKey = lastAction ? String(player.lastActionSeq || 0) : "";
         nextSeenKeys[playerId] = actionKey;
         if (lastAction && actionKey && actionKey !== lastSeenActionKeyRef.current[playerId]) {
+          const st = (player.status || "").toUpperCase();
+          const la = String(lastAction).toUpperCase();
+          let displayAction = lastAction;
+          // Server may have sent BET/RAISE/CALL before lastAction normalization; match ALL IN overlay to 0 chips.
+          if (
+            (player.chips ?? 0) === 0 &&
+            st === "ALL_IN" &&
+            (la === "BET" || la === "RAISE" || la === "CALL")
+          ) {
+            displayAction = "ALL_IN";
+          }
           newOverlays[playerId] = {
-            action: lastAction,
+            action: displayAction,
             timestamp: now,
           };
         }

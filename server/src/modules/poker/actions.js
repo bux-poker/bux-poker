@@ -313,6 +313,19 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
       throw new Error("Unknown action");
   }
 
+  // Avatar overlay + status: any stack-committing action that leaves 0 chips is ALL_IN
+  // (BET/RAISE often left lastAction as BET/RAISE even when the player shoved their entire stack).
+  if (
+    player.chips === 0 &&
+    player.status !== "FOLDED" &&
+    player.status !== "ELIMINATED"
+  ) {
+    player.status = "ALL_IN";
+    if (["BET", "RAISE", "CALL", "ALL_IN"].includes(effectiveAction)) {
+      effectiveAction = "ALL_IN";
+    }
+  }
+
   // Keep in-memory state authoritative for real-time clients.
   player.lastAction = effectiveAction;
   player.lastActionSeq = (player.lastActionSeq || 0) + 1;
