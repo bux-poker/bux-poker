@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { formatLocalDateTime } from '../../utils/formatLocalDateTime';
 
 interface TournamentTimestampProps {
   startTime: Date | string;
@@ -9,7 +10,6 @@ export function TournamentTimestamp({ startTime, showCountdown = true }: Tournam
   const [countdown, setCountdown] = useState<string>('');
 
   const start = new Date(startTime);
-  const timestamp = Math.floor(start.getTime() / 1000);
 
   useEffect(() => {
     if (!showCountdown) return;
@@ -48,9 +48,9 @@ export function TournamentTimestamp({ startTime, showCountdown = true }: Tournam
   return (
     <div className="space-y-1">
       <div className="text-sm text-slate-400">
-        <span>Starts: </span>
-        <span suppressHydrationWarning title={start.toLocaleString()}>
-          {start.toLocaleString()}
+        <span>Starts (your time): </span>
+        <span suppressHydrationWarning title={formatLocalDateTime(start)}>
+          {formatLocalDateTime(start)}
         </span>
       </div>
       {showCountdown && countdown && (

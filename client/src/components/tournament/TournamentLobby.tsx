@@ -5,6 +5,7 @@ import { useAuth } from '@shared/features/auth/AuthContext';
 import { useAdmin } from '../../hooks/useAdmin';
 import { getSocket } from '../../services/socket';
 import { TournamentTimestamp } from './TournamentTimestamp';
+import { formatLocalDateTime } from '../../utils/formatLocalDateTime';
 import { AddToHomeScreen } from '../AddToHomeScreen';
 import api from '../../services/api';
 import { getBlindScheduleForTournament } from '@shared/utils/tournamentBlindSchedule';
@@ -435,7 +436,7 @@ export function TournamentLobby() {
             )}
             {isCompleted && (
               <p className="mt-2 text-slate-400">
-                Completed: {startTime.toLocaleString()}
+                Completed: {formatLocalDateTime(startTime)}
               </p>
             )}
           </div>
@@ -532,7 +533,7 @@ export function TournamentLobby() {
         )}
         {scheduledCountdownActive && startScheduledAtRaw && (
           <p className="mt-2 text-sm text-amber-200/90">
-            Next hand countdown: play begins at {new Date(startScheduledAtRaw).toLocaleString()}.
+            Next hand countdown: play begins at {formatLocalDateTime(new Date(startScheduledAtRaw))}.
           </p>
         )}
 

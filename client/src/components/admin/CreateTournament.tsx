@@ -160,10 +160,17 @@ export function CreateTournament() {
         duration: index === blindLevels.length - 1 ? null : blindRoundDuration,
       }));
 
+      // datetime-local is wall time in the admin's browser; convert to ISO UTC so the server stores the correct instant for all players' local displays.
+      const startInstant = new Date(formData.startTime);
+      if (Number.isNaN(startInstant.getTime())) {
+        throw new Error('Invalid start time');
+      }
+
       const response = await api.post(
         '/api/admin/tournaments',
         {
           ...formData,
+          startTime: startInstant.toISOString(),
           blindLevelsJson: JSON.stringify(blindLevelsWithDuration),
           serverIds: selectedServerIds, // Include selected Discord servers
         },
@@ -304,6 +311,7 @@ export function CreateTournament() {
                 className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
               />
               <p className="mt-1.5 text-xs text-slate-500">
+                Use your device&apos;s local time above. Everyone sees the start time converted to their own timezone in the lobby.
                 Registration closes automatically <strong className="text-slate-400">2 minutes before</strong> this time.
                 Players are seated and the table shows a 2-minute countdown until play starts.
               </p>
