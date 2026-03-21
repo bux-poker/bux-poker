@@ -1035,6 +1035,65 @@ export function PokerGameView() {
         </div>
       )}
 
+      {/* Synchronized blind level / scheduled break (server-driven) */}
+      {scheduleModal && (
+        <div
+          className="fixed inset-0 z-[106] flex items-center justify-center bg-black/75 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="schedule-modal-title"
+        >
+          <div className="w-full max-w-md rounded-xl border border-slate-600 bg-slate-900/98 p-6 text-center shadow-2xl">
+            {scheduleModal.kind === "BREAK" ? (
+              <>
+                <h2 id="schedule-modal-title" className="text-xl font-bold text-sky-200">
+                  Tournament break
+                </h2>
+                <p className="mt-2 text-slate-300">{scheduleModal.message}</p>
+                <p className="mt-4 font-mono text-4xl font-semibold tabular-nums text-white">
+                  {Math.floor(breakRemainSec / 60)}:
+                  {(breakRemainSec % 60).toString().padStart(2, "0")}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">No new hands until the break ends.</p>
+                <button
+                  type="button"
+                  className="mt-6 rounded-lg bg-slate-700 px-5 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600"
+                  onClick={() => {
+                    setScheduleModal(null);
+                    void refetchTournament({ silent: true });
+                  }}
+                >
+                  Dismiss
+                </button>
+              </>
+            ) : (
+              <>
+                <h2 id="schedule-modal-title" className="text-xl font-bold text-amber-200">
+                  Blind level up
+                </h2>
+                <p className="mt-2 text-lg text-slate-200">{scheduleModal.message}</p>
+                {scheduleModal.smallBlind != null && scheduleModal.bigBlind != null && (
+                  <p className="mt-2 text-slate-400">
+                    New blinds: {Number(scheduleModal.smallBlind).toLocaleString()} /{" "}
+                    {Number(scheduleModal.bigBlind).toLocaleString()}
+                  </p>
+                )}
+                <p className="mt-3 text-sm text-slate-500">
+                  The blind timer restarts once every table has started the next hand.
+                </p>
+                <button
+                  type="button"
+                  className="mt-6 rounded-lg bg-amber-600 px-5 py-2 text-sm font-medium text-white hover:bg-amber-500"
+                  onClick={() => setScheduleModal(null)}
+                >
+                  OK
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Winner modal */}
       {winnerModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
@@ -1084,49 +1143,6 @@ export function PokerGameView() {
                   <p className="mt-2 text-sm text-slate-400">
                     Blinds will go up together when every table finishes the current hand.
                   </p>
-                </div>
-              </div>
-            )}
-            {scheduleModal !== null && (
-              <div
-                className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
-                style={{ zIndex: 101 }}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="schedule-modal-title"
-              >
-                <div className="rounded-xl bg-slate-800/95 border border-slate-600 px-8 py-6 text-center max-w-md shadow-2xl">
-                  {scheduleModal.kind === "BREAK" ? (
-                    <>
-                      <p id="schedule-modal-title" className="text-lg font-medium text-slate-200">
-                        Tournament break
-                      </p>
-                      {scheduleModal.message ? (
-                        <p className="mt-2 text-base text-slate-300">{scheduleModal.message}</p>
-                      ) : null}
-                      <p className="mt-4 font-mono text-4xl font-semibold tabular-nums text-white">
-                        {Math.floor(breakRemainSec / 60)}:
-                        {(breakRemainSec % 60).toString().padStart(2, "0")}
-                      </p>
-                      <p className="mt-2 text-sm text-slate-400">No new hands until the break ends.</p>
-                    </>
-                  ) : (
-                    <>
-                      <p id="schedule-modal-title" className="text-lg font-medium text-slate-200">
-                        {scheduleModal.message || "Blind level up"}
-                      </p>
-                      <p className="mt-2 text-sm text-slate-400">
-                        The blind timer restarts once every table has started the next hand.
-                      </p>
-                      <button
-                        type="button"
-                        className="mt-6 rounded-lg bg-slate-700 px-5 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600"
-                        onClick={() => setScheduleModal(null)}
-                      >
-                        OK
-                      </button>
-                    </>
-                  )}
                 </div>
               </div>
             )}
