@@ -2,6 +2,7 @@
 // Extracted from pokerHandler so it can be reused without pulling in the entire socket handler.
 
 import { isTournamentConsolidationWaiting } from "../../services/tournament/consolidateTables.js";
+import { normalizeUserId } from "./normalizeUserId.js";
 
 const CONSOLIDATION_WAIT_MESSAGE =
   "Waiting for other tables to finish their hands before reseating...";
@@ -46,6 +47,21 @@ export function buildClientGameState(game, state) {
       ? CONSOLIDATION_WAIT_MESSAGE
       : null;
 
+  let currentTurnUserId = state?.currentTurnUserId;
+  if (currentTurnUserId != null && state?.players?.length) {
+    const tu = normalizeUserId(currentTurnUserId);
+    const tp = state.players.find((p) => normalizeUserId(p.userId) === tu);
+    const cannotBet =
+      !tp ||
+      tp.status === "FOLDED" ||
+      tp.status === "ELIMINATED" ||
+      tp.status === "ALL_IN" ||
+      (tp.chips ?? 0) <= 0;
+    if (cannotBet) {
+      currentTurnUserId = null;
+    }
+  }
+
   return {
     id: game.id,
     tournamentId: game.tournamentId,
@@ -65,7 +81,7 @@ export function buildClientGameState(game, state) {
     dealerSeat: state?.dealerSeat ?? game.dealerSeat,
     smallBlindSeat: state?.smallBlindSeat ?? game.smallBlindSeat,
     bigBlindSeat: state?.bigBlindSeat ?? game.bigBlindSeat,
-    currentTurnUserId: state?.currentTurnUserId,
+    currentTurnUserId,
     showdownActive: isNewHand ? false : state?.showdownActive || false,
     showdownResults: isNewHand ? null : state?.showdownResults || null,
     players: (state?.players ?? game.players)

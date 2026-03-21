@@ -7,6 +7,7 @@ import { handleShowdown } from "./showdown.js";
 import { handleTestPlayerAction } from "./testPlayers.js";
 import { postDealerMessage } from "./dealerMessages.js";
 import { prisma } from "../../config/database.js";
+import { normalizeUserId } from "./normalizeUserId.js";
 
 export function startTurnTimer(gameId, userId, io) {
   const state = tableState.get(gameId);
@@ -21,8 +22,26 @@ export function startTurnTimer(gameId, userId, io) {
     turnTimers.delete(gameId);
   }
 
-  const player = state.players.find((p) => p.userId === userId);
+  const player = state.players.find(
+    (p) => normalizeUserId(p.userId) === normalizeUserId(userId)
+  );
   if (!player) return;
+
+  if (
+    player.status === "ALL_IN" ||
+    player.status === "FOLDED" ||
+    player.status === "ELIMINATED" ||
+    (player.chips ?? 0) <= 0
+  ) {
+    const nm = player.name || player.user?.username || "";
+    console.warn(
+      `[POKER] startTurnTimer: ${nm || userId} cannot act (all-in or out) — skipping timer, moving turn`
+    );
+    moveToNextPlayer(gameId, io).catch((e) =>
+      console.error("[POKER] startTurnTimer moveToNextPlayer:", e?.message || e)
+    );
+    return;
+  }
 
   const playerName = player.name || player.user?.username || "";
   const isTestPlayer =
@@ -209,7 +228,7 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
     }
 
     const player = state.players.find(
-      (p) => p.userId === userId || String(p.userId) === uidStr
+      (p) => normalizeUserId(p.userId) === normalizeUserId(userId)
     );
     if (!player) {
       console.log(
@@ -219,6 +238,17 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
       return;
     }
     const playerName = player?.name || player?.user?.username || "";
+
+    if (
+      player.status === "ALL_IN" ||
+      (player.chips ?? 0) <= 0
+    ) {
+      console.log(
+        `[POKER] autoFoldPlayer: ${playerName || uidStr} is all-in / no chips — moving turn`
+      );
+      await moveToNextPlayer(gameId, io);
+      return;
+    }
 
     const currentBet = state.bettingRound?.currentBet || 0;
     const myContribution =

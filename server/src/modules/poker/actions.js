@@ -326,6 +326,23 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
     }
   }
 
+  // Never leave the action on someone who cannot bet (e.g. all-in shove): fixes immediate game-state
+  // emit before playerAction runs moveToNextPlayer / advanceStreet.
+  if (state.currentTurnUserId != null) {
+    const turnUid = normalizeUserId(state.currentTurnUserId);
+    if (turnUid === normalizeUserId(player.userId)) {
+      const cannotAct =
+        player.status === "FOLDED" ||
+        player.status === "ELIMINATED" ||
+        player.status === "ALL_IN" ||
+        (player.chips ?? 0) <= 0;
+      if (cannotAct) {
+        state.currentTurnUserId = null;
+        state.currentTurnStartedAt = null;
+      }
+    }
+  }
+
   // Keep in-memory state authoritative for real-time clients.
   player.lastAction = effectiveAction;
   player.lastActionSeq = (player.lastActionSeq || 0) + 1;
