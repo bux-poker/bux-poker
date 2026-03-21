@@ -83,7 +83,11 @@ export function startIdleTablesPoll(engine) {
             continue;
           }
 
-          if ((game.pot ?? 0) > 0) {
+          // NEVER zero DB pot while this process still has a live hand in tableState.
+          // Render logs showed mid-hand "STALE POT BUG" wipes: DB pot > 0 during FLOP betting
+          // but a race/desync made hasActiveHand false briefly, or ordering ran recovery before
+          // checking hand — nuking chips and confusing turn order for real players.
+          if ((game.pot ?? 0) > 0 && !hasActiveHand(game.id)) {
             if (isTournamentConsolidationWaiting(t.id)) {
               console.log(
                 `[TOURNAMENT] Skipping stale-pot recovery for game ${game.id} — consolidation in progress for tournament ${t.id}`
@@ -91,7 +95,7 @@ export function startIdleTablesPoll(engine) {
               continue;
             }
             console.warn(
-              `[TOURNAMENT] Idle-table recovery: awarding stale pot=${game.pot} to players at game ${game.id} (table ${game.tableNumber}) then zeroing so hand can start`
+              `[TOURNAMENT] Idle-table recovery: zeroing stale DB pot=${game.pot} at game ${game.id} (table ${game.tableNumber}) — no active in-memory hand`
             );
             await awardStalePotAndZeroGame(game.id, game.pot);
             game.pot = 0;
