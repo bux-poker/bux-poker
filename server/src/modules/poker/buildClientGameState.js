@@ -48,10 +48,11 @@ function parsePlayerHoleCards(p) {
 /** Hide mucked / not-yet-revealed showdown cards from everyone except the seat owner. */
 function shouldHideHoleCardsFromViewer(p, viewerUserId, optionalRevealPhase) {
   if (!optionalRevealPhase) return false;
+  // No session on socket → keep legacy “same for everyone” payload (avoid hiding from self).
+  if (viewerUserId == null) return false;
   const st = p.showdownRevealStatus;
   if (st !== "PENDING" && st !== "MUCK") return false;
   const mine = normalizeUserId(p.userId);
-  if (viewerUserId == null) return true;
   const vu = normalizeUserId(viewerUserId);
   if (mine === vu) return false;
   return true;
