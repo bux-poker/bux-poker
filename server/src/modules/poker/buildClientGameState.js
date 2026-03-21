@@ -28,7 +28,36 @@ function safePlayerContribution(round, playerId) {
   }
 }
 
-export function buildClientGameState(game, state) {
+function parsePlayerHoleCards(p) {
+  if (!p.holeCards) return null;
+  if (typeof p.holeCards === "object") return p.holeCards;
+  if (typeof p.holeCards === "string") {
+    try {
+      return JSON.parse(p.holeCards);
+    } catch (e) {
+      console.warn(
+        `[POKER] Failed to parse holeCards for player ${p.id}:`,
+        e.message
+      );
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Hide mucked / not-yet-revealed showdown cards from everyone except the seat owner. */
+function shouldHideHoleCardsFromViewer(p, viewerUserId, optionalRevealPhase) {
+  if (!optionalRevealPhase) return false;
+  const st = p.showdownRevealStatus;
+  if (st !== "PENDING" && st !== "MUCK") return false;
+  const mine = normalizeUserId(p.userId);
+  if (viewerUserId == null) return true;
+  const vu = normalizeUserId(viewerUserId);
+  if (mine === vu) return false;
+  return true;
+}
+
+export function buildClientGameState(game, state, viewerUserId) {
   // Calculate total pot: state.pot (accumulated from previous streets) + current betting round
   const totalPot = state
     ? (state.pot || 0) + safeBettingRoundTotalPot(state.bettingRound)
@@ -62,6 +91,23 @@ export function buildClientGameState(game, state) {
     }
   }
 
+  const vuNorm =
+    viewerUserId != null ? normalizeUserId(viewerUserId) : null;
+  const showdownForcedReveal = !!state?.showdownForcedReveal;
+  const optionalRevealPhase =
+    !!state?.showdownActive &&
+    !!state?.showdownResults &&
+    !showdownForcedReveal;
+
+  const showdownNeedsChoice =
+    !!vuNorm &&
+    optionalRevealPhase &&
+    (state?.players || []).some(
+      (p) =>
+        normalizeUserId(p.userId) === vuNorm &&
+        p.showdownRevealStatus === "PENDING"
+    );
+
   return {
     id: game.id,
     tournamentId: game.tournamentId,
@@ -84,35 +130,28 @@ export function buildClientGameState(game, state) {
     currentTurnUserId,
     showdownActive: isNewHand ? false : state?.showdownActive || false,
     showdownResults: isNewHand ? null : state?.showdownResults || null,
+    showdownForcedReveal: isNewHand ? false : showdownForcedReveal,
+    showdownNeedsChoice: isNewHand ? false : showdownNeedsChoice,
     players: (state?.players ?? game.players)
       .filter((p) => p.status !== "ELIMINATED")
-      .map((p) => ({
-        id: p.id,
-        userId: p.userId,
-        name: p.user?.username || "Player",
-        chips: p.chips,
-        seatNumber: p.seatNumber,
-        status: p.status,
-        avatarUrl: p.user?.avatarUrl || null,
-        lastAction: p.lastAction || null,
-        lastActionSeq: p.lastActionSeq || 0,
-        holeCards: (() => {
-          if (!p.holeCards) return null;
-          if (typeof p.holeCards === "object") return p.holeCards;
-          if (typeof p.holeCards === "string") {
-            try {
-              return JSON.parse(p.holeCards);
-            } catch (e) {
-              console.warn(
-                `[POKER] Failed to parse holeCards for player ${p.id}:`,
-                e.message
-              );
-              return null;
-            }
-          }
-          return null;
-        })(),
-        contribution: safePlayerContribution(state?.bettingRound, p.id),
-      })),
+      .map((p) => {
+        const parsed = parsePlayerHoleCards(p);
+        const hide =
+          parsed &&
+          shouldHideHoleCardsFromViewer(p, viewerUserId, optionalRevealPhase);
+        return {
+          id: p.id,
+          userId: p.userId,
+          name: p.user?.username || "Player",
+          chips: p.chips,
+          seatNumber: p.seatNumber,
+          status: p.status,
+          avatarUrl: p.user?.avatarUrl || null,
+          lastAction: p.lastAction || null,
+          lastActionSeq: p.lastActionSeq || 0,
+          holeCards: hide ? null : parsed,
+          contribution: safePlayerContribution(state?.bettingRound, p.id),
+        };
+      }),
   };
 }

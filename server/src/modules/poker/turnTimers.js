@@ -1,5 +1,5 @@
 import { tableState, turnTimers } from "./tableState.js";
-import { buildClientGameState } from "./buildClientGameState.js";
+import { emitGameStateWithGame } from "./emitGameState.js";
 import { applyPlayerAction } from "./actions.js";
 import { advanceToNextStreet } from "./advanceStreet.js";
 import { moveToNextPlayer } from "./turnOrder.js";
@@ -283,6 +283,7 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
         players: {
           include: { user: true },
         },
+        tournament: true,
       },
     });
 
@@ -291,8 +292,7 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
     await moveToNextPlayer(gameId, io);
 
     const stateNow = tableState.get(gameId);
-    const payload = buildClientGameState(game, stateNow || stateAfter);
-    io.to(`game:${gameId}`).emit("game-state", payload);
+    await emitGameStateWithGame(gameId, io, game, stateNow || stateAfter);
   } catch (err) {
     console.error("[POKER] Error auto-folding player:", err);
   }

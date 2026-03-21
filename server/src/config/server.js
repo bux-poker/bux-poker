@@ -92,7 +92,10 @@ if (process.env.REDIS_URL && redisClient) {
   sessionConfig.store = new RedisStore({ client: redisClient, prefix: "bux-poker:sess:" });
   console.log("[SESSION] Using Redis store");
 }
-app.use(session(sessionConfig));
+
+/** Single session middleware instance — required for Socket.IO to share cookies with Express. */
+const sessionMiddleware = session(sessionConfig);
+app.use(sessionMiddleware);
 
 // Passport middleware
 app.use(passport.initialize());
@@ -125,6 +128,11 @@ const io = new Server(server, {
   path: '/socket.io',
   transports: ['polling', 'websocket']
 });
+
+// Share Express session + Passport with Socket.IO handshakes (for per-viewer game-state).
+io.engine.use(sessionMiddleware);
+io.engine.use(passport.initialize());
+io.engine.use(passport.session());
 
 const PORT = process.env.PORT || 3000;
 

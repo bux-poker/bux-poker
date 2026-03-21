@@ -4,6 +4,10 @@ import { getSocket } from "../../services/socket";
 import { PokerTable } from "../../components/poker/PokerTable";
 import type { Card } from "@shared/types/poker";
 import { BettingControls } from "../../components/poker/BettingControls";
+import {
+  PreActionControls,
+  type PreActionKind,
+} from "../../components/poker/PreActionControls";
 import { useAuth } from "@shared/features/auth/AuthContext";
 import Chat from "@shared/components/chat/Chat";
 import type { Player } from "@shared/types/game";
@@ -23,6 +27,48 @@ import {
   getBlindCountdownFromTournamentSchedule,
   type BlindLevelRow,
 } from "@shared/utils/tournamentBlindSchedule";
+
+function computePreActionForGameState(
+  kind: PreActionKind,
+  gs: GameStatePayload,
+  userId: string
+): { action: string; amount: number } | null {
+  const myPlayer = gs.players.find((p) => p.userId === userId || p.id === userId);
+  if (
+    !myPlayer ||
+    myPlayer.status === "FOLDED" ||
+    myPlayer.status === "ALL_IN" ||
+    (myPlayer.chips ?? 0) <= 0
+  ) {
+    return null;
+  }
+
+  const currentBet = gs.currentBet || 0;
+  const bigBlind = gs.bigBlind || 20;
+  const street = gs.street || "PREFLOP";
+  const myContribution = myPlayer.contribution || 0;
+  const myChips = myPlayer.chips;
+  const isPreflop = street === "PREFLOP";
+  const isBigBlind = myPlayer.seatNumber === gs.bigBlindSeat;
+  const hasRaises = isPreflop ? currentBet > bigBlind : currentBet > 0;
+  const canCheck =
+    currentBet === myContribution ||
+    (isPreflop && isBigBlind && currentBet === bigBlind && !hasRaises);
+
+  if (kind === "FOLD_OR_CHECK") {
+    return { action: canCheck ? "CHECK" : "FOLD", amount: 0 };
+  }
+  if (kind === "CALL_ANY") {
+    const toCall = Math.max(0, currentBet - myContribution);
+    if (toCall > myChips) return { action: "ALL_IN", amount: myChips };
+    const callAmount = Math.min(toCall, myChips);
+    return { action: "CALL", amount: callAmount };
+  }
+  if (kind === "ALL_IN") {
+    return { action: "ALL_IN", amount: myChips };
+  }
+  return null;
+}
 
 export function PokerGameView() {
   const { id } = useParams<{ id: string }>();
@@ -74,6 +120,10 @@ export function PokerGameView() {
   const latestTournamentIdRef = useRef<string | undefined>(undefined);
   /** True after we emit player-action until the next authoritative game-state (avoids wait overlay during optimistic gap). */
   const handActionPendingRef = useRef(false);
+  const prevTurnUserIdRef = useRef<string | null>(null);
+  const preActionRef = useRef<PreActionKind | null>(null);
+  const handleActionRef = useRef<(action: string, amount: number) => void>(() => {});
+  const [preActionSelected, setPreActionSelected] = useState<PreActionKind | null>(null);
   const { user } = useAuth();
   const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
 
@@ -894,6 +944,55 @@ export function PokerGameView() {
     });
   };
 
+  handleActionRef.current = handleAction;
+
+  useEffect(() => {
+    if (!gameState?.street) return;
+    preActionRef.current = null;
+    setPreActionSelected(null);
+  }, [gameState?.street]);
+
+  useEffect(() => {
+    if (gameState?.showdownActive) {
+      preActionRef.current = null;
+      setPreActionSelected(null);
+    }
+  }, [gameState?.showdownActive]);
+
+  useEffect(() => {
+    if (!gameState || !user?.id) return;
+    const me = gameState.players.find((p) => p.userId === user.id || p.id === user.id);
+    if (me?.status === "FOLDED") {
+      preActionRef.current = null;
+      setPreActionSelected(null);
+    }
+  }, [gameState, user?.id]);
+
+  useEffect(() => {
+    if (!gameState || !user?.id) return;
+    const myId = String(user.id);
+    const turn = String(gameState.currentTurnUserId ?? "");
+    const prev = prevTurnUserIdRef.current;
+    prevTurnUserIdRef.current = turn || null;
+
+    if (turn !== myId) return;
+    if (prev === myId) return;
+
+    const kind = preActionRef.current;
+    if (!kind) return;
+
+    const cmd = computePreActionForGameState(kind, gameState, user.id);
+    preActionRef.current = null;
+    setPreActionSelected(null);
+    if (!cmd) return;
+    handleActionRef.current(cmd.action, cmd.amount);
+  }, [gameState, user?.id]);
+
+  const handleShowdownChoice = (choice: "SHOW" | "MUCK") => {
+    if (!id) return;
+    getSocket().emit("showdown-choice", { gameId: id, choice });
+  };
+
   if (!id) {
     return (
       <div className="text-red-400">
@@ -955,6 +1054,20 @@ export function PokerGameView() {
   const myChipRank = myPlayer ? sortedByChips.findIndex(p => p.id === myPlayer.id) + 1 : null;
   const myPosition = myChipRank && myChipRank > 0 ? myChipRank : null;
   const myContribution = myPlayer?.contribution || 0;
+  const isMyTurn =
+    String(gameState.currentTurnUserId ?? "") === String(user?.id ?? "");
+  const canPreAction =
+    !!user &&
+    !isMyTurn &&
+    !gameState.showdownActive &&
+    !!myPlayer &&
+    myPlayer.status !== "FOLDED" &&
+    myPlayer.status !== "ALL_IN" &&
+    (myPlayer.chips ?? 0) > 0 &&
+    Array.isArray(myPlayer.holeCards) &&
+    myPlayer.holeCards.length >= 2 &&
+    !!gameState.currentTurnUserId;
+
   const effectiveConsolidationMessage =
     gameState.consolidationWaitingMessage != null &&
     String(gameState.consolidationWaitingMessage).trim().length > 0
@@ -1240,20 +1353,67 @@ export function PokerGameView() {
                 </div>
               </div>
             )}
-              <div className="ml-auto">
-                <BettingControls 
-                  onAction={handleAction} 
-                  currentBet={gameState.currentBet || 0}
-                  bigBlind={bigBlind}
-                  myChips={myPlayer?.chips || 0}
-                  street={gameState.street || 'PREFLOP'}
-                  minimumRaise={gameState.minimumRaise || bigBlind}
-                  isBigBlind={myPlayer?.seatNumber === gameState.bigBlindSeat}
-                  isMyTurn={String(gameState.currentTurnUserId ?? '') === String(user?.id ?? '')}
-                  myContribution={myContribution}
-                  players={gameState.players}
-                  myUserId={user?.id}
-                />
+              <div className="ml-auto flex flex-col items-end gap-3">
+                {gameState.showdownNeedsChoice && (
+                  <div className="flex flex-col items-end gap-1">
+                    <p className="text-xs font-medium text-slate-400">Show your cards?</p>
+                    <div className="flex items-center gap-3" style={{ width: "calc(var(--action-button-width, 140px) * 2 + 0.75rem)" }}>
+                      <button
+                        type="button"
+                        onClick={() => handleShowdownChoice("SHOW")}
+                        className="rounded-lg bg-blue-600 font-bold text-white shadow-lg hover:bg-blue-700 transition-colors flex-1 whitespace-nowrap"
+                        style={{
+                          minWidth: `var(--action-button-width, 140px)`,
+                          height: `var(--action-button-height, 48px)`,
+                          paddingLeft: `var(--action-button-padding-x, 24px)`,
+                          paddingRight: `var(--action-button-padding-x, 24px)`,
+                          fontSize: `var(--action-button-text, 16px)`,
+                        }}
+                      >
+                        SHOW
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleShowdownChoice("MUCK")}
+                        className="rounded-lg bg-slate-600 font-bold text-white shadow-lg hover:bg-slate-500 transition-colors flex-1 whitespace-nowrap"
+                        style={{
+                          minWidth: `var(--action-button-width, 140px)`,
+                          height: `var(--action-button-height, 48px)`,
+                          paddingLeft: `var(--action-button-padding-x, 24px)`,
+                          paddingRight: `var(--action-button-padding-x, 24px)`,
+                          fontSize: `var(--action-button-text, 16px)`,
+                        }}
+                      >
+                        MUCK
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {isMyTurn && !gameState.showdownActive && (
+                  <BettingControls
+                    onAction={handleAction}
+                    currentBet={gameState.currentBet || 0}
+                    bigBlind={bigBlind}
+                    myChips={myPlayer?.chips || 0}
+                    street={gameState.street || "PREFLOP"}
+                    minimumRaise={gameState.minimumRaise || bigBlind}
+                    isBigBlind={myPlayer?.seatNumber === gameState.bigBlindSeat}
+                    isMyTurn
+                    myContribution={myContribution}
+                    players={gameState.players}
+                    myUserId={user?.id}
+                    potSize={gameState.pot}
+                  />
+                )}
+                {canPreAction && (
+                  <PreActionControls
+                    selected={preActionSelected}
+                    onSelect={(k) => {
+                      preActionRef.current = k;
+                      setPreActionSelected(k);
+                    }}
+                  />
+                )}
               </div>
           </div>
         </div>

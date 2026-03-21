@@ -1,6 +1,6 @@
 import { prisma } from "../../../config/database.js";
 import { tableState } from "../../poker/tableState.js";
-import { buildClientGameState } from "../../poker/buildClientGameState.js";
+import { emitGameState } from "../../poker/emitGameState.js";
 
 /**
  * Register the join-table socket handler.
@@ -44,13 +44,7 @@ export function registerJoinTable(socket, io, { startHandForGame }) {
       }
 
       state = tableState.get(gameId);
-      const payload = buildClientGameState(game, state);
-
-      socket.emit("game-state", payload);
-
-      if (state) {
-        io.to(`game:${gameId}`).emit("game-state", payload);
-      }
+      await emitGameState(gameId, io, state);
     } catch (err) {
       console.error("join-table error", err?.message || err, err?.stack || err);
       socket.emit("error", { message: "Failed to join table" });

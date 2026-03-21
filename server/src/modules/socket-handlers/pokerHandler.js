@@ -11,6 +11,7 @@ import {
   registerJoinTable,
   registerPlayerAction,
   registerGameMessage,
+  registerShowdownChoice,
   registerDisconnect,
 } from "./handlers/index.js";
 
@@ -94,10 +95,19 @@ export function registerPokerHandlers(io) {
 
   io.on("connection", (socket) => {
     console.log("Poker client connected", socket.id);
+    const req = socket.request;
+    const passportUser = req.session?.passport?.user;
+    socket.data.userId =
+      typeof passportUser === "string" || typeof passportUser === "number"
+        ? String(passportUser)
+        : passportUser != null
+          ? String(passportUser)
+          : null;
     const deps = { startHandForGame };
     registerJoinTable(socket, io, deps);
     registerPlayerAction(socket, io, deps);
     registerGameMessage(socket, io);
+    registerShowdownChoice(socket, io);
     registerDisconnect(socket);
   });
 }

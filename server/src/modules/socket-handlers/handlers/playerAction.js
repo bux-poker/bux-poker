@@ -1,7 +1,7 @@
 import { prisma } from "../../../config/database.js";
 import { tableState, turnTimers } from "../../poker/tableState.js";
 import { applyPlayerAction } from "../../poker/actions.js";
-import { buildClientGameState } from "../../poker/buildClientGameState.js";
+import { emitGameState } from "../../poker/emitGameState.js";
 import { postDealerMessage } from "../../poker/dealerMessages.js";
 import { moveToNextPlayer } from "../../poker/turnOrder.js";
 import { advanceToNextStreet } from "../../poker/advanceStreet.js";
@@ -39,24 +39,7 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
         io
       });
 
-      const gameFromState = {
-        id: gameId,
-        pot: state.pot,
-        players: state.players.map(p => ({
-          id: p.id,
-          userId: p.userId,
-          name: p.name,
-          chips: p.chips,
-          seatNumber: p.seatNumber,
-          status: p.status,
-          holeCards: p.holeCards,
-          avatarUrl: p.avatarUrl || p.user?.avatarUrl,
-          user: p.user
-        }))
-      };
-
-      const immediatePayload = buildClientGameState(gameFromState, state);
-      io.to(`game:${gameId}`).emit("game-state", immediatePayload);
+      await emitGameState(gameId, io, state);
 
       const activePlayerIds = state.players
         .filter(p => p.status !== "FOLDED" && p.status !== "ELIMINATED")
@@ -211,23 +194,7 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
           };
           tableState.set(gameId, state);
 
-          const updatedGameFromState = {
-            id: gameId,
-            pot: 0,
-            players: state.players.map(p => ({
-              id: p.id,
-              userId: p.userId,
-              name: p.name,
-              chips: p.chips,
-              seatNumber: p.seatNumber,
-              status: p.status,
-              holeCards: p.holeCards,
-              avatarUrl: p.avatarUrl || p.user?.avatarUrl,
-              user: p.user
-            }))
-          };
-          const payload = buildClientGameState(updatedGameFromState, state);
-          io.to(`game:${gameId}`).emit("game-state", payload);
+          await emitGameState(gameId, io, state);
 
           return;
         }
@@ -235,46 +202,13 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
         await advanceToNextStreet(gameId, io);
         const updatedState = tableState.get(gameId);
         if (updatedState) {
-          const updatedGameFromState = {
-            id: gameId,
-            pot: updatedState.pot,
-            communityCards: updatedState.communityCards,
-            players: updatedState.players.map(p => ({
-              id: p.id,
-              userId: p.userId,
-              name: p.name,
-              chips: p.chips,
-              seatNumber: p.seatNumber,
-              status: p.status,
-              holeCards: p.holeCards,
-              avatarUrl: p.avatarUrl || p.user?.avatarUrl,
-              user: p.user
-            }))
-          };
-          const payload = buildClientGameState(updatedGameFromState, updatedState);
-          io.to(`game:${gameId}`).emit("game-state", payload);
+          await emitGameState(gameId, io, updatedState);
         }
       } else {
         await moveToNextPlayer(gameId, io);
         const updatedState = tableState.get(gameId);
         if (updatedState) {
-          const updatedGameFromState = {
-            id: gameId,
-            pot: updatedState.pot,
-            players: updatedState.players.map(p => ({
-              id: p.id,
-              userId: p.userId,
-              name: p.name,
-              chips: p.chips,
-              seatNumber: p.seatNumber,
-              status: p.status,
-              holeCards: p.holeCards,
-              avatarUrl: p.avatarUrl || p.user?.avatarUrl,
-              user: p.user
-            }))
-          };
-          const payload = buildClientGameState(updatedGameFromState, updatedState);
-          io.to(`game:${gameId}`).emit("game-state", payload);
+          await emitGameState(gameId, io, updatedState);
         }
       }
     } catch (err) {

@@ -8,8 +8,7 @@ import { TexasHoldem } from "./TexasHoldem.js";
 import { BettingRound } from "./BettingRound.js";
 import { tableState } from "./tableState.js";
 import { postDealerMessage } from "./dealerMessages.js";
-import { buildClientGameState } from "./buildClientGameState.js";
-import { emitGameState } from "./emitGameState.js";
+import { emitGameState, emitGameStateWithGame } from "./emitGameState.js";
 import { startTurnTimer } from "./turnTimers.js";
 import { advanceToNextStreet } from "./advanceStreet.js";
 import { emitIfTournamentCompleted } from "./tableTournamentHooks.js";
@@ -503,8 +502,7 @@ export async function startHandForGameBody(gameId, io) {
   });
 
   if (io) {
-    const payload = buildClientGameState(game, state);
-    io.to(`game:${gameId}`).emit("game-state", payload);
+    await emitGameStateWithGame(gameId, io, game, state);
   }
 
   console.log(`[POKER] Starting hand: dealer=${dealerPlayer.seatNumber}, sb=${sbPlayer.seatNumber}, bb=${bbPlayer.seatNumber}, utg=${utgPlayer ? utgPlayer.seatNumber : 'none (all-in)'}`);

@@ -36,6 +36,10 @@ export interface GameStatePayload {
   minimumRaise?: number;
   showdownActive?: boolean;
   showdownResults?: unknown;
+  /** Cinematic / all-in runout — everyone’s cards were already exposed. */
+  showdownForcedReveal?: boolean;
+  /** This viewer may choose show or muck (loser optional reveal). */
+  showdownNeedsChoice?: boolean;
   /** Server-driven: tournament is waiting for all tables to finish before reseat. */
   consolidationWaitingMessage?: string | null;
 }

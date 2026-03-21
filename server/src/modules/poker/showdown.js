@@ -7,8 +7,64 @@ import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/
 import { resetPlayerRowIfNotEliminated } from "./safeHandCleanupDb.js";
 
 const SHOWDOWN_PHASE_DELAY_MS = 1000;
+const SHOWDOWN_OPTIONAL_REVEAL_MAX_WAIT_MS = 15000;
+
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** After chips are awarded: clear table state, reset DB rows, maybe start next hand. */
+async function runShowdownTableCleanup(gameId, io) {
+  const st = tableState.get(gameId);
+  if (!st) return;
+  const savedPlayers = [...st.players];
+  tableState.delete(gameId);
+  const resetPromises = savedPlayers
+    .filter((p) => p.status !== "ELIMINATED" && p.chips > 0)
+    .map((p) => resetPlayerRowIfNotEliminated(p.id).catch(() => {}));
+  Promise.all(resetPromises).then(async () => {
+    const gameForNextHand = await prisma.game
+      .findUnique({
+        where: { id: gameId },
+        include: { players: true, tournament: true },
+      })
+      .catch(() => null);
+    if (
+      gameForNextHand &&
+      gameForNextHand.players.filter((p) => p.status === "ACTIVE").length >= 2 &&
+      io
+    ) {
+      try {
+        await startHandForGame(gameId, io);
+      } catch (err) {
+        console.error("[SHOWDOWN] Error starting next hand after showdown:", err);
+      }
+    }
+  });
+}
+
+export function scheduleShowdownTableCleanup(gameId, io, delayMs) {
+  const state = tableState.get(gameId);
+  if (!state || !io) return;
+  if (state.showdownCleanupTimerId) {
+    clearTimeout(state.showdownCleanupTimerId);
+    state.showdownCleanupTimerId = null;
+  }
+  state.showdownCleanupTimerId = setTimeout(() => {
+    const st = tableState.get(gameId);
+    if (st) st.showdownCleanupTimerId = null;
+    void runShowdownTableCleanup(gameId, io);
+  }, delayMs);
+  tableState.set(gameId, state);
+}
+
+/** When every loser has shown or mucked, shorten the wait before the next hand. */
+export function tryAccelerateShowdownCleanup(gameId, io) {
+  const state = tableState.get(gameId);
+  if (!state || !state.showdownActive || !io) return;
+  const pending = state.players.some((p) => p.showdownRevealStatus === "PENDING");
+  if (pending) return;
+  scheduleShowdownTableCleanup(gameId, io, 1200);
 }
 
 export async function handleShowdownCore(gameId, io, options = {}) {
@@ -359,6 +415,28 @@ export async function handleShowdownCore(gameId, io, options = {}) {
         hand: r.hand ? { category: r.hand.category, cards: r.hand.bestFive || [] } : null,
       };
     });
+  // Anyone who received chips (including side pots) is a "winner" for show/muck — do not force losers who only appear in UI winner list.
+  const winnerPlayerIds = new Set();
+  for (const [playerId, won] of totalWon.entries()) {
+    if (won > 0) winnerPlayerIds.add(playerId);
+  }
+  const forcedReveal = options.forcedReveal === true;
+  state.showdownForcedReveal = forcedReveal;
+  for (const p of activePlayers) {
+    if (winnerPlayerIds.has(p.id)) {
+      p.showdownRevealStatus = "SHOW";
+    } else {
+      p.showdownRevealStatus = forcedReveal ? "SHOW" : "PENDING";
+    }
+  }
+
+  const hasPendingOptional =
+    !forcedReveal &&
+    activePlayers.some((p) => p.showdownRevealStatus === "PENDING");
+  const cleanupDelayMs = hasPendingOptional
+    ? SHOWDOWN_OPTIONAL_REVEAL_MAX_WAIT_MS
+    : options.cleanupDelayMs ?? 3000;
+
   state.showdownResults = { winners: showdownWinners };
   state.showdownActive = true;
   tableState.set(gameId, state);
@@ -395,32 +473,7 @@ export async function handleShowdownCore(gameId, io, options = {}) {
     // Schedule cleanup BEFORE onPlayerBust: bust can trigger consolidateTables which waits for
     // all hands to finish. If we hadn't scheduled this yet, this table would still have state
     // and we'd never return to schedule it – deadlock.
-    setTimeout(() => {
-    const savedPlayers = [...state.players];
-    tableState.delete(gameId);
-    const resetPromises = savedPlayers
-      .filter((p) => p.status !== "ELIMINATED" && p.chips > 0)
-      .map((p) => resetPlayerRowIfNotEliminated(p.id).catch(() => {}));
-    Promise.all(resetPromises).then(async () => {
-      const gameForNextHand = await prisma.game
-        .findUnique({
-          where: { id: gameId },
-          include: { players: true, tournament: true },
-        })
-        .catch(() => null);
-      if (
-        gameForNextHand &&
-        gameForNextHand.players.filter((p) => p.status === "ACTIVE").length >= 2 &&
-        io
-      ) {
-        try {
-          await startHandForGame(gameId, io);
-        } catch (err) {
-          console.error("[SHOWDOWN] Error starting next hand after showdown:", err);
-        }
-      }
-    });
-  }, options.cleanupDelayMs ?? 3000);
+    scheduleShowdownTableCleanup(gameId, io, cleanupDelayMs);
 
     if (game?.tournament?.id) {
       const { TournamentEngine } = await import("../../services/TournamentEngine.js");
@@ -518,5 +571,8 @@ export async function runCinematicAllInShowdown(
     await delay(SHOWDOWN_PHASE_DELAY_MS);
   }
 
-  await handleShowdownCore(gameId, io, { cleanupDelayMs: SHOWDOWN_PHASE_DELAY_MS });
+  await handleShowdownCore(gameId, io, {
+    cleanupDelayMs: SHOWDOWN_PHASE_DELAY_MS,
+    forcedReveal: true,
+  });
 }

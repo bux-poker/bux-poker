@@ -2,7 +2,7 @@ import { prisma } from "../../config/database.js";
 import { TexasHoldem } from "./TexasHoldem.js";
 import { tableState, turnTimers } from "./tableState.js";
 import { postDealerMessage } from "./dealerMessages.js";
-import { buildClientGameState } from "./buildClientGameState.js";
+import { emitGameStateWithGame } from "./emitGameState.js";
 import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/pokerHandler.js";
 import { handleShowdown, runCinematicAllInShowdown } from "./showdown.js";
 import { cleanupHandAndStartNext } from "./handCleanup.js";
@@ -161,10 +161,7 @@ export async function advanceToNextStreet(gameId, io) {
         })
         .catch(() => null);
       if (gameForEmit) {
-        io.to(`game:${gameId}`).emit(
-          "game-state",
-          buildClientGameState(gameForEmit, state)
-        );
+        await emitGameStateWithGame(gameId, io, gameForEmit, state);
       }
       io.to(`game:${gameId}`).emit("winner", {
         gameId,
@@ -350,10 +347,7 @@ export async function advanceToNextStreet(gameId, io) {
             })
             .catch(() => null);
           if (gameForEmit) {
-            io.to(`game:${gameId}`).emit(
-              "game-state",
-              buildClientGameState(gameForEmit, state)
-            );
+            await emitGameStateWithGame(gameId, io, gameForEmit, state);
           }
           io.to(`game:${gameId}`).emit("winner", {
             gameId,
@@ -448,10 +442,7 @@ export async function advanceToNextStreet(gameId, io) {
           })
           .catch(() => null);
         if (game) {
-          io.to(`game:${gameId}`).emit(
-            "game-state",
-            buildClientGameState(game, state)
-          );
+          await emitGameStateWithGame(gameId, io, game, state);
         }
       }
       await advanceToNextStreet(gameId, io);
@@ -480,8 +471,7 @@ export async function advanceToNextStreet(gameId, io) {
         })
         .catch(() => null);
       if (game) {
-        const payload = buildClientGameState(game, state);
-        io.to(`game:${gameId}`).emit("game-state", payload);
+        await emitGameStateWithGame(gameId, io, game, state);
         console.log(
           `[POKER] advanceToNextStreet: Emitted game state for street ${state.street}`
         );

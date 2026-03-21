@@ -1,6 +1,6 @@
 import { tableState, turnTimers } from "./tableState.js";
 import { applyPlayerAction } from "./actions.js";
-import { buildClientGameState } from "./buildClientGameState.js";
+import { emitGameStateWithGame } from "./emitGameState.js";
 import { moveToNextPlayer } from "./turnOrder.js";
 import { advanceToNextStreet } from "./advanceStreet.js";
 import { handleShowdownCore } from "./showdown.js";
@@ -20,7 +20,7 @@ async function emitGameStateForGame(gameId, io) {
     })
     .catch(() => null);
   if (!game) return;
-  io.to(`game:${gameId}`).emit("game-state", buildClientGameState(game, stateNow));
+  await emitGameStateWithGame(gameId, io, game, stateNow);
 }
 
 export async function handleTestPlayerAction(gameId, userId, io) {
@@ -401,8 +401,7 @@ export async function handleTestPlayerAction(gameId, userId, io) {
             })
             .catch(() => null);
           if (game && io) {
-            const payload = buildClientGameState(game, latestState);
-            io.to(`game:${gameId}`).emit("game-state", payload);
+            await emitGameStateWithGame(gameId, io, game, latestState);
             console.log(
               "[TEST PLAYER] Emitted game state after advancing street/showdown"
             );

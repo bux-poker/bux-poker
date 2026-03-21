@@ -18,6 +18,8 @@ interface BettingControlsProps {
   myContribution?: number; // How much I've already contributed this round
   players?: PlayerForBetting[];
   myUserId?: string;
+  /** Total pot (main + current street) for bet presets */
+  potSize?: number;
 }
 
 export function BettingControls({ 
@@ -32,10 +34,11 @@ export function BettingControls({
   myContribution = 0, // How much I've already contributed this round
   players: _players = [],
   myUserId: _myUserId,
+  potSize: potSizeProp,
 }: BettingControlsProps) {
   const [raiseAmount, setRaiseAmount] = useState(bigBlind * 2);
 
-  const potSize = 100; // TODO: Get actual pot size from props
+  const potSize = potSizeProp ?? 100;
   const isPreflop = street === 'PREFLOP';
   // Determine if there have been raises (any bet > big blind in preflop, or any bet > 0 post-flop)
   const hasRaises = isPreflop ? currentBet > bigBlind : currentBet > 0;
