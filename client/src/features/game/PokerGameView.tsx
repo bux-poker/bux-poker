@@ -1303,8 +1303,10 @@ export function PokerGameView() {
             />
           </div>
 
-          {/* Betting controls - fixed height so layout does not jump when controls are hidden */}
-          <div className="relative flex min-h-[96px] h-[104px] w-full shrink-0 items-stretch overflow-hidden border-t border-slate-800 bg-slate-900/95 px-2 py-1.5 backdrop-blur-sm sm:min-h-[108px] sm:h-[208px] sm:px-4 sm:py-2">
+          {/* Betting controls - fixed height so layout does not jump when controls are hidden.
+              Use tall panel only when viewport is wide AND tall enough; landscape phones are often
+              sm+ width but ~400px tall — sm:h-[208px] alone ate ~half the screen. */}
+          <div className="relative flex h-[104px] min-h-[96px] w-full shrink-0 items-stretch overflow-hidden border-t border-slate-800 bg-slate-900/95 px-2 py-1.5 backdrop-blur-sm [@media(min-width:640px)_and_(min-height:520px)]:h-[208px] [@media(min-width:640px)_and_(min-height:520px)]:min-h-[108px] [@media(min-width:640px)_and_(min-height:520px)]:px-4 [@media(min-width:640px)_and_(min-height:520px)]:py-2">
             {/* Player's own cards + hand text - fill left side of panel height */}
             {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
               <div className={`absolute left-2 sm:left-4 top-0 bottom-0 z-50 flex flex-col justify-center gap-1 items-start ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ visibility: 'visible' }}>
