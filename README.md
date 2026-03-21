@@ -141,6 +141,10 @@ cd client && npm run dev
 
 ## Deployment Notes
 
+### Link previews: `/bot-invite`
+
+Discord and other crawlers **do not run** the React app. That route is served as **`bot-invite.html`** in production (see `client/bot-invite.html` + `client/vercel.json` rewrites) so Open Graph tags describe the founder bot-setup page. The main site keeps `index.html` meta for the homepage.
+
 ### Render: fetch server logs (CLI)
 
 **Access model:** Render logs are not visible to tools unless **this machine (or CI) is authenticated**. Run `render login` once, then use the commands below. If you use Cursor or another agent, it can only read logs here if the same shell has Render CLI auth and network access; otherwise use **Render Dashboard → your web service → Logs**, or run these commands locally and paste the lines you care about (e.g. `[BETTING]`, `[TURN ORDER]`, `player-action`).

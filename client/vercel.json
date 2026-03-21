@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/bot-invite",
+      "destination": "/bot-invite.html"
+    },
+    {
+      "source": "/bot-invite/",
+      "destination": "/bot-invite.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
