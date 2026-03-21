@@ -426,10 +426,41 @@ export async function advanceToNextStreet(gameId, io) {
   }
 
   if (activePlayers.length > 1) {
-    // First to act post-flop/turn/river = first active player left of button (so client enables that player's action buttons).
-    // Bug: we used to never set currentTurnUserId here, so seat-3 (left of dealer 4) never got the turn and their buttons stayed disabled.
+    // Only players who still have chips and are not ALL_IN can act on this street.
+    // If we used all activePlayers (including short-stack all-ins), we'd assign the turn to someone
+    // who cannot legally act — zombie hand (see: all-in player "prompted" on flop while others have chips).
+    const canBetPlayers = activePlayers.filter(
+      (p) => p.status !== "ALL_IN" && (p.chips ?? 0) > 0
+    );
+
+    if (canBetPlayers.length === 0) {
+      console.log(
+        `[POKER] advanceToNextStreet: No one can bet on ${state.street} (all-in runout) — advancing street`
+      );
+      state.currentTurnUserId = null;
+      state.currentTurnStartedAt = null;
+      tableState.set(gameId, state);
+      if (io) {
+        const game = await prisma.game
+          .findUnique({
+            where: { id: gameId },
+            include: { players: { include: { user: true } }, tournament: true },
+          })
+          .catch(() => null);
+        if (game) {
+          io.to(`game:${gameId}`).emit(
+            "game-state",
+            buildClientGameState(game, state)
+          );
+        }
+      }
+      await advanceToNextStreet(gameId, io);
+      return;
+    }
+
+    // First to act post-flop/turn/river = first *can-bet* player left of button.
     const dealerSeat = state.dealerSeat ?? Math.min(...state.players.map((p) => p.seatNumber));
-    const sorted = [...activePlayers].sort((a, b) => a.seatNumber - b.seatNumber);
+    const sorted = [...canBetPlayers].sort((a, b) => a.seatNumber - b.seatNumber);
     const leftOfDealer = sorted.filter((p) => p.seatNumber < dealerSeat);
     const firstToAct =
       leftOfDealer.length > 0 ? leftOfDealer[leftOfDealer.length - 1] : sorted[sorted.length - 1];

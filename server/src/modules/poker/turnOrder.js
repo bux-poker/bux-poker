@@ -34,6 +34,26 @@ export async function moveToNextPlayer(gameId, io) {
   const state = tableState.get(gameId);
   if (!state) return;
 
+  // If turn is stuck on an all-in / 0-chip player, clear it so we can orbit to someone who can act.
+  if (state.currentTurnUserId) {
+    const uid = normalizeUserId(state.currentTurnUserId);
+    const turnPlayer = state.players.find((p) => normalizeUserId(p.userId) === uid);
+    if (turnPlayer && !playerCanBetThisRound(turnPlayer)) {
+      console.log(
+        `[TURN ORDER] Clearing turn: ${turnPlayer.name || uid} cannot bet (all-in or 0 chips)`
+      );
+      state.currentTurnUserId = null;
+      state.currentTurnStartedAt = null;
+      const existingTimer = turnTimers.get(gameId);
+      if (existingTimer) {
+        clearTimeout(existingTimer.timerId);
+        if (existingTimer.graceTimerId) clearTimeout(existingTimer.graceTimerId);
+        turnTimers.delete(gameId);
+      }
+      tableState.set(gameId, state);
+    }
+  }
+
   const hasActiveHandNow = hasActiveHand(gameId);
 
   if (!hasActiveHandNow) {
