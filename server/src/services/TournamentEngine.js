@@ -8,7 +8,13 @@ import { consolidateTables as runConsolidateTables } from "./tournament/consolid
 import { onPlayersBust as runOnPlayersBust } from "./tournament/busts.js";
 import { seatPlayers as runSeatPlayers } from "./tournament/seatPlayers.js";
 import { completeTournamentIfOneLeft as runCompleteIfOneLeft } from "./tournament/completeIfOneLeft.js";
-import { scheduleStart, doRunScheduledStart, startScheduledStartPoll as startScheduledStartPollImpl } from "./tournament/scheduledStart.js";
+import {
+  scheduleStart,
+  doRunScheduledStart,
+  startScheduledStartPoll as startScheduledStartPollImpl,
+  resumeScheduledStartTimersForSeatedTournaments as resumeScheduledStartTimersImpl,
+} from "./tournament/scheduledStart.js";
+import { startTournamentAutomationPoll as startTournamentAutomationPollImpl } from "./tournament/tournamentAutomationPoll.js";
 import { startBlindLevelTimer as runStartBlindLevelTimer } from "./tournament/blindTimer.js";
 import { startIdleTablesPoll as startIdleTablesPollImpl } from "./tournament/idleTablesPoll.js";
 
@@ -106,6 +112,15 @@ export class TournamentEngine {
       throw new Error("Tournament must be SEATED (registration closed and players seated) before starting");
     }
 
+    if (tournament.startScheduledAt) {
+      const at = new Date(tournament.startScheduledAt).getTime();
+      if (at > Date.now()) {
+        throw new Error(
+          "A start countdown is already scheduled — play will begin automatically at that time"
+        );
+      }
+    }
+
     // Ensure games exist
     if (!tournament.games || tournament.games.length === 0) {
       throw new Error("No games found - players must be seated first");
@@ -135,6 +150,72 @@ export class TournamentEngine {
       include: { games: { include: { players: true } } }
     });
     return { tournamentId, games: updatedTournament?.games || [] };
+  }
+
+  /**
+   * Arm countdown so play begins at tournament.startTime (scheduled create-time).
+   * If that time has passed, starts the tournament immediately.
+   */
+  async scheduleOfficialStartCountdown(tournamentId, io = null) {
+    const tournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      include: { games: { select: { id: true } } },
+    });
+    if (!tournament || tournament.status !== "SEATED" || tournament.startedAt) {
+      return { skipped: true };
+    }
+
+    const officialAt = new Date(tournament.startTime);
+    const officialMs = officialAt.getTime();
+    const nowMs = Date.now();
+
+    const existingSched = tournament.startScheduledAt
+      ? new Date(tournament.startScheduledAt).getTime()
+      : null;
+    if (existingSched != null && existingSched > nowMs) {
+      return { skipped: true, reason: "countdown_in_progress" };
+    }
+    if (
+      existingSched != null &&
+      Math.abs(existingSched - officialMs) < 3000
+    ) {
+      return { skipped: true, reason: "already_armed_for_start_time" };
+    }
+
+    const { getIO } = await import("../modules/socket-handlers/pokerHandler.js");
+    const socketIO = io || getIO();
+    const games = tournament.games?.length
+      ? tournament.games
+      : await prisma.game.findMany({
+          where: { tournamentId },
+          select: { id: true },
+        });
+
+    if (nowMs >= officialMs) {
+      console.log(
+        `[TOURNAMENT] scheduleOfficialStartCountdown: start time passed for ${tournamentId} — starting now`
+      );
+      await this.runScheduledStart(tournamentId);
+      return { immediate: true };
+    }
+
+    await prisma.tournament.update({
+      where: { id: tournamentId },
+      data: { startScheduledAt: officialAt },
+    });
+
+    try {
+      const { postTournamentStartingEmbed } = await import("../discord/bot.js");
+      const full = await prisma.tournament.findUnique({ where: { id: tournamentId } });
+      if (full) await postTournamentStartingEmbed(full);
+    } catch (err) {
+      console.error(`[TOURNAMENT] Discord starting notification (auto):`, err);
+    }
+
+    scheduleStart(tournamentId, officialAt, socketIO, games, (tid) =>
+      this.runScheduledStart(tid)
+    );
+    return { scheduled: true, startScheduledAt: officialAt.toISOString() };
   }
 
   /** Run actual start (RUNNING, hands, blind timer). Delegates to tournament/scheduledStart.js. */
@@ -246,4 +327,14 @@ export function startScheduledStartPoll(engine) {
 /** Start idle/stuck tables poll. Pass engine or omit to create one. */
 export function startIdleTablesPoll(engine) {
   startIdleTablesPollImpl(engine ?? new TournamentEngine());
+}
+
+/** Re-arm setTimeout-based starts after process restart. */
+export function resumeScheduledStartTimersForSeatedTournaments(engine) {
+  return resumeScheduledStartTimersImpl(engine ?? new TournamentEngine());
+}
+
+/** Close registration + countdown at startTime - 2m (uses tournament.startTime). */
+export function startTournamentAutomationPoll(engine) {
+  startTournamentAutomationPollImpl(engine ?? new TournamentEngine());
 }

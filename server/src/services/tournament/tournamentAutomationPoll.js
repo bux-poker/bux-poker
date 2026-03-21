@@ -1,0 +1,87 @@
+import { prisma } from "../../config/database.js";
+
+const PRESTART_LEAD_MS = 2 * 60 * 1000;
+const POLL_MS = 15000;
+
+let automationPollInterval = null;
+
+function preStartThresholdMs(startTime) {
+  return new Date(startTime).getTime() - PRESTART_LEAD_MS;
+}
+
+/**
+ * Poll: at (startTime - 2m), close registration, seat players, and arm countdown to startTime.
+ * Also repairs SEATED tournaments that have games but no startScheduledAt once inside the pre-start window.
+ */
+export function startTournamentAutomationPoll(engine) {
+  if (automationPollInterval) return;
+  automationPollInterval = setInterval(() => {
+    runTournamentAutomationTick(engine).catch((err) =>
+      console.error("[TOURNAMENT] Automation poll tick error:", err)
+    );
+  }, POLL_MS);
+  console.log(`[TOURNAMENT] Auto pre-start poll every ${POLL_MS / 1000}s (close + seat at startTime - 2m)`);
+  runTournamentAutomationTick(engine).catch((err) =>
+    console.error("[TOURNAMENT] Automation initial tick error:", err)
+  );
+}
+
+export async function runTournamentAutomationTick(engine) {
+  const now = Date.now();
+
+  const registering = await prisma.tournament.findMany({
+    where: {
+      status: { in: ["REGISTERING", "SCHEDULED"] },
+    },
+    select: { id: true, startTime: true },
+  });
+
+  for (const t of registering) {
+    if (now < preStartThresholdMs(t.startTime)) continue;
+
+    const confirmed = await prisma.tournamentRegistration.count({
+      where: { tournamentId: t.id, status: "CONFIRMED" },
+    });
+    if (confirmed === 0) {
+      console.log(
+        `[TOURNAMENT] Auto pre-start skipped ${t.id}: no confirmed players at T-2m window`
+      );
+      continue;
+    }
+
+    try {
+      await engine.closeRegistration(t.id);
+    } catch (err) {
+      const msg = err?.message ?? String(err);
+      if (/Players are already seated|already seated/i.test(msg)) {
+        // Admin closed early — still need countdown
+      } else if (/No registered players/i.test(msg)) {
+        continue;
+      } else {
+        console.error(`[TOURNAMENT] Auto closeRegistration failed for ${t.id}:`, msg);
+        continue;
+      }
+    }
+
+    await engine.scheduleOfficialStartCountdown(t.id);
+  }
+
+  const stranded = await prisma.tournament.findMany({
+    where: {
+      status: "SEATED",
+      startScheduledAt: null,
+      startedAt: null,
+    },
+    select: {
+      id: true,
+      startTime: true,
+      _count: { select: { games: true } },
+    },
+  });
+
+  for (const t of stranded) {
+    if (now < preStartThresholdMs(t.startTime)) continue;
+    if ((t._count?.games ?? 0) < 1) continue;
+    await engine.scheduleOfficialStartCountdown(t.id);
+  }
+}

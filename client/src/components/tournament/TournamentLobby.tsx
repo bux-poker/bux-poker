@@ -393,10 +393,17 @@ export function TournamentLobby() {
   };
 
   const startTime = new Date(tournament.startTime);
+  const startScheduledAtRaw = (tournament as { startScheduledAt?: string | null }).startScheduledAt;
+  const startScheduledAtMs = startScheduledAtRaw ? new Date(startScheduledAtRaw).getTime() : null;
   const registeredCount = tournament.registeredCount || 0;
   const isRunning = tournament.status === 'RUNNING' || tournament.status === 'ACTIVE';
   const isCompleted = tournament.status === 'COMPLETED';
   const isSeated = tournament.status === 'SEATED';
+  const scheduledCountdownActive =
+    isSeated &&
+    startScheduledAtMs != null &&
+    !Number.isNaN(startScheduledAtMs) &&
+    startScheduledAtMs > Date.now();
   const isRegistering = tournament.status === 'REGISTERING' || tournament.status === 'REGISTRATION' || tournament.status === 'SCHEDULED';
   const servers = tournament.servers || [];
 
@@ -486,31 +493,47 @@ export function TournamentLobby() {
           </div>
         )}
 
+        {/* Scheduled flow (all users) */}
+        {!isCompleted && !isRunning && (
+          <p className="mt-3 text-sm text-slate-500">
+            <span className="text-slate-400">Schedule:</span> registration closes and players are seated automatically{' '}
+            <strong className="text-slate-300">2 minutes before</strong> the start time above; the table then shows a
+            countdown until play begins.
+          </p>
+        )}
+
         {/* Admin Actions */}
         {isAdmin && !isCompleted && (
-          <div className="mt-4 flex gap-3 border-t border-slate-800 pt-4">
+          <div className="mt-4 flex flex-col gap-2 border-t border-slate-800 pt-4">
+            <div className="flex flex-wrap gap-3">
             {isRegistering && (
               <button
                 onClick={handleCloseRegistration}
                 disabled={closingRegistration}
                 className="rounded bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {closingRegistration ? 'Closing Registration...' : 'Close Registration & Seat Players'}
+                {closingRegistration ? 'Closing Registration...' : 'Close registration now (optional)'}
               </button>
             )}
-            {isSeated && !isRunning && !startRequested && (
+            {isSeated && !isRunning && !startRequested && !scheduledCountdownActive && (
               <button
                 onClick={handleStartTournament}
                 disabled={startingTournament}
                 className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {startingTournament ? 'Starting Tournament...' : 'Start Tournament'}
+                {startingTournament ? 'Starting Tournament...' : 'Start tournament now (manual)'}
               </button>
             )}
             {isSeated && startRequested && startingTournament && (
               <span className="text-slate-400 text-sm">Starting Tournament...</span>
             )}
+            </div>
           </div>
+        )}
+        {scheduledCountdownActive && startScheduledAtRaw && (
+          <p className="mt-2 text-sm text-amber-200/90">
+            Next hand countdown: play begins at {new Date(startScheduledAtRaw).toLocaleString()}.
+          </p>
         )}
 
         {/* Running Tournament Stats */}

@@ -26,19 +26,22 @@ export function scheduleStart(tournamentId, startScheduledAt, socketIO, games, o
   scheduledStartTimers.set(tournamentId, { timeoutId });
 
   if (socketIO && games?.length) {
-    for (const game of games) {
-      socketIO.to(`game:${game.id}`).emit("tournament-starting", {
-        tournamentId,
-        startTime: startScheduledAt.toISOString(),
-        countdownSeconds: 120
-      });
-    }
-    socketIO.emit("tournament-starting", {
+    const countdownSeconds = Math.max(
+      0,
+      Math.ceil((startScheduledAt.getTime() - Date.now()) / 1000)
+    );
+    const payload = {
       tournamentId,
       startTime: startScheduledAt.toISOString(),
-      countdownSeconds: 120
-    });
-    console.log(`[TOURNAMENT] Scheduled start at ${startScheduledAt.toISOString()} for tournament ${tournamentId} (timer in ${(delayMs / 1000).toFixed(0)}s)`);
+      countdownSeconds,
+    };
+    for (const game of games) {
+      socketIO.to(`game:${game.id}`).emit("tournament-starting", payload);
+    }
+    socketIO.emit("tournament-starting", payload);
+    console.log(
+      `[TOURNAMENT] Scheduled start at ${startScheduledAt.toISOString()} for tournament ${tournamentId} (timer in ${(delayMs / 1000).toFixed(0)}s, countdown ${countdownSeconds}s)`
+    );
   }
 }
 
@@ -137,4 +140,28 @@ export function startScheduledStartPoll(engine) {
     }
   }, 30000);
   console.log("[TOURNAMENT] Scheduled start poll running every 30s");
+}
+
+/**
+ * Re-arm in-memory timeouts after deploy for SEATED tournaments with a future startScheduledAt.
+ * @param {{ runScheduledStart: (tournamentId: string) => Promise<void> }} engine
+ */
+export async function resumeScheduledStartTimersForSeatedTournaments(engine) {
+  const rows = await prisma.tournament.findMany({
+    where: {
+      status: "SEATED",
+      startScheduledAt: { gt: new Date() },
+    },
+    include: { games: { select: { id: true } } },
+  });
+  if (rows.length === 0) return;
+  const { getIO } = await import("../../modules/socket-handlers/pokerHandler.js");
+  const socketIO = getIO();
+  for (const t of rows) {
+    const when = new Date(t.startScheduledAt);
+    scheduleStart(t.id, when, socketIO, t.games || [], (tid) =>
+      engine.runScheduledStart(tid)
+    );
+    console.log(`[TOURNAMENT] Resumed scheduled start timer for ${t.id} → ${when.toISOString()}`);
+  }
 }

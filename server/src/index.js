@@ -2,7 +2,13 @@ import dotenv from "dotenv";
 import { app, server, io, PORT } from "./config/server.js";
 import { registerSocketHandlers } from "./modules/socket-handlers/index.js";
 import { initializeDiscordBot } from "./discord/bot.js";
-import { startScheduledStartPoll, startIdleTablesPoll } from "./services/TournamentEngine.js";
+import {
+  TournamentEngine,
+  startScheduledStartPoll,
+  startIdleTablesPoll,
+  resumeScheduledStartTimersForSeatedTournaments,
+  startTournamentAutomationPoll,
+} from "./services/TournamentEngine.js";
 import { connectRedis } from "./config/redis.js";
 import { resumeBlindLevelTimersForRunningTournaments } from "./services/tournament/blindTimer.js";
 import { getIO } from "./modules/poker/tableState.js";
@@ -16,9 +22,17 @@ resumeBlindLevelTimersForRunningTournaments({ getIO }).catch((err) =>
   console.error("[TOURNAMENT] resumeBlindLevelTimersForRunningTournaments:", err)
 );
 
-// Poll for tournaments whose 2-min start time has passed (survives process restart)
-startScheduledStartPoll();
-startIdleTablesPoll();
+// Single engine instance for background polls (admin routes use their own engine; behavior is stateless)
+const tournamentPollEngine = new TournamentEngine();
+
+// Poll for tournaments whose scheduled start time has passed (survives process restart)
+startScheduledStartPoll(tournamentPollEngine);
+startIdleTablesPoll(tournamentPollEngine);
+resumeScheduledStartTimersForSeatedTournaments(tournamentPollEngine).catch((err) =>
+  console.error("[TOURNAMENT] resumeScheduledStartTimersForSeatedTournaments:", err)
+);
+// At (startTime - 2m): close registration, seat players, arm countdown to startTime
+startTournamentAutomationPoll(tournamentPollEngine);
 
 // Initialize Discord bot (non-blocking)
 initializeDiscordBot().catch((err) => {

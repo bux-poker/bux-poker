@@ -14,6 +14,8 @@ export interface Tournament {
   name: string;
   startTime: Date | string;
   startedAt?: Date | string | null; // Actual start time when tournament starts
+  /** When set, RUNNING transition fires at this instant (2m table countdown ends here). */
+  startScheduledAt?: string | null;
   status: 'UPCOMING' | 'REGISTRATION' | 'ACTIVE' | 'COMPLETED' | 'SCHEDULED' | 'CANCELLED' | 'REGISTERING' | 'SEATED' | 'RUNNING';
   maxPlayers: number;
   seatsPerTable: number;

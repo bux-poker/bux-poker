@@ -294,7 +294,7 @@ export function CreateTournament() {
 
             <div>
               <label className="block text-sm font-medium text-slate-300">
-                Start Time *
+                Start time (play begins) *
               </label>
               <input
                 type="datetime-local"
@@ -303,6 +303,10 @@ export function CreateTournament() {
                 onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
                 className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
               />
+              <p className="mt-1.5 text-xs text-slate-500">
+                Registration closes automatically <strong className="text-slate-400">2 minutes before</strong> this time.
+                Players are seated and the table shows a 2-minute countdown until play starts.
+              </p>
             </div>
           </div>
         </div>
