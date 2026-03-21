@@ -9,6 +9,15 @@ The `20260207120000_add_tournament_start_scheduled_at` migration ... failed
 
 Prisma will not run newer migrations (including blind-clock columns) until this is cleared.
 
+## Two different things (read this)
+
+| Step | What it does | Triggers Render? |
+|------|----------------|------------------|
+| **A. Fix the database** | `migrate resolve` + `migrate deploy` on your laptop with **production** `DATABASE_URL` | **No.** This only updates Supabase / `_prisma_migrations`. |
+| **B. Start the service** | Tell Render to run a new deploy | **Yes.** This is what actually restarts the app. |
+
+Running Prisma locally **does not** ping Render. After the DB is fixed, you **must** redeploy the service yourself.
+
 ## Why it failed
 
 Usually **`startScheduledAt` already exists** on `"Tournament"` (added manually, copy-paste SQL, or an old deploy). Postgres then errors with “column already exists” and Prisma marks the migration as **failed**.
@@ -68,9 +77,16 @@ npx prisma migrate deploy --schema=prisma/schema.prisma
 
 You should see `20260319120000_tournament_blind_anchor_break` apply if it was still pending.
 
-### Step 5 — Redeploy on Render
+### Step 5 — Redeploy on Render (required — CLI above does not do this)
 
-Push (if needed) and trigger deploy so `npm start` → `prestart` succeeds.
+After `migrate deploy` succeeds against prod:
+
+1. Open **Render Dashboard** → select **bux-poker-server** (or your API service).
+2. Click **Manual Deploy** → **Deploy latest commit** (or “Clear build cache & deploy” if you want a clean build).
+
+You do **not** need a new git commit for the migration fix. Manual Deploy re-runs `prestart`; with the DB fixed, `prisma migrate deploy` should pass.
+
+**Optional:** If you only use auto-deploy on push, run `git commit --allow-empty -m "chore: redeploy after prisma resolve" && git push` instead of Manual Deploy.
 
 ## Check status
 

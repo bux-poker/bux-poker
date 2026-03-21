@@ -158,7 +158,7 @@ render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 200 -o text --text TOURNAMENT
 - Set `CLIENT_URL` correctly in backend env for CORS.
 - Set `REDIS_URL` in production for Redis session storage.
 - **Migrations must be in Git** — `prisma/migrations/` is tracked so Render’s `prisma migrate deploy` (see `server/package.json` `prestart` / `postinstall`) applies the same schema as the generated client. If you see `PrismaClientKnownRequestError` / `Invalid prisma.tournament.findUnique()` and blinds never advance, the DB is missing columns: check deploy logs for migration failures, or run `npx prisma migrate deploy --schema=prisma/schema.prisma` against production `DATABASE_URL` once.
-- **P3009 failed migration on deploy** (e.g. `20260207120000_add_tournament_start_scheduled_at`): see **`docs/PRISMA_MIGRATION_RECOVERY.md`** — usually `prisma migrate resolve --applied …` after confirming `startScheduledAt` already exists on `Tournament`.
+- **P3009 failed migration on deploy**: **`docs/PRISMA_MIGRATION_RECOVERY.md`** — fix prod DB with `migrate resolve` + `migrate deploy` locally, **then** **Render → Manual Deploy** (the CLI does **not** trigger Render).
 
 ## Poker Rules and Engine Notes
 
