@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface PlayerForBetting {
   chips: number;
@@ -38,7 +38,7 @@ export function BettingControls({
 }: BettingControlsProps) {
   const [raiseAmount, setRaiseAmount] = useState(bigBlind * 2);
 
-  const potSize = potSizeProp ?? 100;
+  const potSize = Math.max(0, Math.floor(Number(potSizeProp) || 0));
   const isPreflop = street === 'PREFLOP';
   // Determine if there have been raises (any bet > big blind in preflop, or any bet > 0 post-flop)
   const hasRaises = isPreflop ? currentBet > bigBlind : currentBet > 0;
@@ -57,32 +57,76 @@ export function BettingControls({
   // Smallest legal total bet: full min raise, or our entire stack if we cannot afford the min raise (short all-in)
   const minTotalBet = Math.min(minRaiseAmount, maxTotalBet);
 
-  // Update raise amount when current bet changes, clamped to max (all-in)
+  /** Minimum legal total shown in the raise field (open / bet / min-raise-to). */
+  const inputMin =
+    isPreflop && currentBet === 0
+      ? bigBlind * 2
+      : currentBet > 0
+        ? minTotalBet
+        : bigBlind;
+  const inputMax = maxTotalBet;
+  /** Step for +/- buttons = minimum raise increment (table min raise). */
+  const stepSize = Math.max(1, minimumRaise);
+
+  // Presets: total raise-to amount equals fractions of current total pot (see server `pot`).
+  const targetHalfPot = Math.floor(potSize / 2);
+  const targetTwoThirdsPot = Math.floor((potSize * 2) / 3);
+  const targetFullPot = potSize;
+  const presetHalfDisabled =
+    !isMyTurn || potSize <= 0 || targetHalfPot < inputMin;
+  const presetTwoThirdsDisabled =
+    !isMyTurn || potSize <= 0 || targetTwoThirdsPot < inputMin;
+  const presetPotDisabled =
+    !isMyTurn || potSize <= 0 || targetFullPot < inputMin;
+
+  // Only reset default raise when the betting line changes — not when pot/stack ticks (fixes 1/2, POT, etc. being overwritten).
+  const lineKey = `${street}|${currentBet}`;
+  const prevLineKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    let amount: number;
-    if (isPreflop && currentBet === 0) {
-      amount = bigBlind * 2;
-    } else if (currentBet > 0) {
-      amount = minTotalBet;
-    } else {
-      amount = bigBlind;
+    const defaultAmount =
+      isPreflop && currentBet === 0
+        ? bigBlind * 2
+        : currentBet > 0
+          ? minTotalBet
+          : bigBlind;
+    const defaultClamped = Math.min(
+      Math.max(defaultAmount, inputMin),
+      inputMax
+    );
+
+    if (prevLineKeyRef.current !== lineKey) {
+      prevLineKeyRef.current = lineKey;
+      setRaiseAmount(defaultClamped);
+      return;
     }
-    setRaiseAmount(Math.min(amount, maxTotalBet));
-  }, [currentBet, bigBlind, minimumRaise, isPreflop, minRaiseAmount, minTotalBet, maxTotalBet]);
+    setRaiseAmount((a) => Math.max(inputMin, Math.min(inputMax, a)));
+  }, [
+    lineKey,
+    street,
+    currentBet,
+    bigBlind,
+    minimumRaise,
+    isPreflop,
+    minTotalBet,
+    inputMin,
+    inputMax,
+  ]);
 
   const handlePreset = (preset: string) => {
     switch (preset) {
-      case 'half':
-        setRaiseAmount(Math.floor(potSize / 2));
+      case "half":
+        if (presetHalfDisabled) return;
+        setRaiseAmount(Math.min(inputMax, targetHalfPot));
         break;
-      case 'twothirds':
-        setRaiseAmount(Math.floor(potSize * 0.67));
+      case "twothirds":
+        if (presetTwoThirdsDisabled) return;
+        setRaiseAmount(Math.min(inputMax, targetTwoThirdsPot));
         break;
-      case 'pot':
-        setRaiseAmount(potSize);
+      case "pot":
+        if (presetPotDisabled) return;
+        setRaiseAmount(Math.min(inputMax, targetFullPot));
         break;
-      case 'allin':
-        // Total bet = what we've already put in + our entire stack (true all-in)
+      case "allin":
         setRaiseAmount(myContribution + myChips);
         break;
     }
@@ -219,7 +263,7 @@ export function BettingControls({
           <div className="flex items-center gap-2">
             <button
               onClick={() => handlePreset('half')}
-              disabled={!isMyTurn}
+              disabled={presetHalfDisabled}
               className="rounded bg-slate-700 font-medium text-slate-200 hover:bg-slate-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 paddingLeft: `var(--preset-button-padding-x, 12px)`,
@@ -234,7 +278,7 @@ export function BettingControls({
             </button>
             <button
               onClick={() => handlePreset('pot')}
-              disabled={!isMyTurn}
+              disabled={presetPotDisabled}
               className="rounded bg-slate-700 font-medium text-slate-200 hover:bg-slate-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 paddingLeft: `var(--preset-button-padding-x, 12px)`,
@@ -252,7 +296,7 @@ export function BettingControls({
           <div className="flex items-center gap-2">
             <button
               onClick={() => handlePreset('twothirds')}
-              disabled={!isMyTurn}
+              disabled={presetTwoThirdsDisabled}
               className="rounded bg-slate-700 font-medium text-slate-200 hover:bg-slate-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 paddingLeft: `var(--preset-button-padding-x, 12px)`,
@@ -286,11 +330,10 @@ export function BettingControls({
         {/* Right side: Amount Input with +/- Controls - same height as both preset rows combined */}
         <div className="flex items-center gap-2">
             <button
-              onClick={() => {
-                const minAmount = isPreflop && currentBet === 0 ? bigBlind * 2 : (currentBet > 0 ? minTotalBet : bigBlind);
-                setRaiseAmount(Math.max(minAmount, raiseAmount - minimumRaise));
-              }}
-              disabled={!isMyTurn}
+              onClick={() =>
+                setRaiseAmount((a) => Math.max(inputMin, a - stepSize))
+              }
+              disabled={!isMyTurn || raiseAmount <= inputMin}
               className="flex items-center justify-center rounded-full bg-slate-700 font-bold text-white hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 width: `var(--input-button-size, 48px)`,
@@ -316,17 +359,21 @@ export function BettingControls({
             }}
             value={raiseAmount}
             onChange={(e) => {
-              const minAmount = isPreflop && currentBet === 0 ? bigBlind * 2 : (currentBet > 0 ? minTotalBet : bigBlind);
-              const val = Math.max(minAmount, Math.min(maxTotalBet, Number(e.target.value) || minAmount));
+              const val = Math.max(
+                inputMin,
+                Math.min(inputMax, Number(e.target.value) || inputMin)
+              );
               setRaiseAmount(val);
             }}
             onWheel={(e) => e.currentTarget.blur()}
-            min={isPreflop && currentBet === 0 ? bigBlind * 2 : (currentBet > 0 ? minTotalBet : bigBlind)}
-            max={maxTotalBet}
+            min={inputMin}
+            max={inputMax}
           />
           <button
-            onClick={() => setRaiseAmount(Math.min(maxTotalBet, raiseAmount + minimumRaise))}
-            disabled={!isMyTurn}
+            onClick={() =>
+              setRaiseAmount((a) => Math.min(inputMax, a + stepSize))
+            }
+            disabled={!isMyTurn || raiseAmount >= inputMax}
             className="flex items-center justify-center rounded-full bg-slate-700 font-bold text-white hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
               width: `var(--input-button-size, 48px)`,

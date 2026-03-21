@@ -115,7 +115,7 @@ export default function Chat({
 
   return (
     <>
-      <div className="flex flex-col h-full min-h-0 bg-gray-800 border-l border-gray-600">
+      <div className="flex min-h-0 flex-1 flex-col bg-gray-800 border-l border-gray-600">
         {/* Chat Header */}
         <ChatHeader
           activeTab={activeTab}
@@ -127,11 +127,11 @@ export default function Chat({
         />
 
         {/* Chat Content */}
-        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
           {activeTab === 'chat' ? (
             <>
-              {/* Chat Messages - takes remaining space */}
-              <div className="flex-1 min-h-0 overflow-hidden">
+              {/* Chat Messages — flex + min-h-0 so inner overflow-y-auto can scroll */}
+              <div className="flex min-h-0 flex-1 flex-col">
                 <ChatMessages
                   messages={messages}
                   isMobile={isMobile}

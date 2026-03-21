@@ -1444,10 +1444,10 @@ export function PokerGameView() {
             {/* Chat panel - hidden on mobile when collapsed */}
             {(!isMobile || !chatCollapsed) && (
               <div 
-                className={`border-l border-slate-800 flex-shrink-0 relative ${isMobile ? 'w-72 max-w-[45%]' : ''}`}
+                className={`border-l border-slate-800 flex h-full min-h-0 flex-shrink-0 flex-col relative ${isMobile ? 'w-72 max-w-[45%]' : ''}`}
                 style={!isMobile ? { width: 'var(--chat-width, 320px)' } : undefined}
               >
-                <div className="flex flex-col h-full">
+                <div className="flex min-h-0 flex-1 flex-col">
                   {/* Header: Dealer toggle + collapse button on mobile */}
                   <div className="px-2 py-1 border-b border-slate-700 flex items-center justify-between bg-slate-800/50">
                     <span className="text-xs text-slate-300">Dealer Messages</span>
