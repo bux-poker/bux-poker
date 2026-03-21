@@ -13,6 +13,22 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Dealt into this hand (folded players still have hole cards until cleanup). */
+function hasTwoHoleCards(player) {
+  let hc = player.holeCards;
+  if (!hc) return false;
+  if (typeof hc === "string") {
+    const t = hc.trim();
+    if (!t) return false;
+    try {
+      hc = JSON.parse(t);
+    } catch {
+      return false;
+    }
+  }
+  return Array.isArray(hc) && hc.length === 2;
+}
+
 /** After chips are awarded: clear table state, reset DB rows, maybe start next hand. */
 async function runShowdownTableCleanup(gameId, io) {
   const st = tableState.get(gameId);
@@ -417,14 +433,19 @@ export async function handleShowdownCore(gameId, io, options = {}) {
     });
   const forcedReveal = options.forcedReveal === true;
   state.showdownForcedReveal = forcedReveal;
-  // Optional reveal: everyone still in the hand (including winners) chooses show/muck.
-  for (const p of activePlayers) {
+  // Optional reveal: every seated player who was dealt cards (including folded) may show or muck.
+  for (const p of state.players) {
+    delete p.showdownRevealStatus;
+  }
+  for (const p of state.players) {
+    if (p.status === "ELIMINATED") continue;
+    if (!hasTwoHoleCards(p)) continue;
     p.showdownRevealStatus = forcedReveal ? "SHOW" : "PENDING";
   }
 
   const hasPendingOptional =
     !forcedReveal &&
-    activePlayers.some((p) => p.showdownRevealStatus === "PENDING");
+    state.players.some((p) => p.showdownRevealStatus === "PENDING");
   const cleanupDelayMs = hasPendingOptional
     ? SHOWDOWN_OPTIONAL_REVEAL_MAX_WAIT_MS
     : options.cleanupDelayMs ?? 3000;

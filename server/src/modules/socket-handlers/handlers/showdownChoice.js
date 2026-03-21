@@ -3,7 +3,7 @@ import { emitGameState } from "../../poker/emitGameState.js";
 import { tryAccelerateShowdownCleanup } from "../../poker/showdown.js";
 
 /**
- * Loser at showdown chooses to show or muck hole cards (optional reveal phase).
+ * After showdown, any player dealt in this hand (including folders) may show or muck.
  */
 export function registerShowdownChoice(socket, io) {
   socket.on("showdown-choice", async ({ gameId, choice }) => {
