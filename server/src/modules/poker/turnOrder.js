@@ -34,25 +34,11 @@ export async function moveToNextPlayer(gameId, io) {
   const state = tableState.get(gameId);
   if (!state) return;
 
-  // If turn is stuck on an all-in / 0-chip player, clear it so we can orbit to someone who can act.
-  if (state.currentTurnUserId) {
-    const uid = normalizeUserId(state.currentTurnUserId);
-    const turnPlayer = state.players.find((p) => normalizeUserId(p.userId) === uid);
-    if (turnPlayer && !playerCanBetThisRound(turnPlayer)) {
-      console.log(
-        `[TURN ORDER] Clearing turn: ${turnPlayer.name || uid} cannot bet (all-in or 0 chips)`
-      );
-      state.currentTurnUserId = null;
-      state.currentTurnStartedAt = null;
-      const existingTimer = turnTimers.get(gameId);
-      if (existingTimer) {
-        clearTimeout(existingTimer.timerId);
-        if (existingTimer.graceTimerId) clearTimeout(existingTimer.graceTimerId);
-        turnTimers.delete(gameId);
-      }
-      tableState.set(gameId, state);
-    }
-  }
+  // Do NOT null currentTurnUserId here when the holder is all-in / 0 chips: that hits the
+  // `!currentTurnUserId` branch below and incorrectly assigns the lowest seat instead of
+  // orbiting from the player who just acted. Keep the turn id on the (non-active) player;
+  // `currentPlayer` lookup against `activePlayers` misses them and the `!currentPlayer` branch
+  // walks seats in order from that seat.
 
   const hasActiveHandNow = hasActiveHand(gameId);
 

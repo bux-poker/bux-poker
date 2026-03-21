@@ -143,6 +143,8 @@ cd client && npm run dev
 
 ### Render: fetch server logs (CLI)
 
+**Access model:** Render logs are not visible to tools unless **this machine (or CI) is authenticated**. Run `render login` once, then use the commands below. If you use Cursor or another agent, it can only read logs here if the same shell has Render CLI auth and network access; otherwise use **Render Dashboard → your web service → Logs**, or run these commands locally and paste the lines you care about (e.g. `[BETTING]`, `[TURN ORDER]`, `player-action`).
+
 ```bash
 # List services (once logged in: render login)
 render services -o json
@@ -152,6 +154,11 @@ render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 200 -o text
 
 # Filter by substring
 render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 200 -o text --text TOURNAMENT
+
+# Turn / betting order debugging (engine emits these prefixes)
+render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 500 -o text --text "[BETTING]"
+render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 500 -o text --text "[TURN ORDER]"
+render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 200 -o text --text "player-action"
 ```
 
 - Use a persistent backend process for websockets (Railway works well).
