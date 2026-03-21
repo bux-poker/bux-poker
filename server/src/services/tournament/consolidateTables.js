@@ -2,6 +2,9 @@ import { prisma } from "../../config/database.js";
 import { auditChipConservation } from "./chipAudit.js";
 import { resyncGamesToMaxBlindLevel } from "./blindLevels.js";
 
+/** Still in the tournament (incl. 0-chip all-in). Excluding them broke table counts & closing tables. */
+const NOT_ELIMINATED = { status: { not: "ELIMINATED" } };
+
 const _consolidationLocks = new Map();
 
 /** Tournament IDs for which we are currently waiting for all hands to finish (so do not start new hands). */
@@ -89,7 +92,7 @@ export async function doConsolidateTables(tournamentId, deps) {
     where: { tournamentId, status: "ACTIVE" },
     include: {
       players: {
-        where: { status: { not: "ELIMINATED" }, chips: { gt: 0 } },
+        where: NOT_ELIMINATED,
         include: { user: true }
       }
     },
@@ -152,7 +155,7 @@ export async function doConsolidateTables(tournamentId, deps) {
     where: { tournamentId, status: "ACTIVE" },
     include: {
       players: {
-        where: { status: { not: "ELIMINATED" }, chips: { gt: 0 } },
+        where: NOT_ELIMINATED,
         include: { user: true }
       }
     },
@@ -218,7 +221,7 @@ export async function doConsolidateTables(tournamentId, deps) {
     where: { tournamentId, status: "ACTIVE" },
     include: {
       players: {
-        where: { status: { not: "ELIMINATED" }, chips: { gt: 0 } },
+        where: NOT_ELIMINATED,
         include: { user: true },
       },
     },
@@ -274,7 +277,7 @@ export async function doConsolidateTables(tournamentId, deps) {
           where: { tournamentId, status: "ACTIVE" },
           include: {
             players: {
-              where: { status: { not: "ELIMINATED" }, chips: { gt: 0 } },
+              where: NOT_ELIMINATED,
               orderBy: { seatNumber: "asc" },
             },
           },

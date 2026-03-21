@@ -36,11 +36,12 @@ export function startIdleTablesPoll(engine) {
         if (!socketIO) continue;
 
         const seatsPerTable = t.seatsPerTable ?? 9;
+        // Count every non-eliminated player (incl. 0-chip all-in); chips>0 undercounted tables & blocked consolidation.
         const games = await prisma.game.findMany({
           where: { tournamentId: t.id, status: "ACTIVE" },
           include: {
             players: {
-              where: { status: { not: "ELIMINATED" }, chips: { gt: 0 } },
+              where: { status: { not: "ELIMINATED" } },
               select: { id: true }
             }
           }
