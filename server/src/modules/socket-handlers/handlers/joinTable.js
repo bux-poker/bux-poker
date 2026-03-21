@@ -9,7 +9,7 @@ import { emitGameState } from "../../poker/emitGameState.js";
  * @param {{ startHandForGame: (gameId: string, io: object) => Promise<void> }} deps - startHandForGame from router (avoids circular dep)
  */
 export function registerJoinTable(socket, io, { startHandForGame }) {
-  socket.on("join-table", async ({ gameId }) => {
+  socket.on("join-table", async ({ gameId, userId: reportedUserId }) => {
     try {
       const game = await prisma.game.findUnique({
         where: { id: gameId },
@@ -22,6 +22,14 @@ export function registerJoinTable(socket, io, { startHandForGame }) {
       if (!game) {
         socket.emit("error", { message: "Game not found" });
         return;
+      }
+
+      if (
+        reportedUserId != null &&
+        String(reportedUserId).length > 0 &&
+        game.players?.some((p) => String(p.userId) === String(reportedUserId))
+      ) {
+        socket.data.userId = String(reportedUserId);
       }
 
       for (const room of socket.rooms) {

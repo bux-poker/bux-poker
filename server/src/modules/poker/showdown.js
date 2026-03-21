@@ -415,19 +415,11 @@ export async function handleShowdownCore(gameId, io, options = {}) {
         hand: r.hand ? { category: r.hand.category, cards: r.hand.bestFive || [] } : null,
       };
     });
-  // Anyone who received chips (including side pots) is a "winner" for show/muck — do not force losers who only appear in UI winner list.
-  const winnerPlayerIds = new Set();
-  for (const [playerId, won] of totalWon.entries()) {
-    if (won > 0) winnerPlayerIds.add(playerId);
-  }
   const forcedReveal = options.forcedReveal === true;
   state.showdownForcedReveal = forcedReveal;
+  // Optional reveal: everyone still in the hand (including winners) chooses show/muck.
   for (const p of activePlayers) {
-    if (winnerPlayerIds.has(p.id)) {
-      p.showdownRevealStatus = "SHOW";
-    } else {
-      p.showdownRevealStatus = forcedReveal ? "SHOW" : "PENDING";
-    }
+    p.showdownRevealStatus = forcedReveal ? "SHOW" : "PENDING";
   }
 
   const hasPendingOptional =

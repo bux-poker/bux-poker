@@ -214,34 +214,31 @@ export async function doConsolidateTables(tournamentId, deps) {
     console.log(`[TOURNAMENT] Reduced to ${numTablesNeeded} table(s) (closed ${toClose.length} emptiest)`);
   }
 
-  if (totalPlayers === 0) {
+  games = await prisma.game.findMany({
+    where: { tournamentId, status: "ACTIVE" },
+    include: {
+      players: {
+        where: { status: { not: "ELIMINATED" }, chips: { gt: 0 } },
+        include: { user: true },
+      },
+    },
+    orderBy: { tableNumber: "asc" },
+  });
+
+  const totalPlayersLive = games.reduce((s, g) => s + (g.players?.length ?? 0), 0);
+  if (totalPlayersLive === 0) {
     console.log(`[TOURNAMENT] No players remaining, skipping redistribution`);
     return games;
   }
 
-  const numTables = games.length;
-  const basePlayersPerTable = Math.floor(totalPlayers / numTables);
-  const extraPlayers = totalPlayers % numTables;
+  const countsLive = games.map((g) => g.players?.length ?? 0).filter((c) => c > 0);
+  const maxLive = countsLive.length ? Math.max(...countsLive) : 0;
+  const minLive = countsLive.length ? Math.min(...countsLive) : 0;
+  const spreadLive = maxLive - minLive;
 
-  console.log(`[TOURNAMENT] Rebalancing ${totalPlayers} players across ${numTables} tables`);
-  console.log(`[TOURNAMENT] Target: ${basePlayersPerTable}-${basePlayersPerTable + 1} players per table`);
-
-  const shuffled = [...allPlayers].sort(() => Math.random() - 0.5);
-
-  const tableAssignments = [];
-  let playerIndex = 0;
-  for (let i = 0; i < games.length; i++) {
-    const game = games[i];
-    const targetPlayers = i < extraPlayers ? basePlayersPerTable + 1 : basePlayersPerTable;
-    const playersForThisTable = shuffled.slice(playerIndex, playerIndex + targetPlayers);
-    playerIndex += targetPlayers;
-
-    tableAssignments.push({
-      gameId: game.id,
-      tableNumber: game.tableNumber,
-      players: playersForThisTable
-    });
-  }
+  console.log(
+    `[TOURNAMENT] Live counts: ${games.map((g) => `${g.tableNumber}:${g.players?.length ?? 0}`).join(", ")} — spread ${spreadLive}`
+  );
 
   for (const gameId of allActiveGameIdsForClear) {
     if (await deps.hasActiveHand(gameId)) {
@@ -267,32 +264,60 @@ export async function doConsolidateTables(tournamentId, deps) {
     console.warn("[TOURNAMENT] Could not clear game state:", e?.message);
   }
 
-  await prisma.$transaction(async (tx) => {
-    for (const player of allPlayers) {
-      await tx.player.delete({ where: { id: player.playerId } });
-    }
-    for (const assignment of tableAssignments) {
-      await tx.player.deleteMany({ where: { gameId: assignment.gameId } });
-    }
-    for (const assignment of tableAssignments) {
-      for (let seatIndex = 0; seatIndex < assignment.players.length; seatIndex++) {
-        const { player } = assignment.players[seatIndex];
-        if (!player?.userId) {
-          throw new Error(`[TOURNAMENT] Invalid player in assignment table ${assignment.tableNumber} seat ${seatIndex + 1}`);
-        }
-        await tx.player.create({
-          data: {
-            gameId: assignment.gameId,
-            userId: player.userId,
-            seatNumber: seatIndex + 1,
-            chips: player.chips,
-            holeCards: "",
-            status: "ACTIVE"
-          }
+  if (spreadLive <= 1) {
+    console.log(`[TOURNAMENT] Spread ≤ 1 — no player moves (seats unchanged except closed tables)`);
+  } else {
+    await prisma.$transaction(async (tx) => {
+      let guard = 0;
+      while (guard++ < 200) {
+        const gs = await tx.game.findMany({
+          where: { tournamentId, status: "ACTIVE" },
+          include: {
+            players: {
+              where: { status: { not: "ELIMINATED" }, chips: { gt: 0 } },
+              orderBy: { seatNumber: "asc" },
+            },
+          },
+          orderBy: { tableNumber: "asc" },
         });
+        const active = gs.filter((g) => (g.players?.length ?? 0) > 0);
+        if (active.length < 2) break;
+        const sizes = active.map((g) => ({ g, n: g.players.length }));
+        const mx = Math.max(...sizes.map((s) => s.n));
+        const mn = Math.min(...sizes.map((s) => s.n));
+        if (mx - mn <= 1) break;
+
+        const maxTables = sizes
+          .filter((s) => s.n === mx)
+          .sort((a, b) => b.g.tableNumber - a.g.tableNumber);
+        const minTables = sizes
+          .filter((s) => s.n === mn)
+          .sort((a, b) => a.g.tableNumber - b.g.tableNumber);
+        const src = maxTables[0].g;
+        const dst = minTables[0].g;
+
+        const taken = new Set(dst.players.map((p) => p.seatNumber));
+        let seat = 1;
+        while (seat <= seatsPerTable && taken.has(seat)) seat++;
+        if (seat > seatsPerTable) {
+          throw new Error(
+            `[TOURNAMENT] No free seat on table ${dst.tableNumber} (seatsPerTable=${seatsPerTable})`
+          );
+        }
+
+        const pi = Math.floor(Math.random() * src.players.length);
+        const mover = src.players[pi];
+
+        await tx.player.update({
+          where: { id: mover.id },
+          data: { gameId: dst.id, seatNumber: seat },
+        });
+        console.log(
+          `[TOURNAMENT] Balance: moved user ${mover.userId} from table ${src.tableNumber} → ${dst.tableNumber} seat ${seat}`
+        );
       }
-    }
-  });
+    });
+  }
 
   const updatedGames = await prisma.game.findMany({
     where: { tournamentId, status: "ACTIVE" },

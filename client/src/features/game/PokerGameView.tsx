@@ -261,6 +261,14 @@ export function PokerGameView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.tournamentId, tournament?.status, tournament?.startedAt]); // refetchTournament is stable (memoized), so we can omit it
 
+  /** Re-join with userId when auth loads after socket (needed for per-viewer showdown / game-state). */
+  useEffect(() => {
+    if (!id || !user?.id) return;
+    const socket = getSocket();
+    if (!socket.connected) return;
+    socket.emit("join-table", { gameId: id, userId: user.id });
+  }, [id, user?.id]);
+
   useEffect(() => {
     if (!id) return;
 
@@ -345,7 +353,7 @@ export function PokerGameView() {
     socket.on("tournament-blind-clock-started", onBlindClockStarted);
 
     const emitJoinTable = () => {
-      socket.emit("join-table", { gameId: id });
+      socket.emit("join-table", { gameId: id, userId: user?.id });
     };
 
     // One join per connection: avoid double emit (mount + connect) racing startHand on the server
@@ -690,7 +698,7 @@ export function PokerGameView() {
 
   useEffect(() => {
     if (!scheduleModal || scheduleModal.kind !== "LEVEL_UP") return;
-    const t = setTimeout(() => setScheduleModal(null), 14000);
+    const t = setTimeout(() => setScheduleModal(null), 2000);
     return () => clearTimeout(t);
   }, [scheduleModal]);
 
@@ -1239,13 +1247,9 @@ export function PokerGameView() {
                       <p id="schedule-modal-title" className="text-lg font-medium text-slate-200">
                         Blind level up
                       </p>
-                      <p className="mt-2 text-lg text-slate-200">{scheduleModal.message}</p>
-                      {scheduleModal.smallBlind != null && scheduleModal.bigBlind != null && (
-                        <p className="mt-2 text-sm text-slate-400">
-                          New blinds: {Number(scheduleModal.smallBlind).toLocaleString()} /{" "}
-                          {Number(scheduleModal.bigBlind).toLocaleString()}
-                        </p>
-                      )}
+                      <p className="mt-2 text-lg text-slate-200">
+                        {scheduleModal.message || "Blinds have increased."}
+                      </p>
                       <p className="mt-3 text-sm text-slate-400">
                         The blind timer restarts once every table has started the next hand.
                       </p>
@@ -1300,7 +1304,7 @@ export function PokerGameView() {
           </div>
 
           {/* Betting controls - fixed height so layout does not jump when controls are hidden */}
-          <div className="relative flex h-[208px] w-full shrink-0 items-stretch overflow-hidden border-t border-slate-800 bg-slate-900/95 px-2 py-1.5 backdrop-blur-sm sm:h-[216px] sm:px-4 sm:py-2">
+          <div className="relative flex min-h-[96px] h-[104px] w-full shrink-0 items-stretch overflow-hidden border-t border-slate-800 bg-slate-900/95 px-2 py-1.5 backdrop-blur-sm sm:min-h-[108px] sm:h-[208px] sm:px-4 sm:py-2">
             {/* Player's own cards + hand text - fill left side of panel height */}
             {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
               <div className={`absolute left-2 sm:left-4 top-0 bottom-0 z-50 flex flex-col justify-center gap-1 items-start ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ visibility: 'visible' }}>
