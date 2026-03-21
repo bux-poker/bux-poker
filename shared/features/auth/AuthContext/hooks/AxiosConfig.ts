@@ -6,38 +6,61 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://bux-poker-serve
 axios.defaults.baseURL = apiBaseUrl;
 axios.defaults.withCredentials = true;
 
-// Add request/response interceptors for debugging
+const isDev = import.meta.env.DEV;
+
+/** Firefox reports aborted fetches as NS_ERROR_ABORT; Socket.IO can abort polling during upgrade. */
+function isBenignClientAbort(error: unknown): boolean {
+  if (error == null || typeof error !== 'object') return false;
+  const e = error as Record<string, unknown>;
+  const code = e.code;
+  const name = e.name;
+  const msg = String(e.message ?? '');
+  if (code === 'ERR_CANCELED' || name === 'CanceledError' || name === 'AbortError') return true;
+  if (/abort|cancel(?:l)?ed/i.test(msg)) return true;
+  if (msg.includes('NS_ERROR_ABORT')) return true;
+  return false;
+}
+
+// Request/response interceptors (verbose logs only in dev; skip noise from aborted requests)
 axios.interceptors.request.use(
   (config) => {
-    console.log('Making request:', {
-      url: config.url,
-      method: config.method,
-      headers: config.headers,
-      data: config.data
-    });
+    if (isDev) {
+      console.log('Making request:', {
+        url: config.url,
+        method: config.method,
+        headers: config.headers,
+        data: config.data,
+      });
+    }
     return config;
   },
   (error) => {
-    console.error('Request error:', error);
+    if (!isBenignClientAbort(error)) {
+      console.error('Request error:', error);
+    }
     return Promise.reject(error);
   }
 );
 
 axios.interceptors.response.use(
   (response) => {
-    console.log('Received response:', {
-      status: response.status,
-      data: response.data,
-      headers: response.headers
-    });
+    if (isDev) {
+      console.log('Received response:', {
+        status: response.status,
+        data: response.data,
+        headers: response.headers,
+      });
+    }
     return response;
   },
   (error) => {
-    console.error('Response error:', {
-      message: error.message,
-      response: error.response?.data,
-      status: error.response?.status
-    });
+    if (!isBenignClientAbort(error)) {
+      console.error('Response error:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+    }
     return Promise.reject(error);
   }
 );

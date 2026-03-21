@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 
@@ -31,9 +31,18 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     isReady: false,
     error: null as string | null
   });
+  /** Tracks attached socket so StrictMode / user changes don't stack duplicate listeners */
+  const attachedRef = useRef<{ sock: Socket; onErr: (err: Error) => void; onUpdate: () => void } | null>(null);
 
   useEffect(() => {
     if (!user) {
+      const prev = attachedRef.current;
+      if (prev) {
+        prev.sock.off('connect', prev.onUpdate);
+        prev.sock.off('disconnect', prev.onUpdate);
+        prev.sock.off('connect_error', prev.onErr);
+        attachedRef.current = null;
+      }
       setSocket(null);
       setState({
         isConnected: false,
@@ -44,35 +53,44 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return;
     }
 
-    // Dynamically import getSocket from client services
-    // This allows shared components to use the socket without direct dependency
-    const initSocket = async () => {
+    const initSocket = () => {
       try {
-        // Try to get socket from window if available (set by client)
         const getSocket = (window as any).__getSocket;
         if (getSocket && typeof getSocket === 'function') {
-          const sock = getSocket();
-          setSocket(sock);
-          
-          // Monitor connection status
-          const updateConnection = () => {
+          const sock = getSocket() as Socket;
+
+          const prev = attachedRef.current;
+          if (prev) {
+            prev.sock.off('connect', prev.onUpdate);
+            prev.sock.off('disconnect', prev.onUpdate);
+            prev.sock.off('connect_error', prev.onErr);
+            attachedRef.current = null;
+          }
+
+          const userId = user?.id;
+          const onUpdate = () => {
             setState({
               isConnected: sock.connected,
-              isAuthenticated: !!user,
-              isReady: sock.connected && !!user,
+              isAuthenticated: !!userId,
+              isReady: sock.connected && !!userId,
               error: null
             });
           };
 
-          sock.on('connect', updateConnection);
-          sock.on('disconnect', updateConnection);
-          sock.on('connect_error', (err) => {
-            setState(prev => ({ ...prev, error: err.message }));
-          });
+          const onErr = (err: Error) => {
+            const msg = err?.message ?? '';
+            if (/NS_ERROR_ABORT|abort/i.test(msg)) return;
+            setState(prev => ({ ...prev, error: msg }));
+          };
 
-          updateConnection();
+          sock.on('connect', onUpdate);
+          sock.on('disconnect', onUpdate);
+          sock.on('connect_error', onErr);
+          attachedRef.current = { sock, onUpdate, onErr };
+
+          setSocket(sock);
+          onUpdate();
         } else {
-          // Fallback: assume connected if user exists
           setState({
             isConnected: true,
             isAuthenticated: true,
@@ -92,7 +110,17 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
 
     initSocket();
-  }, [user]);
+
+    return () => {
+      const prev = attachedRef.current;
+      if (prev) {
+        prev.sock.off('connect', prev.onUpdate);
+        prev.sock.off('disconnect', prev.onUpdate);
+        prev.sock.off('connect_error', prev.onErr);
+        attachedRef.current = null;
+      }
+    };
+  }, [user?.id]);
 
   return (
     <SocketContext.Provider value={{
