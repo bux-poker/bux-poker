@@ -1,5 +1,6 @@
 /**
- * Unlisted page for founders — share /bot-invite directly only (not linked in nav).
+ * Unlisted page for founders — not linked in nav.
+ * Share **https://www.bux-poker.pro/discord-bot** in Discord (correct link preview). /bot-invite redirects here.
  */
 const DISCORD_BOT_INVITE_URL =
   import.meta.env.VITE_DISCORD_BOT_INVITE_URL ??
@@ -93,7 +94,14 @@ export function BotInvitePage() {
       </div>
 
       <p className="mt-8 text-center text-xs text-slate-600">
-        This page is not linked on the public site — keep the URL private to your team.
+        This page is not linked on the public site — keep it private to your team.
+        <br />
+        <span className="text-slate-500">
+          For Discord: paste{" "}
+          <strong className="text-slate-400">https://www.bux-poker.pro/discord-bot</strong> so the embed
+          shows this setup (not the homepage). Older <code className="text-slate-500">/bot-invite</code>{" "}
+          links redirect here.
+        </span>
       </p>
     </div>
   );

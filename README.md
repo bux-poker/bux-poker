@@ -141,11 +141,11 @@ cd client && npm run dev
 
 ## Deployment Notes
 
-### Link previews: `/bot-invite`
+### Link previews: founder Discord bot page
 
-Discord and other crawlers **do not run** the React app. That route is served as **`bot-invite.html`** in production (see `client/bot-invite.html` + `client/vercel.json` rewrites) so Open Graph tags describe the founder bot-setup page. The main site keeps `index.html` meta for the homepage.
+Discord **does not run** the React app. **`/discord-bot`** is rewritten to **`bot-invite.html`** (see `client/vercel.json`) so Open Graph meta is the founder setup copy. **`/bot-invite`** **308-redirects** to **`/discord-bot`** so Discord’s cache (which often pinned the old SPA shell to `/bot-invite`) gets a clean URL.
 
-**Share the same host as `og:url`:** `bot-invite.html` uses **`https://www.bux-poker.pro/bot-invite`** in `og:url` / `canonical` so it matches links people paste. Discord caches embeds: after deploy, try `?v=2` on the URL or wait and paste again in a new message.
+**Share:** `https://www.bux-poker.pro/discord-bot` in Discord. `og:url` / `canonical` match that path. To debug previews, use [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) (same OG scraper family) and “Scrape Again”.
 
 ### Render: fetch server logs (CLI)
 

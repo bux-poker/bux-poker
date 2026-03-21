@@ -1,11 +1,52 @@
 {
-  "rewrites": [
+  "headers": [
+    {
+      "source": "/discord-bot",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/discord-bot/",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/bot-invite.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    }
+  ],
+  "redirects": [
     {
       "source": "/bot-invite",
-      "destination": "/bot-invite.html"
+      "destination": "/discord-bot",
+      "permanent": true
     },
     {
       "source": "/bot-invite/",
+      "destination": "/discord-bot",
+      "permanent": true
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/discord-bot",
+      "destination": "/bot-invite.html"
+    },
+    {
+      "source": "/discord-bot/",
       "destination": "/bot-invite.html"
     },
     {

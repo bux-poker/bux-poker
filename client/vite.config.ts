@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
-/** Dev-only: same URL as production so /bot-invite serves bot-invite.html (correct OG in prod). */
+/** Dev-only: serve OG shell for founder bot page (matches Vercel rewrites). */
 function botInvitePathPlugin() {
   return {
     name: "bot-invite-path",
@@ -10,8 +10,13 @@ function botInvitePathPlugin() {
       server.middlewares.use((req, _res, next) => {
         const raw = req.url ?? "";
         const pathname = raw.split("?")[0];
-        if (pathname === "/bot-invite" || pathname === "/bot-invite/") {
-          const qs = raw.includes("?") ? "?" + raw.slice(raw.indexOf("?") + 1) : "";
+        const qs = raw.includes("?") ? "?" + raw.slice(raw.indexOf("?") + 1) : "";
+        if (
+          pathname === "/discord-bot" ||
+          pathname === "/discord-bot/" ||
+          pathname === "/bot-invite" ||
+          pathname === "/bot-invite/"
+        ) {
           req.url = "/bot-invite.html" + qs;
         }
         next();

@@ -344,8 +344,9 @@ function App() {
             }
           />
           <Route path="/auth/callback" element={<AuthCallback />} />
-          {/* Unlisted: founders only — do not link from header/homepage */}
-          <Route path="/bot-invite" element={<BotInvitePage />} />
+          {/* Unlisted: founders only — share /discord-bot (OG URL); /bot-invite redirects in production */}
+          <Route path="/bot-invite" element={<Navigate to="/discord-bot" replace />} />
+          <Route path="/discord-bot" element={<BotInvitePage />} />
           <Route
             path="/leagues"
             element={
