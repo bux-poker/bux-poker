@@ -7,6 +7,7 @@ import { LoginButton } from "./components/auth/LoginButton";
 import { CreateTournament } from "./components/admin/CreateTournament";
 import { AdminRoute } from "./components/admin/AdminRoute";
 import { AuthCallback } from "./pages/AuthCallback";
+import { BotInvitePage } from "./pages/BotInvitePage";
 import { TableTestPage } from "./pages/TableTestPage";
 import { useAdmin } from "./hooks/useAdmin";
 import { AddToHomeScreen } from "./components/AddToHomeScreen";
@@ -343,6 +344,8 @@ function App() {
             }
           />
           <Route path="/auth/callback" element={<AuthCallback />} />
+          {/* Unlisted: founders only — do not link from header/homepage */}
+          <Route path="/bot-invite" element={<BotInvitePage />} />
           <Route
             path="/leagues"
             element={
