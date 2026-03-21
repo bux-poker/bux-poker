@@ -157,7 +157,7 @@ render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 200 -o text --text TOURNAMENT
 - Use a persistent backend process for websockets (Railway works well).
 - Set `CLIENT_URL` correctly in backend env for CORS.
 - Set `REDIS_URL` in production for Redis session storage.
-- Run Prisma deploy/generate on deploy.
+- **Migrations must be in Git** — `prisma/migrations/` is tracked so Render’s `prisma migrate deploy` (see `server/package.json` `prestart` / `postinstall`) applies the same schema as the generated client. If you see `PrismaClientKnownRequestError` / `Invalid prisma.tournament.findUnique()` and blinds never advance, the DB is missing columns: check deploy logs for migration failures, or run `npx prisma migrate deploy --schema=prisma/schema.prisma` against production `DATABASE_URL` once.
 
 ## Poker Rules and Engine Notes
 

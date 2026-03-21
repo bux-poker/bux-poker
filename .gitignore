@@ -38,6 +38,5 @@ Thumbs.db
 *.db
 *.sqlite
 
-# Prisma
-prisma/migrations/
+# Prisma (keep migrations/ in git — Render `migrate deploy` needs the full chain)
 server/.prisma/

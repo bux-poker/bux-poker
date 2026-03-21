@@ -21,7 +21,10 @@ export async function resumeBlindLevelTimersForRunningTournaments(deps) {
       console.log(`[TOURNAMENT] Resumed blind level timer for tournament ${t.id}`);
     }
   } catch (e) {
-    console.error("[TOURNAMENT] Failed to resume blind timers:", e?.message);
+    console.error(
+      "[TOURNAMENT] Failed to resume blind timers:",
+      e?.code ? `${e.code} ${e?.message}` : e?.message
+    );
   }
 }
 
@@ -54,7 +57,17 @@ export function startBlindLevelTimer(tournamentId, deps) {
       const io = getIO();
       await tryAdvanceBlindsIfDue(tournamentId, io, { emitDealerMessage: true });
     } catch (err) {
-      console.error(`[TOURNAMENT] Error in blind level timer for tournament ${tournamentId}:`, err);
+      const code = err?.code;
+      const msg = err?.message ?? String(err);
+      console.error(
+        `[TOURNAMENT] Error in blind level timer for tournament ${tournamentId}:`,
+        code ? `${code} ${msg}` : msg
+      );
+      if (code === "P2022" || /does not exist|column/i.test(msg)) {
+        console.error(
+          "[TOURNAMENT] DB schema likely out of date — run `npx prisma migrate deploy` on the server DB and redeploy."
+        );
+      }
     }
   }, 10000);
 
