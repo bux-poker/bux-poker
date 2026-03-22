@@ -9,51 +9,52 @@ const router = Router();
 // Discord OAuth routes
 router.get("/discord", passport.authenticate("discord", { scope: ["identify", "email"] }));
 
-router.get(
-  "/discord/callback",
-  passport.authenticate("discord", { failureRedirect: "/login?error=discord_auth_failed", session: false }),
-  async (req, res) => {
-    try {
-      // Check if user was authenticated
-      if (!req.user) {
-        console.error("[AUTH] No user in request after Discord authentication");
-        const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
-        return res.redirect(`${clientUrl}/login?error=no_user`);
-      }
+router.get("/discord/callback", (req, res) => {
+  const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
 
-      // Check if user has an id
-      if (!req.user.id) {
-        console.error("[AUTH] User object missing id:", req.user);
-        const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
+  passport.authenticate("discord", { session: false }, (err, user, info) => {
+    if (err) {
+      console.error("[AUTH] Discord token exchange failed:", err.message);
+      if (err.oauthError) {
+        console.error(
+          "[AUTH] Discord oauthError:",
+          err.oauthError.statusCode,
+          err.oauthError.data
+        );
+      }
+      return res.redirect(`${clientUrl}/login?error=discord_auth_failed`);
+    }
+    if (!user) {
+      console.error("[AUTH] Discord callback: no user", info);
+      return res.redirect(`${clientUrl}/login?error=discord_auth_failed`);
+    }
+
+    try {
+      if (!user.id) {
+        console.error("[AUTH] User object missing id:", user);
         return res.redirect(`${clientUrl}/login?error=invalid_user`);
       }
 
-      // Generate JWT token
       const jwtSecret = process.env.JWT_SECRET;
       if (!jwtSecret) {
         console.error("[AUTH] JWT_SECRET not set in environment variables");
-        const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
         return res.redirect(`${clientUrl}/login?error=server_config`);
       }
 
-      const token = jwt.sign(
-        { userId: req.user.id },
-        jwtSecret,
-        { expiresIn: "7d" }
+      const token = jwt.sign({ userId: user.id }, jwtSecret, { expiresIn: "7d" });
+      console.log(
+        "[AUTH] Successfully authenticated user:",
+        user.id,
+        "Redirecting to:",
+        clientUrl
       );
-
-      // Redirect to frontend with token
-      const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
-      console.log("[AUTH] Successfully authenticated user:", req.user.id, "Redirecting to:", clientUrl);
-      res.redirect(`${clientUrl}/auth/callback?token=${token}`);
+      return res.redirect(`${clientUrl}/auth/callback?token=${token}`);
     } catch (error) {
       console.error("[AUTH] Discord callback error:", error);
-      console.error("[AUTH] Error stack:", error.stack);
-      const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
-      res.redirect(`${clientUrl}/login?error=token_generation_failed`);
+      return res.redirect(`${clientUrl}/login?error=token_generation_failed`);
     }
-  }
-);
+  })(req, res);
+});
 
 // Return current user profile based on JWT
 router.get("/profile", authenticateToken, async (req, res, next) => {
