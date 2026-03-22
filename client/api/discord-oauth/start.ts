@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { getDiscordCallbackUrl } from "../_lib/discordOAuthVercel";
+import { getDiscordCallbackUrl } from "../_lib/discordOAuthVercel.js";
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") {
