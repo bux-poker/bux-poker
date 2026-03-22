@@ -123,6 +123,8 @@ JWT_SECRET=replace_me
 # Discord Developer Portal → Bot → enable **Privileged Gateway Intents → Server Members Intent**.
 # Required for `GET /guilds/.../members/...` (used to verify your saved `adminRoleId` for the web admin panel).
 
+# Optional — set ADMIN_STRICT_ROLE_ONLY=true to require the exact role saved in /setup (no Discord “Administrator” fallback).
+
 # Optional — comma-separated Discord user IDs that always see the admin panel and pass admin API checks.
 # Needed if you have DiscordServer.adminRoleId set but the bot is offline, or your account lacks that role.
 ADMIN_DISCORD_IDS=
