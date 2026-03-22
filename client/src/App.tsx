@@ -13,6 +13,7 @@ import { useAdmin } from "./hooks/useAdmin";
 import { AddToHomeScreen } from "./components/AddToHomeScreen";
 import { LeagueListPage } from "./pages/LeagueListPage";
 import { LeagueDetailPage } from "./pages/LeagueDetailPage";
+import { LoginPage } from "./pages/LoginPage";
 
 function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -345,6 +346,7 @@ function App() {
               </AdminRoute>
             }
           />
+          <Route path="/login" element={<LoginPage />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           {/* Unlisted: founders only — share /discord-bot (OG URL); /bot-invite redirects in production */}
           <Route path="/bot-invite" element={<Navigate to="/discord-bot" replace />} />

@@ -1,12 +1,16 @@
 import { useAuth } from '@shared/features/auth/AuthContext';
 
+const PRODUCTION_API_DEFAULT = 'https://bux-poker-server.onrender.com';
+
 export function LoginButton() {
   const { user, logout } = useAuth();
-  // Use relative URL for local dev (goes through Vite proxy) or env var for production
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+  // Dev: '' uses Vite proxy. Prod: require env or same default as AuthCallback so OAuth hits the API, not the SPA host.
+  const apiBaseUrl = (
+    import.meta.env.VITE_API_BASE_URL ||
+    (import.meta.env.PROD ? PRODUCTION_API_DEFAULT : '')
+  ).replace(/\/+$/, '');
 
   const handleDiscordLogin = () => {
-    // Redirect to Discord OAuth
     window.location.href = `${apiBaseUrl}/api/auth/discord`;
   };
 

@@ -2,12 +2,25 @@ import passport from 'passport';
 import { Strategy as DiscordStrategy } from 'passport-discord';
 import { prisma } from './database.js';
 
+/** Must match Discord Developer Portal → OAuth2 → Redirects exactly (no double slashes). */
+export function resolveDiscordCallbackURL() {
+  const explicit = process.env.DISCORD_CALLBACK_URL?.trim();
+  if (explicit) {
+    return explicit.replace(/\/+$/, '');
+  }
+  const base = (process.env.API_BASE_URL || 'http://localhost:3000').trim().replace(/\/+$/, '');
+  return `${base}/api/auth/discord/callback`;
+}
+
 // Only initialize Discord strategy if credentials are provided
 if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET) {
+  const callbackURL = resolveDiscordCallbackURL();
+  console.log('[PASSPORT] Discord OAuth callback URL:', callbackURL);
+
   passport.use(new DiscordStrategy({
     clientID: process.env.DISCORD_CLIENT_ID,
     clientSecret: process.env.DISCORD_CLIENT_SECRET,
-    callbackURL: process.env.DISCORD_CALLBACK_URL || `${process.env.API_BASE_URL || 'http://localhost:3000'}/api/auth/discord/callback`,
+    callbackURL,
     scope: ['identify', 'email']
   }, async (accessToken, refreshToken, profile, done) => {
   try {
