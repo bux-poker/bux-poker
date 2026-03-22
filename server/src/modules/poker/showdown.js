@@ -433,14 +433,22 @@ export async function handleShowdownCore(gameId, io, options = {}) {
     });
   const forcedReveal = options.forcedReveal === true;
   state.showdownForcedReveal = forcedReveal;
-  // Optional reveal: every seated player who was dealt cards (including folded) may show or muck.
+  // Everyone who reached showdown already had hole cards revealed — no show/muck for them.
+  const showdownParticipantIds = new Set(handResults.map((r) => r.player.id));
+  // Optional reveal: folded players (dealt in, not in handResults) may still show or muck.
   for (const p of state.players) {
     delete p.showdownRevealStatus;
   }
   for (const p of state.players) {
     if (p.status === "ELIMINATED") continue;
     if (!hasTwoHoleCards(p)) continue;
-    p.showdownRevealStatus = forcedReveal ? "SHOW" : "PENDING";
+    if (forcedReveal) {
+      p.showdownRevealStatus = "SHOW";
+    } else if (showdownParticipantIds.has(p.id)) {
+      p.showdownRevealStatus = "SHOW";
+    } else {
+      p.showdownRevealStatus = "PENDING";
+    }
   }
 
   const hasPendingOptional =
