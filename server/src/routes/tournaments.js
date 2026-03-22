@@ -56,12 +56,22 @@ router.post("/:id/register", async (req, res, next) => {
   }
 });
 
-// Check Discord server membership for tournaments
-router.get("/:id/server-membership", authenticateToken, async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const userId = req.userId;
+function tournamentServerPayload(server, isMember) {
+  return {
+    id: server.id,
+    serverId: server.serverId,
+    serverName: server.serverName,
+    inviteLink: server.inviteLink ?? null,
+    isMember,
+  };
+}
 
+// Check Discord server membership for tournaments
+router.get("/:id/server-membership", authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const userId = req.userId;
+
+  try {
     // Get user's Discord ID
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -88,38 +98,48 @@ router.get("/:id/server-membership", authenticateToken, async (req, res, next) =
       return res.status(404).json({ error: "Tournament not found" });
     }
 
-    const discordClient = getDiscordClient();
-    if (!discordClient) {
-      return res.json({ isMember: false, servers: tournament.posts.map(p => ({ ...p.server, isMember: false })) });
+    const posts = tournament.posts.filter((p) => p.server);
+    if (posts.length === 0) {
+      return res.json({ servers: [] });
     }
 
-    // Check membership for each server
-    const serversWithMembership = await Promise.all(
-      tournament.posts.map(async (post) => {
-        const server = post.server;
-        let isMember = false;
+    const discordClient = getDiscordClient();
+    const discordReady = discordClient && discordClient.guilds;
 
-        try {
-          const guild = await discordClient.guilds.fetch(server.serverId).catch(() => null);
-          if (guild) {
-            const member = await guild.members.fetch(user.discordId).catch(() => null);
-            isMember = !!member;
-          }
-        } catch (error) {
-          // User not in server
-          isMember = false;
+    if (!discordReady) {
+      return res.json({
+        servers: posts.map((p) => tournamentServerPayload(p.server, false)),
+      });
+    }
+
+    const discordId = String(user.discordId);
+    const serversWithMembership = [];
+
+    for (const post of posts) {
+      const server = post.server;
+      let isMember = false;
+      try {
+        const guild = await discordClient.guilds.fetch(server.serverId).catch(() => null);
+        if (guild) {
+          const member = await guild.members.fetch(discordId).catch(() => null);
+          isMember = !!member;
         }
+      } catch (error) {
+        console.warn(
+          "[TOURNAMENTS] server-membership check failed",
+          server.serverId,
+          error?.message || error
+        );
+        isMember = false;
+      }
+      serversWithMembership.push(tournamentServerPayload(server, isMember));
+    }
 
-        return {
-          ...server,
-          isMember,
-        };
-      })
-    );
-
-    res.json({ servers: serversWithMembership });
+    return res.json({ servers: serversWithMembership });
   } catch (err) {
-    next(err);
+    console.error("[TOURNAMENTS] server-membership fatal:", err?.message || err);
+    // Optional UI enrichment — never break the tournaments page
+    return res.status(200).json({ servers: [] });
   }
 });
 
