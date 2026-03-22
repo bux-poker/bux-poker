@@ -7,7 +7,7 @@ import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/
 import { resetPlayerRowIfNotEliminated } from "./safeHandCleanupDb.js";
 
 const SHOWDOWN_PHASE_DELAY_MS = 1000;
-const SHOWDOWN_OPTIONAL_REVEAL_MAX_WAIT_MS = 3000;
+const SHOWDOWN_OPTIONAL_REVEAL_MAX_WAIT_MS = 5000;
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));

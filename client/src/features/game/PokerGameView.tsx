@@ -559,18 +559,9 @@ export function PokerGameView() {
     };
   }, [id, user?.id, refetchTournament, navigate]);
 
-  // Turn timer expiry display: do NOT put turnTimer in the socket effect deps (would tear down listeners).
-  useEffect(() => {
-    if (!turnTimer) return;
-    const iv = setInterval(() => {
-      setTurnTimer((prev) => {
-        if (!prev) return prev;
-        if (prev.expiresAt - Date.now() <= 0) return null;
-        return prev;
-      });
-    }, 100);
-    return () => clearInterval(iv);
-  }, [turnTimer]);
+  // Do NOT clear turnTimer when expiresAt passes — that hid the countdown before the server ran
+  // auto-fold/check (client clock can be ahead of server event loop). Keep showing 0 until game-state
+  // or turn-timer-start updates (see socket handler that clears when currentTurnUserId changes).
 
   // Update countdown timer every second (separate from socket setup).
   // IMPORTANT: Countdown is driven only by server \"tournament-starting\" /

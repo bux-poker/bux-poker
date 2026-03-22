@@ -169,9 +169,12 @@ export function startTurnTimer(gameId, userId, io) {
     // - show UI countdown only for the final 10s
     const totalActionMs = 20000;
     const autoActionExpiresAt = Date.now() + totalActionMs;
+    // Wake slightly before deadline; autoFoldPlayer aligns to expiresAt so a late event loop tick
+    // doesn't leave humans sitting after the UI already hit 0.
+    const firstFireMs = Math.max(0, totalActionMs - 50);
     const timeoutTimerId = setTimeout(() => {
       autoFoldPlayer(gameId, userId, io, timeoutTimerId);
-    }, totalActionMs);
+    }, firstFireMs);
 
     // Emit immediately so client always has a timer anchor; client renders only last 10s for humans.
     io.to(`game:${gameId}`).emit("turn-timer-start", {
