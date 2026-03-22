@@ -154,7 +154,7 @@ That path is a **real static file** in `client/public/discord-founders.html` (co
 
 ### Render: fetch server logs (CLI)
 
-**Access model:** Run `render login` once on the machine where you run CLI (or where Cursor’s terminal runs). Then agents **can** pull logs with the commands below from that authenticated shell. If the CLI isn’t logged in, use **Render Dashboard → your web service → Logs**, or paste lines here. For consolidation bugs, filter `--text TOURNAMENT` and look for `Idle-poll consolidation failed` / `PrismaClientKnownRequestError` (often seat `P2002` if eliminated rows still hold seats).
+**Access model:** Run `render login` once on the machine where you run CLI (or where Cursor’s terminal runs). Then agents **can** pull logs with the commands below from that authenticated shell. If the CLI isn’t logged in, use **Render Dashboard → your web service → Logs**, or paste lines here. For consolidation bugs, filter `--text TOURNAMENT`. Common lines: `No free seat` = keep table was **9/9 DB rows** with several **ELIMINATED** still holding seats (fixed by pre-merge evac); `P2002` = seat collision; `Idle-poll consolidation failed` includes Prisma `code`/`meta` after recent server builds.
 
 ```bash
 # List services (once logged in: render login)

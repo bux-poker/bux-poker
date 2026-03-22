@@ -5,6 +5,89 @@ import { resyncGamesToMaxBlindLevel } from "./blindLevels.js";
 /** Still in the tournament (incl. 0-chip all-in). Excluding them broke table counts & closing tables. */
 const NOT_ELIMINATED = { status: { not: "ELIMINATED" } };
 
+async function assignPlayerToFirstAvailableGame(tx, playerId, gameIds, seatsPerTable) {
+  for (const gid of gameIds) {
+    const rows = await tx.player.findMany({
+      where: { gameId: gid },
+      select: { seatNumber: true },
+    });
+    if (rows.length >= seatsPerTable) continue;
+    const taken = new Set(rows.map((r) => r.seatNumber));
+    let s = 1;
+    while (s <= seatsPerTable && taken.has(s)) s++;
+    if (s > seatsPerTable) continue;
+    await tx.player.update({
+      where: { id: playerId },
+      data: { gameId: gid, seatNumber: s },
+    });
+    return true;
+  }
+  return false;
+}
+
+async function createConsolidationGraveyardGame(tx, tournamentId) {
+  const agg = await tx.game.aggregate({
+    where: { tournamentId },
+    _max: { tableNumber: true },
+  });
+  const tn = (agg._max.tableNumber ?? 0) + 1;
+  return tx.game.create({
+    data: {
+      tournamentId,
+      tableNumber: tn,
+      status: "COMPLETED",
+      pot: 0,
+      communityCards: "",
+    },
+  });
+}
+
+/**
+ * ELIMINATED rows still hold (gameId, seatNumber). The "keep" table can be 9/9 with only ~5 live
+ * players — pickDest then throws "No free seat". Move eliminated off keep tables first.
+ */
+async function evacuateEliminatedFromKeepTables(
+  tx,
+  tournamentId,
+  keepIds,
+  closeGameIds,
+  seatsPerTable
+) {
+  const graveyards = [];
+  let total = 0;
+  for (const keepId of keepIds) {
+    const eliminated = await tx.player.findMany({
+      where: { gameId: keepId, status: "ELIMINATED" },
+      select: { id: true },
+    });
+    for (const e of eliminated) {
+      let placed = await assignPlayerToFirstAvailableGame(
+        tx,
+        e.id,
+        closeGameIds,
+        seatsPerTable
+      );
+      if (!placed) {
+        for (const gy of graveyards) {
+          placed = await assignPlayerToFirstAvailableGame(tx, e.id, [gy.id], seatsPerTable);
+          if (placed) break;
+        }
+      }
+      while (!placed) {
+        const gy = await createConsolidationGraveyardGame(tx, tournamentId);
+        graveyards.push(gy);
+        placed = await assignPlayerToFirstAvailableGame(tx, e.id, [gy.id], seatsPerTable);
+      }
+      total++;
+    }
+  }
+  if (total > 0) {
+    console.log(
+      `[TOURNAMENT] Pre-merge: moved ${total} eliminated row(s) off keep table(s) to free physical seats (close/graveyard)`
+    );
+  }
+}
+
 const _consolidationLocks = new Map();
 
 /** Tournament IDs for which we are currently waiting for all hands to finish (so do not start new hands). */
@@ -221,6 +304,14 @@ export async function doConsolidateTables(tournamentId, deps) {
     // from ACTIVE table queries and the tournament would stay split forever.
     await prisma.$transaction(async (tx) => {
       const keepIds = toKeep.map((g) => g.id);
+      const closeIds = toClose.map((g) => g.id);
+      await evacuateEliminatedFromKeepTables(
+        tx,
+        tournamentId,
+        keepIds,
+        closeIds,
+        seatsPerTable
+      );
       // Include ELIMINATED rows: they still occupy (gameId, seatNumber) in DB — ignoring them caused
       // P2002 unique violations and repeated "Idle-poll consolidation failed" on Render.
       const destSnapshots = await tx.game.findMany({
