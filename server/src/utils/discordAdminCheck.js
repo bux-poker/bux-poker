@@ -24,23 +24,49 @@ export async function getConfiguredAdminServers() {
   return rows.filter((s) => normalizeSnowflake(s.adminRoleId));
 }
 
-/**
- * Role IDs for a guild member via Discord REST (source of truth; avoids gateway/cache issues).
- * @returns {string[] | null} null = request failed (403/network); [] = not a member
- */
-/** Permission flag: Administrator (can match panel access when configured role is missing). */
 const DISCORD_PERMISSION_ADMINISTRATOR = 1n << 3n; // 8n
 
-async function fetchGuildRolesRest(guildId) {
-  const token = process.env.DISCORD_BOT_TOKEN;
-  if (!token) return null;
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
-  const res = await fetch(`${DISCORD_API}/guilds/${encodeURIComponent(guildId)}/roles`, {
-    headers: {
-      Authorization: `Bot ${token}`,
-      "User-Agent": process.env.DISCORD_API_USER_AGENT || "BUX-Poker-AdminCheck (+https://www.bux-poker.pro)",
-    },
-  });
+/**
+ * Discord REST with basic 429 / 503 retry (profile calls this for every guild).
+ */
+async function discordRestFetch(url, init, label) {
+  const maxAttempts = 4;
+  let attempt = 0;
+  while (attempt < maxAttempts) {
+    attempt += 1;
+    const res = await fetch(url, init);
+    if (res.status === 429 || res.status === 503) {
+      const retryAfter = res.headers.get("retry-after");
+      const waitSec = retryAfter ? Math.min(8, Math.max(1, parseInt(retryAfter, 10) || 1)) : attempt;
+      console.warn(`[discordAdminCheck] ${label} ${res.status}, retry in ${waitSec}s (attempt ${attempt})`);
+      if (attempt >= maxAttempts) return res;
+      await sleep(waitSec * 1000);
+      continue;
+    }
+    return res;
+  }
+  return null;
+}
+
+function botHeaders() {
+  return {
+    Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}`,
+    "User-Agent": process.env.DISCORD_API_USER_AGENT || "BUX-Poker-AdminCheck (+https://www.bux-poker.pro)",
+  };
+}
+
+async function fetchGuildRolesRest(guildId) {
+  if (!process.env.DISCORD_BOT_TOKEN) return null;
+
+  const res = await discordRestFetch(
+    `${DISCORD_API}/guilds/${encodeURIComponent(guildId)}/roles`,
+    { headers: botHeaders() },
+    `GET roles guild=${guildId}`
+  );
 
   if (!res.ok) {
     const text = await res.text();
@@ -54,9 +80,28 @@ async function fetchGuildRolesRest(guildId) {
   return res.json();
 }
 
-/**
- * True if any of the member's roles (including @everyone = guildId) has the Administrator permission.
- */
+/** { owner_id } for guild ownership check (owner often has roles: [] if only @everyone). */
+async function fetchGuildSummaryRest(guildId) {
+  if (!process.env.DISCORD_BOT_TOKEN) return null;
+
+  const res = await discordRestFetch(
+    `${DISCORD_API}/guilds/${encodeURIComponent(guildId)}`,
+    { headers: botHeaders() },
+    `GET guild=${guildId}`
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.warn(
+      `[discordAdminCheck] REST guild ${res.status} guild=${guildId}`,
+      text.slice(0, 120)
+    );
+    return null;
+  }
+
+  return res.json();
+}
+
 function memberHasDiscordAdministratorPermission(guildId, memberRoleIds, guildRolesJson) {
   if (!Array.isArray(guildRolesJson) || !Array.isArray(memberRoleIds)) return false;
   const memberSet = new Set([normalizeSnowflake(guildId), ...memberRoleIds.map((r) => normalizeSnowflake(r))]);
@@ -75,22 +120,24 @@ function memberHasDiscordAdministratorPermission(guildId, memberRoleIds, guildRo
   return false;
 }
 
-async function fetchMemberRoleIdsRest(guildId, userId) {
-  const token = process.env.DISCORD_BOT_TOKEN;
-  if (!token) return null;
+/**
+ * @returns {{ ok: true, inGuild: boolean, roles: string[] } | { ok: false }}
+ * - inGuild false = 404 (not in guild)
+ * - ok false = transport/5xx after retries (skip guild)
+ */
+async function fetchGuildMemberRest(guildId, userId) {
+  if (!process.env.DISCORD_BOT_TOKEN) return { ok: false };
 
-  const res = await fetch(
+  const res = await discordRestFetch(
     `${DISCORD_API}/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}`,
-    {
-      headers: {
-        Authorization: `Bot ${token}`,
-        "User-Agent": process.env.DISCORD_API_USER_AGENT || "BUX-Poker-AdminCheck (+https://www.bux-poker.pro)",
-      },
-    }
+    { headers: botHeaders() },
+    `GET member guild=${guildId}`
   );
 
+  if (!res) return { ok: false };
+
   if (res.status === 404) {
-    return [];
+    return { ok: true, inGuild: false, roles: [] };
   }
 
   if (!res.ok) {
@@ -99,17 +146,22 @@ async function fetchMemberRoleIdsRest(guildId, userId) {
       `[discordAdminCheck] REST guild member ${res.status} guild=${guildId} user=${userId}`,
       text.slice(0, 200)
     );
-    return null;
+    return { ok: false };
   }
 
   const data = await res.json();
-  if (!Array.isArray(data.roles)) return [];
-  return data.roles.map((r) => String(r).trim());
+  if (!Array.isArray(data.roles)) {
+    return { ok: true, inGuild: true, roles: [] };
+  }
+  return {
+    ok: true,
+    inGuild: true,
+    roles: data.roles.map((r) => String(r).trim()),
+  };
 }
 
 /**
  * True if the Discord user has the configured admin role in any enabled server.
- * Uses REST only — works even when the discord.js gateway client is not connected (Render cold start).
  *
  * @param {string} discordUserId
  * @param {Array<{ serverId: string, adminRoleId: string, serverName: string }>} servers
@@ -124,8 +176,8 @@ export async function findAdminServerForDiscordUser(discordUserId, servers) {
     return null;
   }
 
-  /** Avoid repeated GET /guilds/:id/roles when checking multiple configured servers. */
   const guildRolesCache = new Map();
+  const guildSummaryCache = new Map();
   const strictRoleOnly = process.env.ADMIN_STRICT_ROLE_ONLY === "true";
 
   for (const server of servers) {
@@ -133,25 +185,36 @@ export async function findAdminServerForDiscordUser(discordUserId, servers) {
     const roleId = normalizeSnowflake(server.adminRoleId);
     if (!guildId || !roleId) continue;
 
-    const memberRoles = await fetchMemberRoleIdsRest(guildId, uid);
-    if (memberRoles === null) {
+    const mem = await fetchGuildMemberRest(guildId, uid);
+    if (!mem.ok) {
       continue;
     }
+    if (!mem.inGuild) {
+      continue;
+    }
+
+    const memberRoles = mem.roles;
+
     if (memberRoles.includes(roleId)) {
       return server;
     }
 
-    // You configured a role in /setup, but many owners use Discord "Administrator" without that role id on their member payload edge cases — allow guild admins unless ADMIN_STRICT_ROLE_ONLY=true
-    if (!strictRoleOnly && memberRoles.length > 0) {
+    let summary = guildSummaryCache.get(guildId);
+    if (summary === undefined) {
+      summary = await fetchGuildSummaryRest(guildId);
+      guildSummaryCache.set(guildId, summary);
+    }
+    if (summary?.owner_id && normalizeSnowflake(summary.owner_id) === uid) {
+      return server;
+    }
+
+    if (!strictRoleOnly) {
       let allRoles = guildRolesCache.get(guildId);
       if (allRoles === undefined) {
         allRoles = await fetchGuildRolesRest(guildId);
         guildRolesCache.set(guildId, allRoles);
       }
-      if (
-        allRoles &&
-        memberHasDiscordAdministratorPermission(guildId, memberRoles, allRoles)
-      ) {
+      if (allRoles && memberHasDiscordAdministratorPermission(guildId, memberRoles, allRoles)) {
         return server;
       }
     }
