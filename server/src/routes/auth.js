@@ -3,58 +3,64 @@ import passport from "../config/passport.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { prisma } from "../config/database.js";
 import jwt from "jsonwebtoken";
+import { completeDiscordOAuthFromCode } from "../services/discordOAuth.js";
 
 const router = Router();
 
 // Discord OAuth routes
 router.get("/discord", passport.authenticate("discord", { scope: ["identify", "email"] }));
 
-// Passport authenticate() must receive (req, res, next) — omitting `next` breaks the OAuth2 strategy.
-router.get("/discord/callback", (req, res, next) => {
+/**
+ * Callback uses manual token exchange + retries on HTTP 429 (Discord / Cloudflare 1015 on shared hosts).
+ * Passport still handles the initial /discord redirect.
+ */
+router.get("/discord/callback", async (req, res) => {
   const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
 
-  passport.authenticate("discord", { session: false }, (err, user, info) => {
-    if (err) {
-      console.error("[AUTH] Discord token exchange failed:", err.message);
-      if (err.oauthError) {
-        console.error(
-          "[AUTH] Discord oauthError:",
-          err.oauthError.statusCode,
-          err.oauthError.data
-        );
-      }
-      return res.redirect(`${clientUrl}/login?error=discord_auth_failed`);
-    }
-    if (!user) {
-      console.error("[AUTH] Discord callback: no user", info);
-      return res.redirect(`${clientUrl}/login?error=discord_auth_failed`);
+  if (req.query.error) {
+    console.error(
+      "[AUTH] Discord OAuth error query:",
+      req.query.error,
+      req.query.error_description
+    );
+    return res.redirect(`${clientUrl}/login?error=discord_auth_failed`);
+  }
+
+  const code = req.query.code;
+  if (!code || typeof code !== "string") {
+    console.error("[AUTH] Discord callback missing ?code=");
+    return res.redirect(`${clientUrl}/login?error=discord_auth_failed`);
+  }
+
+  try {
+    const user = await completeDiscordOAuthFromCode(code);
+
+    if (!user?.id) {
+      console.error("[AUTH] User object missing id:", user);
+      return res.redirect(`${clientUrl}/login?error=invalid_user`);
     }
 
-    try {
-      if (!user.id) {
-        console.error("[AUTH] User object missing id:", user);
-        return res.redirect(`${clientUrl}/login?error=invalid_user`);
-      }
-
-      const jwtSecret = process.env.JWT_SECRET;
-      if (!jwtSecret) {
-        console.error("[AUTH] JWT_SECRET not set in environment variables");
-        return res.redirect(`${clientUrl}/login?error=server_config`);
-      }
-
-      const token = jwt.sign({ userId: user.id }, jwtSecret, { expiresIn: "7d" });
-      console.log(
-        "[AUTH] Successfully authenticated user:",
-        user.id,
-        "Redirecting to:",
-        clientUrl
-      );
-      return res.redirect(`${clientUrl}/auth/callback?token=${token}`);
-    } catch (error) {
-      console.error("[AUTH] Discord callback error:", error);
-      return res.redirect(`${clientUrl}/login?error=token_generation_failed`);
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+      console.error("[AUTH] JWT_SECRET not set in environment variables");
+      return res.redirect(`${clientUrl}/login?error=server_config`);
     }
-  })(req, res, next);
+
+    const token = jwt.sign({ userId: user.id }, jwtSecret, { expiresIn: "7d" });
+    console.log(
+      "[AUTH] Successfully authenticated user:",
+      user.id,
+      "Redirecting to:",
+      clientUrl
+    );
+    return res.redirect(`${clientUrl}/auth/callback?token=${token}`);
+  } catch (error) {
+    console.error("[AUTH] Discord OAuth callback failed:", error?.message);
+    if (error?.oauthBody) {
+      console.error("[AUTH] Discord token response body:", error.oauthBody);
+    }
+    return res.redirect(`${clientUrl}/login?error=discord_auth_failed`);
+  }
 });
 
 // Return current user profile based on JWT

@@ -43,6 +43,14 @@ if (process.env.CLIENT_URL_ALT) {
   allowedOrigins.push(process.env.CLIENT_URL_ALT);
 }
 
+// Comma-separated extra origins (e.g. Vercel preview URLs): https://foo.vercel.app,https://bar.vercel.app
+if (process.env.CORS_EXTRA_ORIGINS) {
+  for (const o of process.env.CORS_EXTRA_ORIGINS.split(",")) {
+    const trimmed = o.trim();
+    if (trimmed) allowedOrigins.push(trimmed);
+  }
+}
+
 // Log allowed origins once at startup (not on every request)
 console.log('[CORS] Allowed origins:', allowedOrigins);
 console.log('[CORS] CLIENT_URL env var:', process.env.CLIENT_URL || 'NOT SET');

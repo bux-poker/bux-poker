@@ -175,10 +175,10 @@ render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 500 -o text --text "[TURN ORDER]
 render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 200 -o text --text "player-action"
 ```
 
-If **`[AUTH]`** logs show **`Discord oauthError: 429`** and **`error code: 1015`**, Discord is **rate-limiting or blocking** outbound requests from Render’s IP to `discord.com/api/oauth2/token` — not a wrong secret or redirect URI. **Mitigations:** wait 15–30+ minutes, **Manual Deploy** on Render (egress IP may change), avoid rapid repeated “Login with Discord” clicks. Successful logins show **`[AUTH] Successfully authenticated user:`**.
+If **`[AUTH]`** logs show **`429`** / **`1015`** on the token step, Discord is **rate-limiting or blocking** outbound requests from Render’s IP — not a wrong secret or redirect URI. The server **retries** token exchange and `users/@me` with backoff (and `Retry-After` when present). If login still fails: wait 15–30+ minutes, **Manual Deploy** on Render (egress IP may change), avoid rapid repeated “Login with Discord” clicks. Successful logins show **`[AUTH] Successfully authenticated user:`**.
 
 - Use a persistent backend process for websockets (Railway works well).
-- Set `CLIENT_URL` correctly in backend env for CORS.
+- Set `CLIENT_URL` correctly in backend env for CORS. For Vercel preview URLs, set **`CORS_EXTRA_ORIGINS`** (comma-separated), e.g. `https://bux-poker-xxx.vercel.app`.
 - Set `REDIS_URL` in production for Redis session storage.
 - **Migrations must be in Git** — `prisma/migrations/` is tracked so Render’s `prisma migrate deploy` (see `server/package.json` `prestart` / `postinstall`) applies the same schema as the generated client. If you see `PrismaClientKnownRequestError` / `Invalid prisma.tournament.findUnique()` and blinds never advance, the DB is missing columns: check deploy logs for migration failures, or run `npx prisma migrate deploy --schema=prisma/schema.prisma` against production `DATABASE_URL` once.
 - **P3009 failed migration on deploy**: **`docs/PRISMA_MIGRATION_RECOVERY.md`** — fix prod DB with `migrate resolve` + `migrate deploy` locally, **then** **Render → Manual Deploy** (the CLI does **not** trigger Render).
