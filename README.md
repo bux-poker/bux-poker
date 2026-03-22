@@ -166,11 +166,16 @@ render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 200 -o text
 # Filter by substring
 render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 200 -o text --text TOURNAMENT
 
+# Discord OAuth / token exchange
+render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 100 -o text --text "[AUTH]"
+
 # Turn / betting order debugging (engine emits these prefixes)
 render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 500 -o text --text "[BETTING]"
 render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 500 -o text --text "[TURN ORDER]"
 render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 200 -o text --text "player-action"
 ```
+
+If **`[AUTH]`** logs show **`Discord oauthError: 429`** and **`error code: 1015`**, Discord is **rate-limiting or blocking** outbound requests from Render’s IP to `discord.com/api/oauth2/token` — not a wrong secret or redirect URI. **Mitigations:** wait 15–30+ minutes, **Manual Deploy** on Render (egress IP may change), avoid rapid repeated “Login with Discord” clicks. Successful logins show **`[AUTH] Successfully authenticated user:`**.
 
 - Use a persistent backend process for websockets (Railway works well).
 - Set `CLIENT_URL` correctly in backend env for CORS.
