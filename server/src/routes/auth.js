@@ -9,7 +9,8 @@ const router = Router();
 // Discord OAuth routes
 router.get("/discord", passport.authenticate("discord", { scope: ["identify", "email"] }));
 
-router.get("/discord/callback", (req, res) => {
+// Passport authenticate() must receive (req, res, next) — omitting `next` breaks the OAuth2 strategy.
+router.get("/discord/callback", (req, res, next) => {
   const clientUrl = process.env.CLIENT_URL || "http://localhost:5173";
 
   passport.authenticate("discord", { session: false }, (err, user, info) => {
@@ -53,7 +54,7 @@ router.get("/discord/callback", (req, res) => {
       console.error("[AUTH] Discord callback error:", error);
       return res.redirect(`${clientUrl}/login?error=token_generation_failed`);
     }
-  })(req, res);
+  })(req, res, next);
 });
 
 // Return current user profile based on JWT
