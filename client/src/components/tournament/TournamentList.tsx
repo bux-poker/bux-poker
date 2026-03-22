@@ -139,17 +139,17 @@ function TournamentCard({ tournament, onCancel, onDuplicate, onAddTestPlayers, o
                     />
                     <span className="text-slate-300">{server.serverName}</span>
                     {server.inviteLink && (
-                      <a
-                        href={server.inviteLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        type="button"
                         onClick={(e) => {
+                          e.preventDefault();
                           e.stopPropagation();
+                          window.open(server.inviteLink!, '_blank', 'noopener,noreferrer');
                         }}
                         className="ml-auto rounded bg-emerald-600 px-2 py-0.5 text-xs font-medium text-white transition-colors hover:bg-emerald-700"
                       >
                         Join
-                      </a>
+                      </button>
                     )}
                   </>
                 )}
