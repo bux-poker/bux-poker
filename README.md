@@ -164,7 +164,9 @@ Login starts at **`https://<your-site>/api/auth/discord`** (Vercel **serverless*
 
 The app builds `redirect_uri` from the request **Host** when `DISCORD_VERCEL_CALLBACK_URL` is unset, so **www vs apex** must match what users open and what you whitelist in Discord.
 
-**Rollback** to Render-only OAuth (not recommended if Render IP is blocked): set Vercel build env **`VITE_DISCORD_LOGIN_BASE_URL`** to your API origin, e.g. `https://bux-poker-server.onrender.com`.
+**Rollback** to Render-only OAuth (not recommended if Render IP is blocked): set **`VITE_FORCE_RENDER_DISCORD_OAUTH=true`** and **`VITE_DISCORD_LOGIN_BASE_URL`** to your API origin, e.g. `https://bux-poker-server.onrender.com`.
+
+**Do not** set `VITE_DISCORD_LOGIN_BASE_URL` to Render unless you intend Render OAuth — if that var is set on Vercel without the force flag, older builds used it first and kept sending users to the blocked Render token exchange. Current client always prefers **same-origin** on `bux-poker.pro` / `www` / matching `*.vercel.app`.
 
 **Local dev** still uses the Vite proxy: `/api/auth/discord` → Express on port 3000.
 

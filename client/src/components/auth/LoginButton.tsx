@@ -2,16 +2,38 @@ import { useAuth } from '@shared/features/auth/AuthContext';
 
 const PRODUCTION_API_DEFAULT = 'https://bux-poker-server.onrender.com';
 
-/** Where the browser starts Discord OAuth (must match a redirect URL in the Discord app). */
+/** True when this tab is on the Vercel-hosted site (not the API host). */
+function shouldUseSameOriginDiscordOAuth(): boolean {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname;
+  if (host === 'www.bux-poker.pro' || host === 'bux-poker.pro') return true;
+  if (host.endsWith('.vercel.app') && /bux-poker/i.test(host)) return true;
+  return false;
+}
+
+/**
+ * Where the browser starts Discord OAuth (must match a redirect URL in the Discord app).
+ * IMPORTANT: On production domain, we use same-origin (Vercel serverless) first — do not set
+ * VITE_DISCORD_LOGIN_BASE_URL to Render on Vercel or login will keep hitting the blocked API IP.
+ */
 function getDiscordOAuthBaseUrl(): string {
-  const explicit = import.meta.env.VITE_DISCORD_LOGIN_BASE_URL?.replace(/\/+$/, '');
-  if (explicit) return explicit;
   // Dev: Vite proxies /api → local Express
   if (import.meta.env.DEV) {
     return (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '') || '';
   }
-  // Prod: same origin → Vercel serverless /api/auth/discord (avoids Render IP blocks on token exchange)
-  return typeof window !== 'undefined' ? window.location.origin : PRODUCTION_API_DEFAULT;
+
+  const forceRender =
+    import.meta.env.VITE_FORCE_RENDER_DISCORD_OAUTH === 'true' ||
+    import.meta.env.VITE_FORCE_RENDER_DISCORD_OAUTH === '1';
+
+  if (!forceRender && shouldUseSameOriginDiscordOAuth()) {
+    return window.location.origin;
+  }
+
+  const explicit = import.meta.env.VITE_DISCORD_LOGIN_BASE_URL?.replace(/\/+$/, '');
+  if (explicit) return explicit;
+  if (typeof window !== 'undefined') return window.location.origin;
+  return PRODUCTION_API_DEFAULT;
 }
 
 export function LoginButton() {
