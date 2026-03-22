@@ -1,5 +1,6 @@
 import { prisma } from "../config/database.js";
 import { getDiscordClient } from "../discord/bot.js";
+import { isDiscordIdAdminAllowlisted } from "../utils/adminAllowlist.js";
 
 /**
  * Middleware to check if user has admin role in any configured Discord server
@@ -19,6 +20,10 @@ export const requireAdminRole = async (req, res, next) => {
 
     if (!user || !user.discordId) {
       return res.status(403).json({ error: "User does not have a Discord account linked" });
+    }
+
+    if (isDiscordIdAdminAllowlisted(user.discordId)) {
+      return next();
     }
 
     // Get all configured Discord servers with admin roles

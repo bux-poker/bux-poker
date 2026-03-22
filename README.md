@@ -119,6 +119,10 @@ DISCORD_CLIENT_SECRET=...
 DISCORD_CALLBACK_URL=http://localhost:3000/api/auth/discord/callback
 DISCORD_BOT_TOKEN=...
 JWT_SECRET=replace_me
+
+# Optional — comma-separated Discord user IDs that always see the admin panel and pass admin API checks.
+# Needed if you have DiscordServer.adminRoleId set but the bot is offline, or your account lacks that role.
+ADMIN_DISCORD_IDS=
 ```
 
 ### Database

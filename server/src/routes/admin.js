@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import { requireAdminRole } from "../middleware/admin.js";
+import { isDiscordIdAdminAllowlisted } from "../utils/adminAllowlist.js";
 import { TournamentEngine } from "../services/TournamentEngine.js";
 import { prisma } from "../config/database.js";
 import { postTournamentEmbed, getDiscordClient } from "../discord/bot.js";
@@ -24,6 +25,10 @@ router.get("/check", authenticateToken, async (req, res, next) => {
 
     if (!user || !user.discordId) {
       return res.json({ isAdmin: false });
+    }
+
+    if (isDiscordIdAdminAllowlisted(user.discordId)) {
+      return res.json({ isAdmin: true });
     }
 
     // Get all configured Discord servers with admin roles
