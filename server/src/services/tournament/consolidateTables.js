@@ -108,7 +108,9 @@ export async function doConsolidateTables(tournamentId, deps) {
 
   const maxSpread = 1;
   if (games.length <= tablesNeeded && spread <= maxSpread) {
-    console.log(`[TOURNAMENT] Skipping consolidation: ${games.length} tables, counts ${counts.join(",")}, spread ${spread} (no rebalance needed)`);
+    console.log(
+      `[TOURNAMENT] Skipping consolidation: ${games.length} ACTIVE game(s) ≤ tablesNeeded=${tablesNeeded} (${totalCount} players, seatsPerTable=${seatsPerTable}), counts [${counts.join(",")}], spread ${spread}`
+    );
     return games;
   }
 
@@ -190,31 +192,135 @@ export async function doConsolidateTables(tournamentId, deps) {
   const numTablesNeeded = Math.max(1, Math.ceil(totalPlayers / seatsPerTable));
 
   if (games.length > numTablesNeeded) {
+    if (totalPlayers > numTablesNeeded * seatsPerTable) {
+      console.error(
+        `[TOURNAMENT] Cannot consolidate: ${totalPlayers} players exceed capacity (${numTablesNeeded}×${seatsPerTable} seats)`
+      );
+      return games;
+    }
+
     const byPlayerCount = [...games].sort((a, b) => (a.players?.length ?? 0) - (b.players?.length ?? 0));
     const toClose = byPlayerCount.slice(0, byPlayerCount.length - numTablesNeeded);
     const toKeep = byPlayerCount.slice(-numTablesNeeded);
+
     for (const g of toClose) {
       const hasHand = await deps.hasActiveHand(g.id);
       if (hasHand) {
-        console.warn(`[TOURNAMENT] Cannot close table ${g.tableNumber} - has active hand (likely all-in players); skipping consolidation`);
+        console.warn(
+          `[TOURNAMENT] Cannot close table ${g.tableNumber} - has active hand (likely all-in players); skipping consolidation`
+        );
         return games;
       }
-      const orphanPot = g.pot ?? 0;
-      if (orphanPot > 0) {
-        const fromGame = allPlayers.filter((ap) => ap.gameId === g.id);
-        if (fromGame.length > 0) {
-          const recipient = fromGame[0];
-          recipient.chips = (recipient.chips ?? 0) + orphanPot;
-          recipient.player.chips = recipient.chips;
-          console.log(`[TOURNAMENT] Transferring orphan pot ${orphanPot} from closed game ${g.id} (table ${g.tableNumber}) to player ${recipient.playerId} (chips now ${recipient.chips})`);
-        } else {
-          console.error(`[TOURNAMENT] Cannot transfer pot ${orphanPot} from game ${g.id} - no players in list; chips will be lost`);
-        }
-      }
-      await prisma.game.update({ where: { id: g.id }, data: { status: "COMPLETED", pot: 0 } });
     }
-    games = toKeep;
-    console.log(`[TOURNAMENT] Reduced to ${numTablesNeeded} table(s) (closed ${toClose.length} emptiest)`);
+
+    console.log(
+      `[TOURNAMENT] Closing ${toClose.length} excess table(s); migrating players to kept table(s) (seatsPerTable=${seatsPerTable}, need ${numTablesNeeded} table(s), ${totalPlayers} players)`
+    );
+
+    // CRITICAL: never mark a game COMPLETED while players still point at it — they would disappear
+    // from ACTIVE table queries and the tournament would stay split forever.
+    await prisma.$transaction(async (tx) => {
+      const keepIds = toKeep.map((g) => g.id);
+      const destSnapshots = await tx.game.findMany({
+        where: { id: { in: keepIds } },
+        include: {
+          players: {
+            where: NOT_ELIMINATED,
+            select: { id: true, seatNumber: true, chips: true, userId: true },
+          },
+        },
+        orderBy: { tableNumber: "asc" },
+      });
+
+      const destState = destSnapshots.map((g) => ({
+        id: g.id,
+        tableNumber: g.tableNumber,
+        players: [...g.players],
+      }));
+
+      const pickDest = () => {
+        const viable = destState.filter((d) => d.players.length < seatsPerTable);
+        if (viable.length === 0) {
+          throw new Error(`[TOURNAMENT] No free seat (seatsPerTable=${seatsPerTable})`);
+        }
+        viable.sort((a, b) => a.players.length - b.players.length);
+        return viable[0];
+      };
+
+      const nextFreeSeat = (d) => {
+        const taken = new Set(d.players.map((p) => p.seatNumber));
+        let s = 1;
+        while (s <= seatsPerTable && taken.has(s)) s++;
+        if (s > seatsPerTable) {
+          throw new Error(`[TOURNAMENT] No seat on table ${d.tableNumber}`);
+        }
+        return s;
+      };
+
+      for (const closeG of toClose) {
+        const movers = await tx.player.findMany({
+          where: { gameId: closeG.id, ...NOT_ELIMINATED },
+        });
+        const closeRow = await tx.game.findUnique({
+          where: { id: closeG.id },
+          select: { pot: true, tableNumber: true },
+        });
+        const orphanPot = closeRow?.pot ?? 0;
+
+        if (orphanPot > 0 && movers.length > 0) {
+          const first = movers[0];
+          await tx.player.update({
+            where: { id: first.id },
+            data: { chips: (first.chips ?? 0) + orphanPot },
+          });
+          console.log(
+            `[TOURNAMENT] Orphan pot ${orphanPot} from table ${closeG.tableNumber} → player ${first.id}`
+          );
+        } else if (orphanPot > 0) {
+          console.error(
+            `[TOURNAMENT] Orphan pot ${orphanPot} on table ${closeG.tableNumber} but no players to credit`
+          );
+        }
+
+        for (const p of movers) {
+          const dst = pickDest();
+          const seat = nextFreeSeat(dst);
+          await tx.player.update({
+            where: { id: p.id },
+            data: { gameId: dst.id, seatNumber: seat },
+          });
+          dst.players.push({
+            id: p.id,
+            seatNumber: seat,
+            chips: p.chips,
+            userId: p.userId,
+          });
+          console.log(
+            `[TOURNAMENT] Consolidation move: user ${p.userId} table ${closeG.tableNumber} → table ${dst.tableNumber} seat ${seat}`
+          );
+        }
+
+        await tx.game.update({
+          where: { id: closeG.id },
+          data: { status: "COMPLETED", pot: 0 },
+        });
+        console.log(
+          `[TOURNAMENT] Closed game ${closeG.id} (table ${closeG.tableNumber}) after migrating ${movers.length} player(s)`
+        );
+      }
+    });
+
+    games = await prisma.game.findMany({
+      where: { tournamentId, status: "ACTIVE" },
+      include: {
+        players: {
+          where: NOT_ELIMINATED,
+          include: { user: true },
+        },
+      },
+      orderBy: { tableNumber: "asc" },
+    });
+    console.log(`[TOURNAMENT] Now ${games.length} ACTIVE table(s) after closing excess`);
   }
 
   games = await prisma.game.findMany({
@@ -326,9 +432,9 @@ export async function doConsolidateTables(tournamentId, deps) {
     where: { tournamentId, status: "ACTIVE" },
     include: {
       players: {
-        where: { status: "ACTIVE" }
-      }
-    }
+        where: NOT_ELIMINATED,
+      },
+    },
   });
 
   const playerCounts = updatedGames.map(g => g.players.length);

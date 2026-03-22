@@ -54,7 +54,9 @@ export function startIdleTablesPoll(engine) {
         const needsConsolidation = games.length > tablesNeeded || spread > maxSpread;
         if (needsConsolidation && totalCount >= 2) {
           try {
-            console.log(`[TOURNAMENT] Idle poll: uneven tables (${counts.join(",")}), triggering consolidation`);
+            console.log(
+              `[TOURNAMENT] Idle poll: consolidate tournament ${t.id} — ${games.length} ACTIVE game(s), ${totalCount} players, seatsPerTable=${seatsPerTable}, tablesNeeded=${tablesNeeded}, counts=[${counts.join(",")}], spread=${spread}`
+            );
             await engine.consolidateTables(t.id);
           } catch (err) {
             console.error("[TOURNAMENT] Idle-poll consolidation failed:", err?.message);
