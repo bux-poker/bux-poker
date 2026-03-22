@@ -3,7 +3,7 @@ import { LoginButton } from '../components/auth/LoginButton';
 
 const MESSAGES: Record<string, string> = {
   discord_cloudflare:
-    'Discord blocked the login request from the game server (Cloudflare / rate limit on shared hosting). Wait 15–30 minutes and try again, or in Render click Manual Deploy (can get a new IP). This is not your password or redirect URL being wrong.',
+    'Discord is blocking login from the game server’s network (global / Cloudflare rate limits on shared hosting). Wait a few hours and try again, or in Render use Manual Deploy (may get a different IP). This is not your password or redirect URL being wrong.',
   discord_auth_failed:
     'Discord sign-in failed (server could not complete login). Check Render env DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, DISCORD_CALLBACK_URL, and that the same redirect URL is listed in the Discord Developer Portal.',
   no_user: 'No user returned from Discord. Try again.',

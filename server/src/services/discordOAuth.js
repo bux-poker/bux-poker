@@ -50,7 +50,26 @@ function isCloudflareJson1015OrEgressBlock(text) {
 }
 
 /**
- * HTML challenge or JSON 1015 — not recoverable by backoff from this host.
+ * Discord API JSON when the egress IP is globally blocked (not a per-route retry_after case).
+ * Example: {"code":0,"message":"You are being blocked from accessing our API temporarily due to exceeding global rate limits..."}
+ */
+function isDiscordGlobalApiBlockJson(text) {
+  if (!text || typeof text !== "string") return false;
+  const s = text.trim();
+  if (!s.startsWith("{")) return false;
+  try {
+    const j = JSON.parse(s);
+    const msg = String(j.message || "");
+    if (/exceeding global rate limit/i.test(msg)) return true;
+    if (/blocked from accessing our API temporarily/i.test(msg)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * HTML challenge, Cloudflare JSON 1015, or Discord global block JSON — not recoverable by backoff from this host.
  */
 function throwIfDiscordBlockingResponse(status, bodyText, label) {
   if (isCloudflareOrHtmlChallenge(bodyText)) {
@@ -64,6 +83,14 @@ function throwIfDiscordBlockingResponse(status, bodyText, label) {
   if (isCloudflareJson1015OrEgressBlock(bodyText)) {
     const err = new Error(
       `Discord ${label}: Cloudflare 1015 (egress IP rate-limited). Retries from this server won't help — wait, use Manual Deploy on Render, or move API hosting.`
+    );
+    err.code = "DISCORD_CLOUDFLARE_BLOCK";
+    err.statusCode = status;
+    throw err;
+  }
+  if (isDiscordGlobalApiBlockJson(bodyText)) {
+    const err = new Error(
+      `Discord ${label}: global API block for this egress IP (JSON 429). Retries won't help — wait hours, Manual Deploy, or different API host.`
     );
     err.code = "DISCORD_CLOUDFLARE_BLOCK";
     err.statusCode = status;
