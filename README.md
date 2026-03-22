@@ -143,9 +143,9 @@ cd client && npm run dev
 
 ### Discord OAuth on Vercel (production)
 
-**Vercel project → Settings → General → Root Directory** must be **empty** (repository root), **not** `client`. If it is set to `client`, the deploy **cannot** see the repo-root `api/` folder or root `vercel.json` correctly — clear the field and redeploy.
+**Vercel project → Settings → General → Root Directory** must be **`client`** (this repo’s frontend + `client/api` serverless). **`client/vercel.json`** controls rewrites; Discord OAuth lives in **`client/api/`**. Default Vite build → **`dist/`**.
 
-Build uses repo-root **`vercel.json`**: `npm install` (root deps for `/api`) + `npm install --prefix ./client`, then `npm run build --prefix ./client`, output **`client/dist`**, serverless from **`/api`**.
+If Root Directory were **empty** (repo root), you’d need a different layout; this project is set up for **Root = `client`**.
 
 Production login uses the relative URL **`/api/auth/discord`** (same host as the site), so the browser **cannot** send OAuth to Render by mistake.
 
