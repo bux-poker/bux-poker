@@ -59,7 +59,13 @@ export function startIdleTablesPoll(engine) {
             );
             await engine.consolidateTables(t.id);
           } catch (err) {
-            console.error("[TOURNAMENT] Idle-poll consolidation failed:", err?.message);
+            const code = err?.code ?? "";
+            const meta = err?.meta != null ? JSON.stringify(err.meta) : "";
+            console.error(
+              "[TOURNAMENT] Idle-poll consolidation failed:",
+              err?.message || code || String(err),
+              meta
+            );
           }
           continue;
         }

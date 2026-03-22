@@ -154,7 +154,7 @@ That path is a **real static file** in `client/public/discord-founders.html` (co
 
 ### Render: fetch server logs (CLI)
 
-**Access model:** Render logs are not visible to tools unless **this machine (or CI) is authenticated**. Run `render login` once, then use the commands below. If you use Cursor or another agent, it can only read logs here if the same shell has Render CLI auth and network access; otherwise use **Render Dashboard → your web service → Logs**, or run these commands locally and paste the lines you care about (e.g. `[BETTING]`, `[TURN ORDER]`, `player-action`).
+**Access model:** Run `render login` once on the machine where you run CLI (or where Cursor’s terminal runs). Then agents **can** pull logs with the commands below from that authenticated shell. If the CLI isn’t logged in, use **Render Dashboard → your web service → Logs**, or paste lines here. For consolidation bugs, filter `--text TOURNAMENT` and look for `Idle-poll consolidation failed` / `PrismaClientKnownRequestError` (often seat `P2002` if eliminated rows still hold seats).
 
 ```bash
 # List services (once logged in: render login)

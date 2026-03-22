@@ -221,12 +221,19 @@ export async function doConsolidateTables(tournamentId, deps) {
     // from ACTIVE table queries and the tournament would stay split forever.
     await prisma.$transaction(async (tx) => {
       const keepIds = toKeep.map((g) => g.id);
+      // Include ELIMINATED rows: they still occupy (gameId, seatNumber) in DB — ignoring them caused
+      // P2002 unique violations and repeated "Idle-poll consolidation failed" on Render.
       const destSnapshots = await tx.game.findMany({
         where: { id: { in: keepIds } },
         include: {
           players: {
-            where: NOT_ELIMINATED,
-            select: { id: true, seatNumber: true, chips: true, userId: true },
+            select: {
+              id: true,
+              seatNumber: true,
+              chips: true,
+              userId: true,
+              status: true,
+            },
           },
         },
         orderBy: { tableNumber: "asc" },
@@ -235,20 +242,24 @@ export async function doConsolidateTables(tournamentId, deps) {
       const destState = destSnapshots.map((g) => ({
         id: g.id,
         tableNumber: g.tableNumber,
-        players: [...g.players],
+        /** Every DB row on this game — used only for physical seat caps & free-seat math */
+        rows: [...g.players],
       }));
 
+      const liveCount = (d) =>
+        d.rows.filter((p) => p.status !== "ELIMINATED").length;
+
       const pickDest = () => {
-        const viable = destState.filter((d) => d.players.length < seatsPerTable);
+        const viable = destState.filter((d) => d.rows.length < seatsPerTable);
         if (viable.length === 0) {
           throw new Error(`[TOURNAMENT] No free seat (seatsPerTable=${seatsPerTable})`);
         }
-        viable.sort((a, b) => a.players.length - b.players.length);
+        viable.sort((a, b) => liveCount(a) - liveCount(b));
         return viable[0];
       };
 
       const nextFreeSeat = (d) => {
-        const taken = new Set(d.players.map((p) => p.seatNumber));
+        const taken = new Set(d.rows.map((p) => p.seatNumber));
         let s = 1;
         while (s <= seatsPerTable && taken.has(s)) s++;
         if (s > seatsPerTable) {
@@ -289,11 +300,12 @@ export async function doConsolidateTables(tournamentId, deps) {
             where: { id: p.id },
             data: { gameId: dst.id, seatNumber: seat },
           });
-          dst.players.push({
+          dst.rows.push({
             id: p.id,
             seatNumber: seat,
             chips: p.chips,
             userId: p.userId,
+            status: p.status ?? "ACTIVE",
           });
           console.log(
             `[TOURNAMENT] Consolidation move: user ${p.userId} table ${closeG.tableNumber} → table ${dst.tableNumber} seat ${seat}`
@@ -405,7 +417,16 @@ export async function doConsolidateTables(tournamentId, deps) {
         const src = maxTables[0].g;
         const dst = minTables[0].g;
 
-        const taken = new Set(dst.players.map((p) => p.seatNumber));
+        const dstAllSeats = await tx.player.findMany({
+          where: { gameId: dst.id },
+          select: { seatNumber: true },
+        });
+        if (dstAllSeats.length >= seatsPerTable) {
+          throw new Error(
+            `[TOURNAMENT] Table ${dst.tableNumber} full (${dstAllSeats.length}/${seatsPerTable} seats incl. eliminated)`
+          );
+        }
+        const taken = new Set(dstAllSeats.map((p) => p.seatNumber));
         let seat = 1;
         while (seat <= seatsPerTable && taken.has(seat)) seat++;
         if (seat > seatsPerTable) {
