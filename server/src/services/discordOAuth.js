@@ -30,16 +30,45 @@ function isCloudflareOrHtmlChallenge(text) {
 }
 
 /**
- * Cloudflare HTML 429/403 is not a recoverable JSON rate limit — do not burn 45s retrying.
+ * Cloudflare sometimes returns 429 with JSON problem details (e.g. error 1015) — same IP won't recover by retrying.
+ * @see https://developers.cloudflare.com/support/troubleshooting/http-status-codes/cloudflare-1xxx-errors/error-1015/
  */
-function throwIfDiscordEdgeBlock(status, bodyText, label) {
-  if (!isCloudflareOrHtmlChallenge(bodyText)) return;
-  const err = new Error(
-    `Discord ${label}: blocked by edge (HTTP ${status} HTML page, not API JSON). Try again later or redeploy the API (new outbound IP).`
-  );
-  err.code = "DISCORD_CLOUDFLARE_BLOCK";
-  err.statusCode = status;
-  throw err;
+function isCloudflareJson1015OrEgressBlock(text) {
+  if (!text || typeof text !== "string") return false;
+  const s = text.trim();
+  if (!s.startsWith("{")) return false;
+  try {
+    const j = JSON.parse(s);
+    const type = String(j.type || "");
+    const title = String(j.title || "");
+    if (type.includes("error-1015") || type.includes("/1015")) return true;
+    if (/1015/i.test(title) && /rate|cloudflare/i.test(title + type)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * HTML challenge or JSON 1015 — not recoverable by backoff from this host.
+ */
+function throwIfDiscordBlockingResponse(status, bodyText, label) {
+  if (isCloudflareOrHtmlChallenge(bodyText)) {
+    const err = new Error(
+      `Discord ${label}: blocked by edge (HTTP ${status} HTML page, not API JSON). Try again later or redeploy the API (new outbound IP).`
+    );
+    err.code = "DISCORD_CLOUDFLARE_BLOCK";
+    err.statusCode = status;
+    throw err;
+  }
+  if (isCloudflareJson1015OrEgressBlock(bodyText)) {
+    const err = new Error(
+      `Discord ${label}: Cloudflare 1015 (egress IP rate-limited). Retries from this server won't help — wait, use Manual Deploy on Render, or move API hosting.`
+    );
+    err.code = "DISCORD_CLOUDFLARE_BLOCK";
+    err.statusCode = status;
+    throw err;
+  }
 }
 
 /**
@@ -57,7 +86,7 @@ async function fetchDiscordWithRetry(url, init, { maxAttempts = 4, label = "requ
     }
 
     const bodyText = await res.clone().text();
-    throwIfDiscordEdgeBlock(res.status, bodyText, label);
+    throwIfDiscordBlockingResponse(res.status, bodyText, label);
 
     const retryAfterHeader = res.headers.get("retry-after");
     let waitMs = 0;
@@ -124,7 +153,7 @@ export async function exchangeDiscordOAuthCode(code) {
   try {
     data = rawText ? JSON.parse(rawText) : {};
   } catch {
-    throwIfDiscordEdgeBlock(res.status, rawText, "token exchange");
+    throwIfDiscordBlockingResponse(res.status, rawText, "token exchange");
     const err = new Error(`Discord token exchange: non-JSON response (${res.status})`);
     err.statusCode = res.status;
     throw err;
@@ -165,7 +194,7 @@ export async function fetchDiscordMe(accessToken) {
   try {
     discordUser = rawText ? JSON.parse(rawText) : null;
   } catch {
-    throwIfDiscordEdgeBlock(res.status, rawText, "users/@me");
+    throwIfDiscordBlockingResponse(res.status, rawText, "users/@me");
     const err = new Error(`Discord users/@me: non-JSON (${res.status})`);
     err.statusCode = res.status;
     throw err;
