@@ -997,8 +997,8 @@ export function PokerGameView() {
   }, [gameState, user?.id]);
 
   const handleShowdownChoice = (choice: "SHOW" | "MUCK") => {
-    if (!id) return;
-    getSocket().emit("showdown-choice", { gameId: id, choice });
+    if (!id || !user?.id) return;
+    getSocket().emit("showdown-choice", { gameId: id, choice, userId: user.id });
   };
 
   if (!id) {
@@ -1359,7 +1359,7 @@ export function PokerGameView() {
                 </div>
               </div>
             )}
-              <div className="ml-auto flex h-full min-h-0 flex-col items-end justify-center gap-3">
+              <div className="relative z-[60] ml-auto flex h-full min-h-0 flex-col items-end justify-center gap-3">
                 {gameState.showdownNeedsChoice && (
                   <div className="flex flex-col items-end gap-1">
                     <p className="text-xs font-medium text-slate-400">Show your cards?</p>
