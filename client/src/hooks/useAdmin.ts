@@ -24,7 +24,12 @@ export function useAdmin() {
         }
 
         const response = await api.get('/api/admin/check', {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Cache-Control': 'no-cache',
+            Pragma: 'no-cache',
+          },
+          params: { _: Date.now() },
         });
 
         setIsAdmin(response.data?.isAdmin || false);

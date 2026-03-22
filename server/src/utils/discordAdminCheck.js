@@ -1,5 +1,7 @@
 import { prisma } from "../config/database.js";
 
+const DISCORD_API = "https://discord.com/api/v10";
+
 /** Discord snowflakes must be compared as trimmed strings (DB / copy-paste drift). */
 export function normalizeSnowflake(id) {
   if (id == null) return "";
@@ -23,43 +25,69 @@ export async function getConfiguredAdminServers() {
 }
 
 /**
- * @param {import('discord.js').Client | null} discordClient
+ * Role IDs for a guild member via Discord REST (source of truth; avoids gateway/cache issues).
+ * @returns {string[] | null} null = request failed (403/network); [] = not a member
+ */
+async function fetchMemberRoleIdsRest(guildId, userId) {
+  const token = process.env.DISCORD_BOT_TOKEN;
+  if (!token) return null;
+
+  const res = await fetch(
+    `${DISCORD_API}/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(userId)}`,
+    {
+      headers: {
+        Authorization: `Bot ${token}`,
+        "User-Agent": process.env.DISCORD_API_USER_AGENT || "BUX-Poker-AdminCheck (+https://www.bux-poker.pro)",
+      },
+    }
+  );
+
+  if (res.status === 404) {
+    return [];
+  }
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.warn(
+      `[discordAdminCheck] REST guild member ${res.status} guild=${guildId} user=${userId}`,
+      text.slice(0, 200)
+    );
+    return null;
+  }
+
+  const data = await res.json();
+  if (!Array.isArray(data.roles)) return [];
+  return data.roles.map((r) => String(r).trim());
+}
+
+/**
+ * True if the Discord user has the configured admin role in any enabled server.
+ * Uses REST only — works even when the discord.js gateway client is not connected (Render cold start).
+ *
  * @param {string} discordUserId
  * @param {Array<{ serverId: string, adminRoleId: string, serverName: string }>} servers
  * @returns {Promise<{ serverId: string, adminRoleId: string, serverName: string } | null>}
  */
-export async function findAdminServerForDiscordUser(discordClient, discordUserId, servers) {
+export async function findAdminServerForDiscordUser(discordUserId, servers) {
   const uid = normalizeSnowflake(discordUserId);
-  if (!discordClient?.guilds || !uid) return null;
+  if (!uid) return null;
+
+  if (!process.env.DISCORD_BOT_TOKEN) {
+    console.warn("[discordAdminCheck] DISCORD_BOT_TOKEN missing — cannot verify admin roles");
+    return null;
+  }
 
   for (const server of servers) {
     const guildId = normalizeSnowflake(server.serverId);
     const roleId = normalizeSnowflake(server.adminRoleId);
     if (!guildId || !roleId) continue;
 
-    try {
-      const guild = await discordClient.guilds.fetch(guildId).catch(() => null);
-      if (!guild) {
-        console.warn(`[discordAdminCheck] Bot not in guild ${guildId} (${server.serverName})`);
-        continue;
-      }
-
-      let member = null;
-      try {
-        member = await guild.members.fetch({ user: uid, force: true });
-      } catch {
-        member = await guild.members.fetch(uid).catch(() => null);
-      }
-      if (!member) continue;
-
-      if (member.roles.cache.has(roleId)) {
-        return server;
-      }
-      // Rare: cache key mismatch — verify by id
-      const match = member.roles.cache.find((r) => r.id === roleId);
-      if (match) return server;
-    } catch (e) {
-      console.warn(`[discordAdminCheck] ${server.serverName}:`, e?.message || e);
+    const memberRoles = await fetchMemberRoleIdsRest(guildId, uid);
+    if (memberRoles === null) {
+      continue;
+    }
+    if (memberRoles.includes(roleId)) {
+      return server;
     }
   }
 

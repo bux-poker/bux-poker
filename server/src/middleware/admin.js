@@ -1,5 +1,4 @@
 import { prisma } from "../config/database.js";
-import { getDiscordClient } from "../discord/bot.js";
 import { isDiscordIdAdminAllowlisted } from "../utils/adminAllowlist.js";
 import {
   findAdminServerForDiscordUser,
@@ -36,17 +35,12 @@ export const requireAdminRole = async (req, res, next) => {
       return next();
     }
 
-    const discordClient = getDiscordClient();
-    if (!discordClient) {
-      console.warn("[ADMIN MIDDLEWARE] Discord bot not initialized");
-      return res.status(403).json({ error: "Admin access requires Discord bot" });
+    if (!process.env.DISCORD_BOT_TOKEN) {
+      console.warn("[ADMIN MIDDLEWARE] DISCORD_BOT_TOKEN missing");
+      return res.status(403).json({ error: "Admin access requires Discord bot token" });
     }
 
-    const adminServer = await findAdminServerForDiscordUser(
-      discordClient,
-      user.discordId,
-      servers
-    );
+    const adminServer = await findAdminServerForDiscordUser(user.discordId, servers);
     if (adminServer) {
       req.adminServerId = adminServer.serverId;
       req.adminServerName = adminServer.serverName;

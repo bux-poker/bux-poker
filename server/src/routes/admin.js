@@ -16,6 +16,9 @@ const engine = new TournamentEngine();
 // Check if current user is an admin (accessible without admin role to check status)
 router.get("/check", authenticateToken, async (req, res, next) => {
   try {
+    res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+
     const userId = req.userId;
     if (!userId) {
       return res.json({ isAdmin: false });
@@ -42,16 +45,7 @@ router.get("/check", authenticateToken, async (req, res, next) => {
       return res.json({ isAdmin: true });
     }
 
-    const discordClient = getDiscordClient();
-    if (!discordClient) {
-      return res.json({ isAdmin: false });
-    }
-
-    const adminServer = await findAdminServerForDiscordUser(
-      discordClient,
-      user.discordId,
-      servers
-    );
+    const adminServer = await findAdminServerForDiscordUser(user.discordId, servers);
     return res.json({ isAdmin: !!adminServer });
   } catch (err) {
     console.error("[ADMIN CHECK] Error:", err);
