@@ -159,7 +159,7 @@ The **token exchange** runs in **`api/discord-oauth/callback.ts`** (public path 
 | `DATABASE_URL` | **Same Postgres as Render** (pooler URL is fine) — if missing, user upsert fails |
 | `DISCORD_CLIENT_ID` | Same as Render |
 | `DISCORD_CLIENT_SECRET` | Same as Render |
-| `CLIENT_URL` | Where to redirect after login, e.g. `https://www.bux-poker.pro` |
+| `CLIENT_URL` | Where to redirect after login, e.g. `https://www.bux-poker.pro` — **not** `http://localhost:5173` (that value is for Render/local `.env` only). If it’s wrong, the serverless callback now falls back to the request `Host`. |
 
 Optional: `DISCORD_VERCEL_CALLBACK_URL` (full callback URL, must match Discord portal — use if you change path), `DISCORD_API_USER_AGENT`.
 

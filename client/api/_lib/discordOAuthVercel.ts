@@ -24,8 +24,43 @@ export function getDiscordCallbackUrl(req: VercelRequest): string {
   throw new Error("Cannot resolve Discord callback URL (no Host header or VERCEL_URL)");
 }
 
-export function getClientUrl(): string {
-  return (process.env.CLIENT_URL || "https://www.bux-poker.pro").replace(/\/+$/, "");
+function isLocalHostname(host: string): boolean {
+  const h = host.split(":")[0]?.toLowerCase() || "";
+  return h === "localhost" || h === "127.0.0.1" || h === "[::1]";
+}
+
+function isLocalOriginUrl(url: string): boolean {
+  try {
+    return isLocalHostname(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Where to send the browser after OAuth. Uses CLIENT_URL when it is a non-local URL.
+ * If CLIENT_URL is missing or still set to localhost (common bad copy from .env), uses the
+ * request Host so production logins return to www.bux-poker.pro instead of :5173.
+ */
+export function getClientUrl(req?: VercelRequest): string {
+  const fromEnv = (process.env.CLIENT_URL || "").replace(/\/+$/, "");
+  if (fromEnv && !isLocalOriginUrl(fromEnv)) return fromEnv;
+
+  if (req) {
+    const raw =
+      (req.headers["x-forwarded-host"] as string) || req.headers.host || "";
+    const host = raw.split(",")[0]?.trim() || "";
+    const proto = (req.headers["x-forwarded-proto"] as string) || "https";
+    if (host && !isLocalHostname(host)) {
+      return `${proto}://${host}`;
+    }
+  }
+
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`.replace(/\/+$/, "");
+  }
+
+  return fromEnv || "https://www.bux-poker.pro";
 }
 
 let pool: Pool | null = null;

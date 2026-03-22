@@ -12,7 +12,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const clientUrl = getClientUrl();
+  const clientUrl = getClientUrl(req);
 
   if (req.query.error) {
     console.error("[AUTH][Vercel] Discord error query:", req.query.error, req.query.error_description);
