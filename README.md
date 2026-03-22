@@ -125,8 +125,14 @@ JWT_SECRET=replace_me
 
 # Optional — set ADMIN_STRICT_ROLE_ONLY=true to require the exact role saved in /setup (no Discord “Administrator” fallback).
 
-# Optional — comma-separated Discord user IDs that always see the admin panel and pass admin API checks.
-# Needed if you have DiscordServer.adminRoleId set but the bot is offline, or your account lacks that role.
+# --- Admin access (read this if the panel “suddenly” broke) ---
+# While **no** DiscordServer row has setupCompleted+adminRoleId, **every** Discord login is treated as admin (bootstrap).
+# After /setup, the API uses Discord REST to verify roles. If that fails, set ONE of:
+#
+# ADMIN_USER_IDS=clxxxxxxxx...   # Prisma "User".id (same as JWT userId) — most reliable, no Discord API
+# ADMIN_DISCORD_IDS=1234567890   # Discord snowflake (identify scope id)
+
+ADMIN_USER_IDS=
 ADMIN_DISCORD_IDS=
 ```
 

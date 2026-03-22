@@ -91,7 +91,7 @@ router.get("/profile", authenticateToken, async (req, res, next) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    const isAdmin = await computeWebIsAdmin(user.discordId);
+    const isAdmin = await computeWebIsAdmin({ userId, discordId: user.discordId });
     res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
     res.json({ user: { ...user, isAdmin } });
   } catch (err) {

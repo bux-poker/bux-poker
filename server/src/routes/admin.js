@@ -30,7 +30,7 @@ router.get("/check", authenticateToken, async (req, res, next) => {
       return res.json({ isAdmin: false });
     }
 
-    const isAdmin = await computeWebIsAdmin(user.discordId);
+    const isAdmin = await computeWebIsAdmin({ userId: user.id, discordId: user.discordId });
     return res.json({ isAdmin });
   } catch (err) {
     console.error("[ADMIN CHECK] Error:", err);
