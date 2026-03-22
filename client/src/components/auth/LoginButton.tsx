@@ -6,7 +6,7 @@ import { useAuth } from '@shared/features/auth/AuthContext';
  */
 function discordOAuthStartUrl(): string {
   if (typeof window === 'undefined') {
-    return '/api/auth/discord';
+    return '/oauth/discord';
   }
   const host = window.location.hostname;
   const isLocalDev =
@@ -15,7 +15,8 @@ function discordOAuthStartUrl(): string {
     const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '') || '';
     return `${base}/api/auth/discord`;
   }
-  return `${window.location.origin}/api/auth/discord`;
+  // Production: /oauth/* avoids Cloudflare/DNS rules that proxy /api/* to Render.
+  return `${window.location.origin}/oauth/discord`;
 }
 
 export function LoginButton() {

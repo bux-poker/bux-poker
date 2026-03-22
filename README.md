@@ -147,9 +147,9 @@ cd client && npm run dev
 
 If Root Directory were **empty** (repo root), you’d need a different layout; this project is set up for **Root = `client`**.
 
-Production login uses the relative URL **`/api/auth/discord`** (same host as the site), so the browser **cannot** send OAuth to Render by mistake.
+Production login uses **`/oauth/discord`** (rewritten to serverless). It is **not** under **`/api`** on purpose: many setups proxy **`/api/*`** on the apex/www host to **Render**, which would send Discord’s `redirect_uri` back to Render and hit the blocked IP.
 
-The **token exchange** runs in **`api/auth/discord/callback.ts`** on Vercel’s IP. Render still runs Socket.IO + REST; **`JWT_SECRET` must match Render exactly** so issued JWTs validate on the API.
+The **token exchange** runs in **`api/discord-oauth/callback.ts`** (public path **`/oauth/discord/callback`**) on Vercel’s IP. Render still runs Socket.IO + REST; **`JWT_SECRET` must match Render exactly** so issued JWTs validate on the API.
 
 **Vercel → Environment variables (required for login)**
 
@@ -161,18 +161,20 @@ The **token exchange** runs in **`api/auth/discord/callback.ts`** on Vercel’s 
 | `DISCORD_CLIENT_SECRET` | Same as Render |
 | `CLIENT_URL` | Where to redirect after login, e.g. `https://www.bux-poker.pro` |
 
-Optional: `DISCORD_VERCEL_CALLBACK_URL` (fixed callback, must match Discord portal), `DISCORD_API_USER_AGENT`.
+Optional: `DISCORD_VERCEL_CALLBACK_URL` (full callback URL, must match Discord portal — use if you change path), `DISCORD_API_USER_AGENT`.
 
 You can remove **`DISCORD_CALLBACK_URL`** from Vercel (that’s for the Render server); it is **not** read by the serverless handlers.
 
 Do **not** set **`NODE_ENV=development`** on the Vercel frontend project — it can confuse tooling. Login uses **hostname** (not `import.meta.env.DEV`) so production never follows `VITE_API_BASE_URL` to Render for OAuth.
 
-**Discord Developer Portal → OAuth2 → Redirects** — include:
+**Discord Developer Portal → OAuth2 → Redirects** — add (and remove stale `/api/auth/...` on the **site** host if you no longer use it there):
 
-- `https://www.bux-poker.pro/api/auth/discord/callback` (and/or `https://bux-poker.pro/...` if you use apex)
-- Preview: `https://<project>.vercel.app/api/auth/discord/callback` if you test login on previews
+- `https://www.bux-poker.pro/oauth/discord/callback` (and/or apex `https://bux-poker.pro/oauth/discord/callback`)
+- Preview: `https://<project>.vercel.app/oauth/discord/callback`
 
-**Local dev:** Vite proxies `/api` → `localhost:3000` (Express Passport OAuth).
+Render’s **`/api/auth/discord/callback`** can stay in Discord only if you still start OAuth from the Render host; production on Vercel should use **`/oauth/...`** only.
+
+**Local dev:** Login still uses **`/api/auth/discord`** → Vite proxies `/api` → Express (Passport).
 
 ### Link previews: founder Discord bot page
 

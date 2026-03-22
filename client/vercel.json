@@ -26,6 +26,14 @@
     { "source": "/discord-bot", "destination": "/bot-invite.html" },
     { "source": "/discord-bot/", "destination": "/bot-invite.html" },
     {
+      "source": "/oauth/discord",
+      "destination": "/api/discord-oauth/start"
+    },
+    {
+      "source": "/oauth/discord/callback",
+      "destination": "/api/discord-oauth/callback"
+    },
+    {
       "source": "/((?!api(?:/|$)).*)",
       "destination": "/index.html"
     }

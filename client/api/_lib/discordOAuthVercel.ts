@@ -14,11 +14,12 @@ export function getDiscordCallbackUrl(req: VercelRequest): string {
   const host =
     (req.headers["x-forwarded-host"] as string) || req.headers.host || "";
   const proto = (req.headers["x-forwarded-proto"] as string) || "https";
+  // Path is NOT under /api — many domains proxy /api/* to Render; /oauth/* stays on Vercel.
   if (host) {
-    return `${proto}://${host.split(",")[0].trim()}/api/auth/discord/callback`;
+    return `${proto}://${host.split(",")[0].trim()}/oauth/discord/callback`;
   }
   if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}/api/auth/discord/callback`;
+    return `https://${process.env.VERCEL_URL}/oauth/discord/callback`;
   }
   throw new Error("Cannot resolve Discord callback URL (no Host header or VERCEL_URL)");
 }
