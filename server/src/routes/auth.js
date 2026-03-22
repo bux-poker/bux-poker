@@ -59,7 +59,11 @@ router.get("/discord/callback", async (req, res) => {
     if (error?.oauthBody) {
       console.error("[AUTH] Discord token response body:", error.oauthBody);
     }
-    return res.redirect(`${clientUrl}/login?error=discord_auth_failed`);
+    const errKey =
+      error?.code === "DISCORD_CLOUDFLARE_BLOCK"
+        ? "discord_cloudflare"
+        : "discord_auth_failed";
+    return res.redirect(`${clientUrl}/login?error=${errKey}`);
   }
 });
 

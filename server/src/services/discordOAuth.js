@@ -1,32 +1,69 @@
 import { resolveDiscordCallbackURL } from "../config/discordOAuthConfig.js";
 import { upsertUserFromDiscordMe } from "./discordUserSync.js";
 
+/** Discord asks for an identifiable User-Agent; Node's default is often blocked by Cloudflare. */
+const DEFAULT_DISCORD_UA =
+  "BUX-Poker/1.0 (+https://www.bux-poker.pro; Discord OAuth2 server)";
+
+function withDiscordApiFetchInit(init = {}) {
+  const headers = new Headers(init.headers);
+  if (!headers.has("User-Agent")) {
+    headers.set("User-Agent", process.env.DISCORD_API_USER_AGENT || DEFAULT_DISCORD_UA);
+  }
+  if (!headers.has("Accept")) {
+    headers.set("Accept", "application/json");
+  }
+  return { ...init, headers };
+}
+
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+function isCloudflareOrHtmlChallenge(text) {
+  if (!text || typeof text !== "string") return false;
+  const t = text.slice(0, 4000);
+  if (/^\s*<!doctype html/i.test(text)) return true;
+  if (/cloudflare/i.test(t) && /cf-ray/i.test(t)) return true;
+  if (/attention required.*cloudflare/i.test(t)) return true;
+  return false;
+}
+
 /**
- * Discord (and Cloudflare) often return 429 with code 1015 from shared host IPs.
- * Retry with backoff and optional Retry-After header.
+ * Cloudflare HTML 429/403 is not a recoverable JSON rate limit — do not burn 45s retrying.
+ */
+function throwIfDiscordEdgeBlock(status, bodyText, label) {
+  if (!isCloudflareOrHtmlChallenge(bodyText)) return;
+  const err = new Error(
+    `Discord ${label}: blocked by edge (HTTP ${status} HTML page, not API JSON). Try again later or redeploy the API (new outbound IP).`
+  );
+  err.code = "DISCORD_CLOUDFLARE_BLOCK";
+  err.statusCode = status;
+  throw err;
+}
+
+/**
+ * Discord (and Cloudflare) may return 429 with a JSON body (retry) or HTML (edge block).
  */
 async function fetchDiscordWithRetry(url, init, { maxAttempts = 4, label = "request" } = {}) {
   let lastStatus;
-  let lastBodySnippet = "";
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const res = await fetch(url, init);
+    const res = await fetch(url, withDiscordApiFetchInit(init));
     lastStatus = res.status;
 
     if (res.status !== 429) {
       return res;
     }
 
+    const bodyText = await res.clone().text();
+    throwIfDiscordEdgeBlock(res.status, bodyText, label);
+
     const retryAfterHeader = res.headers.get("retry-after");
     let waitMs = 0;
     if (retryAfterHeader) {
       const sec = Number(retryAfterHeader);
       if (!Number.isNaN(sec)) {
-        // Cap so the browser does not appear "stuck" for many minutes on Authorize
         waitMs = Math.min(15_000, Math.max(1000, sec * 1000));
       }
     }
@@ -34,16 +71,9 @@ async function fetchDiscordWithRetry(url, init, { maxAttempts = 4, label = "requ
       waitMs = Math.min(10_000, 2000 * 2 ** (attempt - 1));
     }
 
-    try {
-      const text = await res.clone().text();
-      lastBodySnippet = text.slice(0, 200);
-    } catch {
-      lastBodySnippet = "";
-    }
-
     console.warn(
       `[AUTH] Discord ${label} returned 429 (attempt ${attempt}/${maxAttempts}), waiting ${waitMs}ms`,
-      lastBodySnippet ? `body: ${lastBodySnippet}` : ""
+      `body: ${bodyText.slice(0, 160)}`
     );
 
     if (attempt === maxAttempts) {
@@ -61,7 +91,7 @@ async function fetchDiscordWithRetry(url, init, { maxAttempts = 4, label = "requ
 }
 
 /**
- * Exchange OAuth authorization code for access_token (with retries on 429).
+ * Exchange OAuth authorization code for access_token (with limited retries on JSON 429).
  */
 export async function exchangeDiscordOAuthCode(code) {
   const clientId = process.env.DISCORD_CLIENT_ID;
@@ -89,7 +119,16 @@ export async function exchangeDiscordOAuthCode(code) {
     { label: "token exchange" }
   );
 
-  const data = await res.json().catch(() => ({}));
+  const rawText = await res.text();
+  let data = {};
+  try {
+    data = rawText ? JSON.parse(rawText) : {};
+  } catch {
+    throwIfDiscordEdgeBlock(res.status, rawText, "token exchange");
+    const err = new Error(`Discord token exchange: non-JSON response (${res.status})`);
+    err.statusCode = res.status;
+    throw err;
+  }
 
   if (!res.ok) {
     const msg =
@@ -110,7 +149,7 @@ export async function exchangeDiscordOAuthCode(code) {
 }
 
 /**
- * GET /users/@me with Bearer token (retries on 429).
+ * GET /users/@me with Bearer token (retries on JSON 429 only).
  */
 export async function fetchDiscordMe(accessToken) {
   const res = await fetchDiscordWithRetry(
@@ -121,7 +160,17 @@ export async function fetchDiscordMe(accessToken) {
     { label: "users/@me" }
   );
 
-  const discordUser = await res.json().catch(() => null);
+  const rawText = await res.text();
+  let discordUser = null;
+  try {
+    discordUser = rawText ? JSON.parse(rawText) : null;
+  } catch {
+    throwIfDiscordEdgeBlock(res.status, rawText, "users/@me");
+    const err = new Error(`Discord users/@me: non-JSON (${res.status})`);
+    err.statusCode = res.status;
+    throw err;
+  }
+
   if (!res.ok || !discordUser?.id) {
     const err = new Error(
       `Failed to fetch Discord profile: ${res.status} ${JSON.stringify(discordUser)}`

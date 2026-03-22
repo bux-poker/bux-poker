@@ -2,8 +2,10 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { LoginButton } from '../components/auth/LoginButton';
 
 const MESSAGES: Record<string, string> = {
+  discord_cloudflare:
+    'Discord blocked the login request from the game server (Cloudflare / rate limit on shared hosting). Wait 15–30 minutes and try again, or in Render click Manual Deploy (can get a new IP). This is not your password or redirect URL being wrong.',
   discord_auth_failed:
-    'Discord sign-in failed (server could not complete login). This is usually a configuration issue: check Render env DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, DISCORD_CALLBACK_URL, and that the same redirect URL is listed in the Discord Developer Portal.',
+    'Discord sign-in failed (server could not complete login). Check Render env DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, DISCORD_CALLBACK_URL, and that the same redirect URL is listed in the Discord Developer Portal.',
   no_user: 'No user returned from Discord. Try again.',
   invalid_user: 'Invalid user data from Discord. Try again.',
   server_config: 'Server is missing JWT configuration.',
