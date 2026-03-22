@@ -4,6 +4,7 @@ import { authenticateToken } from "../middleware/auth.js";
 import { prisma } from "../config/database.js";
 import jwt from "jsonwebtoken";
 import { completeDiscordOAuthFromCode } from "../services/discordOAuth.js";
+import { computeWebIsAdmin } from "../utils/webAdminStatus.js";
 
 const router = Router();
 
@@ -90,7 +91,9 @@ router.get("/profile", authenticateToken, async (req, res, next) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    res.json({ user });
+    const isAdmin = await computeWebIsAdmin(user.discordId);
+    res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
+    res.json({ user: { ...user, isAdmin } });
   } catch (err) {
     const code = err && typeof err === "object" ? err.code : undefined;
     const name = err && typeof err === "object" ? err.name : undefined;

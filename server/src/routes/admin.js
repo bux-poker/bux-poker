@@ -1,11 +1,7 @@
 import { Router } from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import { requireAdminRole } from "../middleware/admin.js";
-import { isDiscordIdAdminAllowlisted } from "../utils/adminAllowlist.js";
-import {
-  findAdminServerForDiscordUser,
-  getConfiguredAdminServers,
-} from "../utils/discordAdminCheck.js";
+import { computeWebIsAdmin } from "../utils/webAdminStatus.js";
 import { TournamentEngine } from "../services/TournamentEngine.js";
 import { prisma } from "../config/database.js";
 import { postTournamentEmbed, getDiscordClient } from "../discord/bot.js";
@@ -30,23 +26,12 @@ router.get("/check", authenticateToken, async (req, res, next) => {
       select: { id: true, discordId: true },
     });
 
-    if (!user || !user.discordId) {
+    if (!user) {
       return res.json({ isAdmin: false });
     }
 
-    if (isDiscordIdAdminAllowlisted(user.discordId)) {
-      return res.json({ isAdmin: true });
-    }
-
-    const servers = await getConfiguredAdminServers();
-
-    if (servers.length === 0) {
-      // No servers configured yet - allow access for initial setup
-      return res.json({ isAdmin: true });
-    }
-
-    const adminServer = await findAdminServerForDiscordUser(user.discordId, servers);
-    return res.json({ isAdmin: !!adminServer });
+    const isAdmin = await computeWebIsAdmin(user.discordId);
+    return res.json({ isAdmin });
   } catch (err) {
     console.error("[ADMIN CHECK] Error:", err);
     res.json({ isAdmin: false });

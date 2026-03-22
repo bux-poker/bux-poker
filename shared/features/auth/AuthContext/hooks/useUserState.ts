@@ -5,6 +5,7 @@ interface User {
   username: string;
   email: string;
   avatar: string | null;
+  isAdmin?: boolean;
   isAuthenticated?: boolean;
   stats?: {
     gamesPlayed: number;

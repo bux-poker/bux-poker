@@ -10,6 +10,8 @@ interface User {
   avatar: string | null;
   avatarUrl?: string; // Support both avatar and avatarUrl properties
   discordId?: string; // Discord ID for admin authentication
+  /** From GET /api/auth/profile — web admin (Discord role / allowlist / bootstrap) */
+  isAdmin?: boolean;
   isAuthenticated?: boolean;
   stats?: {
     gamesPlayed: number;

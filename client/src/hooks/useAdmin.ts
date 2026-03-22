@@ -1,46 +1,14 @@
-import { useState, useEffect } from 'react';
 import { useAuth } from '@shared/features/auth/AuthContext';
-import api from '../services/api';
 
+/**
+ * Admin flag comes from GET /api/auth/profile (`user.isAdmin`) — same logic as /api/admin/check.
+ * Avoids a second cross-origin request, CORS edge cases, and races with the auth bootstrap.
+ */
 export function useAdmin() {
-  const { user } = useAuth();
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { user, loading } = useAuth();
 
-  useEffect(() => {
-    const checkAdmin = async () => {
-      if (!user) {
-        setIsAdmin(false);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const token = localStorage.getItem('sessionToken');
-        if (!token) {
-          setIsAdmin(false);
-          setLoading(false);
-          return;
-        }
-
-        // Do not send Cache-Control/Pragma on cross-origin XHR — CORS preflight only allows
-        // headers listed in Access-Control-Allow-Headers (see server corsOptions).
-        const response = await api.get('/api/admin/check', {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { _: Date.now() },
-        });
-
-        setIsAdmin(response.data?.isAdmin || false);
-      } catch (error: any) {
-        // User is not an admin or not authenticated
-        setIsAdmin(false);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkAdmin();
-  }, [user]);
-
-  return { isAdmin, loading };
+  return {
+    isAdmin: user?.isAdmin === true,
+    loading,
+  };
 }
