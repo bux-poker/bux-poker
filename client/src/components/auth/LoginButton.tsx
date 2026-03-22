@@ -2,16 +2,24 @@ import { useAuth } from '@shared/features/auth/AuthContext';
 
 const PRODUCTION_API_DEFAULT = 'https://bux-poker-server.onrender.com';
 
+/** Where the browser starts Discord OAuth (must match a redirect URL in the Discord app). */
+function getDiscordOAuthBaseUrl(): string {
+  const explicit = import.meta.env.VITE_DISCORD_LOGIN_BASE_URL?.replace(/\/+$/, '');
+  if (explicit) return explicit;
+  // Dev: Vite proxies /api → local Express
+  if (import.meta.env.DEV) {
+    return (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '') || '';
+  }
+  // Prod: same origin → Vercel serverless /api/auth/discord (avoids Render IP blocks on token exchange)
+  return typeof window !== 'undefined' ? window.location.origin : PRODUCTION_API_DEFAULT;
+}
+
 export function LoginButton() {
   const { user, logout } = useAuth();
-  // Dev: '' uses Vite proxy. Prod: require env or same default as AuthCallback so OAuth hits the API, not the SPA host.
-  const apiBaseUrl = (
-    import.meta.env.VITE_API_BASE_URL ||
-    (import.meta.env.PROD ? PRODUCTION_API_DEFAULT : '')
-  ).replace(/\/+$/, '');
 
   const handleDiscordLogin = () => {
-    window.location.href = `${apiBaseUrl}/api/auth/discord`;
+    const oauthBase = getDiscordOAuthBaseUrl();
+    window.location.href = `${oauthBase}/api/auth/discord`;
   };
 
   if (user) {

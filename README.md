@@ -23,7 +23,7 @@ Still needed for full polish:
 - Frontend: React 18, TypeScript, Vite, Tailwind, Socket.IO Client
 - Backend: Node.js, Express, Socket.IO, Prisma
 - Data: PostgreSQL (persistent), Redis (session store)
-- Auth: Discord OAuth + Passport
+- Auth: Discord OAuth (Vercel serverless token exchange in prod; Passport on API server for local/dev fallback)
 - Hosting: Vercel (frontend), Railway (backend), Supabase (Postgres)
 
 ## Repository Layout
@@ -140,6 +140,33 @@ cd client && npm run dev
 - Backend: `http://localhost:3000`
 
 ## Deployment Notes
+
+### Discord OAuth on Vercel (production)
+
+Login starts at **`https://<your-site>/api/auth/discord`** (Vercel **serverless** in `client/api/`). The **authorization code is exchanged on Vercel’s network**, which avoids Discord / Cloudflare **blocking Render’s egress IP** on `oauth2/token`. Render still runs the game API + Socket.IO; **`JWT_SECRET` must be identical** on Vercel and Render so tokens issued by Vercel validate on the API.
+
+**Vercel → Environment variables**
+
+| Variable | Purpose |
+|----------|---------|
+| `DISCORD_CLIENT_ID` | Same as Render |
+| `DISCORD_CLIENT_SECRET` | Same as Render |
+| `JWT_SECRET` | **Same value as Render** (required) |
+| `DATABASE_URL` | Same Postgres; prefer **pooler** URL for short-lived functions |
+| `CLIENT_URL` | Canonical site for post-login redirect, e.g. `https://www.bux-poker.pro` |
+| `DISCORD_VERCEL_CALLBACK_URL` | Optional. If set, must match Discord portal **exactly** (overrides Host-based callback URL). |
+| `DISCORD_API_USER_AGENT` | Optional override for Discord API requests |
+
+**Discord Developer Portal → OAuth2 → Redirects** — add every URL you use:
+
+- `https://www.bux-poker.pro/api/auth/discord/callback` (production custom domain)
+- `https://<project>.vercel.app/api/auth/discord/callback` (preview deploys, if you test login there)
+
+The app builds `redirect_uri` from the request **Host** when `DISCORD_VERCEL_CALLBACK_URL` is unset, so **www vs apex** must match what users open and what you whitelist in Discord.
+
+**Rollback** to Render-only OAuth (not recommended if Render IP is blocked): set Vercel build env **`VITE_DISCORD_LOGIN_BASE_URL`** to your API origin, e.g. `https://bux-poker-server.onrender.com`.
+
+**Local dev** still uses the Vite proxy: `/api/auth/discord` → Express on port 3000.
 
 ### Link previews: founder Discord bot page
 

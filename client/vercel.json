@@ -59,7 +59,7 @@
       "destination": "/bot-invite.html"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api(?:/|$)).*)",
       "destination": "/index.html"
     }
   ]
