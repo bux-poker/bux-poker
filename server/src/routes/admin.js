@@ -2,6 +2,10 @@ import { Router } from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import { requireAdminRole } from "../middleware/admin.js";
 import { isDiscordIdAdminAllowlisted } from "../utils/adminAllowlist.js";
+import {
+  findAdminServerForDiscordUser,
+  getConfiguredAdminServers,
+} from "../utils/discordAdminCheck.js";
 import { TournamentEngine } from "../services/TournamentEngine.js";
 import { prisma } from "../config/database.js";
 import { postTournamentEmbed, getDiscordClient } from "../discord/bot.js";
@@ -31,53 +35,24 @@ router.get("/check", authenticateToken, async (req, res, next) => {
       return res.json({ isAdmin: true });
     }
 
-    // Get all configured Discord servers with admin roles
-    const servers = await prisma.discordServer.findMany({
-      where: {
-        enabled: true,
-        setupCompleted: true,
-        adminRoleId: { not: null },
-      },
-      select: {
-        serverId: true,
-        adminRoleId: true,
-        serverName: true,
-      },
-    });
+    const servers = await getConfiguredAdminServers();
 
     if (servers.length === 0) {
       // No servers configured yet - allow access for initial setup
       return res.json({ isAdmin: true });
     }
 
-    // Check if user has admin role in any server
     const discordClient = getDiscordClient();
     if (!discordClient) {
-      // Bot not available - deny for security
       return res.json({ isAdmin: false });
     }
 
-    // Check each server
-    for (const server of servers) {
-      try {
-        const guild = await discordClient.guilds.fetch(server.serverId).catch(() => null);
-        if (!guild) continue;
-
-        const member = await guild.members.fetch(user.discordId).catch(() => null);
-        if (!member) continue;
-
-        if (member.roles.cache.has(server.adminRoleId)) {
-          // User has admin role in this server
-          return res.json({ isAdmin: true });
-        }
-      } catch (error) {
-        // Continue checking other servers
-        continue;
-      }
-    }
-
-    // User doesn't have admin role in any server
-    res.json({ isAdmin: false });
+    const adminServer = await findAdminServerForDiscordUser(
+      discordClient,
+      user.discordId,
+      servers
+    );
+    return res.json({ isAdmin: !!adminServer });
   } catch (err) {
     console.error("[ADMIN CHECK] Error:", err);
     res.json({ isAdmin: false });

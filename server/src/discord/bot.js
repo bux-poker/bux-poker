@@ -53,6 +53,8 @@ export async function initializeDiscordBot() {
       intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
+        // Required so we can fetch guild members and read role assignments for /api/admin/check
+        GatewayIntentBits.GuildMembers,
       ],
     });
 

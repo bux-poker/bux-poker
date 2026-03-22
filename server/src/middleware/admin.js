@@ -1,6 +1,10 @@
 import { prisma } from "../config/database.js";
 import { getDiscordClient } from "../discord/bot.js";
 import { isDiscordIdAdminAllowlisted } from "../utils/adminAllowlist.js";
+import {
+  findAdminServerForDiscordUser,
+  getConfiguredAdminServers,
+} from "../utils/discordAdminCheck.js";
 
 /**
  * Middleware to check if user has admin role in any configured Discord server
@@ -26,62 +30,29 @@ export const requireAdminRole = async (req, res, next) => {
       return next();
     }
 
-    // Get all configured Discord servers with admin roles
-    const servers = await prisma.discordServer.findMany({
-      where: {
-        enabled: true,
-        setupCompleted: true,
-        adminRoleId: { not: null },
-      },
-      select: {
-        serverId: true,
-        adminRoleId: true,
-        serverName: true,
-      },
-    });
+    const servers = await getConfiguredAdminServers();
 
     if (servers.length === 0) {
-      // No servers configured yet - allow access (for initial setup)
       return next();
     }
 
-    // Check if user has admin role in any server
     const discordClient = getDiscordClient();
     if (!discordClient) {
       console.warn("[ADMIN MIDDLEWARE] Discord bot not initialized");
-      // If bot not available, deny access for security
       return res.status(403).json({ error: "Admin access requires Discord bot" });
     }
 
-    // Check each server
-    for (const server of servers) {
-      try {
-        const guild = await discordClient.guilds.fetch(server.serverId).catch(() => null);
-        if (!guild) {
-          console.warn(`[ADMIN MIDDLEWARE] Bot not in server ${server.serverName} (${server.serverId})`);
-          continue;
-        }
-
-        const member = await guild.members.fetch(user.discordId).catch(() => null);
-        if (!member) {
-          // User not in this server - continue checking other servers
-          continue;
-        }
-
-        if (member.roles.cache.has(server.adminRoleId)) {
-          // User has admin role in this server
-          req.adminServerId = server.serverId;
-          req.adminServerName = server.serverName;
-          return next();
-        }
-      } catch (error) {
-        // Error checking server - continue checking other servers
-        console.warn(`[ADMIN MIDDLEWARE] Error checking server ${server.serverName}:`, error.message || error);
-        continue;
-      }
+    const adminServer = await findAdminServerForDiscordUser(
+      discordClient,
+      user.discordId,
+      servers
+    );
+    if (adminServer) {
+      req.adminServerId = adminServer.serverId;
+      req.adminServerName = adminServer.serverName;
+      return next();
     }
 
-    // User doesn't have admin role in any server
     return res.status(403).json({ error: "Access denied. Admin role required." });
   } catch (error) {
     console.error("[ADMIN MIDDLEWARE] Error:", error);
