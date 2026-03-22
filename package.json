@@ -1,6 +1,10 @@
 {
   "name": "bux-poker-monorepo",
   "private": true,
+  "scripts": {
+    "vercel-install": "npm install && npm install --prefix ./client",
+    "vercel-build": "npm run build --prefix ./client"
+  },
   "dependencies": {
     "@paralleldrive/cuid2": "^2.2.2",
     "@prisma/client": "^6.19.2",
