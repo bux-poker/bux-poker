@@ -51,9 +51,32 @@ if (process.env.CORS_EXTRA_ORIGINS) {
   }
 }
 
+/**
+ * Vercel preview deploys use unique subdomains each time. Allow https://*.vercel.app when the
+ * hostname clearly belongs to this app (contains "bux-poker"). Set CORS_STRICT_VERCEL=true to disable.
+ */
+function isAllowedBuxPokerVercelPreview(origin) {
+  if (process.env.CORS_STRICT_VERCEL === "true") {
+    return false;
+  }
+  try {
+    const u = new URL(origin);
+    if (u.protocol !== "https:") return false;
+    const host = u.hostname.toLowerCase();
+    if (!host.endsWith(".vercel.app")) return false;
+    return host.includes("bux-poker");
+  } catch {
+    return false;
+  }
+}
+
 // Log allowed origins once at startup (not on every request)
 console.log('[CORS] Allowed origins:', allowedOrigins);
 console.log('[CORS] CLIENT_URL env var:', process.env.CLIENT_URL || 'NOT SET');
+console.log(
+  "[CORS] Vercel bux-poker preview auto-allow:",
+  process.env.CORS_STRICT_VERCEL === "true" ? "OFF (CORS_STRICT_VERCEL)" : "ON (*.vercel.app host contains bux-poker)"
+);
 
 const corsOptions = {
   origin: function (origin, callback) {
@@ -64,6 +87,8 @@ const corsOptions = {
     
     // Check if origin is in allowed list
     if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else if (isAllowedBuxPokerVercelPreview(origin)) {
       callback(null, true);
     } else {
       // Only log denied requests (these are errors worth logging)
