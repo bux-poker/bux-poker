@@ -23,12 +23,10 @@ export function useAdmin() {
           return;
         }
 
+        // Do not send Cache-Control/Pragma on cross-origin XHR — CORS preflight only allows
+        // headers listed in Access-Control-Allow-Headers (see server corsOptions).
         const response = await api.get('/api/admin/check', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Cache-Control': 'no-cache',
-            Pragma: 'no-cache',
-          },
+          headers: { Authorization: `Bearer ${token}` },
           params: { _: Date.now() },
         });
 
