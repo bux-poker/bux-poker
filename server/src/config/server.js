@@ -109,6 +109,17 @@ app.use("/uploads", express.static(uploadsRoot));
 // API routes
 app.use("/api", apiRouter);
 
+/**
+ * Discord Developer Portal often has redirect `https://<api-host>/callback` while the real route is
+ * `/api/auth/discord/callback`. Discord sends users to `/callback?code=...`; without this, the browser
+ * hangs waiting for a handler. Preserve query string (code, state, error).
+ */
+app.get("/callback", (req, res) => {
+  const qs = new URLSearchParams(req.query).toString();
+  const dest = qs ? `/api/auth/discord/callback?${qs}` : "/api/auth/discord/callback";
+  res.redirect(302, dest);
+});
+
 // Session configuration: use Redis when REDIS_URL is set (persistent sessions, multi-instance safe)
 const sessionConfig = {
   secret: process.env.SESSION_SECRET || "fallback-session-secret",

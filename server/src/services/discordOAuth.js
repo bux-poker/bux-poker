@@ -9,7 +9,7 @@ function sleep(ms) {
  * Discord (and Cloudflare) often return 429 with code 1015 from shared host IPs.
  * Retry with backoff and optional Retry-After header.
  */
-async function fetchDiscordWithRetry(url, init, { maxAttempts = 6, label = "request" } = {}) {
+async function fetchDiscordWithRetry(url, init, { maxAttempts = 4, label = "request" } = {}) {
   let lastStatus;
   let lastBodySnippet = "";
 
@@ -26,11 +26,12 @@ async function fetchDiscordWithRetry(url, init, { maxAttempts = 6, label = "requ
     if (retryAfterHeader) {
       const sec = Number(retryAfterHeader);
       if (!Number.isNaN(sec)) {
-        waitMs = Math.min(120_000, Math.max(1000, sec * 1000));
+        // Cap so the browser does not appear "stuck" for many minutes on Authorize
+        waitMs = Math.min(15_000, Math.max(1000, sec * 1000));
       }
     }
     if (!waitMs) {
-      waitMs = Math.min(60_000, 1500 * 2 ** (attempt - 1));
+      waitMs = Math.min(10_000, 2000 * 2 ** (attempt - 1));
     }
 
     try {
