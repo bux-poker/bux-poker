@@ -9,6 +9,7 @@ import {
   resumeScheduledStartTimersForSeatedTournaments,
   startTournamentAutomationPoll,
 } from "./services/TournamentEngine.js";
+import { startLeagueDiscordPoll } from "./services/league/leagueDiscordPoll.js";
 import { connectRedis } from "./config/redis.js";
 import { resumeBlindLevelTimersForRunningTournaments } from "./services/tournament/blindTimer.js";
 import { getIO } from "./modules/poker/tableState.js";
@@ -33,6 +34,7 @@ resumeScheduledStartTimersForSeatedTournaments(tournamentPollEngine).catch((err)
 );
 // At (startTime - 2m): close registration, seat players, arm countdown to startTime
 startTournamentAutomationPoll(tournamentPollEngine);
+startLeagueDiscordPoll();
 
 // Initialize Discord bot (non-blocking)
 initializeDiscordBot().catch((err) => {

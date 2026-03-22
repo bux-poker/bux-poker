@@ -94,6 +94,17 @@ export function CreateTournament() {
   const [blindRoundDuration, setBlindRoundDuration] = useState(getInitialBlindRoundDuration());
   const [blindLevels, setBlindLevels] = useState<BlindLevel[]>(getInitialBlindLevels());
 
+  const [createMode, setCreateMode] = useState<'tournament' | 'league'>('tournament');
+  const [numLeagueGames, setNumLeagueGames] = useState(3);
+  const [leagueName, setLeagueName] = useState('');
+  const [leagueDescription, setLeagueDescription] = useState('');
+  const [leagueTimezone, setLeagueTimezone] = useState(() =>
+    typeof Intl !== 'undefined'
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+      : 'UTC'
+  );
+  const [leagueGameTimes, setLeagueGameTimes] = useState<string[]>(['', '', '']);
+
   const startingChipsOptions = [1000, 2000, 5000, 10000, 20000, 50000, 100000];
 
   // Clear URL params after loading (for cleaner URLs)
@@ -142,6 +153,11 @@ export function CreateTournament() {
     );
   }
 
+  const blindLevelsWithDuration = blindLevels.map((level, index) => ({
+    ...level,
+    duration: index === blindLevels.length - 1 ? null : blindRoundDuration,
+  }));
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -153,12 +169,6 @@ export function CreateTournament() {
       if (!token) {
         throw new Error('Not authenticated');
       }
-
-      // Apply single duration to all rounds except the final one (which is infinite)
-      const blindLevelsWithDuration = blindLevels.map((level, index) => ({
-        ...level,
-        duration: index === blindLevels.length - 1 ? null : blindRoundDuration,
-      }));
 
       // datetime-local is wall time in the admin's browser; convert to ISO UTC so the server stores the correct instant for all players' local displays.
       const startInstant = new Date(formData.startTime);
@@ -201,6 +211,64 @@ export function CreateTournament() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLeagueSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setSuccess(false);
+
+    try {
+      const token = localStorage.getItem('sessionToken');
+      if (!token) throw new Error('Not authenticated');
+      if (!leagueName.trim()) throw new Error('League name is required');
+
+      const gameStartTimes: string[] = [];
+      for (let i = 0; i < leagueGameTimes.length; i++) {
+        const t = leagueGameTimes[i];
+        if (!t) throw new Error(`Set start time for game ${i + 1}`);
+        const d = new Date(t);
+        if (Number.isNaN(d.getTime())) throw new Error(`Invalid start time for game ${i + 1}`);
+        gameStartTimes.push(d.toISOString());
+      }
+
+      await api.post(
+        '/api/admin/leagues',
+        {
+          name: leagueName.trim(),
+          description: leagueDescription.trim() || undefined,
+          timezone: leagueTimezone.trim() || undefined,
+          gameStartTimes,
+          maxPlayers: formData.maxPlayers,
+          seatsPerTable: formData.seatsPerTable,
+          startingChips: formData.startingChips,
+          blindLevelsJson: JSON.stringify(blindLevelsWithDuration),
+          serverIds: selectedServerIds,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setSuccess(true);
+      setLeagueName('');
+      setLeagueDescription('');
+      setLeagueGameTimes(Array(numLeagueGames).fill(''));
+      setTimeout(() => setSuccess(false), 4000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.message || 'Failed to create league');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onNumLeagueGamesChange = (n: number) => {
+    const clamped = Math.max(1, Math.min(52, n));
+    setNumLeagueGames(clamped);
+    setLeagueGameTimes((prev) => {
+      const next = [...prev];
+      while (next.length < clamped) next.push('');
+      return next.slice(0, clamped);
+    });
   };
 
   const addBlindLevel = () => {
@@ -261,14 +329,42 @@ export function CreateTournament() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Create Tournament</h1>
+        <h1 className="text-2xl font-semibold">Admin — Create</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Set up a new Texas Hold'em tournament
+          Tournament or multi-game league (Discord posts open 1h before each leg)
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Basic Info */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setCreateMode('tournament')}
+          className={`rounded-lg px-4 py-2 text-sm font-medium ${
+            createMode === 'tournament'
+              ? 'bg-emerald-600 text-white'
+              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+          }`}
+        >
+          Single tournament
+        </button>
+        <button
+          type="button"
+          onClick={() => setCreateMode('league')}
+          className={`rounded-lg px-4 py-2 text-sm font-medium ${
+            createMode === 'league'
+              ? 'bg-emerald-600 text-white'
+              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+          }`}
+        >
+          League
+        </button>
+      </div>
+
+      <form
+        onSubmit={createMode === 'league' ? handleLeagueSubmit : handleSubmit}
+        className="space-y-6"
+      >
+        {createMode === 'tournament' ? (
         <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
           <h2 className="mb-4 text-lg font-semibold">Basic Information</h2>
           <div className="space-y-4">
@@ -318,6 +414,80 @@ export function CreateTournament() {
             </div>
           </div>
         </div>
+        ) : (
+        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
+          <h2 className="mb-4 text-lg font-semibold">League</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300">League name *</label>
+              <input
+                type="text"
+                value={leagueName}
+                onChange={(e) => setLeagueName(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+                placeholder="Spring League 2026"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300">Description</label>
+              <textarea
+                value={leagueDescription}
+                onChange={(e) => setLeagueDescription(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+                rows={3}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300">
+                Your timezone (IANA, for records)
+              </label>
+              <input
+                type="text"
+                value={leagueTimezone}
+                onChange={(e) => setLeagueTimezone(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+                placeholder="Europe/London"
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Game times below use your device local time; lobby and Discord show each player&apos;s local time.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300">Number of games</label>
+              <input
+                type="number"
+                min={1}
+                max={52}
+                value={numLeagueGames}
+                onChange={(e) => onNumLeagueGamesChange(parseInt(e.target.value, 10) || 1)}
+                className="mt-1 w-full max-w-xs rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+              />
+            </div>
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-slate-300">Start time per game (play begins)</p>
+              {leagueGameTimes.map((t, i) => (
+                <div key={i}>
+                  <label className="block text-xs text-slate-400">Game {i + 1}</label>
+                  <input
+                    type="datetime-local"
+                    value={t}
+                    onChange={(e) => {
+                      const next = [...leagueGameTimes];
+                      next[i] = e.target.value;
+                      setLeagueGameTimes(next);
+                    }}
+                    className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500">
+              Registration opens <strong className="text-slate-400">1 hour</strong> before each start; closes{' '}
+              <strong className="text-slate-400">2 minutes</strong> before. Legs with fewer than 5 players register are cancelled (Discord notice).
+            </p>
+          </div>
+        </div>
+        )}
 
         {/* Tournament Settings */}
         <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
@@ -541,10 +711,17 @@ export function CreateTournament() {
 
         {success && (
           <div className="rounded-lg border border-emerald-500/50 bg-emerald-500/10 p-4 text-emerald-200">
-            Tournament created successfully!
-            {selectedServerIds.length > 0 && (
+            {createMode === 'league'
+              ? 'League created successfully. Discord posts go out 1 hour before each game.'
+              : 'Tournament created successfully!'}
+            {createMode === 'tournament' && selectedServerIds.length > 0 && (
               <span className="block mt-2 text-sm">
                 Tournament embed posted to {selectedServerIds.length} Discord server(s).
+              </span>
+            )}
+            {createMode === 'league' && selectedServerIds.length > 0 && (
+              <span className="block mt-2 text-sm">
+                {selectedServerIds.length} server(s) configured — embeds will post automatically before each leg.
               </span>
             )}
           </div>
@@ -557,7 +734,11 @@ export function CreateTournament() {
             disabled={loading}
             className="rounded-lg bg-emerald-600 px-6 py-2 font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
           >
-            {loading ? 'Creating...' : 'Create Tournament'}
+            {loading
+              ? 'Creating...'
+              : createMode === 'league'
+                ? 'Create league'
+                : 'Create Tournament'}
           </button>
         </div>
       </form>

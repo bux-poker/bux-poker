@@ -1,4 +1,5 @@
 import { prisma } from "../../config/database.js";
+import { cancelLeagueLegInsufficient } from "../league/cancelLeagueLegInsufficient.js";
 
 const PRESTART_LEAD_MS = 2 * 60 * 1000;
 const POLL_MS = 15000;
@@ -36,13 +37,28 @@ export async function runTournamentAutomationTick(engine) {
     select: { id: true, startTime: true },
   });
 
+  const leagueLegRows = await prisma.leagueGame.findMany({
+    where: { tournamentId: { in: registering.map((x) => x.id) } },
+    select: { tournamentId: true },
+  });
+  const leagueTournamentIds = new Set(leagueLegRows.map((r) => r.tournamentId));
+
   for (const t of registering) {
     if (now < preStartThresholdMs(t.startTime)) continue;
 
     const confirmed = await prisma.tournamentRegistration.count({
       where: { tournamentId: t.id, status: "CONFIRMED" },
     });
-    if (confirmed === 0) {
+
+    if (leagueTournamentIds.has(t.id)) {
+      if (confirmed < 5) {
+        await cancelLeagueLegInsufficient(t.id);
+        console.log(
+          `[LEAGUE] Cancelled leg ${t.id}: only ${confirmed} registered (<5) at T-2m`
+        );
+        continue;
+      }
+    } else if (confirmed === 0) {
       console.log(
         `[TOURNAMENT] Auto pre-start skipped ${t.id}: no confirmed players at T-2m window`
       );

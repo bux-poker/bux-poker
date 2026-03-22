@@ -47,6 +47,8 @@ export async function completeTournamentIfOneLeft(tournamentId) {
       include: { games: { include: { players: { include: { user: true } } } } }
     });
     if (tournament) {
+      const { applyLeagueGamePoints } = await import("../league/applyLeagueGamePoints.js");
+      await applyLeagueGamePoints(tournamentId);
       const { postTournamentWinnersEmbed } = await import("../../discord/bot.js");
       await postTournamentWinnersEmbed(tournament);
     }

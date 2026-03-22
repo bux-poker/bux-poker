@@ -11,6 +11,8 @@ import { BotInvitePage } from "./pages/BotInvitePage";
 import { TableTestPage } from "./pages/TableTestPage";
 import { useAdmin } from "./hooks/useAdmin";
 import { AddToHomeScreen } from "./components/AddToHomeScreen";
+import { LeagueListPage } from "./pages/LeagueListPage";
+import { LeagueDetailPage } from "./pages/LeagueDetailPage";
 
 function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -347,15 +349,8 @@ function App() {
           {/* Unlisted: founders only — share /discord-bot (OG URL); /bot-invite redirects in production */}
           <Route path="/bot-invite" element={<Navigate to="/discord-bot" replace />} />
           <Route path="/discord-bot" element={<BotInvitePage />} />
-          <Route
-            path="/leagues"
-            element={
-              <div className="space-y-4">
-                <h1 className="text-2xl font-semibold">Leagues</h1>
-                <p className="text-slate-400">League list coming soon</p>
-              </div>
-            }
-          />
+          <Route path="/leagues" element={<LeagueListPage />} />
+          <Route path="/leagues/:id" element={<LeagueDetailPage />} />
         </Routes>
       </main>
     </div>

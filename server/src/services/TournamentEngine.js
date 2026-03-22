@@ -54,6 +54,11 @@ export class TournamentEngine {
       }
     });
 
+    await prisma.leagueGame.updateMany({
+      where: { tournamentId },
+      data: { registrationCountAtClose: registeredCount },
+    });
+
     // Calculate prize places: 1 place per 4 registered players
     const prizePlaces = Math.floor(registeredCount / 4);
     console.log(`[TOURNAMENT] Calculated prize places: ${prizePlaces} (from ${registeredCount} registered players)`);

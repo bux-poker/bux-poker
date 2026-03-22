@@ -46,6 +46,7 @@ export class TournamentService {
       let tournaments;
       try {
         tournaments = await prisma.tournament.findMany({
+          where: { leagueGames: { none: {} } },
           orderBy: { startTime: "asc" },
           include: {
             registrations: {
@@ -73,6 +74,7 @@ export class TournamentService {
         console.error("[TOURNAMENT SERVICE] Prisma query error:", queryError);
         // If the query fails (e.g., relation issues), try without posts
         tournaments = await prisma.tournament.findMany({
+          where: { leagueGames: { none: {} } },
           orderBy: { startTime: "asc" },
           include: {
             registrations: {
@@ -365,6 +367,15 @@ export class TournamentService {
   }
 
   async registerForTournament({ tournamentId, userId }) {
+    const tournament = await prisma.tournament.findUnique({ where: { id: tournamentId } });
+    if (!tournament) throw new Error("Tournament not found");
+    if (tournament.status !== "SCHEDULED" && tournament.status !== "REGISTERING") {
+      throw new Error("Tournament is not open for registration");
+    }
+    if (tournament.registrationOpensAt && new Date(tournament.registrationOpensAt) > new Date()) {
+      throw new Error("Registration is not open yet");
+    }
+
     // Check if already registered first to avoid race conditions
     const existing = await prisma.tournamentRegistration.findUnique({
       where: {

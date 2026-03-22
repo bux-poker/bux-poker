@@ -230,6 +230,14 @@ async function handleRegisterButton(interaction, tournamentId) {
       return;
     }
 
+    if (tournament.registrationOpensAt && new Date(tournament.registrationOpensAt) > new Date()) {
+      await interaction.reply({
+        content: '⏳ Registration opens 1 hour before the scheduled start.',
+        ephemeral: true,
+      });
+      return;
+    }
+
     if (tournament.status !== 'SCHEDULED' && tournament.status !== 'REGISTERING') {
       await interaction.reply({
         content: '❌ This tournament is no longer accepting registrations.',
@@ -447,7 +455,12 @@ async function buildTournamentEmbed(tournament, discordUserId = null) {
   const siteHost = siteHostnameFromClientUrl(clientUrl);
   const logoUrl = `${clientUrl}/images/bux-poker.png`;
   const tournamentUrl = `${clientUrl}/tournaments/${tournament.id}`;
-  
+
+  const leagueGame = await prisma.leagueGame.findFirst({
+    where: { tournamentId: tournament.id },
+    include: { league: true },
+  });
+
   // Get current registration count first
   let registrationCount = 0;
   try {
@@ -496,9 +509,16 @@ async function buildTournamentEmbed(tournament, discordUserId = null) {
   } else if (tournament.status === 'CANCELLED') {
     description = '❌ **Tournament Cancelled**';
   }
+  if (leagueGame) {
+    description = `**${tournament.name}**\n\n${description}`;
+  }
+
+  const embedTitle = leagueGame
+    ? `🏆 ${leagueGame.league.name} — Game ${leagueGame.gameNumber}/${leagueGame.league.totalGames}`
+    : `🃏 ${tournament.name}`;
 
   const embed = new EmbedBuilder()
-    .setTitle(`🃏 ${tournament.name}`)
+    .setTitle(embedTitle)
     .setDescription(description)
     .setThumbnail(logoUrl)
     .addFields(
@@ -522,8 +542,15 @@ async function buildTournamentEmbed(tournament, discordUserId = null) {
   }
 
   const isFull = registrationCount >= tournament.maxPlayers;
+  const beforeRegistrationOpen =
+    !!tournament.registrationOpensAt &&
+    Date.now() < new Date(tournament.registrationOpensAt).getTime();
   // Can register only if SCHEDULED or REGISTERING and not full and not SEATED
-  const canRegister = (tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING') && !isFull && tournament.status !== 'SEATED';
+  const canRegister =
+    (tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING') &&
+    !isFull &&
+    tournament.status !== 'SEATED' &&
+    !beforeRegistrationOpen;
 
   // Build buttons
   // Note: We don't disable based on isRegistered because Discord embeds are shared
@@ -728,6 +755,75 @@ export async function updateTournamentEmbeds(tournamentId) {
 }
 
 /**
+ * Announce league leg cancelled (fewer than 5 registered at T-2m).
+ */
+export async function postLeagueLegCancelledEmbed(tournamentId, registeredCount) {
+  if (!discordClient) {
+    console.warn("[DISCORD BOT] Cannot post league cancel embed - bot not initialized");
+    return [];
+  }
+
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    include: {
+      posts: { include: { server: true } },
+    },
+  });
+  if (!tournament?.posts?.length) return [];
+
+  const leagueGame = await prisma.leagueGame.findFirst({
+    where: { tournamentId },
+    include: { league: true },
+  });
+  const leagueName = leagueGame?.league?.name ?? "League";
+  const gameLabel = leagueGame
+    ? `Game ${leagueGame.gameNumber}/${leagueGame.league.totalGames}`
+    : "";
+
+  const clientUrl = process.env.CLIENT_URL || "https://bux-poker.pro";
+  const logoUrl = `${clientUrl}/images/bux-poker.png`;
+
+  const embed = new EmbedBuilder()
+    .setTitle(`❌ ${leagueName} — leg cancelled`)
+    .setDescription(
+      `${gameLabel ? `**${gameLabel}** — ` : ""}**${tournament.name}**\n\nNot enough players registered at close (**${registeredCount}** confirmed, minimum **5**). No league points awarded for this leg.`
+    )
+    .setThumbnail(logoUrl)
+    .setColor(0xed4245)
+    .setTimestamp();
+
+  const posts = [];
+  for (const post of tournament.posts) {
+    if (!post.server?.announcementChannelId) continue;
+    try {
+      const guild = await discordClient.guilds.fetch(post.server.serverId).catch(() => null);
+      if (!guild) continue;
+      const channel = await guild.channels.fetch(post.server.announcementChannelId);
+      if (!channel || !channel.isTextBased()) continue;
+      const permissions = channel.permissionsFor(guild.members.me);
+      if (!permissions.has("SendMessages") || !permissions.has("EmbedLinks")) continue;
+      const message = await channel.send({ embeds: [embed] });
+      posts.push({ serverId: post.server.serverId, messageId: message.id });
+    } catch (e) {
+      console.error(
+        `[DISCORD BOT] League cancel embed failed (${post.server?.serverName}):`,
+        e?.message || e
+      );
+    }
+  }
+  return posts;
+}
+
+function sortLeagueStandingsRows(rows) {
+  return [...rows].sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points;
+    const af = a.bestFinish ?? 999;
+    const bf = b.bestFinish ?? 999;
+    return af - bf;
+  });
+}
+
+/**
  * Post a winners embed to Discord with final standings.
  */
 export async function postTournamentWinnersEmbed(tournament) {
@@ -810,6 +906,36 @@ export async function postTournamentWinnersEmbed(tournament) {
       return `**${displayRank}.** ${name}`;
     });
 
+    const leagueGame = await prisma.leagueGame.findFirst({
+      where: { tournamentId: tournament.id },
+      include: { league: true },
+    });
+
+    let leagueTableText = '';
+    const leagueComponents = [];
+    if (leagueGame) {
+      const leaguePageUrl = `${clientUrl}/leagues/${leagueGame.leagueId}`;
+      const standingRows = await prisma.leagueStanding.findMany({
+        where: { leagueId: leagueGame.leagueId },
+        include: { user: { select: { username: true } } },
+      });
+      const sorted = sortLeagueStandingsRows(standingRows);
+      const top10 = sorted.slice(0, 10);
+      leagueTableText = top10
+        .map(
+          (row, i) =>
+            `**${i + 1}.** ${row.user?.username ?? "Unknown"} — **${row.points}** pts`
+        )
+        .join("\n");
+      if (!leagueTableText) leagueTableText = "_No standings yet._";
+
+      const viewTableBtn = new ButtonBuilder()
+        .setLabel("View league table")
+        .setURL(leaguePageUrl)
+        .setStyle(ButtonStyle.Link);
+      leagueComponents.push(new ActionRowBuilder().addComponents(viewTableBtn));
+    }
+
     const embed = new EmbedBuilder()
       .setTitle(`🏆 ${tournamentWithRelations.name} — Final Standings`)
       .setDescription(lines.join('\n'))
@@ -821,6 +947,13 @@ export async function postTournamentWinnersEmbed(tournament) {
       .setURL(tournamentUrl)
       .setColor(0xFFD700)
       .setTimestamp();
+
+    if (leagueGame && leagueTableText) {
+      embed.addFields({
+        name: `${leagueGame.league.name} — top 10`,
+        value: leagueTableText.slice(0, 1024),
+      });
+    }
 
     const posts = [];
 
@@ -848,6 +981,7 @@ export async function postTournamentWinnersEmbed(tournament) {
 
         const message = await channel.send({
           embeds: [embed],
+          components: leagueComponents.length > 0 ? leagueComponents : undefined,
         });
 
         console.log(`[DISCORD BOT] Posted winners embed for tournament ${tournament.id} to ${post.server.serverName}, message ID: ${message.id}`);

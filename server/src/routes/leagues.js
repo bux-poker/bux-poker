@@ -6,7 +6,11 @@ const service = new LeagueService();
 
 router.get("/", async (req, res, next) => {
   try {
-    const leagues = await service.listLeagues();
+    const { all } = req.query;
+    const leagues =
+      all === "1"
+        ? await service.listLeagues()
+        : await service.listActiveLeagues();
     res.json(leagues);
   } catch (err) {
     next(err);

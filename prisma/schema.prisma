@@ -22,6 +22,7 @@ model User {
   registrations  TournamentRegistration[]
   players        Player[]
   leagueStanding LeagueStanding[]
+  leaguesCreated League[]       @relation("LeagueCreatedBy")
   tournaments    Tournament[]
 }
 
@@ -48,6 +49,8 @@ model Tournament {
   awaitingHandsForBlindClock Boolean @default(false)
   /// Incremented on each transition; games acknowledge by setting blindBarrierAck to this value after starting a hand.
   blindScheduleBarrier Int @default(0)
+
+  registrationOpensAt DateTime?
 
   createdById String
   createdBy   User   @relation(fields: [createdById], references: [id])
@@ -176,12 +179,17 @@ model HandAction {
 }
 
 model League {
-  id         String       @id @default(cuid())
-  name       String
-  month      Int
-  year       Int
-  status     LeagueStatus @default(PLANNED)
-  totalGames Int
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  timezone    String?
+  month       Int
+  year        Int
+  status      LeagueStatus @default(PLANNED)
+  totalGames  Int
+
+  createdById String?
+  createdBy   User?   @relation("LeagueCreatedBy", fields: [createdById], references: [id])
 
   createdAt DateTime @default(now())
 
@@ -196,9 +204,11 @@ model LeagueGame {
   gameNumber   Int
 
   completedAt DateTime?
+  registrationCountAtClose Int?
+  pointsAwardedAt DateTime?
 
   league     League     @relation(fields: [leagueId], references: [id])
-  tournament Tournament @relation(fields: [tournamentId], references: [id])
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
 
   @@unique([leagueId, gameNumber])
 }
