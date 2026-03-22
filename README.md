@@ -165,6 +165,8 @@ Optional: `DISCORD_VERCEL_CALLBACK_URL` (fixed callback, must match Discord port
 
 You can remove **`DISCORD_CALLBACK_URL`** from Vercel (that’s for the Render server); it is **not** read by the serverless handlers.
 
+Do **not** set **`NODE_ENV=development`** on the Vercel frontend project — it can confuse tooling. Login uses **hostname** (not `import.meta.env.DEV`) so production never follows `VITE_API_BASE_URL` to Render for OAuth.
+
 **Discord Developer Portal → OAuth2 → Redirects** — include:
 
 - `https://www.bux-poker.pro/api/auth/discord/callback` (and/or `https://bux-poker.pro/...` if you use apex)

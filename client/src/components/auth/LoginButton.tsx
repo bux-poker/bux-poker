@@ -1,16 +1,28 @@
 import { useAuth } from '@shared/features/auth/AuthContext';
 
+/**
+ * Never use `import.meta.env.DEV` for this — a mis-set Vercel env or build can send prod users to
+ * VITE_API_BASE_URL (Render) and Discord will callback to Render → blocked IP.
+ */
+function discordOAuthStartUrl(): string {
+  if (typeof window === 'undefined') {
+    return '/api/auth/discord';
+  }
+  const host = window.location.hostname;
+  const isLocalDev =
+    host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+  if (isLocalDev) {
+    const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '') || '';
+    return `${base}/api/auth/discord`;
+  }
+  return `${window.location.origin}/api/auth/discord`;
+}
+
 export function LoginButton() {
   const { user, logout } = useAuth();
 
   const handleDiscordLogin = () => {
-    if (import.meta.env.DEV) {
-      const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '') || '';
-      window.location.href = `${base}/api/auth/discord`;
-      return;
-    }
-    // Production: always same tab host — cannot accidentally use Render (fixes blocked token IP).
-    window.location.href = '/api/auth/discord';
+    window.location.href = discordOAuthStartUrl();
   };
 
   if (user) {
