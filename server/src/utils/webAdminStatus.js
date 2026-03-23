@@ -1,3 +1,4 @@
+import { redisClient } from "../config/redis.js";
 import { isDiscordIdAdminAllowlisted, isUserIdAdminAllowlisted } from "./adminAllowlist.js";
 import {
   DISCORD_ADMIN_CHECK_RATE_LIMITED,
@@ -5,9 +6,39 @@ import {
   getConfiguredAdminServers,
 } from "./discordAdminCheck.js";
 
+const REDIS_ADMIN_PREFIX = "bux-poker:webadmin:";
+
+function redisAdminKey(discordId, serverCount) {
+  return `${REDIS_ADMIN_PREFIX}${discordId}:${serverCount}`;
+}
+
+async function redisAdminGet(discordId, serverCount) {
+  try {
+    if (!redisClient.isOpen) return null;
+    const raw = await redisClient.get(redisAdminKey(discordId, serverCount));
+    if (raw === "1") return true;
+    if (raw === "0") return false;
+    return null;
+  } catch (e) {
+    console.warn("[webAdmin] Redis decision read failed:", e?.message || e);
+    return null;
+  }
+}
+
+async function redisAdminSet(discordId, serverCount, isAdmin, ttlMs) {
+  try {
+    if (!redisClient.isOpen) return;
+    const sec = Math.max(1, Math.ceil(ttlMs / 1000));
+    await redisClient.set(redisAdminKey(discordId, serverCount), isAdmin ? "1" : "0", {
+      EX: sec,
+    });
+  } catch (e) {
+    console.warn("[webAdmin] Redis decision write failed:", e?.message || e);
+  }
+}
+
 /**
- * Cache Discord-based admin resolution so /api/auth/profile does not hammer Discord on every
- * page load (React Strict Mode = double mount, multiple tabs, etc.).
+ * In-memory cache (fast). Redis survives Render restarts — without it every deploy cold-calls Discord.
  * Positive: long TTL. Confirmed non-admin: ADMIN_NEGATIVE_CACHE_MS. Global Discord 429:
  * ADMIN_RATE_LIMIT_CACHE_MS (short) so a transient block is not treated like a verified denial.
  */
@@ -62,16 +93,35 @@ export async function computeWebIsAdmin({ userId, discordId }) {
   }
 
   const key = adminCacheKey(userId, id, servers.length);
+  const sc = servers.length;
 
   const hit = adminDecisionCache.get(key);
   if (hit && hit.expires > Date.now()) {
     return hit.value;
   }
 
+  const redisHit = await redisAdminGet(id, sc);
+  if (redisHit === true) {
+    adminDecisionCache.set(key, { value: true, expires: Date.now() + ADMIN_POSITIVE_CACHE_MS });
+    return true;
+  }
+  if (redisHit === false) {
+    adminDecisionCache.set(key, { value: false, expires: Date.now() + ADMIN_NEGATIVE_CACHE_MS });
+    return false;
+  }
+
   let pending = adminDecisionInflight.get(key);
   if (!pending) {
-    pending = findAdminServerForDiscordUser(id, servers).then((result) => {
+    pending = findAdminServerForDiscordUser(id, servers).then(async (result) => {
       if (result === DISCORD_ADMIN_CHECK_RATE_LIMITED) {
+        const staleOk = await redisAdminGet(id, sc);
+        if (staleOk === true) {
+          adminDecisionCache.set(key, {
+            value: true,
+            expires: Date.now() + ADMIN_RATE_LIMIT_CACHE_MS,
+          });
+          return true;
+        }
         adminDecisionCache.set(key, {
           value: false,
           expires: Date.now() + ADMIN_RATE_LIMIT_CACHE_MS,
@@ -81,6 +131,7 @@ export async function computeWebIsAdmin({ userId, discordId }) {
       const value = result != null;
       const ttl = value ? ADMIN_POSITIVE_CACHE_MS : ADMIN_NEGATIVE_CACHE_MS;
       adminDecisionCache.set(key, { value, expires: Date.now() + ttl });
+      await redisAdminSet(id, sc, value, ttl);
       return value;
     })
       .finally(() => {
