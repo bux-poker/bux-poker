@@ -1,3 +1,5 @@
+import crypto from "crypto";
+import { prisma } from "../config/database.js";
 import { redisClient } from "../config/redis.js";
 import { isDiscordIdAdminAllowlisted, isUserIdAdminAllowlisted } from "./adminAllowlist.js";
 import {
@@ -64,11 +66,53 @@ function adminCacheKey(userId, discordId, serverCount) {
   return `${userId || ""}|${discordId || ""}|${serverCount}`;
 }
 
+function adminProofHashFromServers(servers) {
+  const parts = servers
+    .map((s) => `${String(s.serverId).trim()}:${String(s.adminRoleId).trim()}`)
+    .sort();
+  return crypto.createHash("sha256").update(parts.join("|")).digest("hex");
+}
+
+/** Trust last verified admin when Discord REST is blocked (default 7d, min 1h, max 7d). */
+async function tryDbTrustedWebAdmin(userId, servers) {
+  if (!userId) return false;
+  const maxAge = Math.min(
+    604_800_000,
+    Math.max(3_600_000, Number(process.env.ADMIN_DB_TRUST_MS) || 604_800_000)
+  );
+  const proof = adminProofHashFromServers(servers);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { webAdminVerifiedAt: true, webAdminProofHash: true },
+  });
+  if (!user?.webAdminVerifiedAt || user.webAdminProofHash !== proof) {
+    return false;
+  }
+  return Date.now() - user.webAdminVerifiedAt.getTime() < maxAge;
+}
+
+async function persistUserWebAdminProof(userId, servers, isAdmin) {
+  if (!userId) return;
+  const proof = adminProofHashFromServers(servers);
+  if (isAdmin) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { webAdminVerifiedAt: new Date(), webAdminProofHash: proof },
+    });
+  } else {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { webAdminVerifiedAt: null, webAdminProofHash: null },
+    });
+  }
+}
+
 /**
  * Web + API admin gate (profile isAdmin, /admin/* middleware, /admin/check).
  *
  * Normal operation (no env admin lists):
- * - `DiscordServer.adminRoleId` from `/setup` in Postgres; verified via Discord REST (cached).
+ * - `DiscordServer.adminRoleId` from `/setup`; verified via gateway member cache, else Discord REST,
+ *   Redis, in-memory cache, and DB proof (`webAdminVerifiedAt` + hash) when REST rate-limits.
  *
  * Optional env overrides (emergency only): ADMIN_USER_IDS, ADMIN_DISCORD_IDS.
  *
@@ -110,12 +154,24 @@ export async function computeWebIsAdmin({ userId, discordId }) {
     return false;
   }
 
+  if (await tryDbTrustedWebAdmin(userId, servers)) {
+    adminDecisionCache.set(key, { value: true, expires: Date.now() + ADMIN_POSITIVE_CACHE_MS });
+    return true;
+  }
+
   let pending = adminDecisionInflight.get(key);
   if (!pending) {
     pending = findAdminServerForDiscordUser(id, servers).then(async (result) => {
       if (result === DISCORD_ADMIN_CHECK_RATE_LIMITED) {
         const staleOk = await redisAdminGet(id, sc);
         if (staleOk === true) {
+          adminDecisionCache.set(key, {
+            value: true,
+            expires: Date.now() + ADMIN_RATE_LIMIT_CACHE_MS,
+          });
+          return true;
+        }
+        if (await tryDbTrustedWebAdmin(userId, servers)) {
           adminDecisionCache.set(key, {
             value: true,
             expires: Date.now() + ADMIN_RATE_LIMIT_CACHE_MS,
@@ -132,6 +188,7 @@ export async function computeWebIsAdmin({ userId, discordId }) {
       const ttl = value ? ADMIN_POSITIVE_CACHE_MS : ADMIN_NEGATIVE_CACHE_MS;
       adminDecisionCache.set(key, { value, expires: Date.now() + ttl });
       await redisAdminSet(id, sc, value, ttl);
+      await persistUserWebAdminProof(userId, servers, value);
       return value;
     })
       .finally(() => {

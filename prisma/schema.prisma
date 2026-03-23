@@ -16,6 +16,11 @@ model User {
   email     String? @unique
   avatarUrl String?
 
+  /// Last time Discord (gateway or REST) confirmed this user matches configured admin roles; used when REST is rate-limited.
+  webAdminVerifiedAt DateTime?
+  /// sha256 of sorted serverId:adminRoleId pairs when verified; invalidates if /setup config changes.
+  webAdminProofHash  String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

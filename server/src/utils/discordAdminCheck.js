@@ -1,6 +1,46 @@
+import { PermissionFlagsBits } from "discord.js";
 import { prisma } from "../config/database.js";
+import { getDiscordClient } from "../discord/bot.js";
 
 const DISCORD_API = "https://discord.com/api/v10";
+
+/**
+ * Uses the logged-in bot's gateway cache only (no HTTP) — avoids Discord REST global 429 when the member is cached.
+ */
+function findAdminServerViaGatewayCache(discordUserId, servers, strictRoleOnly) {
+  const uid = normalizeSnowflake(discordUserId);
+  const client = getDiscordClient();
+  if (!client?.isReady()) return null;
+
+  for (const server of servers) {
+    const guildId = normalizeSnowflake(server.serverId);
+    const roleId = normalizeSnowflake(server.adminRoleId);
+    if (!guildId || !roleId) continue;
+
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) continue;
+
+    const member = guild.members.cache.get(uid);
+    if (!member) continue;
+
+    if (member.roles.cache.has(roleId)) {
+      return server;
+    }
+    if (normalizeSnowflake(guild.ownerId) === uid) {
+      return server;
+    }
+    if (!strictRoleOnly) {
+      try {
+        if (member.permissions.has(PermissionFlagsBits.Administrator)) {
+          return server;
+        }
+      } catch {
+        /* invalid permission state */
+      }
+    }
+  }
+  return null;
+}
 
 /**
  * Returned by findAdminServerForDiscordUser when Discord responds with a global 429.
@@ -223,6 +263,12 @@ export async function findAdminServerForDiscordUser(discordUserId, servers) {
   const uid = normalizeSnowflake(discordUserId);
   if (!uid) return null;
 
+  const strictRoleOnly = process.env.ADMIN_STRICT_ROLE_ONLY === "true";
+  const gatewayHit = findAdminServerViaGatewayCache(uid, servers, strictRoleOnly);
+  if (gatewayHit) {
+    return gatewayHit;
+  }
+
   if (Date.now() < discordAdminGlobalBackoffUntil) {
     return DISCORD_ADMIN_CHECK_RATE_LIMITED;
   }
@@ -234,7 +280,6 @@ export async function findAdminServerForDiscordUser(discordUserId, servers) {
 
   const guildRolesCache = new Map();
   const guildSummaryCache = new Map();
-  const strictRoleOnly = process.env.ADMIN_STRICT_ROLE_ONLY === "true";
   const staggerMs = Math.min(2500, Math.max(0, Number(process.env.ADMIN_DISCORD_STAGGER_MS) || 900));
 
   for (let i = 0; i < servers.length; i++) {
