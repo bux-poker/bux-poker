@@ -1,5 +1,6 @@
 import { prisma } from "../../config/database.js";
 import { auditChipConservation, reconcileChipConservationOnCompletion } from "./chipAudit.js";
+import { clearAllStateForGames } from "../../modules/poker/tableState.js";
 
 /**
  * If exactly one player has chips and is not eliminated, mark tournament COMPLETED.
@@ -38,6 +39,13 @@ export async function completeTournamentIfOneLeft(tournamentId) {
     where: { id: tournamentId },
     data: { status: "COMPLETED" }
   });
+
+  const gameRows = await prisma.game.findMany({
+    where: { tournamentId },
+    select: { id: true },
+  });
+  clearAllStateForGames(gameRows.map((r) => r.id));
+
   await reconcileChipConservationOnCompletion(tournamentId);
   await auditChipConservation(tournamentId);
 

@@ -7,6 +7,7 @@ import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/
 import { startTurnTimer } from "./turnTimers.js";
 import { cleanupHandAndStartNext } from "./handCleanup.js";
 import { normalizeUserId } from "./normalizeUserId.js";
+import { shouldBlockFoldWinPotAward } from "./foldWinGuard.js";
 
 /** Prisma/JSON sometimes yields string seats; strict === skipped real players (zombie no-turn hands). */
 function seatNum(s) {
@@ -141,6 +142,10 @@ export async function moveToNextPlayer(gameId, io) {
     const winner = playersInHand[0];
     const collectedPot = state.bettingRound?.getTotalPot() || 0;
     const totalPot = (state.pot || 0) + collectedPot;
+    if (await shouldBlockFoldWinPotAward(gameId)) {
+      tableState.delete(gameId);
+      return;
+    }
     winner.chips += totalPot;
     state.pot = 0;
     state.handEnded = true;

@@ -35,6 +35,15 @@ export async function startHandForGameBody(gameId, io) {
   if (game.status !== "ACTIVE") {
     return;
   }
+  if (
+    game.tournament?.status === "COMPLETED" ||
+    game.tournament?.status === "CANCELLED"
+  ) {
+    console.log(
+      `[POKER] Not starting hand — tournament ${game.tournamentId} is ${game.tournament?.status}`
+    );
+    return;
+  }
   if (game.players.length < 2) {
     throw new Error("Not enough players");
   }
