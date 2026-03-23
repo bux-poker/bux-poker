@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
+import { useAdmin } from '../hooks/useAdmin';
 
 interface LeagueRow {
   id: string;
@@ -10,19 +11,35 @@ interface LeagueRow {
   status: string;
   month?: number;
   year?: number;
+  canCancel?: boolean;
+  canDelete?: boolean;
 }
 
 export function LeagueListPage() {
+  const { isAdmin, loading: adminLoading } = useAdmin();
   const [leagues, setLeagues] = useState<LeagueRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const loadLeagues = useCallback(async () => {
+    const url = isAdmin ? '/api/admin/leagues' : '/api/leagues';
+    const token = localStorage.getItem('sessionToken');
+    const headers =
+      isAdmin && token ? { Authorization: `Bearer ${token}` } : undefined;
+    const { data } = await api.get<LeagueRow[]>(url, headers ? { headers } : undefined);
+    setLeagues(Array.isArray(data) ? data : []);
+  }, [isAdmin]);
 
   useEffect(() => {
+    if (adminLoading) return;
     let cancelled = false;
     (async () => {
       try {
-        const { data } = await api.get<LeagueRow[]>('/api/leagues');
-        if (!cancelled) setLeagues(Array.isArray(data) ? data : []);
+        setLoading(true);
+        await loadLeagues();
+        if (!cancelled) setError(null);
       } catch (e: unknown) {
         if (!cancelled) setError('Failed to load leagues');
       } finally {
@@ -32,9 +49,71 @@ export function LeagueListPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [adminLoading, isAdmin, loadLeagues]);
 
-  if (loading) {
+  const handleCancel = async (L: LeagueRow) => {
+    if (!L.canCancel) return;
+    if (
+      !confirm(
+        `Cancel league "${L.name}"? All scheduled legs will be marked cancelled. This cannot be undone (use Delete to remove entirely).`
+      )
+    ) {
+      return;
+    }
+    const token = localStorage.getItem('sessionToken');
+    if (!token) {
+      alert('Not authenticated');
+      return;
+    }
+    setCancellingId(L.id);
+    try {
+      await api.patch(`/api/admin/leagues/${L.id}/cancel`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await loadLeagues();
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
+          : null;
+      alert(msg || 'Failed to cancel league');
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
+  const handleDelete = async (L: LeagueRow) => {
+    if (!L.canDelete) return;
+    if (
+      !confirm(
+        `PERMANENTLY DELETE league "${L.name}" and all leg tournaments?\n\nThis cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    const token = localStorage.getItem('sessionToken');
+    if (!token) {
+      alert('Not authenticated');
+      return;
+    }
+    setDeletingId(L.id);
+    try {
+      await api.delete(`/api/admin/leagues/${L.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await loadLeagues();
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
+          : null;
+      alert(msg || 'Failed to delete league');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  if (adminLoading || loading) {
     return <p className="text-slate-400">Loading leagues…</p>;
   }
   if (error) {
@@ -66,6 +145,11 @@ export function LeagueListPage() {
                       Completed
                     </span>
                   )}
+                  {L.status === 'CANCELLED' && (
+                    <span className="rounded bg-amber-900/60 px-2 py-0.5 text-xs font-medium text-amber-100">
+                      Cancelled
+                    </span>
+                  )}
                 </div>
                 {L.description && (
                   <p className="mt-1 text-sm text-slate-400 line-clamp-2">{L.description}</p>
@@ -82,6 +166,45 @@ export function LeagueListPage() {
                     </span>
                   )}
                 </p>
+
+                {isAdmin && (L.canCancel || L.canDelete) && (
+                  <div
+                    className="admin-actions mt-4 flex flex-wrap gap-2 border-t border-slate-800 pt-4"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                    }}
+                  >
+                    {L.canCancel && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void handleCancel(L);
+                        }}
+                        disabled={cancellingId === L.id || deletingId === L.id}
+                        className="rounded bg-amber-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {cancellingId === L.id ? 'Cancelling…' : 'Cancel league'}
+                      </button>
+                    )}
+                    {L.canDelete && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void handleDelete(L);
+                        }}
+                        disabled={cancellingId === L.id || deletingId === L.id}
+                        className="rounded bg-red-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {deletingId === L.id ? 'Deleting…' : 'Delete'}
+                      </button>
+                    )}
+                  </div>
+                )}
               </Link>
             </li>
           ))}

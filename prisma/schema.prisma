@@ -317,4 +317,5 @@ enum LeagueStatus {
   PLANNED
   ACTIVE
   COMPLETED
+  CANCELLED
 }

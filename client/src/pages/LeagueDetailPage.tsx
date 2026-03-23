@@ -105,6 +105,11 @@ export function LeagueDetailPage() {
             League completed — final standings below
           </p>
         )}
+        {league.status === 'CANCELLED' && (
+          <p className="mt-2 inline-block rounded-md bg-amber-900/60 px-3 py-1 text-sm font-medium text-amber-100">
+            League cancelled
+          </p>
+        )}
         {league.description && <p className="mt-1 text-slate-400">{league.description}</p>}
         {league.timezone && (
           <p className="mt-1 text-xs text-slate-500">Creator timezone: {league.timezone}</p>

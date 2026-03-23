@@ -9,6 +9,34 @@ import { postTournamentEmbed, getDiscordClient } from "../discord/bot.js";
 const router = Router();
 const engine = new TournamentEngine();
 
+/** Deep delete tournament (same as DELETE /api/admin/tournaments/:id). */
+async function deleteTournamentCascade(tournamentId) {
+  const games = await prisma.game.findMany({
+    where: { tournamentId },
+    include: { players: true },
+  });
+  for (const game of games) {
+    await prisma.player.deleteMany({ where: { gameId: game.id } });
+  }
+  await prisma.game.deleteMany({ where: { tournamentId } });
+  await prisma.tournamentRegistration.deleteMany({ where: { tournamentId } });
+  await prisma.tournamentPost.deleteMany({ where: { tournamentId } });
+  await prisma.tournament.delete({ where: { id: tournamentId } });
+}
+
+/** Admin UI: cancel allowed before any leg is seated, running, or completed. */
+function computeLeagueAdminFlags(league) {
+  const statuses = league.games.map((g) => g.tournament.status);
+  const hasBlocking = statuses.some((s) => s === "SEATED" || s === "RUNNING");
+  const hasPlayStarted = statuses.some(
+    (s) => s === "SEATED" || s === "RUNNING" || s === "COMPLETED"
+  );
+  const canCancel =
+    (league.status === "PLANNED" || league.status === "ACTIVE") && !hasPlayStarted;
+  const canDelete = !hasBlocking;
+  return { canCancel, canDelete };
+}
+
 // Check if current user is an admin (accessible without admin role to check status)
 router.get("/check", authenticateToken, async (req, res, next) => {
   try {
@@ -221,6 +249,40 @@ router.post("/tournaments", async (req, res, next) => {
   }
 });
 
+// List leagues for admin UI (includes cancelled; flags for cancel/delete)
+router.get("/leagues", async (req, res, next) => {
+  try {
+    const leagues = await prisma.league.findMany({
+      orderBy: [{ year: "desc" }, { month: "desc" }, { createdAt: "desc" }],
+      include: {
+        games: {
+          orderBy: { gameNumber: "asc" },
+          include: {
+            tournament: { select: { id: true, status: true, startTime: true } },
+          },
+        },
+      },
+    });
+    const result = leagues.map((L) => {
+      const flags = computeLeagueAdminFlags(L);
+      return {
+        id: L.id,
+        name: L.name,
+        description: L.description,
+        totalGames: L.totalGames,
+        status: L.status,
+        month: L.month,
+        year: L.year,
+        canCancel: flags.canCancel,
+        canDelete: flags.canDelete,
+      };
+    });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Create a league: N tournaments (legs) with per-game start times; Discord posts at T-1h via poll
 router.post("/leagues", async (req, res, next) => {
   try {
@@ -380,6 +442,89 @@ router.post("/leagues", async (req, res, next) => {
   }
 });
 
+// Cancel league (only before any leg has started: no seated/running/completed legs)
+router.patch("/leagues/:id/cancel", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const league = await prisma.league.findUnique({
+      where: { id },
+      include: {
+        games: {
+          include: {
+            tournament: { select: { id: true, status: true } },
+          },
+        },
+      },
+    });
+    if (!league) {
+      return res.status(404).json({ error: "League not found" });
+    }
+    const { canCancel } = computeLeagueAdminFlags(league);
+    if (!canCancel) {
+      return res.status(400).json({
+        error:
+          "League cannot be cancelled once a leg has started or finished. Delete may still be available if no leg is running.",
+      });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const g of league.games) {
+        const st = g.tournament.status;
+        if (st === "COMPLETED" || st === "CANCELLED") continue;
+        await tx.tournament.update({
+          where: { id: g.tournament.id },
+          data: { status: "CANCELLED" },
+        });
+      }
+      await tx.league.update({
+        where: { id },
+        data: { status: "CANCELLED" },
+      });
+    });
+
+    res.json({ leagueId: id, status: "CANCELLED" });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Permanently delete league and all leg tournaments (blocked while any leg is SEATED or RUNNING)
+router.delete("/leagues/:id", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const league = await prisma.league.findUnique({
+      where: { id },
+      include: {
+        games: {
+          include: {
+            tournament: { select: { id: true, status: true } },
+          },
+        },
+      },
+    });
+    if (!league) {
+      return res.status(404).json({ error: "League not found" });
+    }
+    const { canDelete } = computeLeagueAdminFlags(league);
+    if (!canDelete) {
+      return res.status(400).json({
+        error:
+          "Cannot delete league while a leg tournament is seated or running. Cancel or finish that leg first.",
+      });
+    }
+
+    for (const g of league.games) {
+      await deleteTournamentCascade(g.tournament.id);
+    }
+    await prisma.leagueStanding.deleteMany({ where: { leagueId: id } });
+    await prisma.league.delete({ where: { id } });
+
+    res.json({ leagueId: id, deleted: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Close registration: seat players but don't start
 router.post("/tournaments/:id/close-registration", async (req, res, next) => {
   try {
@@ -467,41 +612,7 @@ router.delete("/tournaments/:id", async (req, res, next) => {
       return res.status(404).json({ error: "Tournament not found" });
     }
 
-    // Manually delete related records first (some don't have cascade delete set)
-    // Delete in order to respect foreign key constraints
-    
-    // 1. Delete players (and their related records)
-    const games = await prisma.game.findMany({
-      where: { tournamentId: id },
-      include: { players: true },
-    });
-    
-    for (const game of games) {
-      // Delete players in each game
-      await prisma.player.deleteMany({
-        where: { gameId: game.id },
-      });
-    }
-    
-    // 2. Delete games
-    await prisma.game.deleteMany({
-      where: { tournamentId: id },
-    });
-    
-    // 3. Delete registrations
-    await prisma.tournamentRegistration.deleteMany({
-      where: { tournamentId: id },
-    });
-    
-    // 4. Delete posts (has cascade, but being explicit)
-    await prisma.tournamentPost.deleteMany({
-      where: { tournamentId: id },
-    });
-    
-    // 5. Finally, delete the tournament itself
-    await prisma.tournament.delete({
-      where: { id },
-    });
+    await deleteTournamentCascade(id);
 
     res.json({ tournamentId: id, deleted: true });
   } catch (err) {

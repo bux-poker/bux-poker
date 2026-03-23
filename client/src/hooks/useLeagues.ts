@@ -6,7 +6,7 @@ export interface League {
   name: string;
   month: number;
   year: number;
-  status: 'PLANNED' | 'ACTIVE' | 'COMPLETED';
+  status: 'PLANNED' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
   totalGames: number;
   createdAt: Date | string;
 }

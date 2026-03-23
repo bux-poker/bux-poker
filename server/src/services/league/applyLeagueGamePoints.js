@@ -90,6 +90,12 @@ export async function applyLeagueGamePoints(tournamentId) {
 }
 
 async function maybeMarkLeagueCompleted(leagueId) {
+  const league = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: { status: true },
+  });
+  if (!league || league.status === "CANCELLED") return;
+
   const games = await prisma.leagueGame.findMany({
     where: { leagueId },
     include: { tournament: { select: { status: true } } },
