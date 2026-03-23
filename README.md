@@ -123,22 +123,15 @@ JWT_SECRET=replace_me
 # Discord Developer Portal → Bot → enable **Privileged Gateway Intents → Server Members Intent**.
 # Required for `GET /guilds/.../members/...` (used to verify your saved `adminRoleId` for the web admin panel).
 
-# Optional — set ADMIN_STRICT_ROLE_ONLY=true to require the exact role saved in /setup (no Discord “Administrator” fallback).
+# Optional — ADMIN_STRICT_ROLE_ONLY=true = only the exact role from /setup counts (no Discord “Administrator” / owner fallbacks).
 
-# --- Admin access (read this if the panel “suddenly” broke) ---
-# While **no** DiscordServer row has setupCompleted+adminRoleId, **every** Discord login is treated as admin (bootstrap).
-# After /setup, the API uses Discord REST to verify roles. If that fails, set ONE of:
+# --- Admin access (normal: no extra env vars) ---
+# 1) Run `/setup` in each Discord server → bot writes `DiscordServer.adminRoleId` (+ guild id) to Postgres.
+# 2) Website checks: your Discord user must have that role in that guild (or owner / Administrator perm fallbacks), via Discord API — **cached** so we don’t spam Discord on every page load.
+# 3) **Bootstrap:** if there are **no** configured `DiscordServer` rows yet, every Discord login is treated as admin until someone runs `/setup`.
 #
-# ADMIN_USER_IDS=clxxxxxxxx...   # Prisma "User".id (same as JWT userId) — most reliable, no Discord API
-# ADMIN_DISCORD_IDS=1234567890   # Discord snowflake (identify scope id)
-
-ADMIN_USER_IDS=
-ADMIN_DISCORD_IDS=
-
-# Optional — ms to cache Discord-based admin result (default 600000 = 10m). Lowers Discord API load on /profile.
-# ADMIN_DECISION_CACHE_MS=600000
-# Optional — ms delay between checking each configured guild (default 400). Reduces burst 429s.
-# ADMIN_DISCORD_STAGGER_MS=400
+# Emergency overrides only (leave unset in production): `ADMIN_USER_IDS`, `ADMIN_DISCORD_IDS`.
+# Tuning (optional): `ADMIN_DECISION_CACHE_MS` (default 10m for “yes admin”), `ADMIN_NEGATIVE_CACHE_MS` (default 90s for “not admin” after a check), `ADMIN_DISCORD_STAGGER_MS` (default 400).
 ```
 
 ### Database
