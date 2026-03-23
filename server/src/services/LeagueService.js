@@ -44,25 +44,40 @@ export class LeagueService {
     return { ...league, standings };
   }
 
-  /** Leagues that still have at least one leg not finished (for public list). */
+  /**
+   * Public league list: in-progress leagues (at least one leg not finished) plus
+   * recently finished leagues so players can open final standings.
+   */
   async listActiveLeagues() {
-    const leagues = await prisma.league.findMany({
-      where: { status: { in: ["PLANNED", "ACTIVE"] } },
-      orderBy: { createdAt: "desc" },
-      include: {
-        games: {
-          include: {
-            tournament: { select: { id: true, status: true, startTime: true } },
-          },
+    const includeGames = {
+      games: {
+        include: {
+          tournament: { select: { id: true, status: true, startTime: true } },
         },
       },
+    };
+
+    const inProgress = await prisma.league.findMany({
+      where: { status: { in: ["PLANNED", "ACTIVE"] } },
+      orderBy: { createdAt: "desc" },
+      include: includeGames,
     });
-    return leagues.filter((L) =>
+    const inProgressFiltered = inProgress.filter((L) =>
       L.games.some(
         (g) =>
-          g.tournament.status !== "COMPLETED" && g.tournament.status !== "CANCELLED"
+          g.tournament.status !== "COMPLETED" &&
+          g.tournament.status !== "CANCELLED"
       )
     );
+
+    const completed = await prisma.league.findMany({
+      where: { status: "COMPLETED" },
+      orderBy: [{ year: "desc" }, { month: "desc" }],
+      take: 100,
+      include: includeGames,
+    });
+
+    return [...inProgressFiltered, ...completed];
   }
 }
 

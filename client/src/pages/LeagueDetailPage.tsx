@@ -100,6 +100,11 @@ export function LeagueDetailPage() {
           ← Leagues
         </Link>
         <h1 className="mt-2 text-2xl font-semibold text-white">{league.name}</h1>
+        {league.status === 'COMPLETED' && (
+          <p className="mt-2 inline-block rounded-md bg-slate-700 px-3 py-1 text-sm font-medium text-slate-100">
+            League completed — final standings below
+          </p>
+        )}
         {league.description && <p className="mt-1 text-slate-400">{league.description}</p>}
         {league.timezone && (
           <p className="mt-1 text-xs text-slate-500">Creator timezone: {league.timezone}</p>

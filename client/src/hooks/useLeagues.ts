@@ -6,7 +6,7 @@ export interface League {
   name: string;
   month: number;
   year: number;
-  status: 'UPCOMING' | 'ACTIVE' | 'COMPLETED';
+  status: 'PLANNED' | 'ACTIVE' | 'COMPLETED';
   totalGames: number;
   createdAt: Date | string;
 }
@@ -61,8 +61,9 @@ export function useLeague(id: string | undefined) {
       try {
         setLoading(true);
         const response = await api.get(`/api/leagues/${id}`);
-        setLeague(response.data.league);
-        setStandings(response.data.standings || []);
+        const data = response.data as League & { standings?: LeagueStanding[] };
+        setLeague(data);
+        setStandings(data.standings ?? []);
         setError(null);
       } catch (err: any) {
         setError(err.response?.data?.error || 'Failed to fetch league');
