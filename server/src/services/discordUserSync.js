@@ -3,8 +3,9 @@ import { prisma } from "../config/database.js";
 /**
  * Create or update app user from Discord GET /users/@me JSON.
  * @param {object} discordUser - { id, username, global_name?, avatar }
+ * @param {object} [oauthTokens] - optional guilds.members.read token from same OAuth exchange
  */
-export async function upsertUserFromDiscordMe(discordUser) {
+export async function upsertUserFromDiscordMe(discordUser, oauthTokens) {
   const profileId = String(discordUser.id);
   const currentNickname = discordUser.global_name || discordUser.username;
   const currentAvatar = discordUser.avatar;
@@ -12,6 +13,14 @@ export async function upsertUserFromDiscordMe(discordUser) {
   const avatarUrl = currentAvatar
     ? `https://cdn.discordapp.com/avatars/${profileId}/${currentAvatar}.png`
     : "/default-pfp.jpg";
+
+  const tokenData =
+    oauthTokens?.discordOAuthAccessToken != null
+      ? {
+          discordOAuthAccessToken: oauthTokens.discordOAuthAccessToken,
+          discordOAuthAccessExpiresAt: oauthTokens.discordOAuthAccessExpiresAt ?? null,
+        }
+      : {};
 
   let user = await prisma.user.findUnique({
     where: { discordId: profileId },
@@ -23,6 +32,7 @@ export async function upsertUserFromDiscordMe(discordUser) {
         discordId: profileId,
         username: currentNickname,
         avatarUrl,
+        ...tokenData,
       },
     });
     console.log("[DISCORD AUTH] New user created:", user.id);
@@ -32,6 +42,7 @@ export async function upsertUserFromDiscordMe(discordUser) {
       data: {
         username: currentNickname,
         avatarUrl,
+        ...tokenData,
       },
     });
     console.log("[DISCORD AUTH] Existing user updated:", user.id);

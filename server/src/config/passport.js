@@ -15,7 +15,7 @@ if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET) {
     clientID: process.env.DISCORD_CLIENT_ID,
     clientSecret: process.env.DISCORD_CLIENT_SECRET,
     callbackURL,
-    scope: ['identify', 'email']
+    scope: ["identify", "email", "guilds", "guilds.members.read"],
   }, async (accessToken, refreshToken, profile, done) => {
     try {
       console.log("[DISCORD AUTH] Profile data:", {
@@ -23,6 +23,11 @@ if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET) {
         username: profile.username,
         avatar: profile.avatar,
       });
+
+      const oauthMeta = {
+        discordOAuthAccessToken: accessToken,
+        discordOAuthAccessExpiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+      };
 
       const discordUserResponse = await fetch("https://discord.com/api/users/@me", {
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -39,12 +44,12 @@ if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_SECRET) {
           global_name: undefined,
           avatar: profile.avatar,
         };
-        const user = await upsertUserFromDiscordMe(fallback);
+        const user = await upsertUserFromDiscordMe(fallback, oauthMeta);
         return done(null, user);
       }
 
       const discordUser = await discordUserResponse.json();
-      const user = await upsertUserFromDiscordMe(discordUser);
+      const user = await upsertUserFromDiscordMe(discordUser, oauthMeta);
       return done(null, user);
     } catch (error) {
       console.error("[DISCORD AUTH] Error in passport strategy:", error);

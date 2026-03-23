@@ -18,7 +18,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: "identify email",
+    scope: "identify email guilds guilds.members.read",
   });
 
   res.redirect(302, `https://discord.com/api/oauth2/authorize?${params.toString()}`);

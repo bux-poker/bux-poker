@@ -15,7 +15,7 @@ const Login: React.FC = () => {
       : "http://localhost:3000";
     
     const redirectUri = encodeURIComponent(`${serverUrl}/api/auth/discord/callback`);
-    const scope = encodeURIComponent('identify email');
+    const scope = encodeURIComponent('identify email guilds guilds.members.read');
     
     if (!clientId) {
       setError('Discord client ID not configured');

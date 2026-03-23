@@ -9,7 +9,10 @@ import { computeWebIsAdmin } from "../utils/webAdminStatus.js";
 const router = Router();
 
 // Discord OAuth routes
-router.get("/discord", passport.authenticate("discord", { scope: ["identify", "email"] }));
+router.get(
+  "/discord",
+  passport.authenticate("discord", { scope: ["identify", "email", "guilds", "guilds.members.read"] })
+);
 
 /**
  * Callback uses manual token exchange + retries on HTTP 429 (Discord / Cloudflare 1015 on shared hosts).

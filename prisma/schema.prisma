@@ -21,6 +21,10 @@ model User {
   /// sha256 of sorted serverId:adminRoleId pairs when verified; invalidates if /setup config changes.
   webAdminProofHash  String?
 
+  /// Latest Discord OAuth access token (scopes: guilds + guilds.members.read) — used for admin role checks without bot REST.
+  discordOAuthAccessToken     String? @db.Text
+  discordOAuthAccessExpiresAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

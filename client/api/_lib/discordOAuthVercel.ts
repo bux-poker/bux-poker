@@ -112,7 +112,10 @@ function isBlocking429Body(text: string): boolean {
   }
 }
 
-export async function exchangeDiscordCode(code: string, redirectUri: string): Promise<string> {
+export async function exchangeDiscordCode(
+  code: string,
+  redirectUri: string
+): Promise<{ access_token: string; expires_in?: number }> {
   const clientId = process.env.DISCORD_CLIENT_ID;
   const clientSecret = process.env.DISCORD_CLIENT_SECRET;
   if (!clientId || !clientSecret) throw new Error("Discord OAuth not configured");
@@ -143,7 +146,12 @@ export async function exchangeDiscordCode(code: string, redirectUri: string): Pr
     err.code = "DISCORD_CLOUDFLARE_BLOCK";
     throw err;
   }
-  let data: { access_token?: string; error?: string; error_description?: string } = {};
+  let data: {
+    access_token?: string;
+    expires_in?: number;
+    error?: string;
+    error_description?: string;
+  } = {};
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
@@ -154,7 +162,10 @@ export async function exchangeDiscordCode(code: string, redirectUri: string): Pr
     throw new Error(`Discord token exchange failed: ${res.status} ${msg}`);
   }
   if (!data.access_token) throw new Error("Discord token response missing access_token");
-  return data.access_token;
+  return {
+    access_token: data.access_token,
+    expires_in: typeof data.expires_in === "number" ? data.expires_in : undefined,
+  };
 }
 
 export async function fetchDiscordMe(accessToken: string): Promise<{
@@ -189,19 +200,38 @@ export function signSessionJwt(userId: string): string {
   return jwt.sign({ userId }, secret, { expiresIn: "7d" });
 }
 
+async function saveDiscordOAuthTokenForUser(
+  discordId: string,
+  accessToken: string,
+  expiresAt: Date
+): Promise<void> {
+  const p = getPool();
+  await p.query(
+    `UPDATE "User" SET "discordOAuthAccessToken" = $1, "discordOAuthAccessExpiresAt" = $2, "updatedAt" = NOW() WHERE "discordId" = $3`,
+    [accessToken, expiresAt, discordId]
+  );
+}
+
 export async function completeDiscordOAuthFromCode(
   code: string,
   redirectUri: string
 ): Promise<{ id: string }> {
-  const accessToken = await exchangeDiscordCode(code, redirectUri);
+  const tokenRes = await exchangeDiscordCode(code, redirectUri);
+  const accessToken = tokenRes.access_token;
+  const expiresAt =
+    typeof tokenRes.expires_in === "number" && Number.isFinite(tokenRes.expires_in)
+      ? new Date(Date.now() + tokenRes.expires_in * 1000)
+      : new Date(Date.now() + 7 * 24 * 3600 * 1000);
   const discordUser = await fetchDiscordMe(accessToken);
   const nickname = discordUser.global_name || discordUser.username;
   const avatarUrl = discordUser.avatar
     ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
     : "/default-pfp.jpg";
-  return upsertDiscordUser({
+  const user = await upsertDiscordUser({
     discordId: String(discordUser.id),
     username: nickname,
     avatarUrl,
   });
+  await saveDiscordOAuthTokenForUser(String(discordUser.id), accessToken, expiresAt);
+  return user;
 }

@@ -1,6 +1,7 @@
 import { PermissionFlagsBits } from "discord.js";
 import { prisma } from "../config/database.js";
 import { getDiscordClient } from "../discord/bot.js";
+import { findAdminServerViaStoredUserOAuth } from "./discordAdminUserOAuth.js";
 
 const DISCORD_API = "https://discord.com/api/v10";
 
@@ -264,6 +265,12 @@ export async function findAdminServerForDiscordUser(discordUserId, servers) {
   if (!uid) return null;
 
   const strictRoleOnly = process.env.ADMIN_STRICT_ROLE_ONLY === "true";
+
+  const oauthHit = await findAdminServerViaStoredUserOAuth(uid, servers);
+  if (oauthHit) {
+    return oauthHit;
+  }
+
   const gatewayHit = findAdminServerViaGatewayCache(uid, servers, strictRoleOnly);
   if (gatewayHit) {
     return gatewayHit;

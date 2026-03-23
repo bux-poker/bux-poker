@@ -201,7 +201,10 @@ export async function exchangeDiscordOAuthCode(code) {
     throw new Error("Discord token response missing access_token");
   }
 
-  return data.access_token;
+  return {
+    accessToken: data.access_token,
+    expiresInSec: typeof data.expires_in === "number" ? data.expires_in : undefined,
+  };
 }
 
 /**
@@ -248,7 +251,14 @@ export async function fetchDiscordMe(accessToken) {
  * Full callback flow: code → token → @me → DB user.
  */
 export async function completeDiscordOAuthFromCode(code) {
-  const accessToken = await exchangeDiscordOAuthCode(code);
+  const { accessToken, expiresInSec } = await exchangeDiscordOAuthCode(code);
   const discordUser = await fetchDiscordMe(accessToken);
-  return upsertUserFromDiscordMe(discordUser);
+  const expiresAt =
+    expiresInSec != null && Number.isFinite(expiresInSec)
+      ? new Date(Date.now() + expiresInSec * 1000)
+      : new Date(Date.now() + 7 * 24 * 3600 * 1000);
+  return upsertUserFromDiscordMe(discordUser, {
+    discordOAuthAccessToken: accessToken,
+    discordOAuthAccessExpiresAt: expiresAt,
+  });
 }
