@@ -10,6 +10,14 @@ const UA =
   process.env.DISCORD_API_USER_AGENT ||
   "BUX-Poker-UserOAuth-Admin (+https://www.bux-poker.pro)";
 
+function getAdminRoleIdAllowlist() {
+  const raw = process.env.ADMIN_ROLE_IDS || "";
+  return raw
+    .split(",")
+    .map((s) => normSnowflake(s))
+    .filter(Boolean);
+}
+
 function trimId(id) {
   if (id == null) return "";
   return String(id).trim();
@@ -63,6 +71,7 @@ async function discordBearerGet(path, accessToken, label) {
 export async function findAdminServerViaStoredUserOAuth(discordUserId, servers) {
   const uid = normSnowflake(discordUserId);
   if (!uid || !servers?.length) return null;
+  const allowlistedRoleIds = new Set(getAdminRoleIdAllowlist());
 
   const row = await prisma.user.findUnique({
     where: { discordId: uid },
@@ -111,6 +120,10 @@ export async function findAdminServerViaStoredUserOAuth(discordUserId, servers) 
 
     const roleSet = new Set(member.roles.map((r) => normSnowflake(r)));
     if (roleSet.has(roleId)) {
+      return server;
+    }
+    // Optional env fallback when setup role is stale/misconfigured for a guild.
+    if (allowlistedRoleIds.size > 0 && [...allowlistedRoleIds].some((rid) => roleSet.has(rid))) {
       return server;
     }
   }
