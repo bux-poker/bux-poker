@@ -5,45 +5,25 @@ import { useAuth } from '@shared/features/auth/AuthContext';
 export function AuthCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { setUser } = useAuth();
+  const { fetchProfile } = useAuth();
 
   useEffect(() => {
     const token = searchParams.get('token');
-    if (token) {
-      // Store token
-      localStorage.setItem('sessionToken', token);
-
-      // Fetch user profile
-      // Use environment variable or fallback to Render backend
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://bux-poker-server.onrender.com';
-      fetch(`${apiBaseUrl}/api/auth/profile`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.user) {
-            const userData = {
-              ...data.user,
-              isAuthenticated: true,
-            };
-            setUser(userData);
-            localStorage.setItem('userData', JSON.stringify(userData));
-            // isAdmin is included on profile (same as /api/admin/check)
-            navigate(userData.isAdmin ? '/admin' : '/tournaments');
-          } else {
-            navigate('/login?error=profile_fetch_failed');
-          }
-        })
-        .catch((error) => {
-          console.error('Profile fetch error:', error);
-          navigate('/login?error=profile_fetch_failed');
-        });
-    } else {
-      navigate('/login?error=no_token');
+    if (!token) {
+      navigate('/login?error=no_token', { replace: true });
+      return;
     }
-  }, [searchParams, navigate, setUser]);
+
+    localStorage.setItem('sessionToken', token);
+
+    void fetchProfile().then((user) => {
+      if (user) {
+        navigate(user.isAdmin ? '/admin' : '/tournaments', { replace: true });
+      } else {
+        navigate('/login?error=profile_fetch_failed', { replace: true });
+      }
+    });
+  }, [searchParams, navigate, fetchProfile]);
 
   return (
     <div className="flex min-h-screen items-center justify-center">

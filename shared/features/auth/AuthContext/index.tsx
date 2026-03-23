@@ -28,6 +28,8 @@ interface AuthContextType {
   loading: boolean;
   error: string | null;
   setUser: (user: User | null) => void;
+  /** Single-flight per token — avoids duplicate /api/auth/profile (and server-side Discord admin checks). */
+  fetchProfile: () => Promise<User | null>;
   login: (username: string, password: string) => Promise<{ activeGame?: { id: string; status: string } }>;
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => void;
@@ -65,6 +67,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Initialize auth state
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname.replace(/\/+$/, '') || '/';
+      if (path === '/auth/callback') {
+        const oauthToken = new URLSearchParams(window.location.search).get('token');
+        if (!oauthToken) {
+          setLoading(false);
+        }
+        // AuthCallback runs fetchProfile once; running it here too doubles /api/auth/profile + admin checks.
+        return;
+      }
+    }
+
     const token = localStorage.getItem('sessionToken');
     if (token) {
       // First try to load user data from localStorage for immediate display
@@ -81,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (error) {
         console.warn('Failed to load user data from localStorage:', error);
       }
-      
+
       // Then fetch fresh data from API
       fetchProfile();
     } else {
@@ -96,6 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         error,
         setUser,
+        fetchProfile,
         login,
         register,
         logout,

@@ -24,52 +24,67 @@ interface UseAuthMethodsProps {
   setLoading: (loading: boolean) => void;
 }
 
+/** Same JWT → one in-flight GET /api/auth/profile (StrictMode double effect + callback race). */
+const profileFetchInflight = new Map<string, Promise<User | null>>();
+
 export const useAuthMethods = ({ setUser, setError, setLoading }: UseAuthMethodsProps) => {
-  const fetchProfile = useCallback(async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('sessionToken');
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
-      const response = await axios.get('/api/auth/profile', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
-        // Profile runs Discord admin resolution (cached server-side); cold cache can take > default timeout.
-        timeout: 120_000,
-      });
-
-      if (response.data) {
-        // Handle both nested and flat user data structures
-        const userData = response.data.user ? response.data.user : response.data;
-        const finalUserData = {
-          ...userData,
-          isAuthenticated: true
-        };
-        setUser(finalUserData);
-        
-        // Store user data in localStorage
-        try {
-          localStorage.setItem('userData', JSON.stringify(finalUserData));
-        } catch (storageError) {
-          console.warn('Failed to store user data in localStorage:', storageError);
-        }
-      }
-    } catch (error: any) {
-      console.error('Profile fetch error:', error);
-      const status = error.response?.status;
-      // 401/403: bad or expired token; clear so user can re-login (avoids infinite 500 loops from bad payloads)
-      if (status === 401 || status === 403) {
-        localStorage.removeItem('sessionToken');
-        localStorage.removeItem('userData');
-        setUser(null);
-      }
-    } finally {
+  const fetchProfile = useCallback(async (): Promise<User | null> => {
+    const token = localStorage.getItem('sessionToken');
+    if (!token) {
       setLoading(false);
+      return null;
     }
+
+    const existing = profileFetchInflight.get(token);
+    if (existing) {
+      return existing;
+    }
+
+    const run = (async (): Promise<User | null> => {
+      try {
+        setLoading(true);
+
+        const response = await axios.get('/api/auth/profile', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          // Profile runs Discord admin resolution (cached server-side); cold cache can take > default timeout.
+          timeout: 120_000,
+        });
+
+        if (response.data) {
+          const userData = response.data.user ? response.data.user : response.data;
+          const finalUserData: User = {
+            ...userData,
+            isAuthenticated: true,
+          };
+          setUser(finalUserData);
+
+          try {
+            localStorage.setItem('userData', JSON.stringify(finalUserData));
+          } catch (storageError) {
+            console.warn('Failed to store user data in localStorage:', storageError);
+          }
+          return finalUserData;
+        }
+        return null;
+      } catch (error: any) {
+        console.error('Profile fetch error:', error);
+        const status = error.response?.status;
+        if (status === 401 || status === 403) {
+          localStorage.removeItem('sessionToken');
+          localStorage.removeItem('userData');
+          setUser(null);
+        }
+        return null;
+      } finally {
+        profileFetchInflight.delete(token);
+        setLoading(false);
+      }
+    })();
+
+    profileFetchInflight.set(token, run);
+    return run;
   }, [setUser, setLoading]);
 
   const login = useCallback(async (username: string, password: string) => {
