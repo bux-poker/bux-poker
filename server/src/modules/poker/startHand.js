@@ -12,7 +12,7 @@ import { emitGameState, emitGameStateWithGame } from "./emitGameState.js";
 import { startTurnTimer } from "./turnTimers.js";
 import { advanceToNextStreet } from "./advanceStreet.js";
 import { emitIfTournamentCompleted } from "./tableTournamentHooks.js";
-import { isTournamentConsolidationWaiting } from "../../services/tournament/consolidateTables.js";
+import { isGameConsolidationWaiting } from "../../services/tournament/consolidateTables.js";
 import { awardStalePotAndZeroGame } from "../../services/tournament/stalePotRecovery.js";
 
 const gameStartInclude = {
@@ -52,7 +52,7 @@ export async function startHandForGameBody(gameId, io) {
     return;
   }
 
-  if (game.tournament?.id && isTournamentConsolidationWaiting(game.tournament.id)) {
+  if (isGameConsolidationWaiting(gameId)) {
     if (io) {
       const st = tableState.get(gameId);
       await emitGameState(gameId, io, st ?? null);

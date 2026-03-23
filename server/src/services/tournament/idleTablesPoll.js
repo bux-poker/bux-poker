@@ -1,7 +1,7 @@
 import { prisma } from "../../config/database.js";
 import { awardStalePotAndZeroGame } from "./stalePotRecovery.js";
 import { tryAdvanceBlindsIfDue } from "./blindLevels.js";
-import { isTournamentConsolidationWaiting } from "./consolidateTables.js";
+import { isGameConsolidationWaiting } from "./consolidateTables.js";
 
 const STUCK_THRESHOLD_MS = 45000;
 const IDLE_POLL_INTERVAL_MS = 15000;
@@ -97,9 +97,9 @@ export function startIdleTablesPoll(engine) {
           // but a race/desync made hasActiveHand false briefly, or ordering ran recovery before
           // checking hand — nuking chips and confusing turn order for real players.
           if ((game.pot ?? 0) > 0 && !hasActiveHand(game.id)) {
-            if (isTournamentConsolidationWaiting(t.id)) {
+            if (isGameConsolidationWaiting(game.id)) {
               console.log(
-                `[TOURNAMENT] Skipping stale-pot recovery for game ${game.id} — consolidation in progress for tournament ${t.id}`
+                `[TOURNAMENT] Skipping stale-pot recovery for game ${game.id} — consolidation wait active for this table`
               );
               continue;
             }

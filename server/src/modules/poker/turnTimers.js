@@ -164,9 +164,7 @@ export function startTurnTimer(gameId, userId, io) {
       duration: timeoutMs,
     });
   } else {
-    // Human timing policy:
-    // - 20s total action window on the backend
-    // - show UI countdown only for the final 10s
+    // Human timing policy: 20s total action window; client shows full countdown aligned with expiresAt.
     const totalActionMs = 20000;
     const autoActionExpiresAt = Date.now() + totalActionMs;
     // Wake slightly before deadline; autoFoldPlayer aligns to expiresAt so a late event loop tick

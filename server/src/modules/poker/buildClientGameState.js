@@ -1,11 +1,11 @@
 // Build the client-facing representation of a game + in-memory hand state.
 // Extracted from pokerHandler so it can be reused without pulling in the entire socket handler.
 
-import { isTournamentConsolidationWaiting } from "../../services/tournament/consolidateTables.js";
+import { isGameConsolidationWaiting } from "../../services/tournament/consolidateTables.js";
 import { normalizeUserId } from "./normalizeUserId.js";
 
 const CONSOLIDATION_WAIT_MESSAGE =
-  "Waiting for other tables to finish their hands before reseating...";
+  "Waiting for this table's hand to finish before reseating...";
 
 /** In-memory state can rarely have a plain-object bettingRound (no class methods) — never throw on join. */
 function safeBettingRoundTotalPot(round) {
@@ -73,7 +73,7 @@ export function buildClientGameState(game, state, viewerUserId) {
     : JSON.stringify(state?.communityCards ?? []);
 
   const consolidationWaitingMessage =
-    game.tournamentId && isTournamentConsolidationWaiting(game.tournamentId)
+    game.tournamentId && isGameConsolidationWaiting(game.id)
       ? CONSOLIDATION_WAIT_MESSAGE
       : null;
 

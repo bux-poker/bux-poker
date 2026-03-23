@@ -333,13 +333,8 @@ export function PokerTable({
           const rawTimerRemaining = hasActiveTimer
             ? Math.max(0, Math.ceil((turnTimer.expiresAt - currentTime) / 1000))
             : null;
-          // Human turns use a 20s backend timer, but UI should show only final 10s.
-          const timerRemaining =
-            rawTimerRemaining == null
-              ? null
-              : (turnTimer?.duration ?? 0) >= 20000 && rawTimerRemaining > 10
-              ? null
-              : rawTimerRemaining;
+          // Match server: humans get a full 20s action window (backend turnTimers.js); show entire countdown so 0s aligns with auto CHECK/FOLD.
+          const timerRemaining = rawTimerRemaining;
           
           // Determine card positioning relative to avatar
           // Seats 1, 2, 3, 9, 10: cards to the RIGHT of avatar (positive offset)
