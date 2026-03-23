@@ -2,6 +2,12 @@ import { prisma } from "../config/database.js";
 
 const DISCORD_API = "https://discord.com/api/v10";
 
+/**
+ * Returned by findAdminServerForDiscordUser when Discord responds with a global 429.
+ * Callers must not treat this as "user is not admin" for long-cache purposes.
+ */
+export const DISCORD_ADMIN_CHECK_RATE_LIMITED = Symbol("DISCORD_ADMIN_CHECK_RATE_LIMITED");
+
 /** Discord snowflakes must be compared as trimmed strings (DB / copy-paste drift). */
 export function normalizeSnowflake(id) {
   if (id == null) return "";
@@ -145,6 +151,7 @@ function memberHasDiscordAdministratorPermission(guildId, memberRoleIds, guildRo
 /**
  * @returns {{ ok: true, inGuild: boolean, roles: string[] } | { ok: false }}
  * - inGuild false = 404 (not in guild)
+ * - globalRateLimited = Discord global 429 (caller should stop further guild calls)
  * - ok false = transport/5xx after retries (skip guild)
  */
 async function fetchGuildMemberRest(guildId, userId) {
@@ -164,11 +171,16 @@ async function fetchGuildMemberRest(guildId, userId) {
 
   if (!res.ok) {
     const text = await res.text();
+    const globalRateLimited =
+      res.status === 429 &&
+      /global rate limit|blocked from accessing our api temporarily|exceeding global rate limit/i.test(
+        text
+      );
     console.warn(
       `[discordAdminCheck] REST guild member ${res.status} guild=${guildId} user=${userId}`,
       text.slice(0, 200)
     );
-    return { ok: false };
+    return { ok: false, globalRateLimited };
   }
 
   const data = await res.json();
@@ -187,7 +199,7 @@ async function fetchGuildMemberRest(guildId, userId) {
  *
  * @param {string} discordUserId
  * @param {Array<{ serverId: string, adminRoleId: string, serverName: string }>} servers
- * @returns {Promise<{ serverId: string, adminRoleId: string, serverName: string } | null>}
+ * @returns {Promise<{ serverId: string, adminRoleId: string, serverName: string } | null | typeof DISCORD_ADMIN_CHECK_RATE_LIMITED>}
  */
 export async function findAdminServerForDiscordUser(discordUserId, servers) {
   const uid = normalizeSnowflake(discordUserId);
@@ -201,7 +213,7 @@ export async function findAdminServerForDiscordUser(discordUserId, servers) {
   const guildRolesCache = new Map();
   const guildSummaryCache = new Map();
   const strictRoleOnly = process.env.ADMIN_STRICT_ROLE_ONLY === "true";
-  const staggerMs = Math.min(2000, Math.max(0, Number(process.env.ADMIN_DISCORD_STAGGER_MS) || 400));
+  const staggerMs = Math.min(2500, Math.max(0, Number(process.env.ADMIN_DISCORD_STAGGER_MS) || 900));
 
   for (let i = 0; i < servers.length; i++) {
     const server = servers[i];
@@ -214,6 +226,9 @@ export async function findAdminServerForDiscordUser(discordUserId, servers) {
     if (!guildId || !roleId) continue;
 
     const mem = await fetchGuildMemberRest(guildId, uid);
+    if (mem.globalRateLimited) {
+      return DISCORD_ADMIN_CHECK_RATE_LIMITED;
+    }
     if (!mem.ok) {
       continue;
     }

@@ -1,5 +1,6 @@
 import { isDiscordIdAdminAllowlisted, isUserIdAdminAllowlisted } from "./adminAllowlist.js";
 import {
+  DISCORD_ADMIN_CHECK_RATE_LIMITED,
   findAdminServerForDiscordUser,
   getConfiguredAdminServers,
 } from "./discordAdminCheck.js";
@@ -7,8 +8,8 @@ import {
 /**
  * Cache Discord-based admin resolution so /api/auth/profile does not hammer Discord on every
  * page load (React Strict Mode = double mount, multiple tabs, etc.).
- * Positive result: long TTL. Negative: short TTL so a Discord 429 / transient failure is not
- * remembered for 10 minutes.
+ * Positive: long TTL. Confirmed non-admin: ADMIN_NEGATIVE_CACHE_MS. Global Discord 429:
+ * ADMIN_RATE_LIMIT_CACHE_MS (short) so a transient block is not treated like a verified denial.
  */
 const ADMIN_POSITIVE_CACHE_MS = Math.min(
   86_400_000,
@@ -17,6 +18,11 @@ const ADMIN_POSITIVE_CACHE_MS = Math.min(
 const ADMIN_NEGATIVE_CACHE_MS = Math.min(
   ADMIN_POSITIVE_CACHE_MS,
   Math.max(15_000, Number(process.env.ADMIN_NEGATIVE_CACHE_MS) || 90_000)
+);
+/** Global Discord 429: cache false briefly so the client retries instead of locking out ~90s. */
+const ADMIN_RATE_LIMIT_CACHE_MS = Math.min(
+  120_000,
+  Math.max(5_000, Number(process.env.ADMIN_RATE_LIMIT_CACHE_MS) || 15_000)
 );
 
 const adminDecisionCache = new Map();
@@ -64,13 +70,19 @@ export async function computeWebIsAdmin({ userId, discordId }) {
 
   let pending = adminDecisionInflight.get(key);
   if (!pending) {
-    pending = findAdminServerForDiscordUser(id, servers)
-      .then((server) => !!server)
-      .then((value) => {
-        const ttl = value ? ADMIN_POSITIVE_CACHE_MS : ADMIN_NEGATIVE_CACHE_MS;
-        adminDecisionCache.set(key, { value, expires: Date.now() + ttl });
-        return value;
-      })
+    pending = findAdminServerForDiscordUser(id, servers).then((result) => {
+      if (result === DISCORD_ADMIN_CHECK_RATE_LIMITED) {
+        adminDecisionCache.set(key, {
+          value: false,
+          expires: Date.now() + ADMIN_RATE_LIMIT_CACHE_MS,
+        });
+        return false;
+      }
+      const value = result != null;
+      const ttl = value ? ADMIN_POSITIVE_CACHE_MS : ADMIN_NEGATIVE_CACHE_MS;
+      adminDecisionCache.set(key, { value, expires: Date.now() + ttl });
+      return value;
+    })
       .finally(() => {
         adminDecisionInflight.delete(key);
       });
