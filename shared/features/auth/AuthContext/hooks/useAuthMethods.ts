@@ -37,7 +37,9 @@ export const useAuthMethods = ({ setUser, setError, setLoading }: UseAuthMethods
       const response = await axios.get('/api/auth/profile', {
         headers: {
           Authorization: `Bearer ${token}`
-        }
+        },
+        // Profile runs Discord admin resolution (cached server-side); cold cache can take > default timeout.
+        timeout: 120_000,
       });
 
       if (response.data) {

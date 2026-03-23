@@ -31,24 +31,46 @@ function sleep(ms) {
 }
 
 /**
- * Discord REST with basic 429 / 503 retry (profile calls this for every guild).
+ * Discord REST. Global 429 / “blocked temporarily” → fail fast (retries make global limits worse).
+ * Per-route bucket 429 → short bounded retry.
  */
 async function discordRestFetch(url, init, label) {
-  const maxAttempts = 4;
-  let attempt = 0;
-  while (attempt < maxAttempts) {
-    attempt += 1;
+  const maxAttempts = 3;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const res = await fetch(url, init);
-    if (res.status === 429 || res.status === 503) {
+
+    if (res.status === 429) {
+      const text = await res.text();
+      if (
+        /global rate limit|blocked from accessing our api temporarily|exceeding global rate limit/i.test(
+          text
+        )
+      ) {
+        console.warn(`[discordAdminCheck] ${label} global 429 — fail fast (no retry)`);
+        return new Response(text, { status: 429, headers: res.headers });
+      }
+      if (attempt >= maxAttempts) {
+        return new Response(text, { status: 429, headers: res.headers });
+      }
       const retryAfter = res.headers.get("retry-after");
-      const waitSec = retryAfter ? Math.min(8, Math.max(1, parseInt(retryAfter, 10) || 1)) : attempt;
-      console.warn(`[discordAdminCheck] ${label} ${res.status}, retry in ${waitSec}s (attempt ${attempt})`);
-      if (attempt >= maxAttempts) return res;
+      const waitSec = Math.min(
+        4,
+        Math.max(1, parseFloat(retryAfter || "") || attempt * 1.5)
+      );
+      console.warn(`[discordAdminCheck] ${label} 429, retry in ${waitSec}s (${attempt}/${maxAttempts})`);
       await sleep(waitSec * 1000);
       continue;
     }
+
+    if (res.status === 503 && attempt < maxAttempts) {
+      await sleep(Math.min(4, attempt * 2) * 1000);
+      continue;
+    }
+
     return res;
   }
+
   return null;
 }
 
@@ -179,8 +201,14 @@ export async function findAdminServerForDiscordUser(discordUserId, servers) {
   const guildRolesCache = new Map();
   const guildSummaryCache = new Map();
   const strictRoleOnly = process.env.ADMIN_STRICT_ROLE_ONLY === "true";
+  const staggerMs = Math.min(2000, Math.max(0, Number(process.env.ADMIN_DISCORD_STAGGER_MS) || 400));
 
-  for (const server of servers) {
+  for (let i = 0; i < servers.length; i++) {
+    const server = servers[i];
+    if (i > 0 && staggerMs > 0) {
+      await sleep(staggerMs);
+    }
+
     const guildId = normalizeSnowflake(server.serverId);
     const roleId = normalizeSnowflake(server.adminRoleId);
     if (!guildId || !roleId) continue;

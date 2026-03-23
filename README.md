@@ -134,6 +134,11 @@ JWT_SECRET=replace_me
 
 ADMIN_USER_IDS=
 ADMIN_DISCORD_IDS=
+
+# Optional — ms to cache Discord-based admin result (default 600000 = 10m). Lowers Discord API load on /profile.
+# ADMIN_DECISION_CACHE_MS=600000
+# Optional — ms delay between checking each configured guild (default 400). Reduces burst 429s.
+# ADMIN_DISCORD_STAGGER_MS=400
 ```
 
 ### Database
