@@ -86,6 +86,7 @@ export function TournamentLobby() {
   const [startRequested, setStartRequested] = useState(false);
   const [tables, setTables] = useState<any[]>([]);
   const [myGameId, setMyGameId] = useState<string | null>(null);
+  const [addingTestPlayers, setAddingTestPlayers] = useState(false);
 
   // Clear start-requested flag once tournament is actually running (after refetch)
   useEffect(() => {
@@ -393,6 +394,52 @@ export function TournamentLobby() {
     }
   };
 
+  const handleAddTestPlayers = async () => {
+    if (!tournament || !id) return;
+    const currentRegistered = tournament.registeredCount ?? 0;
+    const maxPlayers = tournament.maxPlayers;
+    const availableSlots = maxPlayers - currentRegistered;
+    if (availableSlots <= 0) {
+      alert('Tournament is full!');
+      return;
+    }
+    const defaultCount = Math.min(tournament.seatsPerTable ?? 9, availableSlots);
+    const countInput = window.prompt(
+      'How many test players would you like to add?',
+      String(defaultCount)
+    );
+    if (countInput == null) return;
+    const count = parseInt(countInput, 10);
+    if (Number.isNaN(count) || count < 1 || count > availableSlots) {
+      alert('Please enter a number between 1 and ' + String(availableSlots));
+      return;
+    }
+    if (!window.confirm('Add ' + String(count) + ' test player(s)?')) {
+      return;
+    }
+    setAddingTestPlayers(true);
+    try {
+      const token = localStorage.getItem('sessionToken');
+      if (!token) {
+        alert('Not authenticated');
+        return;
+      }
+      const response = await api.post(
+        '/api/admin/tournaments/' + id + '/add-test-players',
+        { count: count },
+        { headers: { Authorization: 'Bearer ' + token } }
+      );
+      alert(response.data.message || 'Added ' + String(count) + ' test player(s)');
+      await refetch();
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { error?: string } } };
+      alert(ax.response?.data?.error || 'Failed to add test players');
+      console.error('Error adding test players:', err);
+    } finally {
+      setAddingTestPlayers(false);
+    }
+  };
+
   const startTime = new Date(tournament.startTime);
   const startScheduledAtRaw = (tournament as { startScheduledAt?: string | null }).startScheduledAt;
   const startScheduledAtMs = startScheduledAtRaw ? new Date(startScheduledAtRaw).getTime() : null;
@@ -514,6 +561,19 @@ export function TournamentLobby() {
                 className="rounded bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {closingRegistration ? 'Closing Registration...' : 'Close registration now (optional)'}
+              </button>
+            )}
+            {!isRunning && tournament.status !== 'CANCELLED' && (
+              <button
+                type="button"
+                onClick={() => {
+                  void handleAddTestPlayers();
+                }}
+                disabled={addingTestPlayers}
+                className="rounded bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Add test players for development/testing"
+              >
+                {addingTestPlayers ? 'Adding test players...' : 'Add test players'}
               </button>
             )}
             {isSeated && !isRunning && !startRequested && !scheduledCountdownActive && (

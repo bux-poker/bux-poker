@@ -5,7 +5,9 @@
 import { useState, useEffect } from 'react';
 import { useTournament } from '../../hooks/useTournaments';
 import { useAuth } from '@shared/features/auth/AuthContext';
+import { useAdmin } from '../../hooks/useAdmin';
 import { getSocket } from '../../services/socket';
+import api from '../../services/api';
 
 type Tab = 'players' | 'blinds' | 'prizes' | 'tables';
 
@@ -44,11 +46,13 @@ export function TournamentLobbyModal({
   gameState?: GameStateForLobby | null;
 }) {
   const { user } = useAuth();
+  const { isAdmin } = useAdmin();
   const { tournament, loading, error, refetch } = useTournament(tournamentId);
   const [activeTab, setActiveTab] = useState<Tab>('players');
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [blindLevels, setBlindLevels] = useState<BlindLevel[]>([]);
   const [tables, setTables] = useState<any[]>([]);
+  const [addingTestPlayers, setAddingTestPlayers] = useState(false);
 
   useEffect(() => {
     if (!tournamentId) return;
@@ -138,6 +142,59 @@ export function TournamentLobbyModal({
           (l) => l.smallBlind === gameState.smallBlind && l.bigBlind === gameState.bigBlind
         )
       : -1;
+
+  const canAddTestPlayers =
+    isAdmin &&
+    !!tournament &&
+    !isCompleted &&
+    !isRunning &&
+    tournament.status !== 'CANCELLED';
+
+  const handleAddTestPlayers = async () => {
+    if (!tournament) return;
+    const currentRegistered = tournament.registeredCount ?? 0;
+    const maxPlayers = tournament.maxPlayers;
+    const availableSlots = maxPlayers - currentRegistered;
+    if (availableSlots <= 0) {
+      alert('Tournament is full!');
+      return;
+    }
+    const defaultCount = Math.min(tournament.seatsPerTable ?? 9, availableSlots);
+    const countInput = window.prompt(
+      'How many test players would you like to add?',
+      String(defaultCount)
+    );
+    if (countInput == null) return;
+    const count = parseInt(countInput, 10);
+    if (Number.isNaN(count) || count < 1 || count > availableSlots) {
+      alert('Please enter a number between 1 and ' + String(availableSlots));
+      return;
+    }
+    if (!window.confirm('Add ' + String(count) + ' test player(s)?')) {
+      return;
+    }
+    setAddingTestPlayers(true);
+    try {
+      const token = localStorage.getItem('sessionToken');
+      if (!token) {
+        alert('Not authenticated');
+        return;
+      }
+      const response = await api.post(
+        '/api/admin/tournaments/' + tournamentId + '/add-test-players',
+        { count: count },
+        { headers: { Authorization: 'Bearer ' + token } }
+      );
+      alert(response.data.message || 'Added ' + String(count) + ' test player(s)');
+      await refetch({ silent: true });
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { error?: string } } };
+      alert(ax.response?.data?.error || 'Failed to add test players');
+      console.error('Error adding test players:', err);
+    } finally {
+      setAddingTestPlayers(false);
+    }
+  };
 
   if (loading && !tournament) {
     return (
@@ -235,6 +292,23 @@ export function TournamentLobbyModal({
             )}
           </nav>
         </div>
+
+        {canAddTestPlayers && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-purple-900/40 bg-purple-950/30 px-4 py-2 sm:px-6">
+            <span className="text-xs font-medium text-purple-200/90">Admin</span>
+            <button
+              type="button"
+              onClick={() => {
+                void handleAddTestPlayers();
+              }}
+              disabled={addingTestPlayers}
+              className="rounded bg-purple-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
+              title="Add test players for development/testing"
+            >
+              {addingTestPlayers ? 'Adding...' : 'Add test players'}
+            </button>
+          </div>
+        )}
 
         <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
           {activeTab === 'players' && (
