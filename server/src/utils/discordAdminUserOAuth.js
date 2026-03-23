@@ -10,7 +10,18 @@ function trimId(id) {
   return String(id).trim();
 }
 
-async function discordBearerGet(path, accessToken) {
+/** Normalize Discord snowflakes so "123" and 123n match DB strings. */
+function normSnowflake(id) {
+  const t = trimId(id);
+  if (!t) return "";
+  try {
+    return BigInt(t).toString();
+  } catch {
+    return t;
+  }
+}
+
+async function discordBearerGet(path, accessToken, label) {
   const res = await fetch(`${DISCORD_API}${path}`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -19,10 +30,16 @@ async function discordBearerGet(path, accessToken) {
     },
   });
   const text = await res.text();
-  if (!res.ok) return null;
+  if (!res.ok) {
+    console.warn(
+      `[webAdmin] user OAuth ${label} HTTP ${res.status} — ${text.slice(0, 160).replace(/\s+/g, " ")}`
+    );
+    return null;
+  }
   try {
     return JSON.parse(text);
   } catch {
+    console.warn(`[webAdmin] user OAuth ${label} non-JSON response`);
     return null;
   }
 }
@@ -32,7 +49,7 @@ async function discordBearerGet(path, accessToken) {
  * Avoids bot global rate limits on GET /guilds/{id}/members/{id}.
  */
 export async function findAdminServerViaStoredUserOAuth(discordUserId, servers) {
-  const uid = trimId(discordUserId);
+  const uid = normSnowflake(discordUserId);
   if (!uid || !servers?.length) return null;
 
   const row = await prisma.user.findUnique({
@@ -40,19 +57,24 @@ export async function findAdminServerViaStoredUserOAuth(discordUserId, servers) 
     select: { discordOAuthAccessToken: true, discordOAuthAccessExpiresAt: true },
   });
   const token = row?.discordOAuthAccessToken;
-  if (!token) return null;
+  if (!token) {
+    return null;
+  }
   if (row.discordOAuthAccessExpiresAt && row.discordOAuthAccessExpiresAt.getTime() < Date.now() + 10_000) {
+    console.warn("[webAdmin] user OAuth token expired for discordId", uid.slice(0, 8) + "…");
     return null;
   }
 
-  const guildsJson = await discordBearerGet("/users/@me/guilds?limit=200", token);
-  if (!Array.isArray(guildsJson)) return null;
+  const guildsJson = await discordBearerGet("/users/@me/guilds?limit=200", token, "GET @me/guilds");
+  if (!Array.isArray(guildsJson)) {
+    return null;
+  }
 
-  const guildMap = new Map(guildsJson.map((g) => [trimId(g.id), g]));
+  const guildMap = new Map(guildsJson.map((g) => [normSnowflake(g.id), g]));
 
   for (const server of servers) {
-    const guildId = trimId(server.serverId);
-    const roleId = trimId(server.adminRoleId);
+    const guildId = normSnowflake(server.serverId);
+    const roleId = normSnowflake(server.adminRoleId);
     if (!guildId || !roleId) continue;
 
     const g = guildMap.get(guildId);
@@ -64,15 +86,15 @@ export async function findAdminServerViaStoredUserOAuth(discordUserId, servers) 
 
     const member = await discordBearerGet(
       `/users/@me/guilds/${encodeURIComponent(guildId)}/member`,
-      token
+      token,
+      `GET @me/guilds/${guildId}/member`
     );
     if (!member || !Array.isArray(member.roles)) continue;
 
-    const roleSet = new Set(member.roles.map((r) => trimId(r)));
+    const roleSet = new Set(member.roles.map((r) => normSnowflake(r)));
     if (roleSet.has(roleId)) {
       return server;
     }
-    // Bot REST can still resolve Discord "Administrator" permission via role list; user OAuth cannot without extra calls.
   }
 
   return null;

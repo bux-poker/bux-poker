@@ -78,17 +78,24 @@ export async function upsertDiscordUser(params: {
   discordId: string;
   username: string;
   avatarUrl: string;
+  discordOAuthAccessToken: string;
+  discordOAuthAccessExpiresAt: Date;
 }): Promise<{ id: string }> {
-  const { discordId, username, avatarUrl } = params;
+  const { discordId, username, avatarUrl, discordOAuthAccessToken, discordOAuthAccessExpiresAt } =
+    params;
   const newId = createId();
   const p = getPool();
   const r = await p.query<{ id: string }>(
-    `INSERT INTO "User" (id, "discordId", username, "avatarUrl", "createdAt", "updatedAt")
-     VALUES ($1, $2, $3, $4, NOW(), NOW())
+    `INSERT INTO "User" (id, "discordId", username, "avatarUrl", "discordOAuthAccessToken", "discordOAuthAccessExpiresAt", "createdAt", "updatedAt")
+     VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
      ON CONFLICT ("discordId") DO UPDATE
-     SET username = EXCLUDED.username, "avatarUrl" = EXCLUDED."avatarUrl", "updatedAt" = NOW()
+     SET username = EXCLUDED.username,
+         "avatarUrl" = EXCLUDED."avatarUrl",
+         "discordOAuthAccessToken" = EXCLUDED."discordOAuthAccessToken",
+         "discordOAuthAccessExpiresAt" = EXCLUDED."discordOAuthAccessExpiresAt",
+         "updatedAt" = NOW()
      RETURNING id`,
-    [newId, discordId, username, avatarUrl]
+    [newId, discordId, username, avatarUrl, discordOAuthAccessToken, discordOAuthAccessExpiresAt]
   );
   if (!r.rows[0]?.id) throw new Error("User upsert returned no id");
   return { id: r.rows[0].id };
@@ -200,18 +207,6 @@ export function signSessionJwt(userId: string): string {
   return jwt.sign({ userId }, secret, { expiresIn: "7d" });
 }
 
-async function saveDiscordOAuthTokenForUser(
-  discordId: string,
-  accessToken: string,
-  expiresAt: Date
-): Promise<void> {
-  const p = getPool();
-  await p.query(
-    `UPDATE "User" SET "discordOAuthAccessToken" = $1, "discordOAuthAccessExpiresAt" = $2, "updatedAt" = NOW() WHERE "discordId" = $3`,
-    [accessToken, expiresAt, discordId]
-  );
-}
-
 export async function completeDiscordOAuthFromCode(
   code: string,
   redirectUri: string
@@ -227,11 +222,11 @@ export async function completeDiscordOAuthFromCode(
   const avatarUrl = discordUser.avatar
     ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
     : "/default-pfp.jpg";
-  const user = await upsertDiscordUser({
+  return upsertDiscordUser({
     discordId: String(discordUser.id),
     username: nickname,
     avatarUrl,
+    discordOAuthAccessToken: accessToken,
+    discordOAuthAccessExpiresAt: expiresAt,
   });
-  await saveDiscordOAuthTokenForUser(String(discordUser.id), accessToken, expiresAt);
-  return user;
 }
