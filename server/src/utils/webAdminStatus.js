@@ -114,10 +114,40 @@ async function persistUserWebAdminProof(userId, servers, isAdmin) {
  * - `DiscordServer.adminRoleId` from `/setup`; verified via gateway member cache, else Discord REST,
  *   Redis, in-memory cache, and DB proof (`webAdminVerifiedAt` + hash) when REST rate-limits.
  *
- * Optional env overrides (emergency only): ADMIN_USER_IDS, ADMIN_DISCORD_IDS.
+ * Optional env overrides (emergency only): ADMIN_USER_IDS, ADMIN_DISCORD_IDS, WEB_ADMIN_BOOTSTRAP_SECRET.
  *
  * Bootstrap: no configured servers → any Discord-linked user is admin until first `/setup`.
  */
+
+/**
+ * When Discord global-blocks all API calls from your host, stamp DB proof for the logged-in user
+ * (same row used by tryDbTrustedWebAdmin). Requires POST /api/auth/emergency-web-admin-stamp + secret header.
+ */
+export async function emergencyStampWebAdminForSessionUser(userId) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { discordId: true },
+  });
+  if (!user?.discordId) {
+    return { ok: false, error: "discord_required" };
+  }
+  const discordId = String(user.discordId).trim();
+  const servers = await getConfiguredAdminServers();
+  if (servers.length === 0) {
+    return { ok: true, alreadyOpen: true };
+  }
+  await persistUserWebAdminProof(userId, servers, true);
+  const sc = servers.length;
+  const prefix = `${userId}|${discordId}|`;
+  for (const k of [...adminDecisionCache.keys()]) {
+    if (k.startsWith(prefix)) {
+      adminDecisionCache.delete(k);
+    }
+  }
+  await redisAdminSet(discordId, sc, true, ADMIN_POSITIVE_CACHE_MS);
+  return { ok: true, stamped: true };
+}
+
 export async function computeWebIsAdmin({ userId, discordId }) {
   if (userId && isUserIdAdminAllowlisted(userId)) {
     return true;
