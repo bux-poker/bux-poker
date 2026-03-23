@@ -1,7 +1,15 @@
 import { PermissionFlagsBits } from "discord.js";
 import { prisma } from "../config/database.js";
 import { getDiscordClient } from "../discord/bot.js";
+import {
+  DISCORD_ADMIN_CHECK_RATE_LIMITED,
+  isDiscordGlobal429Body,
+  isDiscordAdminGlobalBackoffActive,
+  scheduleDiscordAdminGlobalBackoff,
+} from "./discordAdminShared.js";
 import { findAdminServerViaStoredUserOAuth } from "./discordAdminUserOAuth.js";
+
+export { DISCORD_ADMIN_CHECK_RATE_LIMITED } from "./discordAdminShared.js";
 
 const DISCORD_API = "https://discord.com/api/v10";
 
@@ -41,29 +49,6 @@ function findAdminServerViaGatewayCache(discordUserId, servers, strictRoleOnly) 
     }
   }
   return null;
-}
-
-/**
- * Returned by findAdminServerForDiscordUser when Discord responds with a global 429.
- * Callers must not treat this as "user is not admin" for long-cache purposes.
- */
-export const DISCORD_ADMIN_CHECK_RATE_LIMITED = Symbol("DISCORD_ADMIN_CHECK_RATE_LIMITED");
-
-/** After any global 429, skip Discord REST for admin checks until this time (process-wide). */
-let discordAdminGlobalBackoffUntil = 0;
-
-function scheduleDiscordAdminGlobalBackoff() {
-  const backoffMs = Math.min(
-    600_000,
-    Math.max(45_000, Number(process.env.DISCORD_ADMIN_GLOBAL_BACKOFF_MS) || 120_000)
-  );
-  const next = Date.now() + backoffMs;
-  if (next > discordAdminGlobalBackoffUntil) {
-    discordAdminGlobalBackoffUntil = next;
-    console.warn(
-      `[discordAdminCheck] Global rate limit — pausing admin Discord REST ~${Math.round(backoffMs / 1000)}s (no member/role calls)`
-    );
-  }
 }
 
 /** Discord snowflakes must be compared as trimmed strings (DB / copy-paste drift). */
@@ -106,11 +91,7 @@ async function discordRestFetch(url, init, label) {
 
     if (res.status === 429) {
       const text = await res.text();
-      if (
-        /global rate limit|blocked from accessing our api temporarily|exceeding global rate limit/i.test(
-          text
-        )
-      ) {
+      if (isDiscordGlobal429Body(text)) {
         scheduleDiscordAdminGlobalBackoff();
         console.warn(`[discordAdminCheck] ${label} global 429 — fail fast (no retry)`);
         return new Response(text, { status: 429, headers: res.headers });
@@ -230,11 +211,7 @@ async function fetchGuildMemberRest(guildId, userId) {
 
   if (!res.ok) {
     const text = await res.text();
-    const globalRateLimited =
-      res.status === 429 &&
-      /global rate limit|blocked from accessing our api temporarily|exceeding global rate limit/i.test(
-        text
-      );
+    const globalRateLimited = res.status === 429 && isDiscordGlobal429Body(text);
     console.warn(
       `[discordAdminCheck] REST guild member ${res.status} guild=${guildId} user=${userId}`,
       text.slice(0, 200)
@@ -276,7 +253,7 @@ export async function findAdminServerForDiscordUser(discordUserId, servers) {
     return gatewayHit;
   }
 
-  if (Date.now() < discordAdminGlobalBackoffUntil) {
+  if (isDiscordAdminGlobalBackoffActive()) {
     return DISCORD_ADMIN_CHECK_RATE_LIMITED;
   }
 

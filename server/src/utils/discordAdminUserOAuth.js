@@ -1,4 +1,9 @@
 import { prisma } from "../config/database.js";
+import {
+  DISCORD_ADMIN_CHECK_RATE_LIMITED,
+  isDiscordGlobal429Body,
+  scheduleDiscordAdminGlobalBackoff,
+} from "./discordAdminShared.js";
 
 const DISCORD_API = "https://discord.com/api/v10";
 const UA =
@@ -30,6 +35,13 @@ async function discordBearerGet(path, accessToken, label) {
     },
   });
   const text = await res.text();
+  if (res.status === 429 && isDiscordGlobal429Body(text)) {
+    scheduleDiscordAdminGlobalBackoff();
+    console.warn(
+      `[webAdmin] user OAuth ${label} global 429 — skipping bot REST this request (${text.slice(0, 100).replace(/\s+/g, " ")})`
+    );
+    return DISCORD_ADMIN_CHECK_RATE_LIMITED;
+  }
   if (!res.ok) {
     console.warn(
       `[webAdmin] user OAuth ${label} HTTP ${res.status} — ${text.slice(0, 160).replace(/\s+/g, " ")}`
@@ -66,6 +78,9 @@ export async function findAdminServerViaStoredUserOAuth(discordUserId, servers) 
   }
 
   const guildsJson = await discordBearerGet("/users/@me/guilds?limit=200", token, "GET @me/guilds");
+  if (guildsJson === DISCORD_ADMIN_CHECK_RATE_LIMITED) {
+    return DISCORD_ADMIN_CHECK_RATE_LIMITED;
+  }
   if (!Array.isArray(guildsJson)) {
     return null;
   }
@@ -89,6 +104,9 @@ export async function findAdminServerViaStoredUserOAuth(discordUserId, servers) 
       token,
       `GET @me/guilds/${guildId}/member`
     );
+    if (member === DISCORD_ADMIN_CHECK_RATE_LIMITED) {
+      return DISCORD_ADMIN_CHECK_RATE_LIMITED;
+    }
     if (!member || !Array.isArray(member.roles)) continue;
 
     const roleSet = new Set(member.roles.map((r) => normSnowflake(r)));
