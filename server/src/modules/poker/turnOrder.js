@@ -30,6 +30,11 @@ function computeNeedsToAct(p, state) {
   return contribution < currentBet || !hasActed;
 }
 
+/** Anyone who can still bet and owes action or has not acted this round (used to unstick bad seat walks). */
+function listPlayersWhoOweAction(activePlayers, state) {
+  return activePlayers.filter((p) => computeNeedsToAct(p, state));
+}
+
 export async function moveToNextPlayer(gameId, io) {
   const state = tableState.get(gameId);
   if (!state) return;
@@ -347,6 +352,18 @@ export async function moveToNextPlayer(gameId, io) {
         attempts++;
       }
 
+      // Seat walk can miss with sparse seats / edge cases — brute-force scan.
+      if (!nextPlayer) {
+        const owed = listPlayersWhoOweAction(activePlayers, state);
+        if (owed.length > 0) {
+          owed.sort((a, b) => seatNum(a.seatNumber) - seatNum(b.seatNumber));
+          nextPlayer = owed[0];
+          console.warn(
+            `[TURN ORDER] After fold: seat walk missed; brute-force owed actor seat ${nextPlayer.seatNumber} (${nextPlayer.name || nextPlayer.userId})`
+          );
+        }
+      }
+
       if (nextPlayer) {
         state.currentTurnUserId = normalizeUserId(nextPlayer.userId);
         state.currentTurnStartedAt = Date.now();
@@ -359,7 +376,20 @@ export async function moveToNextPlayer(gameId, io) {
       }
     }
 
-    console.log("[TURN ORDER] Falling back to first active player");
+    const owedFallback = listPlayersWhoOweAction(activePlayers, state);
+    if (owedFallback.length > 0) {
+      owedFallback.sort((a, b) => seatNum(a.seatNumber) - seatNum(b.seatNumber));
+      const pick = owedFallback[0];
+      state.currentTurnUserId = normalizeUserId(pick.userId);
+      state.currentTurnStartedAt = Date.now();
+      startTurnTimer(gameId, state.currentTurnUserId, io);
+      console.log(
+        `[TURN ORDER] Fallback: turn to player who still owes action — seat ${pick.seatNumber} (${pick.name || pick.userId})`
+      );
+      return;
+    }
+
+    console.log("[TURN ORDER] Falling back to first active player (no separate owed list)");
     const sortedPlayers = [...activePlayers].sort(
       (a, b) => seatNum(a.seatNumber) - seatNum(b.seatNumber)
     );
@@ -433,6 +463,17 @@ export async function moveToNextPlayer(gameId, io) {
           )} (${nextPlayer.name || nextPlayer.userId})`
         );
       }
+    }
+  }
+
+  if (!nextPlayer) {
+    const owedLast = listPlayersWhoOweAction(activePlayers, state);
+    if (owedLast.length > 0) {
+      owedLast.sort((a, b) => seatNum(a.seatNumber) - seatNum(b.seatNumber));
+      nextPlayer = owedLast[0];
+      console.warn(
+        `[TURN ORDER] Last resort: assigning turn to owed player seat ${nextPlayer.seatNumber} (${nextPlayer.name || nextPlayer.userId}) — was about to null turn with betting incomplete`
+      );
     }
   }
 
