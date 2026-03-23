@@ -8,6 +8,23 @@ const DISCORD_API = "https://discord.com/api/v10";
  */
 export const DISCORD_ADMIN_CHECK_RATE_LIMITED = Symbol("DISCORD_ADMIN_CHECK_RATE_LIMITED");
 
+/** After any global 429, skip Discord REST for admin checks until this time (process-wide). */
+let discordAdminGlobalBackoffUntil = 0;
+
+function scheduleDiscordAdminGlobalBackoff() {
+  const backoffMs = Math.min(
+    600_000,
+    Math.max(45_000, Number(process.env.DISCORD_ADMIN_GLOBAL_BACKOFF_MS) || 120_000)
+  );
+  const next = Date.now() + backoffMs;
+  if (next > discordAdminGlobalBackoffUntil) {
+    discordAdminGlobalBackoffUntil = next;
+    console.warn(
+      `[discordAdminCheck] Global rate limit — pausing admin Discord REST ~${Math.round(backoffMs / 1000)}s (no member/role calls)`
+    );
+  }
+}
+
 /** Discord snowflakes must be compared as trimmed strings (DB / copy-paste drift). */
 export function normalizeSnowflake(id) {
   if (id == null) return "";
@@ -53,6 +70,7 @@ async function discordRestFetch(url, init, label) {
           text
         )
       ) {
+        scheduleDiscordAdminGlobalBackoff();
         console.warn(`[discordAdminCheck] ${label} global 429 — fail fast (no retry)`);
         return new Response(text, { status: 429, headers: res.headers });
       }
@@ -204,6 +222,10 @@ async function fetchGuildMemberRest(guildId, userId) {
 export async function findAdminServerForDiscordUser(discordUserId, servers) {
   const uid = normalizeSnowflake(discordUserId);
   if (!uid) return null;
+
+  if (Date.now() < discordAdminGlobalBackoffUntil) {
+    return DISCORD_ADMIN_CHECK_RATE_LIMITED;
+  }
 
   if (!process.env.DISCORD_BOT_TOKEN) {
     console.warn("[discordAdminCheck] DISCORD_BOT_TOKEN missing — cannot verify admin roles");
