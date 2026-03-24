@@ -198,6 +198,27 @@ export function isTournamentConsolidationWaiting(tournamentId) {
 /** Max one-table-to-table moves per consolidation run (idle poll calls this ~15s). */
 const MAX_BALANCE_MOVES_PER_RUN = 12;
 
+/**
+ * Pick source (most chip-positive players) and destination (fewest) for spread balancing.
+ * Returns null if no move is needed or possible.
+ */
+function pickBalanceEndpoints(games) {
+  const nonempty = games.filter((g) => (g.players?.length ?? 0) > 0);
+  if (nonempty.length < 2) return null;
+  const sz = nonempty.map((g) => ({ g, n: g.players.length }));
+  const mx = Math.max(...sz.map((s) => s.n));
+  const mn = Math.min(...sz.map((s) => s.n));
+  if (mx - mn <= 1) return null;
+  const srcGame = sz
+    .filter((s) => s.n === mx)
+    .sort((a, b) => b.g.tableNumber - a.g.tableNumber)[0].g;
+  const dstGame = sz
+    .filter((s) => s.n === mn)
+    .sort((a, b) => a.g.tableNumber - b.g.tableNumber)[0].g;
+  if (srcGame.id === dstGame.id) return null;
+  return { srcGame, dstGame };
+}
+
 async function emitRoomsGameState(gameIds, io) {
   if (!io) return;
   const { emitGameState } = await import("../../modules/poker/emitGameState.js");
@@ -681,22 +702,9 @@ export async function doConsolidateTables(tournamentId, deps) {
           orderBy: { tableNumber: "asc" },
         });
 
-        const nonempty = games.filter((g) => (g.players?.length ?? 0) > 0);
-        if (nonempty.length < 2) break;
-
-        const sz = nonempty.map((g) => ({ g, n: g.players.length }));
-        const mx = Math.max(...sz.map((s) => s.n));
-        const mn = Math.min(...sz.map((s) => s.n));
-        if (mx - mn <= 1) break;
-
-        const srcGame = sz
-          .filter((s) => s.n === mx)
-          .sort((a, b) => b.g.tableNumber - a.g.tableNumber)[0].g;
-        const dstGame = sz
-          .filter((s) => s.n === mn)
-          .sort((a, b) => a.g.tableNumber - b.g.tableNumber)[0].g;
-
-        if (srcGame.id === dstGame.id) break;
+        const pairPreWait = pickBalanceEndpoints(games);
+        if (!pairPreWait) break;
+        const { srcGame, dstGame } = pairPreWait;
 
         const waitSrc = [srcGame.id];
         registerConsolidationWait(tournamentId, waitSrc);
@@ -719,17 +727,42 @@ export async function doConsolidateTables(tournamentId, deps) {
             break;
           }
 
-          const srcPotRow = await prisma.game.findUnique({
-            where: { id: srcGame.id },
-            select: { pot: true, tableNumber: true },
+          // Hands can change chip counts / eligibility; re-pick endpoints after wait (avoids "missing src/dst").
+          games = await prisma.game.findMany({
+            where: { tournamentId, status: "ACTIVE" },
+            include: {
+              players: {
+                where: MOVE_ELIGIBLE,
+                include: { user: true },
+                orderBy: { seatNumber: "asc" },
+              },
+            },
+            orderBy: { tableNumber: "asc" },
           });
-          if ((srcPotRow?.pot ?? 0) > 0) {
-            console.warn(
-              `[TOURNAMENT] Balance: source table ${srcGame.tableNumber} DB pot ${srcPotRow.pot} — skip`
+          const pairPostWait = pickBalanceEndpoints(games);
+          if (!pairPostWait) break;
+          const srcGameTx = pairPostWait.srcGame;
+          const dstGameTx = pairPostWait.dstGame;
+
+          if (await deps.hasActiveHand(srcGameTx.id)) {
+            console.log(
+              `[TOURNAMENT] Balance: source table ${srcGameTx.tableNumber} (post-refresh) still in hand — stop for this run`
             );
             break;
           }
 
+          const srcPotRow = await prisma.game.findUnique({
+            where: { id: srcGameTx.id },
+            select: { pot: true, tableNumber: true },
+          });
+          if ((srcPotRow?.pot ?? 0) > 0) {
+            console.warn(
+              `[TOURNAMENT] Balance: source table ${srcGameTx.tableNumber} DB pot ${srcPotRow.pot} — skip`
+            );
+            break;
+          }
+
+          let balanceTxnSkipped = false;
           await prisma.$transaction(async (tx) => {
             const gs = await tx.game.findMany({
               where: { tournamentId, status: "ACTIVE" },
@@ -741,10 +774,14 @@ export async function doConsolidateTables(tournamentId, deps) {
               },
               orderBy: { tableNumber: "asc" },
             });
-            const srcRow = gs.find((g) => g.id === srcGame.id);
-            const dstRow = gs.find((g) => g.id === dstGame.id);
+            const srcRow = gs.find((g) => g.id === srcGameTx.id);
+            const dstRow = gs.find((g) => g.id === dstGameTx.id);
             if (!srcRow?.players?.length || !dstRow) {
-              throw new Error("[TOURNAMENT] Balance: missing src/dst in transaction");
+              console.warn(
+                "[TOURNAMENT] Balance: missing src/dst or no chip-positive movers in transaction — stale snapshot, will retry next poll"
+              );
+              balanceTxnSkipped = true;
+              return;
             }
 
             await relocateEliminatedOffTableToGraveyard(
@@ -759,9 +796,11 @@ export async function doConsolidateTables(tournamentId, deps) {
               select: { seatNumber: true },
             });
             if (dstAllSeats.length >= seatsPerTable) {
-              throw new Error(
-                `[TOURNAMENT] Table ${dstRow.tableNumber} full (${dstAllSeats.length}/${seatsPerTable})`
+              console.warn(
+                `[TOURNAMENT] Balance: destination table ${dstRow.tableNumber} full (${dstAllSeats.length}/${seatsPerTable}) after graveyard pass — retry next poll`
               );
+              balanceTxnSkipped = true;
+              return;
             }
             const taken = new Set(dstAllSeats.map((p) => p.seatNumber));
             const seat = pickWorstOpenSeat(
@@ -771,9 +810,11 @@ export async function doConsolidateTables(tournamentId, deps) {
               dstRow.smallBlindSeat
             );
             if (seat == null) {
-              throw new Error(
-                `[TOURNAMENT] No free seat on table ${dstRow.tableNumber}`
+              console.warn(
+                `[TOURNAMENT] Balance: no free seat on table ${dstRow.tableNumber} (TDA layout) — retry next poll`
               );
+              balanceTxnSkipped = true;
+              return;
             }
 
             const mover = pickNextBigBlindMover(
@@ -782,7 +823,11 @@ export async function doConsolidateTables(tournamentId, deps) {
               seatsPerTable
             );
             if (!mover) {
-              throw new Error("[TOURNAMENT] Balance: could not pick mover");
+              console.warn(
+                "[TOURNAMENT] Balance: could not pick mover — retry next poll"
+              );
+              balanceTxnSkipped = true;
+              return;
             }
             await tx.player.update({
               where: { id: mover.id },
@@ -793,20 +838,21 @@ export async function doConsolidateTables(tournamentId, deps) {
             );
           });
 
+          if (balanceTxnSkipped) break;
+
           try {
-            deps.clearAllStateForGames([srcGame.id]);
-            if (!(await deps.hasActiveHand(dstGame.id))) {
-              deps.clearAllStateForGames([dstGame.id]);
+            deps.clearAllStateForGames([srcGameTx.id]);
+            if (!(await deps.hasActiveHand(dstGameTx.id))) {
+              deps.clearAllStateForGames([dstGameTx.id]);
             }
           } catch (e) {
             console.warn("[TOURNAMENT] Balance clear state:", e?.message);
           }
 
           const ioPush = deps.getIO();
-          if (ioPush) await emitRoomsGameState([srcGame.id, dstGame.id], ioPush);
-
           if (ioPush) {
-            for (const gid of [srcGame.id, dstGame.id]) {
+            await emitRoomsGameState([srcGameTx.id, dstGameTx.id], ioPush);
+            for (const gid of [srcGameTx.id, dstGameTx.id]) {
               const g = await prisma.game.findUnique({
                 where: { id: gid },
                 include: { players: { where: MOVE_ELIGIBLE } },
