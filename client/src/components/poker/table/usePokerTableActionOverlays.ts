@@ -79,11 +79,12 @@ export function usePokerTableActionOverlays(
         const action = normalizeAction(overlay.action);
         const status = (player.status || "").toUpperCase();
         const keepFold = action === "FOLD" && status === "FOLDED";
+        // Do not treat chips===0 alone as all-in (0-chip players waiting for the next hand are not ALL_IN here).
         const keepAllIn =
           action === "ALLIN" &&
           status !== "ELIMINATED" &&
           status !== "FOLDED" &&
-          (status === "ALL_IN" || player.chips === 0);
+          status === "ALL_IN";
         if (!keepFold && !keepAllIn) {
           delete next[playerId];
         }

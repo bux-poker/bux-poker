@@ -164,16 +164,18 @@ export function buildClientGameState(game, state, viewerUserId) {
         const hide =
           parsed &&
           shouldHideHoleCardsFromViewer(p, viewerUserId, optionalRevealPhase);
+        // Seats merged from DB mid-hand (e.g. just reseated) are not in this hand — strip stale
+        // lastAction/ALL_IN from the previous table/hand so we do not show "ALL IN" on 0-chip waiters.
         return {
           id: p.id,
           userId: p.userId,
           name: p.user?.username || "Player",
           chips: p.chips,
           seatNumber: p.seatNumber,
-          status: p.status,
+          status: inCurrentHand ? p.status : "ACTIVE",
           avatarUrl: p.user?.avatarUrl || null,
-          lastAction: p.lastAction || null,
-          lastActionSeq: p.lastActionSeq || 0,
+          lastAction: inCurrentHand ? p.lastAction || null : null,
+          lastActionSeq: inCurrentHand ? p.lastActionSeq || 0 : 0,
           holeCards: hide ? null : parsed,
           contribution: safePlayerContribution(state?.bettingRound, p.id),
         };

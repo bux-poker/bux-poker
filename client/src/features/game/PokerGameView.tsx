@@ -468,29 +468,14 @@ export function PokerGameView() {
       }
     });
 
-    socket.on("tournament_updated", async (payload?: { tournamentId?: string }) => {
+    socket.on("tournament_updated", (payload?: { tournamentId?: string }) => {
       if (payload?.tournamentId) {
         const matchesGameState = payload.tournamentId === latestGameTournamentIdRef.current;
         const matchesTournament = payload.tournamentId === latestTournamentIdRef.current;
         if (!matchesGameState && !matchesTournament) return;
       }
+      // Do NOT add extra HTTP/API work here — this fires very often (blinds, actions, etc.) and was hammering the DB.
       refetchTournament({ silent: true });
-      // Reseat / consolidation: DB gameId can change before route + join-table catch up (same as consolidation-complete).
-      const tid = payload?.tournamentId;
-      if (!tid || !user?.id || !id) return;
-      try {
-        const { data: t } = await api.get(`/api/tournaments/${tid}`);
-        const myEntry = (t?.players || []).find((p: { userId?: string }) => p.userId === user.id);
-        if (
-          myEntry?.gameId &&
-          myEntry.status !== "ELIMINATED" &&
-          String(myEntry.gameId) !== String(id)
-        ) {
-          navigate(`/game/${myEntry.gameId}`, { replace: true });
-        }
-      } catch {
-        /* ignore */
-      }
     });
     socket.on("consolidation-complete", async (payload: { tournamentId: string }) => {
       if (
