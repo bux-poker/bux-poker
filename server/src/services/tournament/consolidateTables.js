@@ -88,6 +88,55 @@ async function evacuateEliminatedFromKeepTables(
   }
 }
 
+/**
+ * ELIMINATED rows still hold seats. A table can be 9/9 DB rows with only ~5 live players, so spread
+ * balance throws "Table full". Park eliminated on a COMPLETED graveyard until there is a free seat.
+ */
+async function relocateEliminatedOffTableToGraveyard(
+  tx,
+  tournamentId,
+  sourceGameId,
+  seatsPerTable
+) {
+  const graveyards = [];
+  let moved = 0;
+  while (true) {
+    const totalRows = await tx.player.count({ where: { gameId: sourceGameId } });
+    if (totalRows < seatsPerTable) break;
+    const nextElim = await tx.player.findFirst({
+      where: { gameId: sourceGameId, status: "ELIMINATED" },
+      select: { id: true },
+    });
+    if (!nextElim) break;
+    let placed = false;
+    for (const gy of graveyards) {
+      placed = await assignPlayerToFirstAvailableGame(
+        tx,
+        nextElim.id,
+        [gy.id],
+        seatsPerTable
+      );
+      if (placed) break;
+    }
+    while (!placed) {
+      const gy = await createConsolidationGraveyardGame(tx, tournamentId);
+      graveyards.push(gy);
+      placed = await assignPlayerToFirstAvailableGame(
+        tx,
+        nextElim.id,
+        [gy.id],
+        seatsPerTable
+      );
+    }
+    moved++;
+  }
+  if (moved > 0) {
+    console.log(
+      `[TOURNAMENT] Balance prep: moved ${moved} eliminated row(s) off table (game ${sourceGameId}) to graveyard`
+    );
+  }
+}
+
 const _consolidationLocks = new Map();
 
 /** tournamentId -> Set<gameId> — only these games are blocked from starting new hands during that wave. */
@@ -646,6 +695,13 @@ export async function doConsolidateTables(tournamentId, deps) {
             if (!srcRow?.players?.length || !dstRow) {
               throw new Error("[TOURNAMENT] Balance: missing src/dst in transaction");
             }
+
+            await relocateEliminatedOffTableToGraveyard(
+              tx,
+              tournamentId,
+              dstRow.id,
+              seatsPerTable
+            );
 
             const dstAllSeats = await tx.player.findMany({
               where: { gameId: dstRow.id },
