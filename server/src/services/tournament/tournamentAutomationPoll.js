@@ -5,6 +5,18 @@ const PRESTART_LEAD_MS = 2 * 60 * 1000;
 const POLL_MS = 15000;
 
 let automationPollInterval = null;
+let automationTickInFlight = false;
+let automationPollBackoffUntilMs = 0;
+
+function isPrismaPressureError(err) {
+  const msg = `${err?.message ?? err ?? ""}`;
+  return (
+    msg.includes("connection pool") ||
+    msg.includes("PrismaClientKnownRequestError") ||
+    msg.includes("Can't reach database server") ||
+    msg.includes("Can't reach database")
+  );
+}
 
 function preStartThresholdMs(startTime) {
   return new Date(startTime).getTime() - PRESTART_LEAD_MS;
@@ -16,10 +28,21 @@ function preStartThresholdMs(startTime) {
  */
 export function startTournamentAutomationPoll(engine) {
   if (automationPollInterval) return;
-  automationPollInterval = setInterval(() => {
-    runTournamentAutomationTick(engine).catch((err) =>
-      console.error("[TOURNAMENT] Automation poll tick error:", err)
-    );
+  automationPollInterval = setInterval(async () => {
+    const now = Date.now();
+    if (automationTickInFlight) return;
+    if (now < automationPollBackoffUntilMs) return;
+    automationTickInFlight = true;
+    try {
+      await runTournamentAutomationTick(engine);
+    } catch (err) {
+      console.error("[TOURNAMENT] Automation poll tick error:", err);
+      if (isPrismaPressureError(err)) {
+        automationPollBackoffUntilMs = Date.now() + 30000;
+      }
+    } finally {
+      automationTickInFlight = false;
+    }
   }, POLL_MS);
   console.log(`[TOURNAMENT] Auto pre-start poll every ${POLL_MS / 1000}s (close + seat at startTime - 2m)`);
   runTournamentAutomationTick(engine).catch((err) =>

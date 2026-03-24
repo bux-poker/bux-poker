@@ -119,9 +119,25 @@ export async function doRunScheduledStart(tournamentId, deps) {
  * @param {{ runScheduledStart: (tournamentId: string) => Promise<void> }} engine - object with runScheduledStart method
  */
 let scheduledStartPollInterval = null;
+let scheduledStartTickInFlight = false;
+let scheduledStartBackoffUntilMs = 0;
+
+function isPrismaPressureError(err) {
+  const msg = `${err?.message ?? err ?? ""}`;
+  return (
+    msg.includes("connection pool") ||
+    msg.includes("PrismaClientKnownRequestError") ||
+    msg.includes("Can't reach database server") ||
+    msg.includes("Can't reach database")
+  );
+}
 export function startScheduledStartPoll(engine) {
   if (scheduledStartPollInterval) return;
   scheduledStartPollInterval = setInterval(async () => {
+    const nowMs = Date.now();
+    if (scheduledStartTickInFlight) return;
+    if (nowMs < scheduledStartBackoffUntilMs) return;
+    scheduledStartTickInFlight = true;
     try {
       const now = new Date();
       const due = await prisma.tournament.findMany({
@@ -137,6 +153,11 @@ export function startScheduledStartPoll(engine) {
       }
     } catch (err) {
       console.error(`[TOURNAMENT] Scheduled start poll error:`, err);
+      if (isPrismaPressureError(err)) {
+        scheduledStartBackoffUntilMs = Date.now() + 30000;
+      }
+    } finally {
+      scheduledStartTickInFlight = false;
     }
   }, 30000);
   console.log("[TOURNAMENT] Scheduled start poll running every 30s");
