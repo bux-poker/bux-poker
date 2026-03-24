@@ -1,6 +1,10 @@
 import { prisma } from "../../config/database.js";
 import { auditChipConservation } from "./chipAudit.js";
 import { resyncGamesToMaxBlindLevel } from "./blindLevels.js";
+import {
+  pickNextBigBlindMover,
+  pickWorstOpenSeat,
+} from "./balanceSeatSelection.js";
 
 /** Still in the tournament (incl. 0-chip all-in). Excluding them broke table counts & closing tables. */
 const NOT_ELIMINATED = { status: { not: "ELIMINATED" } };
@@ -495,6 +499,8 @@ export async function doConsolidateTables(tournamentId, deps) {
           const destState = destSnapshots.map((g) => ({
             id: g.id,
             tableNumber: g.tableNumber,
+            bigBlindSeat: g.bigBlindSeat,
+            smallBlindSeat: g.smallBlindSeat,
             rows: [...g.players],
           }));
 
@@ -510,14 +516,18 @@ export async function doConsolidateTables(tournamentId, deps) {
             return viable[0];
           };
 
-          const nextFreeSeat = (d) => {
+          const worstSeatOnDestination = (d) => {
             const taken = new Set(d.rows.map((p) => p.seatNumber));
-            let s = 1;
-            while (s <= seatsPerTable && taken.has(s)) s++;
-            if (s > seatsPerTable) {
+            const seat = pickWorstOpenSeat(
+              taken,
+              seatsPerTable,
+              d.bigBlindSeat,
+              d.smallBlindSeat
+            );
+            if (seat == null) {
               throw new Error(`[TOURNAMENT] No seat on table ${d.tableNumber}`);
             }
-            return s;
+            return seat;
           };
 
           const movers = await tx.player.findMany({
@@ -530,7 +540,9 @@ export async function doConsolidateTables(tournamentId, deps) {
           const orphanPot = closeRow?.pot ?? 0;
 
           if (orphanPot > 0 && movers.length > 0) {
-            const first = movers[0];
+            const first = [...movers].sort(
+              (a, b) => a.seatNumber - b.seatNumber
+            )[0];
             await tx.player.update({
               where: { id: first.id },
               data: { chips: (first.chips ?? 0) + orphanPot },
@@ -544,9 +556,14 @@ export async function doConsolidateTables(tournamentId, deps) {
             );
           }
 
+          for (let i = movers.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [movers[i], movers[j]] = [movers[j], movers[i]];
+          }
+
           for (const p of movers) {
             const dst = pickDest();
-            const seat = nextFreeSeat(dst);
+            const seat = worstSeatOnDestination(dst);
             touchedDestIds.push(dst.id);
             await tx.player.update({
               where: { id: p.id },
@@ -560,7 +577,7 @@ export async function doConsolidateTables(tournamentId, deps) {
               status: p.status ?? "ACTIVE",
             });
             console.log(
-              `[TOURNAMENT] Consolidation move: user ${p.userId} table ${closeG.tableNumber} → table ${dst.tableNumber} seat ${seat}`
+              `[TOURNAMENT] Consolidation move (worst seat / TDA): user ${p.userId} table ${closeG.tableNumber} → table ${dst.tableNumber} seat ${seat}`
             );
           }
 
@@ -745,21 +762,32 @@ export async function doConsolidateTables(tournamentId, deps) {
               );
             }
             const taken = new Set(dstAllSeats.map((p) => p.seatNumber));
-            let seat = 1;
-            while (seat <= seatsPerTable && taken.has(seat)) seat++;
-            if (seat > seatsPerTable) {
+            const seat = pickWorstOpenSeat(
+              taken,
+              seatsPerTable,
+              dstRow.bigBlindSeat,
+              dstRow.smallBlindSeat
+            );
+            if (seat == null) {
               throw new Error(
                 `[TOURNAMENT] No free seat on table ${dstRow.tableNumber}`
               );
             }
 
-            const mover = srcRow.players[0];
+            const mover = pickNextBigBlindMover(
+              srcRow.players,
+              srcRow.bigBlindSeat,
+              seatsPerTable
+            );
+            if (!mover) {
+              throw new Error("[TOURNAMENT] Balance: could not pick mover");
+            }
             await tx.player.update({
               where: { id: mover.id },
               data: { gameId: dstRow.id, seatNumber: seat },
             });
             console.log(
-              `[TOURNAMENT] Balance: moved user ${mover.userId} table ${srcRow.tableNumber} → ${dstRow.tableNumber} seat ${seat}`
+              `[TOURNAMENT] Balance: moved next-BB / UTG user ${mover.userId} table ${srcRow.tableNumber} → ${dstRow.tableNumber} worst seat ${seat} (TDA)`
             );
           });
 
