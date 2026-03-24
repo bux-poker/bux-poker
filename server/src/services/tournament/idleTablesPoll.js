@@ -135,7 +135,11 @@ export function startIdleTablesPoll(engine) {
           }
           try {
             await startHandForGame(game.id, socketIO);
-            console.log(`[TOURNAMENT] Idle-table recovery: started hand for game ${game.id} (table ${game.tableNumber}) with pot=0`);
+            if (hasActiveHand(game.id)) {
+              console.log(`[TOURNAMENT] Idle-table recovery: started hand for game ${game.id} (table ${game.tableNumber}) with pot=0`);
+            } else {
+              console.log(`[TOURNAMENT] Idle-table recovery: no hand started for game ${game.id} (table ${game.tableNumber}) - blocked by break/sync/wait conditions`);
+            }
           } catch (err) {
             console.error(`[TOURNAMENT] Idle-table start failed for game ${game.id}:`, err);
           }

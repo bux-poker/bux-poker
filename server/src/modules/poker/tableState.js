@@ -93,6 +93,11 @@ export function clearAllStateForGames(gameIds) {
       if (timer.graceTimerId) clearTimeout(timer.graceTimerId);
       turnTimers.delete(gameId);
     }
+    const testTimer = testPlayerTimers.get(gameId);
+    if (testTimer) {
+      if (testTimer.timerId) clearTimeout(testTimer.timerId);
+      testPlayerTimers.delete(gameId);
+    }
   }
   console.log(
     `[POKER] Cleared state for ${gameIds.length} game(s) before consolidation`
