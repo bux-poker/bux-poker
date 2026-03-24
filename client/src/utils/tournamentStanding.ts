@@ -59,8 +59,8 @@ export function orderTournamentPlayersForStandings(merged: MergedPlayer[]): Merg
   activeWithChips.sort((a, b) => (b.chips ?? 0) - (a.chips ?? 0));
   eliminated.sort(
     (a, b) =>
-      (b.finishingPlace ?? b.positionField ?? 0) -
-      (a.finishingPlace ?? a.positionField ?? 0)
+      (a.finishingPlace ?? a.positionField ?? 999) -
+      (b.finishingPlace ?? b.positionField ?? 999)
   );
   return [...activeWithChips, ...allIn, ...eliminated];
 }

@@ -122,8 +122,8 @@ export function TournamentLobbyModal({
       const allIn = withLiveChips.filter((p: PlayerRow) => p.status !== 'ELIMINATED' && (p.chips ?? 0) === 0);
       const eliminated = withLiveChips.filter((p: PlayerRow) => p.status === 'ELIMINATED');
       activeWithChips.sort((a: PlayerRow, b: PlayerRow) => (b.chips ?? 0) - (a.chips ?? 0));
-      // Eliminated: first eliminated = highest finishingPlace (e.g. 13th) at bottom → sort descending
-      eliminated.sort((a: PlayerRow, b: PlayerRow) => (b.position ?? 0) - (a.position ?? 0));
+      // Eliminated: finishingPlace asc (4th before 7th) — first out = worst place = largest number = bottom (matches server sortTournamentStandings)
+      eliminated.sort((a: PlayerRow, b: PlayerRow) => (a.position ?? 999) - (b.position ?? 999));
       setPlayers([...activeWithChips, ...allIn, ...eliminated]);
     } else {
       setPlayers([]);
