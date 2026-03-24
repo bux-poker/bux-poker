@@ -1060,7 +1060,7 @@ export function PokerGameView() {
   const myPositionStr =
     gameState.tournamentId
       ? tournamentStanding.place != null && tournamentStanding.total > 0
-        ? `${ordinalSuffix(tournamentStanding.place)} / ${tournamentStanding.total}`
+        ? `${ordinalSuffix(tournamentStanding.place)}`
         : myTableChipRank && myTableChipRank > 0
           ? ordinalSuffix(myTableChipRank)
           : null
