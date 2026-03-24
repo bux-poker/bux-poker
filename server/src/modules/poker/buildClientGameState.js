@@ -109,6 +109,22 @@ export function buildClientGameState(game, state, viewerUserId) {
         p.showdownRevealStatus === "PENDING"
     );
 
+  // Mid-hand tournament moves: DB has a seated player not yet in this hand's in-memory list — show them (next hand they play).
+  let playersForDisplay = state?.players?.length
+    ? [...state.players]
+    : [...(game.players || [])];
+  if (state?.players?.length && game.players?.length) {
+    const seen = new Set(playersForDisplay.map((p) => p.id));
+    for (const gp of game.players) {
+      if (gp.status === "ELIMINATED" || seen.has(gp.id)) continue;
+      playersForDisplay.push(gp);
+      seen.add(gp.id);
+    }
+    playersForDisplay.sort(
+      (a, b) => (a.seatNumber ?? 0) - (b.seatNumber ?? 0)
+    );
+  }
+
   return {
     id: game.id,
     tournamentId: game.tournamentId,
@@ -133,7 +149,7 @@ export function buildClientGameState(game, state, viewerUserId) {
     showdownResults: isNewHand ? null : state?.showdownResults || null,
     showdownForcedReveal: isNewHand ? false : showdownForcedReveal,
     showdownNeedsChoice: isNewHand ? false : showdownNeedsChoice,
-    players: (state?.players ?? game.players)
+    players: playersForDisplay
       .filter((p) => p.status !== "ELIMINATED")
       .map((p) => {
         const parsed = parsePlayerHoleCards(p);

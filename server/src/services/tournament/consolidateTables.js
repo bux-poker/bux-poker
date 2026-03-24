@@ -140,106 +140,20 @@ export function isTournamentConsolidationWaiting(tournamentId) {
   return !!s && s.size > 0;
 }
 
-/**
- * Which destination tables receive live players when we close `closeG` (same pickDest order as the DB transaction).
- * @param {{ id: string, tableNumber: number, players: { id: string, seatNumber: number, chips: number, userId: string, status?: string }[] }} closeGFull
- * @param {typeof closeGFull[]} keepGamesFull
- */
-function simulateCloseWaveAffectedGameIds(closeGFull, keepGamesFull, seatsPerTable) {
-  const affected = new Set([closeGFull.id]);
-  const destState = keepGamesFull.map((g) => ({
-    id: g.id,
-    tableNumber: g.tableNumber,
-    rows: g.players.map((p) => ({ ...p })),
-  }));
-  const liveCount = (d) => d.rows.filter((p) => p.status !== "ELIMINATED").length;
-  const pickDest = () => {
-    const viable = destState.filter((d) => d.rows.length < seatsPerTable);
-    if (viable.length === 0) {
-      throw new Error(`[TOURNAMENT] No free seat (seatsPerTable=${seatsPerTable})`);
+/** Max one-table-to-table moves per consolidation run (idle poll calls this ~15s). */
+const MAX_BALANCE_MOVES_PER_RUN = 12;
+
+async function emitRoomsGameState(gameIds, io) {
+  if (!io) return;
+  const { emitGameState } = await import("../../modules/poker/emitGameState.js");
+  const { tableState } = await import("../../modules/poker/tableState.js");
+  for (const gid of [...new Set(gameIds)].filter(Boolean)) {
+    try {
+      await emitGameState(gid, io, tableState.get(gid) ?? null);
+    } catch (e) {
+      console.warn(`[TOURNAMENT] emit game-state ${gid}:`, e?.message);
     }
-    viable.sort((a, b) => liveCount(a) - liveCount(b));
-    return viable[0];
-  };
-  const nextFreeSeat = (d) => {
-    const taken = new Set(d.rows.map((p) => p.seatNumber));
-    let s = 1;
-    while (s <= seatsPerTable && taken.has(s)) s++;
-    if (s > seatsPerTable) {
-      throw new Error(`[TOURNAMENT] No seat on table ${d.tableNumber}`);
-    }
-    return s;
-  };
-  const movers = closeGFull.players.filter((p) => p.status !== "ELIMINATED");
-  for (const p of movers) {
-    const dst = pickDest();
-    const seat = nextFreeSeat(dst);
-    affected.add(dst.id);
-    dst.rows.push({
-      id: p.id,
-      seatNumber: seat,
-      chips: p.chips,
-      userId: p.userId,
-      status: p.status ?? "ACTIVE",
-    });
   }
-  return affected;
-}
-
-/**
- * Tables touched by spread-balancing (deterministic: lowest live seat leaves the fullest table).
- */
-function simulateSpreadBalanceAffectedGameIds(gamesWithAllPlayerRows, seatsPerTable) {
-  const notElim = (p) => p.status !== "ELIMINATED";
-  const deepGames = gamesWithAllPlayerRows.map((g) => ({
-    id: g.id,
-    tableNumber: g.tableNumber,
-    players: g.players.map((p) => ({ ...p })),
-  }));
-  const affected = new Set();
-  let guard = 0;
-  while (guard++ < 200) {
-    const active = deepGames.filter((g) => g.players.some(notElim));
-    if (active.length < 2) break;
-    const sizes = active.map((g) => ({
-      g,
-      n: g.players.filter(notElim).length,
-    }));
-    const mx = Math.max(...sizes.map((s) => s.n));
-    const mn = Math.min(...sizes.map((s) => s.n));
-    if (mx - mn <= 1) break;
-
-    const maxTables = sizes
-      .filter((s) => s.n === mx)
-      .sort((a, b) => b.g.tableNumber - a.g.tableNumber);
-    const minTables = sizes
-      .filter((s) => s.n === mn)
-      .sort((a, b) => a.g.tableNumber - b.g.tableNumber);
-    const src = maxTables[0].g;
-    const dst = minTables[0].g;
-
-    if (dst.players.length >= seatsPerTable) {
-      throw new Error(
-        `[TOURNAMENT] Table ${dst.tableNumber} full (${dst.players.length}/${seatsPerTable})`
-      );
-    }
-    const taken = new Set(dst.players.map((p) => p.seatNumber));
-    let seat = 1;
-    while (seat <= seatsPerTable && taken.has(seat)) seat++;
-    if (seat > seatsPerTable) {
-      throw new Error(`[TOURNAMENT] No free seat on table ${dst.tableNumber}`);
-    }
-
-    const live = src.players.filter(notElim).sort((a, b) => a.seatNumber - b.seatNumber);
-    const mover = live[0];
-    const idx = src.players.findIndex((x) => x.id === mover.id);
-    if (idx < 0) break;
-    src.players.splice(idx, 1);
-    dst.players.push({ ...mover, seatNumber: seat });
-    affected.add(src.id);
-    affected.add(dst.id);
-  }
-  return affected;
 }
 
 /**
@@ -389,7 +303,7 @@ export async function doConsolidateTables(tournamentId, deps) {
   };
 
   try {
-    // Close one excess table per wave; only that table + destination keep tables pause for hands.
+    // Close one excess table per wave; only the closing table waits for its hand (destinations keep playing).
     while (true) {
       games = await prisma.game.findMany({
         where: { tournamentId, status: "ACTIVE" },
@@ -439,89 +353,43 @@ export async function doConsolidateTables(tournamentId, deps) {
         );
       });
 
-      const [keepFull, closeFull] = await Promise.all([
-        prisma.game.findMany({
-          where: { id: { in: keepIds } },
-          include: {
-            players: {
-              select: {
-                id: true,
-                seatNumber: true,
-                chips: true,
-                userId: true,
-                status: true,
-              },
-              orderBy: { seatNumber: "asc" },
-            },
-          },
-          orderBy: { tableNumber: "asc" },
-        }),
-        prisma.game.findUnique({
-          where: { id: closeG.id },
-          include: {
-            players: {
-              select: {
-                id: true,
-                seatNumber: true,
-                chips: true,
-                userId: true,
-                status: true,
-              },
-              orderBy: { seatNumber: "asc" },
-            },
-          },
-        }),
-      ]);
-
-      if (!closeFull) {
+      const closeExists = await prisma.game.findUnique({
+        where: { id: closeG.id },
+        select: { id: true, tableNumber: true },
+      });
+      if (!closeExists) {
         console.warn("[TOURNAMENT] Close target game missing; aborting consolidation wave");
         return games;
       }
 
-      let affectedIds;
-      try {
-        affectedIds = [
-          ...simulateCloseWaveAffectedGameIds(closeFull, keepFull, seatsPerTable),
-        ];
-      } catch (e) {
-        console.warn("[TOURNAMENT] Close simulation failed:", e?.message);
-        return games;
-      }
-
-      registerConsolidationWait(tournamentId, affectedIds);
+      const waitCloseIds = [closeG.id];
+      const touchedDestIds = [];
+      registerConsolidationWait(tournamentId, waitCloseIds);
       try {
         const io = deps.getIO();
-        const anyHand = await Promise.all(
-          affectedIds.map((id) => deps.hasActiveHand(id))
-        ).then((arr) => arr.some(Boolean));
-        if (anyHand) {
+        if (await deps.hasActiveHand(closeG.id)) {
           console.log(
-            `[TOURNAMENT] Merge wave: waiting on ${affectedIds.length} table(s) (others keep playing)`
+            `[TOURNAMENT] Merge: wait only closing table ${closeG.tableNumber} — destination tables keep playing`
           );
-          if (io) await emitConsolidationWaitToGames(affectedIds, tournamentId, io);
-          await waitForGameIdsToFinishHands(affectedIds, waitDeps);
+          if (io) await emitConsolidationWaitToGames(waitCloseIds, tournamentId, io);
+          await waitForGameIdsToFinishHands(waitCloseIds, waitDeps);
         }
         await new Promise((r) => setTimeout(r, 2000));
 
-        const handBlocking = await Promise.all(
-          affectedIds.map((id) => deps.hasActiveHand(id))
-        ).then((arr) => arr.some(Boolean));
-        if (handBlocking) {
+        if (await deps.hasActiveHand(closeG.id)) {
           console.log(
-            `[TOURNAMENT] Consolidation aborted mid-close: hand still active after wait; will retry next poll`
+            `[TOURNAMENT] Consolidation aborted: closing table still in hand; will retry next poll`
           );
           return games;
         }
 
-        const pots = await prisma.game.findMany({
-          where: { id: { in: affectedIds }, pot: { gt: 0 } },
-          select: { id: true, pot: true, tableNumber: true },
+        const preClosePot = await prisma.game.findUnique({
+          where: { id: closeG.id },
+          select: { pot: true, tableNumber: true },
         });
-        if (pots.length > 0) {
+        if ((preClosePot?.pot ?? 0) > 0) {
           console.warn(
-            `[TOURNAMENT] Consolidation aborted: DB pot > 0: ${pots
-              .map((p) => `table${p.tableNumber}:${p.pot}`)
-              .join(", ")}`
+            `[TOURNAMENT] Consolidation aborted: closing table ${closeG.tableNumber} DB pot ${preClosePot.pot}`
           );
           return games;
         }
@@ -598,6 +466,7 @@ export async function doConsolidateTables(tournamentId, deps) {
           for (const p of movers) {
             const dst = pickDest();
             const seat = nextFreeSeat(dst);
+            touchedDestIds.push(dst.id);
             await tx.player.update({
               where: { id: p.id },
               data: { gameId: dst.id, seatNumber: seat },
@@ -624,18 +493,24 @@ export async function doConsolidateTables(tournamentId, deps) {
         });
 
         try {
-          deps.clearAllStateForGames(affectedIds);
+          deps.clearAllStateForGames([closeG.id]);
+          const uniqueDest = [...new Set(touchedDestIds)];
+          for (const did of uniqueDest) {
+            if (!(await deps.hasActiveHand(did))) {
+              deps.clearAllStateForGames([did]);
+            }
+          }
         } catch (e) {
           console.warn("[TOURNAMENT] Could not clear game state:", e?.message);
         }
       } finally {
-        unregisterConsolidationWait(tournamentId, affectedIds);
+        unregisterConsolidationWait(tournamentId, waitCloseIds);
       }
 
       const ioWave = deps.getIO();
       if (ioWave) {
-        const keepAffected = affectedIds.filter((id) => id !== closeG.id);
-        for (const gid of keepAffected) {
+        await emitRoomsGameState([...new Set(touchedDestIds)], ioWave);
+        for (const gid of [...new Set(touchedDestIds)]) {
           const g = await prisma.game.findUnique({
             where: { id: gid },
             include: { players: { where: NOT_ELIMINATED } },
@@ -692,169 +567,156 @@ export async function doConsolidateTables(tournamentId, deps) {
     );
 
     if (spreadLive > 1) {
-      const gamesAllRows = await prisma.game.findMany({
-        where: { tournamentId, status: "ACTIVE" },
-        include: {
-          players: {
-            select: {
-              id: true,
-              seatNumber: true,
-              chips: true,
-              userId: true,
-              status: true,
+      let balanceMoves = 0;
+      while (balanceMoves < MAX_BALANCE_MOVES_PER_RUN) {
+        games = await prisma.game.findMany({
+          where: { tournamentId, status: "ACTIVE" },
+          include: {
+            players: {
+              where: NOT_ELIMINATED,
+              include: { user: true },
+              orderBy: { seatNumber: "asc" },
             },
-            orderBy: { seatNumber: "asc" },
           },
-        },
-        orderBy: { tableNumber: "asc" },
-      });
+          orderBy: { tableNumber: "asc" },
+        });
 
-      let balanceAffected;
-      try {
-        balanceAffected = [
-          ...simulateSpreadBalanceAffectedGameIds(gamesAllRows, seatsPerTable),
-        ];
-      } catch (e) {
-        console.warn("[TOURNAMENT] Balance simulation failed:", e?.message);
-        return games;
-      }
+        const nonempty = games.filter((g) => (g.players?.length ?? 0) > 0);
+        if (nonempty.length < 2) break;
 
-      if (balanceAffected.length > 0) {
-        registerConsolidationWait(tournamentId, balanceAffected);
+        const sz = nonempty.map((g) => ({ g, n: g.players.length }));
+        const mx = Math.max(...sz.map((s) => s.n));
+        const mn = Math.min(...sz.map((s) => s.n));
+        if (mx - mn <= 1) break;
+
+        const srcGame = sz
+          .filter((s) => s.n === mx)
+          .sort((a, b) => b.g.tableNumber - a.g.tableNumber)[0].g;
+        const dstGame = sz
+          .filter((s) => s.n === mn)
+          .sort((a, b) => a.g.tableNumber - b.g.tableNumber)[0].g;
+
+        if (srcGame.id === dstGame.id) break;
+
+        const waitSrc = [srcGame.id];
+        registerConsolidationWait(tournamentId, waitSrc);
+        let progressed = false;
         try {
           const io = deps.getIO();
-          const anyHand = await Promise.all(
-            balanceAffected.map((id) => deps.hasActiveHand(id))
-          ).then((arr) => arr.some(Boolean));
-          if (anyHand) {
+          if (await deps.hasActiveHand(srcGame.id)) {
             console.log(
-              `[TOURNAMENT] Balancing: waiting on ${balanceAffected.length} table(s) only`
+              `[TOURNAMENT] Balance: wait only table ${srcGame.tableNumber} (largest); table ${dstGame.tableNumber} keeps playing`
             );
-            if (io) {
-              await emitConsolidationWaitToGames(
-                balanceAffected,
-                tournamentId,
-                io
-              );
-            }
-            await waitForGameIdsToFinishHands(balanceAffected, waitDeps);
+            if (io) await emitConsolidationWaitToGames(waitSrc, tournamentId, io);
+            await waitForGameIdsToFinishHands(waitSrc, waitDeps);
           }
-          await new Promise((r) => setTimeout(r, 2000));
+          await new Promise((r) => setTimeout(r, 1500));
 
-          const handBlocking = await Promise.all(
-            balanceAffected.map((id) => deps.hasActiveHand(id))
-          ).then((arr) => arr.some(Boolean));
-          if (handBlocking) {
+          if (await deps.hasActiveHand(srcGame.id)) {
             console.log(
-              `[TOURNAMENT] Consolidation aborted during balance wait; will retry next poll`
+              `[TOURNAMENT] Balance: source table ${srcGame.tableNumber} still in hand — stop for this run`
             );
-            return games;
+            break;
           }
 
-          const pots = await prisma.game.findMany({
-            where: { id: { in: balanceAffected }, pot: { gt: 0 } },
-            select: { id: true, tableNumber: true, pot: true },
+          const srcPotRow = await prisma.game.findUnique({
+            where: { id: srcGame.id },
+            select: { pot: true, tableNumber: true },
           });
-          if (pots.length > 0) {
+          if ((srcPotRow?.pot ?? 0) > 0) {
             console.warn(
-              `[TOURNAMENT] Aborted balance: DB pot > 0 on affected table(s): ${pots
-                .map((p) => `t${p.tableNumber}`)
-                .join(", ")}`
+              `[TOURNAMENT] Balance: source table ${srcGame.tableNumber} DB pot ${srcPotRow.pot} — skip`
             );
-            return games;
+            break;
           }
 
           await prisma.$transaction(async (tx) => {
-            let guard = 0;
-            while (guard++ < 200) {
-              const gs = await tx.game.findMany({
-                where: { tournamentId, status: "ACTIVE" },
-                include: {
-                  players: {
-                    where: NOT_ELIMINATED,
-                    orderBy: { seatNumber: "asc" },
-                  },
+            const gs = await tx.game.findMany({
+              where: { tournamentId, status: "ACTIVE" },
+              include: {
+                players: {
+                  where: NOT_ELIMINATED,
+                  orderBy: { seatNumber: "asc" },
                 },
-                orderBy: { tableNumber: "asc" },
-              });
-              const active = gs.filter((g) => (g.players?.length ?? 0) > 0);
-              if (active.length < 2) break;
-              const sizes = active.map((g) => ({ g, n: g.players.length }));
-              const mx = Math.max(...sizes.map((s) => s.n));
-              const mn = Math.min(...sizes.map((s) => s.n));
-              if (mx - mn <= 1) break;
+              },
+              orderBy: { tableNumber: "asc" },
+            });
+            const srcRow = gs.find((g) => g.id === srcGame.id);
+            const dstRow = gs.find((g) => g.id === dstGame.id);
+            if (!srcRow?.players?.length || !dstRow) {
+              throw new Error("[TOURNAMENT] Balance: missing src/dst in transaction");
+            }
 
-              const maxTables = sizes
-                .filter((s) => s.n === mx)
-                .sort((a, b) => b.g.tableNumber - a.g.tableNumber);
-              const minTables = sizes
-                .filter((s) => s.n === mn)
-                .sort((a, b) => a.g.tableNumber - b.g.tableNumber);
-              const src = maxTables[0].g;
-              const dst = minTables[0].g;
-
-              const dstAllSeats = await tx.player.findMany({
-                where: { gameId: dst.id },
-                select: { seatNumber: true },
-              });
-              if (dstAllSeats.length >= seatsPerTable) {
-                throw new Error(
-                  `[TOURNAMENT] Table ${dst.tableNumber} full (${dstAllSeats.length}/${seatsPerTable} seats incl. eliminated)`
-                );
-              }
-              const taken = new Set(dstAllSeats.map((p) => p.seatNumber));
-              let seat = 1;
-              while (seat <= seatsPerTable && taken.has(seat)) seat++;
-              if (seat > seatsPerTable) {
-                throw new Error(
-                  `[TOURNAMENT] No free seat on table ${dst.tableNumber} (seatsPerTable=${seatsPerTable})`
-                );
-              }
-
-              const mover = src.players[0];
-
-              await tx.player.update({
-                where: { id: mover.id },
-                data: { gameId: dst.id, seatNumber: seat },
-              });
-              console.log(
-                `[TOURNAMENT] Balance: moved user ${mover.userId} from table ${src.tableNumber} → ${dst.tableNumber} seat ${seat}`
+            const dstAllSeats = await tx.player.findMany({
+              where: { gameId: dstRow.id },
+              select: { seatNumber: true },
+            });
+            if (dstAllSeats.length >= seatsPerTable) {
+              throw new Error(
+                `[TOURNAMENT] Table ${dstRow.tableNumber} full (${dstAllSeats.length}/${seatsPerTable})`
               );
             }
+            const taken = new Set(dstAllSeats.map((p) => p.seatNumber));
+            let seat = 1;
+            while (seat <= seatsPerTable && taken.has(seat)) seat++;
+            if (seat > seatsPerTable) {
+              throw new Error(
+                `[TOURNAMENT] No free seat on table ${dstRow.tableNumber}`
+              );
+            }
+
+            const mover = srcRow.players[0];
+            await tx.player.update({
+              where: { id: mover.id },
+              data: { gameId: dstRow.id, seatNumber: seat },
+            });
+            console.log(
+              `[TOURNAMENT] Balance: moved user ${mover.userId} table ${srcRow.tableNumber} → ${dstRow.tableNumber} seat ${seat}`
+            );
           });
 
           try {
-            deps.clearAllStateForGames(balanceAffected);
+            deps.clearAllStateForGames([srcGame.id]);
+            if (!(await deps.hasActiveHand(dstGame.id))) {
+              deps.clearAllStateForGames([dstGame.id]);
+            }
           } catch (e) {
-            console.warn("[TOURNAMENT] Could not clear game state:", e?.message);
+            console.warn("[TOURNAMENT] Balance clear state:", e?.message);
           }
-        } finally {
-          unregisterConsolidationWait(tournamentId, balanceAffected);
-        }
 
-        const ioBal = deps.getIO();
-        if (ioBal) {
-          for (const gid of balanceAffected) {
-            const g = await prisma.game.findUnique({
-              where: { id: gid },
-              include: { players: { where: NOT_ELIMINATED } },
-            });
-            if (
-              g &&
-              g.players.length >= 2 &&
-              !(await deps.hasActiveHand(gid))
-            ) {
-              try {
-                await deps.startHandForGame(gid, ioBal);
-              } catch (err) {
-                console.error(
-                  `[TOURNAMENT] Balance start hand error:`,
-                  err?.message
-                );
+          const ioPush = deps.getIO();
+          if (ioPush) await emitRoomsGameState([srcGame.id, dstGame.id], ioPush);
+
+          if (ioPush) {
+            for (const gid of [srcGame.id, dstGame.id]) {
+              const g = await prisma.game.findUnique({
+                where: { id: gid },
+                include: { players: { where: NOT_ELIMINATED } },
+              });
+              if (
+                g &&
+                g.players.length >= 2 &&
+                !(await deps.hasActiveHand(gid))
+              ) {
+                try {
+                  await deps.startHandForGame(gid, ioPush);
+                } catch (err) {
+                  console.error(
+                    `[TOURNAMENT] Balance post-move start:`,
+                    err?.message
+                  );
+                }
               }
             }
           }
+
+          progressed = true;
+          balanceMoves++;
+        } finally {
+          unregisterConsolidationWait(tournamentId, waitSrc);
         }
+
+        if (!progressed) break;
       }
     } else {
       console.log(
