@@ -7,6 +7,7 @@ const STUCK_THRESHOLD_MS = 45000;
 const IDLE_POLL_INTERVAL_MS = 15000;
 
 let idleTablesPollInterval = null;
+let idleTablesPollInFlight = false;
 
 /**
  * Start the poll that recovers idle/stuck tables and triggers consolidation when needed.
@@ -15,6 +16,11 @@ let idleTablesPollInterval = null;
 export function startIdleTablesPoll(engine) {
   if (idleTablesPollInterval) return;
   idleTablesPollInterval = setInterval(async () => {
+    if (idleTablesPollInFlight) {
+      console.log("[TOURNAMENT] Idle poll skipped: previous tick still running");
+      return;
+    }
+    idleTablesPollInFlight = true;
     const { startHandForGame, hasActiveHand, forceStuckPlayerToAct, getIO, getTurnStartedAt, clearAllStateForGames } = await import("../../modules/socket-handlers/pokerHandler.js");
     const socketIO = getIO();
     const now = Date.now();
@@ -155,6 +161,8 @@ export function startIdleTablesPoll(engine) {
       }
     } catch (err) {
       console.error("[TOURNAMENT] Idle tables poll error:", err);
+    } finally {
+      idleTablesPollInFlight = false;
     }
   }, IDLE_POLL_INTERVAL_MS);
   console.log(`[TOURNAMENT] Idle tables poll running every ${IDLE_POLL_INTERVAL_MS / 1000}s (stuck-table recovery after ${STUCK_THRESHOLD_MS / 1000}s)`);
