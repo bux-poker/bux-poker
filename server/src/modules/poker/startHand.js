@@ -14,6 +14,7 @@ import { advanceToNextStreet } from "./advanceStreet.js";
 import { emitIfTournamentCompleted } from "./tableTournamentHooks.js";
 import { isGameConsolidationWaiting } from "../../services/tournament/consolidateTables.js";
 import { awardStalePotAndZeroGame } from "../../services/tournament/stalePotRecovery.js";
+import { isEligibleToDealNextHand } from "./playerEligibility.js";
 
 const gameStartInclude = {
   players: {
@@ -148,9 +149,7 @@ export async function startHandForGameBody(gameId, io) {
   const previousState = tableState.get(gameId);
   const previousDealerSeat = previousState?.dealerSeat ?? game.dealerSeat;
 
-  const activePlayersForDealer = game.players.filter(p =>
-    p.status === 'ACTIVE' && p.seatNumber >= 0 && p.chips > 0
-  );
+  const activePlayersForDealer = game.players.filter(isEligibleToDealNextHand);
 
   if (previousDealerSeat !== null && previousDealerSeat !== undefined && activePlayersForDealer.length > 0) {
     const maxSeat = Math.max(...activePlayersForDealer.map(p => p.seatNumber));
@@ -202,9 +201,7 @@ export async function startHandForGameBody(gameId, io) {
   const minSeat = Math.min(...activePlayersForDealer.map(p => p.seatNumber), 8);
   const seatRange = maxSeat >= minSeat ? maxSeat - minSeat + 1 : 8;
 
-  const activePlayers = game.players.filter(p =>
-    p.status === 'ACTIVE' && p.seatNumber >= 0 && p.chips > 0
-  );
+  const activePlayers = game.players.filter(isEligibleToDealNextHand);
   if (activePlayers.length < 2) {
     throw new Error(`Cannot start hand: need at least 2 active players, found ${activePlayers.length}. Table may need consolidation or is finished.`);
   }

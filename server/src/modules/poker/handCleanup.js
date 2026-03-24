@@ -5,6 +5,7 @@
 import { prisma } from "../../config/database.js";
 import { tableState } from "./tableState.js";
 import { resetPlayerRowIfNotEliminated } from "./safeHandCleanupDb.js";
+import { isEligibleToDealNextHand } from "./playerEligibility.js";
 
 /**
  * @param {string} gameId
@@ -41,7 +42,7 @@ export function cleanupHandAndStartNext(gameId, io, state, startHandForGame, del
 
       if (
         gameForNext &&
-        gameForNext.players.filter((p) => p.status === "ACTIVE").length >= 2 &&
+        gameForNext.players.filter(isEligibleToDealNextHand).length >= 2 &&
         io
       ) {
         try {

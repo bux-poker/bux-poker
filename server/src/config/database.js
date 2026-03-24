@@ -10,31 +10,52 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 /**
- * Append Prisma pool query params when missing so production isn't stuck at defaults like limit=9/timeout=10.
- * Override via DATABASE_URL or set PRISMA_CONNECTION_LIMIT / PRISMA_POOL_TIMEOUT on the host.
+ * Prisma pool tuning. Logs showed production stuck at connection_limit=9 / pool_timeout=10 — too small
+ * under socket + polls + consolidation. We **raise** low limits (replace in URL), not only append when absent.
+ * Set PRISMA_CONNECTION_LIMIT / PRISMA_POOL_TIMEOUT on Render to override targets.
  */
 function databaseUrlWithPoolDefaults() {
   let url = process.env.DATABASE_URL;
   if (!url || typeof url !== "string") return url;
-  const hasLimit = /[?&]connection_limit=/i.test(url);
-  const hasTimeout = /[?&]pool_timeout=/i.test(url);
-  if (hasLimit && hasTimeout) return url;
-  const limit =
-    process.env.PRISMA_CONNECTION_LIMIT ||
-    (hasLimit ? null : "15");
-  const timeout =
-    process.env.PRISMA_POOL_TIMEOUT ||
-    (hasTimeout ? null : "30");
-  const parts = [];
-  if (!hasLimit && limit != null) {
-    parts.push(`connection_limit=${encodeURIComponent(String(limit))}`);
+  const targetLimit = Math.max(
+    1,
+    parseInt(process.env.PRISMA_CONNECTION_LIMIT || "18", 10)
+  );
+  const targetTimeout = Math.max(
+    1,
+    parseInt(process.env.PRISMA_POOL_TIMEOUT || "45", 10)
+  );
+
+  let out = url;
+  const limMatch = out.match(/connection_limit=(\d+)/i);
+  if (limMatch) {
+    const cur = parseInt(limMatch[1], 10);
+    if (cur < targetLimit) {
+      out = out.replace(/connection_limit=\d+/i, `connection_limit=${targetLimit}`);
+    }
+  } else {
+    out += (out.includes("?") ? "&" : "?") + `connection_limit=${targetLimit}`;
   }
-  if (!hasTimeout && timeout != null) {
-    parts.push(`pool_timeout=${encodeURIComponent(String(timeout))}`);
+
+  const toMatch = out.match(/pool_timeout=(\d+)/i);
+  if (toMatch) {
+    const cur = parseInt(toMatch[1], 10);
+    if (cur < targetTimeout) {
+      out = out.replace(/pool_timeout=\d+/i, `pool_timeout=${targetTimeout}`);
+    }
+  } else {
+    out += (out.includes("?") ? "&" : "?") + `pool_timeout=${targetTimeout}`;
   }
-  if (parts.length === 0) return url;
-  const sep = url.includes("?") ? "&" : "?";
-  return `${url}${sep}${parts.join("&")}`;
+  return out;
+}
+
+const resolvedDatabaseUrl = databaseUrlWithPoolDefaults();
+if (process.env.NODE_ENV === "production" && resolvedDatabaseUrl) {
+  const lim = resolvedDatabaseUrl.match(/connection_limit=(\d+)/i);
+  const to = resolvedDatabaseUrl.match(/pool_timeout=(\d+)/i);
+  console.log(
+    `[DB] Prisma pool: connection_limit=${lim?.[1] ?? "?"}, pool_timeout=${to?.[1] ?? "?"}`
+  );
 }
 
 // Standard Prisma client — avoid undocumented __internal engine overrides (can break Prisma 5+ / 6+).
@@ -45,7 +66,7 @@ const prisma = new PrismaClient({
       : ["warn", "error"],
   datasources: {
     db: {
-      url: databaseUrlWithPoolDefaults(),
+      url: resolvedDatabaseUrl,
     },
   },
 });
