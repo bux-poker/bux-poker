@@ -45,6 +45,25 @@ function parsePlayerHoleCards(p) {
   return null;
 }
 
+/**
+ * Table UI should not show empty stacks except real all-in (0 chips, still in the pot).
+ * DB rows merged mid-hand for reseats could otherwise appear as ACTIVE 0-chip ghosts.
+ * Always include the viewer so bust / elimination flows still see their row in payload.
+ */
+function includePlayerInClientTableList(p, viewerUserIdNorm) {
+  if (p.status === "ELIMINATED") return false;
+  const chips = p.chips ?? 0;
+  if (chips > 0) return true;
+  if (p.status === "ALL_IN") return true;
+  if (
+    viewerUserIdNorm != null &&
+    normalizeUserId(p.userId) === viewerUserIdNorm
+  ) {
+    return true;
+  }
+  return false;
+}
+
 /** Hide mucked / not-yet-revealed showdown cards from everyone except the seat owner. */
 function shouldHideHoleCardsFromViewer(p, viewerUserId, optionalRevealPhase) {
   if (!optionalRevealPhase) return false;
@@ -156,7 +175,7 @@ export function buildClientGameState(game, state, viewerUserId) {
     showdownForcedReveal: isNewHand ? false : showdownForcedReveal,
     showdownNeedsChoice: isNewHand ? false : showdownNeedsChoice,
     players: playersForDisplay
-      .filter((p) => p.status !== "ELIMINATED")
+      .filter((p) => includePlayerInClientTableList(p, vuNorm))
       .map((p) => {
         const inCurrentHand =
           inHandPlayerIds == null || inHandPlayerIds.has(p.id);

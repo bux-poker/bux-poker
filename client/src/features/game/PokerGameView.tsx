@@ -32,6 +32,24 @@ import {
   ordinalSuffix,
 } from "../../utils/tournamentStanding";
 
+/** Do not render 0-chip seats on the felt (all-in is the exception; viewer kept for bust UX). */
+function includePlayerOnTableUI(
+  p: { chips?: number; status?: string; userId?: string; id?: string },
+  myUserId: string | undefined
+): boolean {
+  if (p.status === "ELIMINATED") return false;
+  const chips = p.chips ?? 0;
+  if (chips > 0) return true;
+  if (p.status === "ALL_IN") return true;
+  if (
+    myUserId &&
+    (String(p.userId) === String(myUserId) || String(p.id) === String(myUserId))
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function computePreActionForGameState(
   kind: PreActionKind,
   gs: GameStatePayload,
@@ -1289,7 +1307,9 @@ export function PokerGameView() {
             <PokerTable
               gameId={gameState.id}
               turnTimer={turnTimer}
-              players={gameState.players.map((p: any) => ({
+              players={gameState.players
+                .filter((p: any) => includePlayerOnTableUI(p, user?.id))
+                .map((p: any) => ({
                 id: p.id,
                 name: p.name,
                 chips: p.chips,
