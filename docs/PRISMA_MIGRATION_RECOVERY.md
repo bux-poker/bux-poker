@@ -24,7 +24,7 @@ Usually **`startScheduledAt` already exists** on `"Tournament"` (added manually,
 
 ## Auto-repair on Render (no laptop)
 
-The server’s **`prestart`** and **`postinstall`** run `node server/scripts/prisma-migrate-deploy-or-repair.mjs` before `prisma generate`.
+The server’s **`prestart`** runs `node server/scripts/prisma-migrate-deploy-or-repair.mjs` before `prisma generate`. **`postinstall`** only runs `prisma generate` so two migrate passes don’t fight for the same advisory lock on boot.
 
 If `migrate deploy` fails with **P3009** and mentions **`20260207120000_add_tournament_start_scheduled_at`**, that script:
 

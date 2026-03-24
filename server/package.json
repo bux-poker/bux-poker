@@ -12,7 +12,7 @@
     "prisma:generate": "npx prisma generate --schema=../prisma/schema.prisma",
     "prisma:migrate": "npx prisma migrate dev --schema=../prisma/schema.prisma",
     "prisma:migrate:deploy": "npx prisma migrate deploy --schema=../prisma/schema.prisma",
-    "postinstall": "node scripts/prisma-migrate-deploy-or-repair.mjs && npx prisma generate --schema=../prisma/schema.prisma || echo 'Prisma setup failed in postinstall'"
+    "postinstall": "npx prisma generate --schema=../prisma/schema.prisma || echo 'Prisma generate failed in postinstall'"
   },
   "dependencies": {
     "@prisma/client": "^6.19.2",
