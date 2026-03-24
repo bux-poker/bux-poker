@@ -69,8 +69,14 @@ export const useAuthMethods = ({ setUser, setError, setLoading }: UseAuthMethods
         }
         return null;
       } catch (error: any) {
-        console.error('Profile fetch error:', error);
         const status = error.response?.status;
+        if (status === 503) {
+          console.warn(
+            '[AUTH] Profile unavailable (503). API or database may be down, waking up, or unreachable.'
+          );
+        } else {
+          console.error('Profile fetch error:', error);
+        }
         if (status === 401 || status === 403) {
           localStorage.removeItem('sessionToken');
           localStorage.removeItem('userData');

@@ -159,43 +159,37 @@ export function PokerGameView() {
   }, [gameState?.tournamentId, tournament, refetchTournament]);
   const lastTournamentStatusRef = useRef<string | null>(null);
   const lastPlayerStatusRef = useRef<string | null>(null);
-  
-  // Request fullscreen on load to hide browser bar
-  useEffect(() => {
-    const requestFullscreen = async () => {
-      try {
-        // Check if we're in a popup window (opened from tournament lobby)
-        const isPopup = window.opener !== null;
-        
-        if (isPopup) {
-          // Wait a bit for window to fully load
-          setTimeout(async () => {
-            try {
-              if (document.documentElement.requestFullscreen) {
-                await document.documentElement.requestFullscreen();
-              } else if ((document.documentElement as any).webkitRequestFullscreen) {
-                // Safari
-                await (document.documentElement as any).webkitRequestFullscreen();
-              } else if ((document.documentElement as any).mozRequestFullScreen) {
-                // Firefox
-                await (document.documentElement as any).mozRequestFullScreen();
-              } else if ((document.documentElement as any).msRequestFullscreen) {
-                // IE/Edge
-                await (document.documentElement as any).msRequestFullscreen();
-              }
-            } catch (err) {
-              // User denied fullscreen or not supported - that's ok
-              console.log('[FULLSCREEN] Fullscreen request denied or not supported');
-            }
-          }, 1000);
-        }
-      } catch (err) {
-        // Ignore errors
-      }
-    };
 
-    requestFullscreen();
+  /** Browsers only allow fullscreen from a user gesture — no auto-request on load. */
+  const [showFullscreenButton, setShowFullscreenButton] = useState(false);
+  useEffect(() => {
+    const sync = () => {
+      setShowFullscreenButton(
+        typeof window !== "undefined" &&
+          window.opener !== null &&
+          !document.fullscreenElement
+      );
+    };
+    sync();
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
   }, []);
+
+  const requestFullscreenFromClick = () => {
+    const el = document.documentElement;
+    const p =
+      el.requestFullscreen?.bind(el) ??
+      (el as unknown as { webkitRequestFullscreen?: () => Promise<void> })
+        .webkitRequestFullscreen?.bind(el) ??
+      (el as unknown as { mozRequestFullScreen?: () => Promise<void> })
+        .mozRequestFullScreen?.bind(el) ??
+      (el as unknown as { msRequestFullscreen?: () => Promise<void> })
+        .msRequestFullscreen?.bind(el);
+    if (!p) return;
+    void p().catch(() => {
+      /* denied or unsupported */
+    });
+  };
 
   // Check screen orientation
   useEffect(() => {
@@ -1134,6 +1128,17 @@ export function PokerGameView() {
       className="flex h-[100dvh] min-h-screen w-screen flex-col bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden"
       onPointerDown={handleSoundUnlock}
     >
+      {showFullscreenButton && isMobile && (
+        <div className="flex shrink-0 justify-end border-b border-slate-700/50 bg-slate-900/80 px-3 py-1.5">
+          <button
+            type="button"
+            onClick={requestFullscreenFromClick}
+            className="rounded bg-slate-700 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-slate-600"
+          >
+            Fullscreen
+          </button>
+        </div>
+      )}
       {!socketConnected && gameState && (
         <div className="flex items-center justify-between gap-4 bg-amber-500/20 border-b border-amber-500/40 px-4 py-2 text-amber-200 text-sm shrink-0">
           <span>Connection lost. Game may be out of date.</span>
