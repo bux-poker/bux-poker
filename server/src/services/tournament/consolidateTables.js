@@ -932,7 +932,6 @@ export async function doConsolidateTables(tournamentId, deps) {
     try {
       const io = deps.getIO();
       if (io) {
-        let started = 0;
         for (const g of updatedGames) {
           if (
             g.players.length >= 2 &&
@@ -940,7 +939,6 @@ export async function doConsolidateTables(tournamentId, deps) {
           ) {
             try {
               await deps.startHandForGame(g.id, io);
-              started++;
               console.log(
                 `[TOURNAMENT] Started hand for table ${g.tableNumber} after rebalancing (${g.players.length} players)`
               );
@@ -951,9 +949,6 @@ export async function doConsolidateTables(tournamentId, deps) {
               );
             }
           }
-        }
-        if (started > 0) {
-          io.emit("consolidation-complete", { tournamentId });
         }
       }
     } catch (e) {
@@ -970,6 +965,8 @@ export async function doConsolidateTables(tournamentId, deps) {
           io.to(`game:${g.id}`).emit("tournament_updated", { tournamentId });
         }
         io.emit("tournament_updated", { tournamentId });
+        // Clients use this to leave the old table URL and join-table on the new game (not only when a hand was started above).
+        io.emit("consolidation-complete", { tournamentId });
       }
     } catch (e) {
       console.warn("[TOURNAMENT] Could not emit tournament_updated:", e?.message);
