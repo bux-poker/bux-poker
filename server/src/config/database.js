@@ -10,43 +10,25 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 /**
- * Prisma pool tuning. Logs showed production stuck at connection_limit=9 / pool_timeout=10 — too small
- * under socket + polls + consolidation. We **raise** low limits (replace in URL), not only append when absent.
- * Set PRISMA_CONNECTION_LIMIT / PRISMA_POOL_TIMEOUT on Render to override targets.
+ * Prisma pool tuning: **append only** missing query params — never rewrite existing `connection_limit` /
+ * `pool_timeout` in DATABASE_URL. Replacing values (e.g. 9→18) can break Supabase pooler (P1001, join-table fails).
+ * To raise limits: edit DATABASE_URL on Render, or set PRISMA_CONNECTION_LIMIT / PRISMA_POOL_TIMEOUT when params are absent.
  */
 function databaseUrlWithPoolDefaults() {
   let url = process.env.DATABASE_URL;
   if (!url || typeof url !== "string") return url;
-  const targetLimit = Math.max(
-    1,
-    parseInt(process.env.PRISMA_CONNECTION_LIMIT || "18", 10)
-  );
-  const targetTimeout = Math.max(
-    1,
-    parseInt(process.env.PRISMA_POOL_TIMEOUT || "45", 10)
-  );
-
-  let out = url;
-  const limMatch = out.match(/connection_limit=(\d+)/i);
-  if (limMatch) {
-    const cur = parseInt(limMatch[1], 10);
-    if (cur < targetLimit) {
-      out = out.replace(/connection_limit=\d+/i, `connection_limit=${targetLimit}`);
-    }
-  } else {
-    out += (out.includes("?") ? "&" : "?") + `connection_limit=${targetLimit}`;
+  const limit = process.env.PRISMA_CONNECTION_LIMIT || "15";
+  const timeout = process.env.PRISMA_POOL_TIMEOUT || "45";
+  const parts = [];
+  if (!/[?&]connection_limit=/i.test(url)) {
+    parts.push(`connection_limit=${encodeURIComponent(String(limit))}`);
   }
-
-  const toMatch = out.match(/pool_timeout=(\d+)/i);
-  if (toMatch) {
-    const cur = parseInt(toMatch[1], 10);
-    if (cur < targetTimeout) {
-      out = out.replace(/pool_timeout=\d+/i, `pool_timeout=${targetTimeout}`);
-    }
-  } else {
-    out += (out.includes("?") ? "&" : "?") + `pool_timeout=${targetTimeout}`;
+  if (!/[?&]pool_timeout=/i.test(url)) {
+    parts.push(`pool_timeout=${encodeURIComponent(String(timeout))}`);
   }
-  return out;
+  if (parts.length === 0) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}${parts.join("&")}`;
 }
 
 const resolvedDatabaseUrl = databaseUrlWithPoolDefaults();
