@@ -167,7 +167,7 @@ export function PokerTable({
             {topRightPosition != null && (
               <div className="flex flex-col text-right">
                 <span className="font-semibold uppercase tracking-wide text-slate-400" style={{ fontSize: cornerLabelSize }}>
-                  POSITION
+                  RANK
                 </span>
                 <span className="font-bold text-white" style={{ fontSize: cornerValueSize }}>
                   {topRightPosition}

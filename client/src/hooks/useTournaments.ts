@@ -28,6 +28,14 @@ export interface Tournament {
   createdAt: Date | string;
   servers?: TournamentServer[];
   games?: Array<{ id: string; tableNumber: number; players?: Array<{ id: string; userId: string; status: string; chips?: number; user?: { username?: string } }> }>;
+  /** Full registration list + standings fields (from GET /api/tournaments/:id) */
+  players?: Array<{
+    userId: string;
+    chips?: number;
+    status?: string;
+    finishingPlace?: number | null;
+    position?: number | null;
+  }>;
 }
 
 export function useTournaments() {

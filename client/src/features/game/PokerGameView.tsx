@@ -27,6 +27,10 @@ import {
   getBlindCountdownFromTournamentSchedule,
   type BlindLevelRow,
 } from "@shared/utils/tournamentBlindSchedule";
+import {
+  getMyTournamentStanding,
+  ordinalSuffix,
+} from "../../utils/tournamentStanding";
 
 function computePreActionForGameState(
   kind: PreActionKind,
@@ -1048,10 +1052,27 @@ export function PokerGameView() {
   const tournamentRemainingPlayers = tournament?.remainingPlayers ?? activePlayers.length;
   const tournamentTotalPlayers = tournament?.registeredCount ?? gameState.players.length;
   
-  // For tournaments, header POSITION should reflect chip rank (1 = most chips at the table)
+  // Cash / no tournament payload: chip rank among players at this table only
   const sortedByChips = [...activePlayers].sort((a, b) => b.chips - a.chips);
-  const myChipRank = myPlayer ? sortedByChips.findIndex(p => p.id === myPlayer.id) + 1 : null;
-  const myPosition = myChipRank && myChipRank > 0 ? myChipRank : null;
+  const myTableChipRank = myPlayer
+    ? sortedByChips.findIndex((p) => p.id === myPlayer.id) + 1
+    : null;
+
+  const tournamentStanding = getMyTournamentStanding(
+    tournament,
+    gameState,
+    user?.id
+  );
+  const myPositionStr =
+    gameState.tournamentId
+      ? tournamentStanding.place != null && tournamentStanding.total > 0
+        ? `${ordinalSuffix(tournamentStanding.place)} / ${tournamentStanding.total}`
+        : myTableChipRank && myTableChipRank > 0
+          ? ordinalSuffix(myTableChipRank)
+          : null
+      : myTableChipRank && myTableChipRank > 0
+        ? ordinalSuffix(myTableChipRank)
+        : null;
   const myContribution = myPlayer?.contribution || 0;
   const isMyTurn =
     String(gameState.currentTurnUserId ?? "") === String(user?.id ?? "");
@@ -1290,7 +1311,7 @@ export function PokerGameView() {
               topLeftTimer={nextBlindTime}
               onTournamentLobbyClick={gameState.tournamentId ? () => setTournamentLobbyOpen(true) : undefined}
               topRightPlayers={tournament ? `${tournamentRemainingPlayers}/${tournamentTotalPlayers}` : `${activePlayers.length}/${gameState.players.length}`}
-              topRightPosition={myPosition != null ? `${myPosition}${myPosition === 1 ? 'st' : myPosition === 2 ? 'nd' : myPosition === 3 ? 'rd' : 'th'}` : undefined}
+              topRightPosition={myPositionStr ?? undefined}
             />
           </div>
 
