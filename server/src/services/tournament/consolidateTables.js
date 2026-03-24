@@ -207,8 +207,9 @@ async function emitRoomsGameState(gameIds, io) {
 
 /**
  * Wait until listed games have no active hand. If a hand is stuck 90s+, force current player to act.
+ * If forcing does not clear the hand (broken in-memory state), clear table state after ~2.5m so consolidation can proceed.
  * @param {string[]} gameIds
- * @param {{ hasActiveHand: (gameId: string) => Promise<boolean>, forceStuckPlayerToAct: (gameId: string, io: object) => Promise<boolean>, getIO: () => object, getTableNumber?: (gameId: string) => Promise<number|undefined> }} deps
+ * @param {{ hasActiveHand: (gameId: string) => Promise<boolean>, forceStuckPlayerToAct: (gameId: string, io: object) => Promise<boolean>, getIO: () => object, getTableNumber?: (gameId: string) => Promise<number|undefined>, clearAllStateForGames?: (gameIds: string[]) => void }} deps
  */
 export function waitForGameIdsToFinishHands(gameIds, deps) {
   const ids = [...new Set(gameIds)].filter(Boolean);
@@ -218,7 +219,13 @@ export function waitForGameIdsToFinishHands(gameIds, deps) {
 
   const checkInterval = 2000;
   const stuckThresholdMs = 90000;
+  /** Do not hammer force every 2s once stuck — applyPlayerAction may succeed without finishing the hand. */
+  const forceThrottleMs = 30000;
+  /** Wall-clock time with a still-active hand before clearing in-memory state (last resort). */
+  const nukeStuckAfterMs = 150000;
   const activeSince = new Map();
+  const lastForceAttempt = new Map();
+  const nukeDone = new Set();
 
   return new Promise((resolve) => {
     const checkHands = async () => {
@@ -242,18 +249,40 @@ export function waitForGameIdsToFinishHands(gameIds, deps) {
             }
           }
 
-          if (stuckForMs >= stuckThresholdMs) {
+          if (
+            stuckForMs >= nukeStuckAfterMs &&
+            typeof deps.clearAllStateForGames === "function" &&
+            !nukeDone.has(gameId)
+          ) {
+            nukeDone.add(gameId);
             try {
-              const io = deps.getIO();
-              const ok = await deps.forceStuckPlayerToAct(gameId, io);
-              if (ok) {
-                console.log(
-                  `[TOURNAMENT] ${tableLabel} hand stuck ${waitingFor.toFixed(0)}s - forced player to act`
-                );
-                activeSince.delete(gameId);
-              }
+              deps.clearAllStateForGames([gameId]);
+              console.warn(
+                `[TOURNAMENT] ${tableLabel}: cleared stuck in-memory hand after ${waitingFor.toFixed(0)}s (consolidation wait)`
+              );
             } catch (e) {
-              console.warn(`[TOURNAMENT] Force-stuck failed for ${tableLabel}:`, e?.message);
+              console.warn(`[TOURNAMENT] Nuke stuck state failed for ${tableLabel}:`, e?.message);
+            }
+            activeSince.delete(gameId);
+            lastForceAttempt.delete(gameId);
+            continue;
+          }
+
+          if (stuckForMs >= stuckThresholdMs) {
+            const lastForce = lastForceAttempt.get(gameId) ?? 0;
+            if (now - lastForce >= forceThrottleMs) {
+              lastForceAttempt.set(gameId, now);
+              try {
+                const io = deps.getIO();
+                const ok = await deps.forceStuckPlayerToAct(gameId, io);
+                if (ok) {
+                  console.log(
+                    `[TOURNAMENT] ${tableLabel} hand stuck ${waitingFor.toFixed(0)}s - forced player to act`
+                  );
+                }
+              } catch (e) {
+                console.warn(`[TOURNAMENT] Force-stuck failed for ${tableLabel}:`, e?.message);
+              }
             }
           } else {
             console.log(
@@ -262,6 +291,8 @@ export function waitForGameIdsToFinishHands(gameIds, deps) {
           }
         } else {
           activeSince.delete(gameId);
+          lastForceAttempt.delete(gameId);
+          nukeDone.delete(gameId);
         }
       }
 
@@ -342,6 +373,7 @@ export async function doConsolidateTables(tournamentId, deps) {
     hasActiveHand: deps.hasActiveHand,
     forceStuckPlayerToAct: deps.forceStuckPlayerToAct,
     getIO: deps.getIO,
+    clearAllStateForGames: deps.clearAllStateForGames,
     getTableNumber: async (gameId) => {
       const row = await prisma.game.findUnique({
         where: { id: gameId },
