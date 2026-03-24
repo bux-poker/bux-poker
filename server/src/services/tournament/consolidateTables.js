@@ -8,6 +8,8 @@ import {
 
 /** Still in the tournament (incl. 0-chip all-in). Excluding them broke table counts & closing tables. */
 const NOT_ELIMINATED = { status: { not: "ELIMINATED" } };
+/** Eligible to be moved / dealt in the next hand. Prevents reseating 0-chip all-ins. */
+const MOVE_ELIGIBLE = { status: { not: "ELIMINATED" }, chips: { gt: 0 } };
 
 async function assignPlayerToFirstAvailableGame(tx, playerId, gameIds, seatsPerTable) {
   for (const gid of gameIds) {
@@ -531,7 +533,7 @@ export async function doConsolidateTables(tournamentId, deps) {
           };
 
           const movers = await tx.player.findMany({
-            where: { gameId: closeG.id, ...NOT_ELIMINATED },
+            where: { gameId: closeG.id, ...MOVE_ELIGIBLE },
           });
           const closeRow = await tx.game.findUnique({
             where: { id: closeG.id },
@@ -611,7 +613,7 @@ export async function doConsolidateTables(tournamentId, deps) {
         for (const gid of [...new Set(touchedDestIds)]) {
           const g = await prisma.game.findUnique({
             where: { id: gid },
-            include: { players: { where: NOT_ELIMINATED } },
+            include: { players: { where: MOVE_ELIGIBLE } },
           });
           if (
             g &&
@@ -635,7 +637,7 @@ export async function doConsolidateTables(tournamentId, deps) {
       where: { tournamentId, status: "ACTIVE" },
       include: {
         players: {
-          where: NOT_ELIMINATED,
+          where: MOVE_ELIGIBLE,
           include: { user: true },
         },
       },
@@ -671,7 +673,7 @@ export async function doConsolidateTables(tournamentId, deps) {
           where: { tournamentId, status: "ACTIVE" },
           include: {
             players: {
-              where: NOT_ELIMINATED,
+              where: MOVE_ELIGIBLE,
               include: { user: true },
               orderBy: { seatNumber: "asc" },
             },
@@ -733,7 +735,7 @@ export async function doConsolidateTables(tournamentId, deps) {
               where: { tournamentId, status: "ACTIVE" },
               include: {
                 players: {
-                  where: NOT_ELIMINATED,
+                  where: MOVE_ELIGIBLE,
                   orderBy: { seatNumber: "asc" },
                 },
               },
@@ -807,7 +809,7 @@ export async function doConsolidateTables(tournamentId, deps) {
             for (const gid of [srcGame.id, dstGame.id]) {
               const g = await prisma.game.findUnique({
                 where: { id: gid },
-                include: { players: { where: NOT_ELIMINATED } },
+                include: { players: { where: MOVE_ELIGIBLE } },
               });
               if (
                 g &&
@@ -844,7 +846,7 @@ export async function doConsolidateTables(tournamentId, deps) {
       where: { tournamentId, status: "ACTIVE" },
       include: {
         players: {
-          where: NOT_ELIMINATED,
+          where: MOVE_ELIGIBLE,
         },
       },
     });
