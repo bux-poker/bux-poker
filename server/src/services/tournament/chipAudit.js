@@ -1,4 +1,5 @@
 import { prisma } from "../../config/database.js";
+import { hasActiveHand } from "../../modules/poker/tableState.js";
 
 /**
  * Audit chip conservation: total chips in tournament must equal expected (registrations * startingChips).
@@ -23,8 +24,17 @@ export async function auditChipConservation(tournamentId) {
     }
   }
   const actualTotal = playerChipsTotal + gamePotTotal;
+  const activeHandCount = (tournament.games || []).filter((g) =>
+    hasActiveHand(g.id)
+  ).length;
   if (actualTotal !== expectedTotal) {
-    console.error(`[TOURNAMENT] CHIP CONSERVATION VIOLATION: tournament ${tournamentId} has ${actualTotal} chips (players: ${playerChipsTotal}, game pots: ${gamePotTotal}), expected ${expectedTotal} (${tournament.registrations.length} players × ${tournament.startingChips} starting). Difference: ${actualTotal - expectedTotal}`);
+    const msg = `[TOURNAMENT] CHIP CONSERVATION ${activeHandCount > 0 ? "PENDING" : "VIOLATION"}: tournament ${tournamentId} has ${actualTotal} chips (players: ${playerChipsTotal}, game pots: ${gamePotTotal}), expected ${expectedTotal} (${tournament.registrations.length} players × ${tournament.startingChips} starting). Difference: ${actualTotal - expectedTotal}${activeHandCount > 0 ? `, activeHands=${activeHandCount}` : ""}`;
+    if (activeHandCount > 0) {
+      // Mid-hand audits can transiently undercount chips that still sit in in-memory betting state.
+      console.warn(msg);
+    } else {
+      console.error(msg);
+    }
   } else {
     console.log(`[TOURNAMENT] Chip audit OK: ${actualTotal} chips (expected ${expectedTotal})`);
   }

@@ -24,11 +24,12 @@ export function startIdleTablesPoll(engine) {
         select: { id: true, seatsPerTable: true }
       });
       for (const t of running) {
+        let blindAdvance = { advanced: false, waiting: false };
         // Backup blind advancement: wall clock vs DB (covers lost timers after deploy / missed ticks).
         try {
-          await tryAdvanceBlindsIfDue(t.id, socketIO ?? null, {
+          blindAdvance = (await tryAdvanceBlindsIfDue(t.id, socketIO ?? null, {
             emitDealerMessage: !!socketIO,
-          });
+          })) ?? { advanced: false, waiting: false };
         } catch (blindErr) {
           console.warn(`[TOURNAMENT] Idle poll blind sync failed for ${t.id}:`, blindErr?.message);
         }
@@ -134,6 +135,13 @@ export function startIdleTablesPoll(engine) {
             continue;
           }
           try {
+            const blockedBySchedule =
+              !!blindAdvance?.inBreak ||
+              !!blindAdvance?.waiting ||
+              !!blindAdvance?.aligning;
+            if (blockedBySchedule) {
+              continue;
+            }
             await startHandForGame(game.id, socketIO);
             if (hasActiveHand(game.id)) {
               console.log(`[TOURNAMENT] Idle-table recovery: started hand for game ${game.id} (table ${game.tableNumber}) with pot=0`);

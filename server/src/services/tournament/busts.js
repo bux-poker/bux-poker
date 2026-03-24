@@ -2,9 +2,11 @@ import { prisma } from "../../config/database.js";
 import { auditChipConservation, reconcileChipConservationOnCompletion } from "./chipAudit.js";
 
 const _onPlayersBustLocks = new Map();
+const _lastConsolidateAt = new Map(); // tournamentId -> ms
 // Idempotency guard to avoid processing the same bust repeatedly in race windows.
 const _recentBustMarks = new Map(); // key: `${tournamentId}:${playerId}` -> timestamp ms
 const RECENT_BUST_WINDOW_MS = 30000;
+const CONSOLIDATE_DEBOUNCE_MS = 1500;
 
 /**
  * Mark a single player as bust - only updates DB. Handles P2025 (player already removed by consolidation).
@@ -159,6 +161,15 @@ export async function doOnPlayersBust(tournamentId, playerIds, deps) {
       }
     }
   } else if (remainingAfterBust > 1) {
+    const now = Date.now();
+    const last = _lastConsolidateAt.get(tournamentId) ?? 0;
+    if (now - last < CONSOLIDATE_DEBOUNCE_MS) {
+      console.log(
+        `[TOURNAMENT] onPlayersBust: consolidation debounced for ${tournamentId} (${now - last}ms since last run)`
+      );
+      return;
+    }
+    _lastConsolidateAt.set(tournamentId, now);
     await deps.consolidateTables(tournamentId);
   }
 }
