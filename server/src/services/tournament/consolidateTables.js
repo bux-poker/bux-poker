@@ -429,6 +429,16 @@ export async function doConsolidateTables(tournamentId, deps) {
       const keepIds = toKeep.map((g) => g.id);
       const closeIds = toClose.map((g) => g.id);
 
+      await prisma.$transaction(async (tx) => {
+        await evacuateEliminatedFromKeepTables(
+          tx,
+          tournamentId,
+          keepIds,
+          closeIds,
+          seatsPerTable
+        );
+      });
+
       const [keepFull, closeFull] = await Promise.all([
         prisma.game.findMany({
           where: { id: { in: keepIds } },
@@ -517,13 +527,6 @@ export async function doConsolidateTables(tournamentId, deps) {
         }
 
         await prisma.$transaction(async (tx) => {
-          await evacuateEliminatedFromKeepTables(
-            tx,
-            tournamentId,
-            keepIds,
-            closeIds,
-            seatsPerTable
-          );
           const destSnapshots = await tx.game.findMany({
             where: { id: { in: keepIds } },
             include: {
