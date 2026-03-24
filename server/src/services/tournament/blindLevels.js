@@ -8,6 +8,7 @@ import {
 const _blindWaitActiveSince = new Map(); // gameId -> first-seen-active timestamp
 const _blindWaitLastForce = new Map(); // gameId -> last forceStuckPlayerToAct attempt
 const _blindWaitNuked = new Set(); // gameIds already hard-reset in this active stretch
+const _blindAdvanceLocks = new Map(); // tournamentId -> in-flight blind advancement promise
 
 const BLIND_WAIT_STUCK_MS = 90_000;
 const BLIND_WAIT_FORCE_THROTTLE_MS = 30_000;
@@ -322,7 +323,7 @@ function clearWaiting(io, tournamentId, games) {
  * - At 0:00 wait until no active hand on any table, then break or level-up + barrier before next anchor.
  * - Break: no new hands until break ends; then level-up + same barrier rules.
  */
-export async function tryAdvanceBlindsIfDue(tournamentId, io, options = { emitDealerMessage: true }) {
+async function tryAdvanceBlindsIfDueImpl(tournamentId, io, options = { emitDealerMessage: true }) {
   let tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
   });
@@ -525,4 +526,20 @@ export async function tryAdvanceBlindsIfDue(tournamentId, io, options = { emitDe
   }
   await maybeFinalizeBlindPeriodAnchor(tournamentId, io);
   return { advanced: true, waiting: false };
+}
+
+export async function tryAdvanceBlindsIfDue(tournamentId, io, options = { emitDealerMessage: true }) {
+  const existing = _blindAdvanceLocks.get(tournamentId);
+  if (existing) {
+    // Avoid DB stampedes from concurrent callers (idle poll, startHand, blind timer, socket events).
+    return { advanced: false, waiting: false, queued: true };
+  }
+
+  const running = tryAdvanceBlindsIfDueImpl(tournamentId, io, options);
+  _blindAdvanceLocks.set(tournamentId, running);
+  try {
+    return await running;
+  } finally {
+    _blindAdvanceLocks.delete(tournamentId);
+  }
 }
