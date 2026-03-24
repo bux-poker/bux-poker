@@ -125,6 +125,12 @@ export function buildClientGameState(game, state, viewerUserId) {
     );
   }
 
+  /** Only seats dealt into this in-memory hand may show hole cards (DB rows can still carry stale cards). */
+  const inHandPlayerIds =
+    state?.players?.length > 0
+      ? new Set(state.players.map((p) => p.id))
+      : null;
+
   return {
     id: game.id,
     tournamentId: game.tournamentId,
@@ -152,7 +158,9 @@ export function buildClientGameState(game, state, viewerUserId) {
     players: playersForDisplay
       .filter((p) => p.status !== "ELIMINATED")
       .map((p) => {
-        const parsed = parsePlayerHoleCards(p);
+        const inCurrentHand =
+          inHandPlayerIds == null || inHandPlayerIds.has(p.id);
+        const parsed = inCurrentHand ? parsePlayerHoleCards(p) : null;
         const hide =
           parsed &&
           shouldHideHoleCardsFromViewer(p, viewerUserId, optionalRevealPhase);
