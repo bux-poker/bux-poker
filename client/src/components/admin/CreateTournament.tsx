@@ -21,6 +21,11 @@ interface DiscordServer {
   isBotMember: boolean | null;
 }
 
+function parseIntOrFallback(value: string | null | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 export function CreateTournament() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -35,9 +40,9 @@ export function CreateTournament() {
   const getInitialFormData = () => {
     const name = searchParams.get('name') || '';
     const description = searchParams.get('description') || '';
-    const maxPlayers = parseInt(searchParams.get('maxPlayers') || '100');
-    const seatsPerTable = parseInt(searchParams.get('seatsPerTable') || '9');
-    const startingChips = parseInt(searchParams.get('startingChips') || '10000');
+    const maxPlayers = parseIntOrFallback(searchParams.get('maxPlayers'), 100);
+    const seatsPerTable = parseIntOrFallback(searchParams.get('seatsPerTable'), 9);
+    const startingChips = parseIntOrFallback(searchParams.get('startingChips'), 10000);
     return {
       name,
       description,
@@ -503,7 +508,10 @@ export function CreateTournament() {
                 min="2"
                 value={formData.maxPlayers}
                 onChange={(e) =>
-                  setFormData({ ...formData, maxPlayers: parseInt(e.target.value) })
+                  setFormData({
+                    ...formData,
+                    maxPlayers: parseIntOrFallback(e.target.value, formData.maxPlayers),
+                  })
                 }
                 className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
               />
@@ -519,7 +527,10 @@ export function CreateTournament() {
                 max="10"
                 value={formData.seatsPerTable}
                 onChange={(e) =>
-                  setFormData({ ...formData, seatsPerTable: parseInt(e.target.value) })
+                  setFormData({
+                    ...formData,
+                    seatsPerTable: parseIntOrFallback(e.target.value, formData.seatsPerTable),
+                  })
                 }
                 className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
               />
@@ -532,7 +543,10 @@ export function CreateTournament() {
               <select
                 value={formData.startingChips}
                 onChange={(e) =>
-                  setFormData({ ...formData, startingChips: parseInt(e.target.value) })
+                  setFormData({
+                    ...formData,
+                    startingChips: parseIntOrFallback(e.target.value, formData.startingChips),
+                  })
                 }
                 className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
               >
@@ -570,7 +584,11 @@ export function CreateTournament() {
               type="number"
               min="1"
               value={blindRoundDuration}
-              onChange={(e) => handleBlindRoundDurationChange(parseInt(e.target.value))}
+              onChange={(e) =>
+                handleBlindRoundDurationChange(
+                  parseIntOrFallback(e.target.value, blindRoundDuration)
+                )
+              }
               className="mt-1 w-full max-w-xs rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
             />
           </div>
@@ -595,7 +613,11 @@ export function CreateTournament() {
                         min="1"
                         value={level.smallBlind}
                         onChange={(e) =>
-                          updateBlindLevel(index, 'smallBlind', parseInt(e.target.value))
+                          updateBlindLevel(
+                            index,
+                            'smallBlind',
+                            parseIntOrFallback(e.target.value, level.smallBlind)
+                          )
                         }
                         className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
                       />
@@ -607,7 +629,11 @@ export function CreateTournament() {
                         min="1"
                         value={level.bigBlind}
                         onChange={(e) =>
-                          updateBlindLevel(index, 'bigBlind', parseInt(e.target.value))
+                          updateBlindLevel(
+                            index,
+                            'bigBlind',
+                            parseIntOrFallback(e.target.value, level.bigBlind)
+                          )
                         }
                         className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
                       />
@@ -627,7 +653,9 @@ export function CreateTournament() {
                       <select
                         value={level.breakAfter || ''}
                         onChange={(e) => {
-                          const value = e.target.value ? parseInt(e.target.value) : undefined;
+                          const value = e.target.value
+                            ? parseIntOrFallback(e.target.value, level.breakAfter ?? 5)
+                            : undefined;
                           updateBlindLevelBreak(index, value);
                         }}
                         className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
