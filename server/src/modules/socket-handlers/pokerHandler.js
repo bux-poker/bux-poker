@@ -2,6 +2,7 @@
 
 import { tableState, getIO, setIO } from "../poker/tableState.js";
 export { clearAllStateForGames, hasActiveHand, getTurnStartedAt } from "../poker/tableState.js";
+export { ensureTurnTimerIfMissing } from "../poker/turnTimers.js";
 import { applyPlayerAction } from "../poker/actions.js";
 import { moveToNextPlayer } from "../poker/turnOrder.js";
 import { emitIfTournamentCompleted } from "../poker/tableTournamentHooks.js";
@@ -23,21 +24,22 @@ const startHandLocks = new Map();
  * Preserves chips - applies a real action, does NOT clear state.
  */
 export async function forceStuckPlayerToAct(gameId, io) {
+  const ioResolved = io ?? getIO();
   const state = tableState.get(gameId);
-  if (!state || !io) return false;
+  if (!state || !ioResolved) return false;
   const userId = state.currentTurnUserId;
   if (!userId) {
     // No turn set - try moveToNextPlayer which may detect betting complete
-    await moveToNextPlayer(gameId, io);
+    await moveToNextPlayer(gameId, ioResolved);
     return true;
   }
   const player = state.players.find(p => p.userId === userId);
   if (!player || player.status === 'FOLDED' || player.status === 'ELIMINATED') {
-    await moveToNextPlayer(gameId, io);
+    await moveToNextPlayer(gameId, ioResolved);
     return true;
   }
   if (player.chips === 0 || player.status === 'ALL_IN') {
-    await moveToNextPlayer(gameId, io);
+    await moveToNextPlayer(gameId, ioResolved);
     return true;
   }
   const currentBet = state.bettingRound?.currentBet || 0;
@@ -46,12 +48,12 @@ export async function forceStuckPlayerToAct(gameId, io) {
   const playerName = player.name || player.user?.username || "";
   try {
     if (canCheck) {
-      await applyPlayerAction({ gameId, userId, action: "CHECK", amount: 0, io });
+      await applyPlayerAction({ gameId, userId, action: "CHECK", amount: 0, io: ioResolved });
     } else {
       // Must fold when facing a bet (same as turn timer expiry) — same chips as manual fold.
-      await applyPlayerAction({ gameId, userId, action: "FOLD", amount: 0, io });
+      await applyPlayerAction({ gameId, userId, action: "FOLD", amount: 0, io: ioResolved });
     }
-    await moveToNextPlayer(gameId, io);
+    await moveToNextPlayer(gameId, ioResolved);
     console.log(`[POKER] Force-stuck recovery: ${canCheck ? "CHECK" : "FOLD"} for ${player.name || userId} at table ${gameId}`);
     return true;
   } catch (err) {
