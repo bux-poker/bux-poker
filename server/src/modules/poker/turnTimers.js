@@ -167,14 +167,12 @@ export function startTurnTimer(gameId, userId, io) {
     // Human timing policy: 20s total action window; client shows full countdown aligned with expiresAt.
     const totalActionMs = 20000;
     const autoActionExpiresAt = Date.now() + totalActionMs;
-    // Wake slightly before deadline; autoFoldPlayer aligns to expiresAt so a late event loop tick
-    // doesn't leave humans sitting after the UI already hit 0.
-    const firstFireMs = Math.max(0, totalActionMs - 50);
+    // Single deadline timer (no nested follow-up). A nested timeout was not cleared on player-action
+    // and could race the timerId guard so auto CHECK/FOLD never ran.
     const timeoutTimerId = setTimeout(() => {
       autoFoldPlayer(gameId, userId, io, timeoutTimerId);
-    }, firstFireMs);
+    }, totalActionMs);
 
-    // Emit immediately so client always has a timer anchor; client renders only last 10s for humans.
     io.to(`game:${gameId}`).emit("turn-timer-start", {
       gameId,
       userId,
@@ -193,22 +191,14 @@ export function startTurnTimer(gameId, userId, io) {
 
 async function autoFoldPlayer(gameId, userId, io, timerId) {
   try {
-    const uidStr = String(userId);
+    const uidNorm = normalizeUserId(userId);
     const timerState = turnTimers.get(gameId);
     // Guard against stale timer callbacks from previous turns.
     if (
       !timerState ||
       timerState.timerId !== timerId ||
-      String(timerState.userId) !== uidStr
+      normalizeUserId(timerState.userId) !== uidNorm
     ) {
-      return;
-    }
-    // If the OS/event loop fires slightly before expiresAt, retry at the real deadline (old code returned and never folded).
-    const msUntilExpiry = (timerState.expiresAt || 0) - Date.now();
-    if (msUntilExpiry > 0) {
-      setTimeout(() => {
-        autoFoldPlayer(gameId, userId, io, timerId);
-      }, msUntilExpiry);
       return;
     }
 
@@ -216,11 +206,12 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
     turnTimers.delete(gameId);
 
     const state = tableState.get(gameId);
-    const turnStr =
-      state?.currentTurnUserId != null ? String(state.currentTurnUserId) : "";
-    if (!state || turnStr !== uidStr) {
+    if (
+      !state ||
+      normalizeUserId(state.currentTurnUserId) !== uidNorm
+    ) {
       console.log(
-        `[POKER] autoFoldPlayer: skipping – not ${uidStr}'s turn (currentTurn=${state?.currentTurnUserId})`
+        `[POKER] autoFoldPlayer: skipping – not ${uidNorm}'s turn (currentTurn=${state?.currentTurnUserId})`
       );
       if (state?.currentTurnUserId) {
         startTurnTimer(gameId, state.currentTurnUserId, io);
@@ -229,11 +220,11 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
     }
 
     const player = state.players.find(
-      (p) => normalizeUserId(p.userId) === normalizeUserId(userId)
+      (p) => normalizeUserId(p.userId) === uidNorm
     );
     if (!player) {
       console.log(
-        `[POKER] autoFoldPlayer: player not found for ${uidStr}, moving turn`
+        `[POKER] autoFoldPlayer: player not found for ${uidNorm}, moving turn`
       );
       await moveToNextPlayer(gameId, io);
       return;
@@ -245,7 +236,7 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
       (player.chips ?? 0) <= 0
     ) {
       console.log(
-        `[POKER] autoFoldPlayer: ${playerName || uidStr} is all-in / no chips — moving turn`
+        `[POKER] autoFoldPlayer: ${playerName || uidNorm} is all-in / no chips — moving turn`
       );
       await moveToNextPlayer(gameId, io);
       return;
@@ -267,7 +258,10 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
         io,
       });
     } catch (err) {
-      if (err?.message === "All-in players cannot act") {
+      if (
+        err?.message === "All-in players cannot act" ||
+        err?.message === "Not your turn to act"
+      ) {
         await moveToNextPlayer(gameId, io);
         return;
       }
