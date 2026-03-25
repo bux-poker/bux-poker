@@ -91,8 +91,12 @@ export function buildClientGameState(game, state, viewerUserId) {
     ? "[]"
     : JSON.stringify(state?.communityCards ?? []);
 
+  // Closed / non-active tables must never show "wait for hand" — players were moved; staying on
+  // this URL is already a stale view. The in-memory wait set can lag until the next poll wave.
   const consolidationWaitingMessage =
-    game.tournamentId && isGameConsolidationWaiting(game.id)
+    game.tournamentId &&
+    game.status === "ACTIVE" &&
+    isGameConsolidationWaiting(game.id)
       ? CONSOLIDATION_WAIT_MESSAGE
       : null;
 

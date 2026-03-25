@@ -175,6 +175,21 @@ export function PokerGameView() {
     const interval = setInterval(() => refetchTournament({ silent: true }), 10000);
     return () => clearInterval(interval);
   }, [gameState?.tournamentId, tournament, refetchTournament]);
+
+  /** If DB says we're seated on another game (reseated), leave stale /game/:id + wait overlay. */
+  useEffect(() => {
+    if (!user?.id || !id || !gameState?.tournamentId || !tournament?.players?.length) return;
+    const me = tournament.players.find(
+      (p: { userId?: string; status?: string; gameId?: string }) =>
+        String(p.userId) === String(user.id)
+    );
+    if (!me || me.status === "ELIMINATED") return;
+    const correctGameId = (me as { gameId?: string }).gameId;
+    if (!correctGameId || String(correctGameId) === String(id)) return;
+    setConsolidationWaiting(null);
+    setPendingConsolidationWaiting(null);
+    navigate(`/game/${correctGameId}`, { replace: true });
+  }, [tournament?.players, user?.id, id, gameState?.tournamentId, navigate]);
   const lastTournamentStatusRef = useRef<string | null>(null);
   const lastPlayerStatusRef = useRef<string | null>(null);
 
@@ -403,12 +418,12 @@ export function PokerGameView() {
         : payload;
 
       handActionPendingRef.current = false;
-      if (
-        Object.prototype.hasOwnProperty.call(payload, "consolidationWaitingMessage") &&
-        !payload.consolidationWaitingMessage
-      ) {
-        setConsolidationWaiting(null);
-        setPendingConsolidationWaiting(null);
+      {
+        const cw = payload.consolidationWaitingMessage;
+        if (cw == null || String(cw).trim() === "") {
+          setConsolidationWaiting(null);
+          setPendingConsolidationWaiting(null);
+        }
       }
 
       // Never keep the blind-sync modal over an active betting round (stale socket event vs game-state).

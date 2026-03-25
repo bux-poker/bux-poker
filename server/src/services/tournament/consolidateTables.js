@@ -639,6 +639,9 @@ export async function doConsolidateTables(tournamentId, deps) {
           );
         });
 
+        // Table is COMPLETED — drop wait flag immediately so any emit shows no "wait for hand" on this URL.
+        unregisterConsolidationWait(tournamentId, waitCloseIds);
+
         try {
           deps.clearAllStateForGames([closeG.id]);
           const uniqueDest = [...new Set(touchedDestIds)];
