@@ -167,12 +167,22 @@ app.use((err, req, res, next) => {
   return res.status(status).send(err?.message || "Internal Server Error");
 });
 
+// Socket.IO: generous ping/timeout so brief server load (e.g. consolidation) or proxy jitter
+// does not drop clients as "ping timeout". Clients still reconnect, but mid-hand drops are painful.
+const SOCKET_PING_MS = Number(process.env.SOCKET_PING_INTERVAL_MS) || 20000;
+const SOCKET_PING_TIMEOUT_MS = Number(process.env.SOCKET_PING_TIMEOUT_MS) || 60000;
+
 // Socket.IO configuration
 const io = new Server(server, {
   cors: corsOptions,
   path: '/socket.io',
-  transports: ['polling', 'websocket']
+  transports: ['polling', 'websocket'],
+  pingInterval: SOCKET_PING_MS,
+  pingTimeout: SOCKET_PING_TIMEOUT_MS,
 });
+console.log(
+  `[SOCKET.IO] pingInterval=${SOCKET_PING_MS}ms pingTimeout=${SOCKET_PING_TIMEOUT_MS}ms`
+);
 
 // Share Express session + Passport with Socket.IO handshakes (for per-viewer game-state).
 io.engine.use(sessionMiddleware);

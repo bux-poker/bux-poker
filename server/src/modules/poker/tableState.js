@@ -79,6 +79,31 @@ export async function forceStuckPlayerToAct(gameId, io) {
 }
 
 /**
+ * Drop in-memory hand state and cancel all timers for one table.
+ * Always use this instead of raw `tableState.delete` — otherwise turn / test-player /
+ * showdown cleanup timers can fire with no state ("State missing when timer fired").
+ */
+export function clearTableStateForGame(gameId) {
+  if (!gameId) return;
+  const st = tableState.get(gameId);
+  if (st?.showdownCleanupTimerId) {
+    clearTimeout(st.showdownCleanupTimerId);
+  }
+  const timer = turnTimers.get(gameId);
+  if (timer) {
+    if (timer.timerId) clearTimeout(timer.timerId);
+    if (timer.graceTimerId) clearTimeout(timer.graceTimerId);
+    turnTimers.delete(gameId);
+  }
+  const testTimer = testPlayerTimers.get(gameId);
+  if (testTimer) {
+    if (testTimer.timerId) clearTimeout(testTimer.timerId);
+    testPlayerTimers.delete(gameId);
+  }
+  tableState.delete(gameId);
+}
+
+/**
  * Clear all in-memory state and timers for given game IDs.
  * MUST be called before consolidation deletes/moves players, otherwise
  * pending timers will try to update deleted player records (P2025).
@@ -86,21 +111,8 @@ export async function forceStuckPlayerToAct(gameId, io) {
 export function clearAllStateForGames(gameIds) {
   if (!gameIds || gameIds.length === 0) return;
   for (const gameId of gameIds) {
-    tableState.delete(gameId);
-    const timer = turnTimers.get(gameId);
-    if (timer) {
-      if (timer.timerId) clearTimeout(timer.timerId);
-      if (timer.graceTimerId) clearTimeout(timer.graceTimerId);
-      turnTimers.delete(gameId);
-    }
-    const testTimer = testPlayerTimers.get(gameId);
-    if (testTimer) {
-      if (testTimer.timerId) clearTimeout(testTimer.timerId);
-      testPlayerTimers.delete(gameId);
-    }
+    clearTableStateForGame(gameId);
   }
-  console.log(
-    `[POKER] Cleared state for ${gameIds.length} game(s) before consolidation`
-  );
+  console.log(`[POKER] Cleared in-memory state for ${gameIds.length} game(s)`);
 }
 

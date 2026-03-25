@@ -1,6 +1,6 @@
 import { prisma } from "../../config/database.js";
 import { TexasHoldem } from "./TexasHoldem.js";
-import { tableState, turnTimers } from "./tableState.js";
+import { tableState, turnTimers, clearTableStateForGame } from "./tableState.js";
 import { postDealerMessage } from "./dealerMessages.js";
 import { emitGameStateWithGame } from "./emitGameState.js";
 import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/pokerHandler.js";
@@ -102,7 +102,7 @@ export async function advanceToNextStreet(gameId, io) {
     const winner = activePlayers[0];
     const totalPot = state.pot;
     if (await shouldBlockFoldWinPotAward(gameId)) {
-      tableState.delete(gameId);
+      clearTableStateForGame(gameId);
       return;
     }
     winner.chips += totalPot;
@@ -186,7 +186,7 @@ export async function advanceToNextStreet(gameId, io) {
 
     setTimeout(() => {
       const savedPlayers = [...state.players];
-      tableState.delete(gameId);
+      clearTableStateForGame(gameId);
       const resetPromises = savedPlayers
         .filter((p) => p.status !== "ELIMINATED" && p.chips > 0)
         .map((p) =>
@@ -372,7 +372,7 @@ export async function advanceToNextStreet(gameId, io) {
 
         setTimeout(() => {
           const savedPlayers = [...state.players];
-          tableState.delete(gameId);
+          clearTableStateForGame(gameId);
 
           const resetPromises = savedPlayers
             .filter((p) => p.status !== "ELIMINATED" && p.chips > 0)
