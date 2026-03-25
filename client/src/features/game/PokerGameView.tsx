@@ -665,11 +665,11 @@ export function PokerGameView() {
         typeof tournament.blindLevels === "string"
           ? tournament.blindLevels
           : JSON.stringify((tournament as any).blindLevels ?? []);
-      const tt = tournament as any;
+      const tournamentMeta = tournament as any;
       const useAnchor =
-        tt.awaitingHandsForBlindClock === true ||
-        tt.blindPeriodAnchorAt != null ||
-        tt.tournamentBreakUntilAt != null;
+        tournamentMeta.awaitingHandsForBlindClock === true ||
+        tournamentMeta.blindPeriodAnchorAt != null ||
+        tournamentMeta.tournamentBreakUntilAt != null;
 
       if (useAnchor) {
         let blindLevels: BlindLevelRow[] = [];
@@ -689,9 +689,9 @@ export function PokerGameView() {
             ? gameState.currentBlindLevel
             : 0;
         const clock = getBlindCountdownFromTournamentSchedule({
-          blindPeriodAnchorAt: tt.blindPeriodAnchorAt,
-          awaitingHandsForBlindClock: !!tt.awaitingHandsForBlindClock,
-          tournamentBreakUntilAt: tt.tournamentBreakUntilAt,
+          blindPeriodAnchorAt: tournamentMeta.blindPeriodAnchorAt,
+          awaitingHandsForBlindClock: !!tournamentMeta.awaitingHandsForBlindClock,
+          tournamentBreakUntilAt: tournamentMeta.tournamentBreakUntilAt,
           currentLevelIndex: levelIdx,
           blindLevels,
           nowMs: Date.now(),
