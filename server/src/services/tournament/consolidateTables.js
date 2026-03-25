@@ -6,6 +6,32 @@ import {
   pickWorstOpenSeat,
 } from "./balanceSeatSelection.js";
 
+/**
+ * Tell clients to refetch tournament + navigate if their gameId changed.
+ * Must run after EACH wave that mutates seats — a later wave can `return` early
+ * (hand still up / pot) and skip the end-of-function emit, leaving moved users
+ * stuck on the old /game/:id URL.
+ */
+async function emitConsolidationResync(io, tournamentId) {
+  if (!io) return;
+  try {
+    const activeGames = await prisma.game.findMany({
+      where: { tournamentId, status: "ACTIVE" },
+      select: { id: true },
+    });
+    for (const ag of activeGames) {
+      io.to(`game:${ag.id}`).emit("tournament_updated", { tournamentId });
+    }
+    io.emit("tournament_updated", { tournamentId });
+    io.emit("consolidation-complete", { tournamentId });
+    console.log(
+      `[TOURNAMENT] consolidation-complete emitted (tournament ${tournamentId}, ${activeGames.length} active table room(s))`
+    );
+  } catch (e) {
+    console.warn("[TOURNAMENT] consolidation resync emit failed:", e?.message);
+  }
+}
+
 /** Still in the tournament (incl. 0-chip all-in). Excluding them broke table counts & closing tables. */
 const NOT_ELIMINATED = { status: { not: "ELIMINATED" } };
 /** Eligible to be moved / dealt in the next hand. Prevents reseating 0-chip all-ins. */
@@ -652,6 +678,7 @@ export async function doConsolidateTables(tournamentId, deps) {
           }
         }
       }
+      await emitConsolidationResync(ioWave, tournamentId);
     }
 
     games = await prisma.game.findMany({
@@ -873,6 +900,7 @@ export async function doConsolidateTables(tournamentId, deps) {
               }
             }
           }
+          await emitConsolidationResync(ioPush, tournamentId);
 
           progressed = true;
           balanceMoves++;

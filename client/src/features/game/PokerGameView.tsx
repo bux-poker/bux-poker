@@ -498,25 +498,31 @@ export function PokerGameView() {
     socket.on("consolidation-complete", async (payload: { tournamentId: string }) => {
       const tid = payload?.tournamentId;
       if (!tid || !user?.id || !id) return;
-      try {
-        const { data: t } = await api.get(`/api/tournaments/${tid}`);
-        const myEntry = (t?.players || []).find(
-          (p: any) => String(p.userId) === String(user.id)
-        );
-        if (!myEntry) return;
-        setConsolidationWaiting(null);
-        setPendingConsolidationWaiting(null);
-        if (
-          tid === latestGameTournamentIdRef.current ||
-          tid === latestTournamentIdRef.current
-        ) {
-          refetchTournament({ silent: true });
+      let t: any = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await api.get(`/api/tournaments/${tid}`);
+          t = res?.data;
+          break;
+        } catch {
+          if (attempt === 2) return;
+          await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
         }
-        if (myEntry.gameId && String(myEntry.gameId) !== String(id)) {
-          navigate(`/game/${myEntry.gameId}`, { replace: true });
-        }
-      } catch {
-        // ignore
+      }
+      const myEntry = (t?.players || []).find(
+        (p: any) => String(p.userId) === String(user.id)
+      );
+      if (!myEntry) return;
+      setConsolidationWaiting(null);
+      setPendingConsolidationWaiting(null);
+      if (
+        tid === latestGameTournamentIdRef.current ||
+        tid === latestTournamentIdRef.current
+      ) {
+        refetchTournament({ silent: true });
+      }
+      if (myEntry.gameId && String(myEntry.gameId) !== String(id)) {
+        navigate(`/game/${myEntry.gameId}`, { replace: true });
       }
     });
 
