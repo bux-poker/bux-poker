@@ -57,31 +57,11 @@ export async function initializeDiscordBot() {
         GatewayIntentBits.GuildMembers,
       ],
     });
-    // Expose immediately so waitForDiscordClientReady() can poll until ClientReady (slash registration may take a long time).
+    // Expose immediately; login before slash registration so gateway is ready quickly
+    // (global rest.put can take 30–60s+ and was blocking /api/admin/servers for the whole wait).
     discordClient = client;
 
-    // Register slash commands
-    const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
-
-    console.log('[DISCORD BOT] Registering slash commands...');
-
-    if (GUILD_ID) {
-      // Guild-specific commands (faster, for testing)
-      await rest.put(
-        Routes.applicationGuildCommands(DISCORD_CLIENT_ID, GUILD_ID),
-        { body: commands }
-      );
-      console.log(`[DISCORD BOT] Registered ${commands.length} guild commands`);
-    } else {
-      // Global commands (takes up to 1 hour to propagate)
-      await rest.put(
-        Routes.applicationCommands(DISCORD_CLIENT_ID),
-        { body: commands }
-      );
-      console.log(`[DISCORD BOT] Registered ${commands.length} global commands`);
-    }
-
-    // Handle interactions (slash commands and buttons)
+    // Handle interactions (slash commands and buttons) — register before login
     client.on('interactionCreate', async (interaction) => {
       try {
         if (interaction.isChatInputCommand()) {
@@ -121,6 +101,24 @@ export async function initializeDiscordBot() {
     });
 
     await client.login(DISCORD_TOKEN);
+
+    const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
+    console.log('[DISCORD BOT] Registering slash commands...');
+    try {
+      if (GUILD_ID) {
+        await rest.put(
+          Routes.applicationGuildCommands(DISCORD_CLIENT_ID, GUILD_ID),
+          { body: commands }
+        );
+        console.log(`[DISCORD BOT] Registered ${commands.length} guild commands`);
+      } else {
+        await rest.put(Routes.applicationCommands(DISCORD_CLIENT_ID), { body: commands });
+        console.log(`[DISCORD BOT] Registered ${commands.length} global commands`);
+      }
+    } catch (regErr) {
+      console.error('[DISCORD BOT] Slash command registration failed (bot stays online):', regErr?.message || regErr);
+    }
+
     return client;
   } catch (error) {
     console.error('[DISCORD BOT] Failed to initialize:', error);
