@@ -8,12 +8,39 @@ import { postTournamentEmbed, getDiscordClient } from "../discord/bot.js";
 
 const router = Router();
 const engine = new TournamentEngine();
+const DISCORD_API_V10 = "https://discord.com/api/v10";
+
+async function resolveBotGuildMembershipViaRest(rawServerId) {
+  const raw = process.env.DISCORD_BOT_TOKEN;
+  const token = raw ? String(raw).replace(/^(Bot|Bearer)\s*/i, "") : "";
+  const id = String(rawServerId ?? "").trim();
+  if (!token || !/^\d{17,20}$/.test(id)) return null;
+  try {
+    const res = await fetch(`${DISCORD_API_V10}/guilds/${encodeURIComponent(id)}`, {
+      method: "GET",
+      headers: { Authorization: `Bot ${token}` },
+    });
+    if (res.ok) return true;
+    if (res.status === 404) return false;
+    if (res.status === 401) {
+      console.warn("[ADMIN /servers] Discord REST 401 — invalid DISCORD_BOT_TOKEN");
+      return null;
+    }
+    return null;
+  } catch (e) {
+    console.warn("[ADMIN /servers] Discord REST guild check failed:", e?.message || e);
+    return null;
+  }
+}
 
 /**
  * Whether the bot is in the guild. Cache-first, then REST fetch.
  * @returns {Promise<boolean|null>} true = in guild, false = not in guild, null = Discord unavailable or transient error
  */
 async function resolveBotGuildMembership(discordClient, rawServerId) {
+  const rest = await resolveBotGuildMembershipViaRest(rawServerId);
+  if (rest === true || rest === false) return rest;
+
   if (!discordClient) return null;
   const id = String(rawServerId ?? "").trim();
   if (!/^\d{17,20}$/.test(id)) {
