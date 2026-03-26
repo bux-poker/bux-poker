@@ -1,41 +1,23 @@
-# Fly.io app name must be globally unique. If `bux-poker-server` is taken, run:
-#   fly apps create <your-name>
-# then set `app = "<your-name>"` below and rebuild the client fallback / Vercel VITE_API_BASE_URL.
+# fly.toml app configuration file generated for bux-poker on 2026-03-26T23:02:54Z
 #
-# After first deploy:
-#   fly secrets set DATABASE_URL=<neon> REDIS_URL=<redis> SESSION_SECRET=<...> JWT_SECRET=<...> \
-#     DISCORD_CLIENT_ID=<...> DISCORD_CLIENT_SECRET=<...> DISCORD_BOT_TOKEN=<...> \
-#     CLIENT_URL=https://bux-poker.pro API_BASE_URL=https://<your-app>.fly.dev
-# (copy values from Render; add any other vars you use there.)
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
-# Vercel: set VITE_API_BASE_URL and VITE_SOCKET_URL to https://<your-app>.fly.dev
-# Discord Developer Portal: add redirect https://<your-app>.fly.dev/api/auth/discord/callback
-#   if you use Passport on the API directly; Vercel OAuth flow may still use /oauth/discord on www.
 
-app = "bux-poker-server"
-primary_region = "lhr"
+app = 'bux-poker'
+primary_region = 'ams'
 
 [build]
 
-[env]
-  NODE_ENV = "production"
-  PORT = "3000"
-
 [http_service]
-  internal_port = 3000
+  internal_port = 8080
   force_https = true
-  auto_stop_machines = false
+  auto_stop_machines = 'stop'
   auto_start_machines = true
-  min_machines_running = 1
-
-  [[http_service.checks]]
-    interval = "15s"
-    timeout = "10s"
-    grace_period = "120s"
-    method = "GET"
-    path = "/api/health"
+  min_machines_running = 0
+  processes = ['app']
 
 [[vm]]
-  memory = "1gb"
-  cpu_kind = "shared"
+  memory = '1gb'
+  cpu_kind = 'shared'
   cpus = 1
+  memory_mb = 256
