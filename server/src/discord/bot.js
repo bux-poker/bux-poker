@@ -43,6 +43,31 @@ const commands = [
 let discordClient = null;
 let discordInitPromise = null;
 const DISCORD_LOGIN_TIMEOUT_MS = Number(process.env.DISCORD_LOGIN_TIMEOUT_MS || 45000);
+const DISCORD_API_V10 = "https://discord.com/api/v10";
+
+function getDiscordBotAuthToken() {
+  const raw = DISCORD_TOKEN ? String(DISCORD_TOKEN) : "";
+  const token = raw.replace(/^(Bot|Bearer)\s*/i, "").trim();
+  return token ? `Bot ${token}` : "";
+}
+
+async function sendMessageViaDiscordRest(channelId, payload) {
+  const auth = getDiscordBotAuthToken();
+  if (!auth || !channelId) return null;
+  const res = await fetch(`${DISCORD_API_V10}/channels/${encodeURIComponent(channelId)}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: auth,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const bodyText = await res.text().catch(() => "");
+    throw new Error(`Discord REST send failed (${res.status}): ${bodyText || "no body"}`);
+  }
+  return res.json();
+}
 
 async function registerSlashCommandsInBackground(token, appId, guildId, commandBodies) {
   const rest = new REST({ version: '10' }).setToken(token);
@@ -621,11 +646,6 @@ async function buildTournamentEmbed(tournament, discordUserId = null) {
 }
 
 export async function postTournamentEmbed(tournament, serverIds) {
-  if (!discordClient) {
-    console.warn('[DISCORD BOT] Cannot post embed - bot not initialized');
-    return [];
-  }
-
   if (!serverIds || serverIds.length === 0) {
     console.log('[DISCORD BOT] No server IDs provided, skipping embed posting');
     return [];
@@ -665,45 +685,54 @@ export async function postTournamentEmbed(tournament, serverIds) {
   for (const server of servers) {
     try {
       console.log(`[DISCORD BOT] Posting to server: ${server.serverName} (${server.serverId})`);
-      let channel = null;
-      let guild = await discordClient.guilds.fetch(server.serverId).catch(() => null);
-      if (guild) {
-        channel = await guild.channels.fetch(server.announcementChannelId).catch(() => null);
-      }
-      // Fallback for stale/incorrect stored guild IDs: channel id is globally unique.
-      // If this works, posting can continue even when membership verification says false.
-      if (!channel && server.announcementChannelId) {
-        channel = await discordClient.channels.fetch(server.announcementChannelId).catch(() => null);
-        if (channel?.guild) {
-          guild = channel.guild;
-          if (String(guild.id) !== String(server.serverId)) {
-            console.warn(
-              `[DISCORD BOT] Server ID mismatch for ${server.serverName}: stored=${server.serverId}, channelGuild=${guild.id}`
-            );
+      let message = null;
+      const canUseGateway = !!discordClient?.isReady?.();
+
+      if (canUseGateway) {
+        let channel = null;
+        let guild = await discordClient.guilds.fetch(server.serverId).catch(() => null);
+        if (guild) {
+          channel = await guild.channels.fetch(server.announcementChannelId).catch(() => null);
+        }
+        // Fallback for stale/incorrect stored guild IDs: channel id is globally unique.
+        if (!channel && server.announcementChannelId) {
+          channel = await discordClient.channels.fetch(server.announcementChannelId).catch(() => null);
+          if (channel?.guild) {
+            guild = channel.guild;
+            if (String(guild.id) !== String(server.serverId)) {
+              console.warn(
+                `[DISCORD BOT] Server ID mismatch for ${server.serverName}: stored=${server.serverId}, channelGuild=${guild.id}`
+              );
+            }
+          }
+        }
+
+        if (!channel || !channel.isTextBased() || !guild) {
+          console.warn(`[DISCORD BOT] Gateway channel/guild resolve failed for ${server.serverName}; trying REST send`);
+        } else {
+          const permissions = channel.permissionsFor(guild.members.me);
+          if (permissions.has('SendMessages') && permissions.has('EmbedLinks')) {
+            message = await channel.send({
+              embeds: [embed],
+              components: components,
+            });
+          } else {
+            console.warn(`[DISCORD BOT] Missing channel perms via gateway for ${server.serverName}; trying REST send`);
           }
         }
       }
 
-      if (!channel || !channel.isTextBased()) {
-        console.warn(`[DISCORD BOT] Invalid channel for server ${server.serverName}`);
-        continue;
+      // Gateway unavailable or failed: direct REST send by channel ID.
+      if (!message) {
+        if (!server.announcementChannelId) {
+          console.warn(`[DISCORD BOT] No announcementChannelId for ${server.serverName}`);
+          continue;
+        }
+        message = await sendMessageViaDiscordRest(server.announcementChannelId, {
+          embeds: [embed.toJSON()],
+          components: components.map((c) => c.toJSON()),
+        });
       }
-      if (!guild) {
-        console.warn(`[DISCORD BOT] Could not resolve guild for server ${server.serverName}`);
-        continue;
-      }
-
-      // Check bot permissions
-      const permissions = channel.permissionsFor(guild.members.me);
-      if (!permissions.has('SendMessages') || !permissions.has('EmbedLinks')) {
-        console.error(`[DISCORD BOT] Bot lacks permissions in channel ${channel.name} for server ${server.serverName}`);
-        continue;
-      }
-
-      const message = await channel.send({
-        embeds: [embed],
-        components: components,
-      });
 
       console.log(`[DISCORD BOT] Successfully posted embed to ${server.serverName}, message ID: ${message.id}`);
 
