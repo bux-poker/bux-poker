@@ -44,6 +44,8 @@ export function CreateTournament() {
   const [servers, setServers] = useState<DiscordServer[]>([]);
   const [selectedServerIds, setSelectedServerIds] = useState<string[]>([]);
   const [loadingServers, setLoadingServers] = useState(true);
+  /** Bumps to refetch /api/admin/servers (e.g. after Discord API rate limit or cold start). */
+  const [serversRetryKey, setServersRetryKey] = useState(0);
 
   // Initialize form data from URL params if present (for duplication)
   const getInitialFormData = () => {
@@ -176,7 +178,7 @@ export function CreateTournament() {
     return () => {
       cancelled = true;
     };
-  }, [user?.id]);
+  }, [user?.id, serversRetryKey]);
 
   const toggleServerSelection = (serverId: string) => {
     setSelectedServerIds((prev) =>
@@ -696,7 +698,17 @@ export function CreateTournament() {
 
         {/* Discord Server Selection */}
         <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-          <h2 className="mb-4 text-lg font-semibold">Discord Servers</h2>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-semibold">Discord Servers</h2>
+            <button
+              type="button"
+              disabled={loadingServers || !user?.id}
+              onClick={() => setServersRetryKey((k) => k + 1)}
+              className="rounded border border-slate-600 bg-slate-800 px-3 py-1 text-xs font-medium text-slate-200 hover:border-slate-500 hover:bg-slate-700 disabled:opacity-50"
+            >
+              Retry verification
+            </button>
+          </div>
           <p className="mb-4 text-sm text-slate-400">
             Select which Discord servers to post this tournament to. Servers must be set up with /setup command first.
           </p>
@@ -733,8 +745,11 @@ export function CreateTournament() {
                         <span className="text-xs text-amber-400">(Bot not in server)</span>
                       )}
                       {server.isBotMember === null && (
-                        <span className="text-xs text-slate-500">
-                          (Could not verify bot — refresh once Discord is connected)
+                        <span
+                          className="text-xs text-slate-500"
+                          title="The API host checks Discord with your bot token (REST). This is unrelated to the website WebSocket. If it persists, confirm DISCORD_BOT_TOKEN on Render and that the bot is in the server."
+                        >
+                          (Could not verify — Discord API did not confirm; use Retry or check bot token on the server)
                         </span>
                       )}
                       {!server.setupCompleted && (
