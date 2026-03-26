@@ -162,16 +162,16 @@ export async function initializeDiscordBot() {
 
   const initTask = (async () => {
     try {
-      const skipPreflight =
-        process.env.DISCORD_REST_PREFLIGHT === '0' ||
-        process.env.DISCORD_REST_PREFLIGHT === 'false';
-      if (!skipPreflight) {
+      // Preflight is opt-in: hitting discord.com/api from some PaaS IPs triggers Cloudflare HTML (429)
+      // and adds noise; gateway uses a different path. Set DISCORD_REST_PREFLIGHT=true to debug token/REST.
+      const enablePreflight =
+        process.env.DISCORD_REST_PREFLIGHT === '1' ||
+        process.env.DISCORD_REST_PREFLIGHT === 'true';
+      if (enablePreflight) {
         const restCheck = await verifyDiscordRestToken(token);
         if (!restCheck.ok && restCheck.fatal) {
           throw new Error(restCheck.message);
         }
-      } else {
-        console.log('[DISCORD BOT] DISCORD_REST_PREFLIGHT disabled — skipping REST check');
       }
 
       const client = new Client({
