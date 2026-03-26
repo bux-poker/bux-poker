@@ -42,6 +42,7 @@ const commands = [
 
 let discordClient = null;
 let discordInitPromise = null;
+const DISCORD_LOGIN_TIMEOUT_MS = Number(process.env.DISCORD_LOGIN_TIMEOUT_MS || 10000);
 
 async function registerSlashCommandsInBackground(token, appId, guildId, commandBodies) {
   const rest = new REST({ version: '10' }).setToken(token);
@@ -131,7 +132,16 @@ export async function initializeDiscordBot() {
       console.log(`[DISCORD BOT] Logged in as ${client.user.tag}`);
     });
 
-      await client.login(DISCORD_TOKEN);
+      const loginResult = await Promise.race([
+        client.login(DISCORD_TOKEN),
+        new Promise((resolve) => setTimeout(() => resolve("__login_timeout__"), DISCORD_LOGIN_TIMEOUT_MS)),
+      ]);
+      if (loginResult === "__login_timeout__") {
+        try {
+          client.destroy();
+        } catch {}
+        throw new Error(`Discord login timed out after ${DISCORD_LOGIN_TIMEOUT_MS}ms`);
+      }
       // Mark online only after successful login.
       discordClient = client;
       // Command registration must never block process startup/port binding.
