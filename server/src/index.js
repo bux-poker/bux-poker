@@ -35,8 +35,8 @@ resumeScheduledStartTimersForSeatedTournaments(tournamentPollEngine).catch((err)
 // At (startTime - 2m): close registration, seat players, arm countdown to startTime
 startTournamentAutomationPoll(tournamentPollEngine);
 startLeagueDiscordPoll();
-const DISCORD_INIT_TIMEOUT_MS = Number(process.env.DISCORD_INIT_TIMEOUT_MS || 12000);
-const DISCORD_INIT_RETRY_MS = Number(process.env.DISCORD_INIT_RETRY_MS || 30000);
+const DISCORD_INIT_TIMEOUT_MS = Number(process.env.DISCORD_INIT_TIMEOUT_MS || 50000);
+const DISCORD_INIT_RETRY_MS = Number(process.env.DISCORD_INIT_RETRY_MS || 15000);
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));

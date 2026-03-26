@@ -42,7 +42,7 @@ const commands = [
 
 let discordClient = null;
 let discordInitPromise = null;
-const DISCORD_LOGIN_TIMEOUT_MS = Number(process.env.DISCORD_LOGIN_TIMEOUT_MS || 10000);
+const DISCORD_LOGIN_TIMEOUT_MS = Number(process.env.DISCORD_LOGIN_TIMEOUT_MS || 45000);
 
 async function registerSlashCommandsInBackground(token, appId, guildId, commandBodies) {
   const rest = new REST({ version: '10' }).setToken(token);
