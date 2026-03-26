@@ -720,7 +720,7 @@ export function CreateTournament() {
               : 'Tournament created successfully!'}
             {createMode === 'tournament' && selectedServerIds.length > 0 && (
               <span className="block mt-2 text-sm">
-                Tournament embed posted to {selectedServerIds.length} Discord server(s).
+                Tournament created and embed post requested for {selectedServerIds.length} Discord server(s).
               </span>
             )}
             {createMode === 'league' && selectedServerIds.length > 0 && (

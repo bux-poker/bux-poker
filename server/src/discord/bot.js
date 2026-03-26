@@ -43,30 +43,13 @@ const commands = [
 let discordClient = null;
 let discordInitPromise = null;
 const DISCORD_LOGIN_TIMEOUT_MS = Number(process.env.DISCORD_LOGIN_TIMEOUT_MS || 45000);
-const DISCORD_API_V10 = "https://discord.com/api/v10";
-
-function getDiscordBotAuthToken() {
-  const raw = DISCORD_TOKEN ? String(DISCORD_TOKEN) : "";
-  const token = raw.replace(/^(Bot|Bearer)\s*/i, "").trim();
-  return token ? `Bot ${token}` : "";
-}
+const restClient = DISCORD_TOKEN
+  ? new REST({ version: "10" }).setToken(DISCORD_TOKEN)
+  : null;
 
 async function sendMessageViaDiscordRest(channelId, payload) {
-  const auth = getDiscordBotAuthToken();
-  if (!auth || !channelId) return null;
-  const res = await fetch(`${DISCORD_API_V10}/channels/${encodeURIComponent(channelId)}/messages`, {
-    method: "POST",
-    headers: {
-      Authorization: auth,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const bodyText = await res.text().catch(() => "");
-    throw new Error(`Discord REST send failed (${res.status}): ${bodyText || "no body"}`);
-  }
-  return res.json();
+  if (!restClient || !channelId) return null;
+  return restClient.post(Routes.channelMessages(channelId), { body: payload });
 }
 
 async function registerSlashCommandsInBackground(token, appId, guildId, commandBodies) {
