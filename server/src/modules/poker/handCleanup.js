@@ -3,7 +3,7 @@
  * (e.g. "skip award" path) so we don't leave the table stuck with hasActiveHand true.
  */
 import { prisma } from "../../config/database.js";
-import { clearTableStateForGame } from "./tableState.js";
+import { tableState } from "./tableState.js";
 import { resetPlayerRowIfNotEliminated } from "./safeHandCleanupDb.js";
 import { isEligibleToDealNextHand } from "./playerEligibility.js";
 
@@ -22,7 +22,7 @@ export function cleanupHandAndStartNext(gameId, io, state, startHandForGame, del
 
     setTimeout(() => {
     const savedPlayers = [...state.players];
-    clearTableStateForGame(gameId);
+    tableState.delete(gameId);
 
     const resetPromises = savedPlayers
       .filter((p) => p.status !== "ELIMINATED" && p.chips > 0)

@@ -8,73 +8,6 @@ import { postTournamentEmbed, getDiscordClient } from "../discord/bot.js";
 
 const router = Router();
 const engine = new TournamentEngine();
-const DISCORD_API_V10 = "https://discord.com/api/v10";
-const ADMIN_SERVERS_MEMBERSHIP_TIMEOUT_MS = Number(process.env.ADMIN_SERVERS_MEMBERSHIP_TIMEOUT_MS || 2500);
-
-function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((resolve) => setTimeout(() => resolve(null), ms)),
-  ]);
-}
-
-async function resolveBotGuildMembershipViaRest(rawServerId) {
-  const raw = process.env.DISCORD_BOT_TOKEN;
-  const token = raw ? String(raw).replace(/^(Bot|Bearer)\s*/i, "") : "";
-  const id = String(rawServerId ?? "").trim();
-  if (!token || !/^\d{17,20}$/.test(id)) return null;
-  try {
-    const res = await fetch(`${DISCORD_API_V10}/guilds/${encodeURIComponent(id)}`, {
-      method: "GET",
-      headers: { Authorization: `Bot ${token}` },
-    });
-    if (res.ok) return true;
-    if (res.status === 404) return false;
-    if (res.status === 401) {
-      console.warn("[ADMIN /servers] Discord REST 401 — invalid DISCORD_BOT_TOKEN");
-      return null;
-    }
-    return null;
-  } catch (e) {
-    console.warn("[ADMIN /servers] Discord REST guild check failed:", e?.message || e);
-    return null;
-  }
-}
-
-/**
- * Whether the bot is in the guild. Cache-first, then REST fetch.
- * @returns {Promise<boolean|null>} true = in guild, false = not in guild, null = Discord unavailable or transient error
- */
-async function resolveBotGuildMembership(discordClient, rawServerId) {
-  const rest = await resolveBotGuildMembershipViaRest(rawServerId);
-  if (rest === true || rest === false) return rest;
-
-  if (!discordClient) return null;
-  const id = String(rawServerId ?? "").trim();
-  if (!/^\d{17,20}$/.test(id)) {
-    console.warn("[ADMIN /servers] Invalid Discord guild id:", rawServerId);
-    return false;
-  }
-  if (discordClient.guilds.cache.get(id)) return true;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const guild = await discordClient.guilds.fetch(id);
-      return !!guild;
-    } catch (e) {
-      const code = e?.code;
-      // Only 10004 means the bot is definitively not in this guild (or ID is wrong).
-      // Other errors (network, rate limit) must not become "bot not in server".
-      if (code === 10004) return false;
-      if (attempt === 0) {
-        await new Promise((r) => setTimeout(r, 80));
-        continue;
-      }
-      console.warn("[ADMIN /servers] guilds.fetch failed for", id, e?.message || e);
-      return null;
-    }
-  }
-  return null;
-}
 
 /** Deep delete tournament (same as DELETE /api/admin/tournaments/:id). */
 async function deleteTournamentCascade(tournamentId) {
@@ -140,21 +73,20 @@ router.use(requireAdminRole);
 // Get all configured Discord servers
 router.get("/servers", async (req, res, next) => {
   try {
-    res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
-    res.setHeader("Pragma", "no-cache");
     const discordClient = getDiscordClient();
     const servers = await prisma.discordServer.findMany({
       where: { enabled: true },
       orderBy: { serverName: "asc" },
     });
 
-    // Enrich with bot membership: cache hit, else REST; unknown guild => false, transient errors => null
-    const enrichedServers = await Promise.allSettled(
+    // Enrich with current bot membership status (fetch with .catch so Unknown Guild never throws)
+    const enrichedServers = await Promise.all(
       servers.map(async (server) => {
-        const isBotMember = await withTimeout(
-          resolveBotGuildMembership(discordClient, server.serverId),
-          ADMIN_SERVERS_MEMBERSHIP_TIMEOUT_MS
-        );
+        let isBotMember = false;
+        if (discordClient) {
+          const guild = await discordClient.guilds.fetch(server.serverId).catch(() => null);
+          isBotMember = !!guild;
+        }
         return {
           ...server,
           isBotMember,
@@ -162,12 +94,7 @@ router.get("/servers", async (req, res, next) => {
       })
     );
 
-    const payload = enrichedServers.map((item, idx) =>
-      item.status === "fulfilled"
-        ? item.value
-        : { ...servers[idx], isBotMember: null }
-    );
-    res.json(payload);
+    res.json(enrichedServers);
   } catch (err) {
     next(err);
   }
@@ -186,13 +113,6 @@ router.post("/tournaments", async (req, res, next) => {
       blindLevelsJson,
       serverIds = [], // Array of Discord server IDs to post to
     } = req.body;
-    const embedPost = {
-      attempted: false,
-      selectedServers: Array.isArray(serverIds) ? serverIds.length : 0,
-      configuredServers: 0,
-      postedCount: 0,
-      error: null,
-    };
 
     // Calculate prize places: 1 place per 4 registered players
     // Initially set to 0 since no one is registered yet
@@ -266,7 +186,6 @@ router.post("/tournaments", async (req, res, next) => {
             setupCompleted: true,
           },
         });
-        embedPost.configuredServers = discordServers.length;
 
         // Create post entries for each server (messageId will be null until post succeeds)
         await Promise.all(
@@ -297,12 +216,9 @@ router.post("/tournaments", async (req, res, next) => {
 
       // Now attempt to post tournament embed to Discord
       try {
-        embedPost.attempted = true;
-        const posts = await postTournamentEmbed(tournament, serverIds);
-        embedPost.postedCount = Array.isArray(posts) ? posts.length : 0;
+        await postTournamentEmbed(tournament, serverIds);
       } catch (error) {
         console.error("[ADMIN] Error posting tournament embed:", error);
-        embedPost.error = error?.message || "embed_post_failed";
         // Don't fail the tournament creation if embed posting fails
         // Posts are already created, so servers will still show
       }
@@ -327,10 +243,7 @@ router.post("/tournaments", async (req, res, next) => {
       },
     });
 
-    res.status(201).json({
-      ...tournamentWithPosts,
-      embedPost,
-    });
+    res.status(201).json(tournamentWithPosts);
   } catch (err) {
     next(err);
   }

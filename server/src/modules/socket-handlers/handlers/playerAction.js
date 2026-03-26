@@ -1,5 +1,5 @@
 import { prisma } from "../../../config/database.js";
-import { tableState, turnTimers, clearTableStateForGame } from "../../poker/tableState.js";
+import { tableState, turnTimers } from "../../poker/tableState.js";
 import { applyPlayerAction } from "../../poker/actions.js";
 import { emitGameState } from "../../poker/emitGameState.js";
 import { postDealerMessage } from "../../poker/dealerMessages.js";
@@ -86,7 +86,7 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
           const isUncalledBet = lastRaiserUserId && lastRaiserUserId === winner.userId && currentBet > 0;
 
           if (await shouldBlockFoldWinPotAward(gameId)) {
-            clearTableStateForGame(gameId);
+            tableState.delete(gameId);
             return;
           }
           winner.chips += totalPot;
@@ -132,7 +132,7 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
           const savedPlayers = [...state.players];
           // Schedule cleanup BEFORE onPlayerBust: bust can trigger consolidateTables; if we hadn't scheduled this yet we'd deadlock.
           setTimeout(async () => {
-            clearTableStateForGame(gameId);
+            tableState.delete(gameId);
 
             savedPlayers.forEach((p) => {
               if (p.status === "ELIMINATED") {

@@ -1,4 +1,4 @@
-import { tableState, turnTimers, getIO } from "./tableState.js";
+import { tableState, turnTimers } from "./tableState.js";
 import { emitGameStateWithGame } from "./emitGameState.js";
 import { applyPlayerAction } from "./actions.js";
 import { advanceToNextStreet } from "./advanceStreet.js";
@@ -9,29 +9,9 @@ import { postDealerMessage } from "./dealerMessages.js";
 import { prisma } from "../../config/database.js";
 import { normalizeUserId } from "./normalizeUserId.js";
 
-/**
- * If the current actor has no scheduled auto-action timer (e.g. io was null when turn began),
- * start one. Called from idle recovery — avoids long waits until poll forces action.
- */
-export function ensureTurnTimerIfMissing(gameId, io) {
-  const state = tableState.get(gameId);
-  if (!state?.currentTurnUserId || state.handEnded) return;
-  if (turnTimers.has(gameId)) return;
-  const started = state.currentTurnStartedAt ?? 0;
-  if (started > 0 && Date.now() - started < 1500) return;
-  const ioResolved = io ?? getIO();
-  if (!ioResolved) return;
-  console.warn(
-    `[POKER] Repair: active turn but no timer for game ${gameId} — starting turn timer for ${state.currentTurnUserId}`
-  );
-  startTurnTimer(gameId, state.currentTurnUserId, ioResolved);
-}
-
 export function startTurnTimer(gameId, userId, io) {
   const state = tableState.get(gameId);
   if (!state) return;
-
-  const ioResolved = io ?? getIO();
 
   const existingTimer = turnTimers.get(gameId);
   if (existingTimer) {
@@ -57,7 +37,7 @@ export function startTurnTimer(gameId, userId, io) {
     console.warn(
       `[POKER] startTurnTimer: ${nm || userId} cannot act (all-in or out) — skipping timer, moving turn`
     );
-    moveToNextPlayer(gameId, ioResolved).catch((e) =>
+    moveToNextPlayer(gameId, io).catch((e) =>
       console.error("[POKER] startTurnTimer moveToNextPlayer:", e?.message || e)
     );
     return;
@@ -72,9 +52,9 @@ export function startTurnTimer(gameId, userId, io) {
     `[POKER] startTurnTimer for player ${playerName} (userId: ${userId}): isTestPlayer=${isTestPlayer}`
   );
 
-  if (!ioResolved) {
+  if (!io) {
     console.error(
-      `[POKER] Cannot start turn timer: no Socket.IO server (gameId ${gameId})`
+      `[POKER] Cannot start turn timer: io is null for gameId ${gameId}`
     );
     return;
   }
@@ -93,8 +73,6 @@ export function startTurnTimer(gameId, userId, io) {
       console.log(
         `[POKER] Timer expired for test player ${playerName} (userId: ${userId})`
       );
-
-      const ioForCallback = ioResolved;
 
       const currentState = tableState.get(gameId);
       if (!currentState) {
@@ -118,7 +96,7 @@ export function startTurnTimer(gameId, userId, io) {
                 nextPlayer.name || currentState.currentTurnUserId
               } (hand was stuck)`
             );
-            startTurnTimer(gameId, currentState.currentTurnUserId, ioResolved);
+            startTurnTimer(gameId, currentState.currentTurnUserId, io);
           }
         }
         if (!currentState.currentTurnUserId) {
@@ -141,12 +119,12 @@ export function startTurnTimer(gameId, userId, io) {
 
           if (bettingComplete && currentState.street) {
             if (currentState.street === "RIVER") {
-              await handleShowdown(gameId, ioForCallback);
+              await handleShowdown(gameId, io);
             } else {
-              await advanceToNextStreet(gameId, ioForCallback);
+              await advanceToNextStreet(gameId, io);
             }
           } else if (!bettingComplete) {
-            await moveToNextPlayer(gameId, ioForCallback);
+            await moveToNextPlayer(gameId, io);
           }
         }
 
@@ -163,7 +141,7 @@ export function startTurnTimer(gameId, userId, io) {
         );
         turnTimers.delete(gameId);
         try {
-          await moveToNextPlayer(gameId, ioForCallback);
+          await moveToNextPlayer(gameId, io);
         } catch (moveErr) {
           console.error(
             "[POKER] Error moving to next player after player not found:",
@@ -173,13 +151,13 @@ export function startTurnTimer(gameId, userId, io) {
         return;
       }
 
-      await handleTestPlayerAction(gameId, userId, ioForCallback);
+      await handleTestPlayerAction(gameId, userId, io);
       turnTimers.delete(gameId);
     }, timeoutMs);
 
     turnTimers.set(gameId, { timerId, userId, expiresAt, duration: timeoutMs });
 
-    ioResolved.to(`game:${gameId}`).emit("turn-timer-start", {
+    io.to(`game:${gameId}`).emit("turn-timer-start", {
       gameId,
       userId,
       expiresAt,
@@ -192,10 +170,10 @@ export function startTurnTimer(gameId, userId, io) {
     // Single deadline timer (no nested follow-up). A nested timeout was not cleared on player-action
     // and could race the timerId guard so auto CHECK/FOLD never ran.
     const timeoutTimerId = setTimeout(() => {
-      autoFoldPlayer(gameId, userId, ioResolved, timeoutTimerId);
+      autoFoldPlayer(gameId, userId, io, timeoutTimerId);
     }, totalActionMs);
 
-    ioResolved.to(`game:${gameId}`).emit("turn-timer-start", {
+    io.to(`game:${gameId}`).emit("turn-timer-start", {
       gameId,
       userId,
       expiresAt: autoActionExpiresAt,

@@ -1,5 +1,5 @@
 import { prisma } from "../../config/database.js";
-import { tableState, turnTimers, hasActiveHand, clearTableStateForGame } from "./tableState.js";
+import { tableState, turnTimers, hasActiveHand } from "./tableState.js";
 import { resetPlayerRowIfNotEliminated } from "./safeHandCleanupDb.js";
 import { postDealerMessage } from "./dealerMessages.js";
 import { emitGameState } from "./emitGameState.js";
@@ -143,7 +143,7 @@ export async function moveToNextPlayer(gameId, io) {
     const collectedPot = state.bettingRound?.getTotalPot() || 0;
     const totalPot = (state.pot || 0) + collectedPot;
     if (await shouldBlockFoldWinPotAward(gameId)) {
-      clearTableStateForGame(gameId);
+      tableState.delete(gameId);
       return;
     }
     winner.chips += totalPot;
@@ -209,7 +209,7 @@ export async function moveToNextPlayer(gameId, io) {
 
     setTimeout(() => {
       const savedPlayers = [...state.players];
-      clearTableStateForGame(gameId);
+      tableState.delete(gameId);
       const resetPromises = savedPlayers
         .filter((p) => p.status !== "ELIMINATED" && p.chips > 0)
         .map((p) => resetPlayerRowIfNotEliminated(p.id).catch(() => {}));

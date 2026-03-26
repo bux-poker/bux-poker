@@ -16,9 +16,7 @@ export function getSocket(): Socket {
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 15000,
-      randomizationFactor: 0.5,
-      timeout: 30000,
+      reconnectionDelayMax: 5000,
     });
 
     // Make socket available to shared components via window

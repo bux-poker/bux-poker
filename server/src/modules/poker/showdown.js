@@ -1,6 +1,6 @@
 import { prisma } from "../../config/database.js";
 import { HandEvaluator } from "./HandEvaluator.js";
-import { tableState, clearTableStateForGame } from "./tableState.js";
+import { tableState } from "./tableState.js";
 import { postDealerMessage } from "./dealerMessages.js";
 import { emitGameState } from "./emitGameState.js";
 import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/pokerHandler.js";
@@ -34,7 +34,7 @@ async function runShowdownTableCleanup(gameId, io) {
   const st = tableState.get(gameId);
   if (!st) return;
   const savedPlayers = [...st.players];
-  clearTableStateForGame(gameId);
+  tableState.delete(gameId);
   const resetPromises = savedPlayers
     .filter((p) => p.status !== "ELIMINATED" && p.chips > 0)
     .map((p) => resetPlayerRowIfNotEliminated(p.id).catch(() => {}));

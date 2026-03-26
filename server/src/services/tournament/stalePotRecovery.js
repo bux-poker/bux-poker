@@ -1,10 +1,13 @@
 import { prisma } from "../../config/database.js";
 
 /**
- * DB pot > 0 while there is no active in-memory hand — invariant violation.
- * We do not invent winners or redistribute chips; that would fake a result.
- * Zeroing the DB pot unblocks dealing; chip total can drop until hand-end paths are fixed
- * so this path is never hit (award + pot=0 + clear state in one coherent sequence).
+ * "Stale pot" = game.pot > 0 in DB but no active hand. This is a BUG: when a hand ends
+ * we should always award the pot to the winner and persist pot=0. If we're here, that
+ * didn't happen (e.g. race where we cleared state before the DB update completed).
+ *
+ * We do NOT award to anyone – we don't know who won. We zero the pot so the table can
+ * start the next hand, and log. Chips in that pot are lost. Fix hand-end paths so we
+ * always award to the winner and persist before clearing state; then we never hit this.
  *
  * @param {string} gameId
  * @param {number} potAmount
@@ -17,7 +20,7 @@ export async function awardStalePotAndZeroGame(gameId, potAmount) {
   }
 
   console.error(
-    `[TOURNAMENT] STALE POT BUG: game ${gameId} had pot=${potAmount} but no active hand – pot not awarded. Zeroing DB pot to unblock table; investigate hand-end / consolidation ordering.`
+    `[TOURNAMENT] STALE POT BUG: game ${gameId} had pot=${potAmount} but no active hand – we never awarded the winner. Zeroing pot so table can continue; chips lost. Fix hand-end paths to always award winner and persist pot=0 before clearing state.`
   );
 
   await prisma.game.update({ where: { id: gameId }, data: { pot: 0 } }).catch(() => {});
