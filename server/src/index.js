@@ -42,18 +42,14 @@ async function start() {
       console.warn("[REDIS] Session store unavailable, using memory:", err?.message);
     });
   }
-  const discordRequired = process.env.DISCORD_REQUIRED !== "false";
   const bot = await initializeDiscordBot().catch((err) => {
     console.error("[DISCORD BOT] Failed to initialize:", err);
     return null;
   });
   if (bot) {
     console.log("[DISCORD BOT] Online");
-  } else if (discordRequired) {
-    console.error("[DISCORD BOT] Offline and DISCORD_REQUIRED is true; exiting process");
-    process.exit(1);
   } else {
-    console.warn("[DISCORD BOT] Offline but DISCORD_REQUIRED=false; continuing");
+    console.warn("[DISCORD BOT] Offline; continuing startup so service remains deployable");
   }
 
   server.listen(PORT, () => {
