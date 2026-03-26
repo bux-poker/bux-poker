@@ -1098,21 +1098,29 @@ function clientIsReady(c) {
 }
 
 /**
- * Admin routes can hit before the gateway is ready. Tight-poll first (avoids missing a fast
- * ClientReady between checks), then wait on ClientReady with timeout and listener cleanup.
+ * @param {number} [maxWaitMs] Total budget. `/api/admin/servers` passes a lower value so a dead bot
+ *   does not hold HTTP open for 60s (common when init failed and discordClient stays null).
  */
-export async function waitForDiscordClientReady() {
+export async function waitForDiscordClientReady(maxWaitMs = DISCORD_READY_MAX_MS) {
   if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID) return null;
   const started = Date.now();
-  const deadline = started + DISCORD_READY_MAX_MS;
+  const deadline = started + maxWaitMs;
 
-  while (!discordClient && Date.now() < deadline) {
+  // If bot init failed, discordClient stays null forever — do not burn the full maxWaitMs polling.
+  const assignCap = Math.min(
+    Number(process.env.DISCORD_CLIENT_ASSIGN_WAIT_MS || 5000),
+    maxWaitMs
+  );
+  const assignDeadline = started + assignCap;
+  while (!discordClient && Date.now() < assignDeadline) {
     await new Promise((r) => setTimeout(r, DISCORD_READY_POLL_MS));
   }
 
   const client = discordClient;
   if (!client) {
-    console.warn('[DISCORD BOT] waitForDiscordClientReady: no discordClient — bot init missing or failed');
+    console.warn(
+      '[DISCORD BOT] waitForDiscordClientReady: no discordClient after assign window — bot init missing, failed, or wrong env on this host (see [DISCORD BOT] logs)'
+    );
     return null;
   }
 
@@ -1132,7 +1140,7 @@ export async function waitForDiscordClientReady() {
   const remaining = deadline - Date.now();
   if (remaining <= 0) {
     console.warn(
-      `[DISCORD BOT] waitForDiscordClientReady timed out after ${DISCORD_READY_MAX_MS}ms — admin guild checks may return null`
+      `[DISCORD BOT] waitForDiscordClientReady timed out after ${maxWaitMs}ms — admin guild checks may return null`
     );
     return null;
   }
@@ -1160,7 +1168,7 @@ export async function waitForDiscordClientReady() {
   }
 
   console.warn(
-    `[DISCORD BOT] waitForDiscordClientReady timed out after ${DISCORD_READY_MAX_MS}ms — admin guild checks may return null`
+    `[DISCORD BOT] waitForDiscordClientReady timed out after ${maxWaitMs}ms — admin guild checks may return null`
   );
   return null;
 }

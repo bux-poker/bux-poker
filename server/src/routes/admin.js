@@ -9,6 +9,9 @@ import { postTournamentEmbed, waitForDiscordClientReady } from "../discord/bot.j
 const router = Router();
 const engine = new TournamentEngine();
 
+/** Max time /api/admin/servers waits on Discord; avoids 60s browser hang if gateway never becomes ready. */
+const ADMIN_SERVERS_DISCORD_WAIT_MS = Number(process.env.ADMIN_SERVERS_DISCORD_WAIT_MS || 12000);
+
 /**
  * Whether the bot is in the guild. Cache-first, then REST fetch with one retry.
  * @returns {Promise<boolean|null>} true = in guild, false = not in guild (Unknown Guild), null = offline / transient
@@ -105,7 +108,7 @@ router.get("/servers", async (req, res, next) => {
     res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
     res.setHeader("Pragma", "no-cache");
 
-    const discordClient = await waitForDiscordClientReady();
+    const discordClient = await waitForDiscordClientReady(ADMIN_SERVERS_DISCORD_WAIT_MS);
     const servers = await prisma.discordServer.findMany({
       where: { enabled: true },
       orderBy: { serverName: "asc" },
