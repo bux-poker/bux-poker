@@ -42,6 +42,22 @@ const commands = [
 
 let discordClient = null;
 
+async function registerSlashCommandsInBackground(token, appId, guildId, commandBodies) {
+  const rest = new REST({ version: '10' }).setToken(token);
+  console.log('[DISCORD BOT] Registering slash commands (background)...');
+  try {
+    if (guildId) {
+      await rest.put(Routes.applicationGuildCommands(appId, guildId), { body: commandBodies });
+      console.log(`[DISCORD BOT] Registered ${commandBodies.length} guild commands`);
+    } else {
+      await rest.put(Routes.applicationCommands(appId), { body: commandBodies });
+      console.log(`[DISCORD BOT] Registered ${commandBodies.length} global commands`);
+    }
+  } catch (regErr) {
+    console.error('[DISCORD BOT] Slash command registration failed (bot stays online):', regErr?.message || regErr);
+  }
+}
+
 export async function initializeDiscordBot() {
   if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID) {
     console.log('[DISCORD BOT] Skipping initialization - missing credentials');
@@ -102,22 +118,9 @@ export async function initializeDiscordBot() {
 
     await client.login(DISCORD_TOKEN);
 
-    const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
-    console.log('[DISCORD BOT] Registering slash commands...');
-    try {
-      if (GUILD_ID) {
-        await rest.put(
-          Routes.applicationGuildCommands(DISCORD_CLIENT_ID, GUILD_ID),
-          { body: commands }
-        );
-        console.log(`[DISCORD BOT] Registered ${commands.length} guild commands`);
-      } else {
-        await rest.put(Routes.applicationCommands(DISCORD_CLIENT_ID), { body: commands });
-        console.log(`[DISCORD BOT] Registered ${commands.length} global commands`);
-      }
-    } catch (regErr) {
-      console.error('[DISCORD BOT] Slash command registration failed (bot stays online):', regErr?.message || regErr);
-    }
+    // Do not await — global command PUT can take 30–60s+ and must not block gateway readiness
+    // or keep the init promise chained behind Discord REST.
+    void registerSlashCommandsInBackground(DISCORD_TOKEN, DISCORD_CLIENT_ID, GUILD_ID, commands);
 
     return client;
   } catch (error) {
@@ -1090,20 +1093,72 @@ export function getDiscordClient() {
 const DISCORD_READY_POLL_MS = 250;
 const DISCORD_READY_MAX_MS = Number(process.env.DISCORD_ADMIN_READY_TIMEOUT_MS || 60000);
 
+function clientIsReady(c) {
+  return Boolean(c && typeof c.isReady === 'function' && c.isReady());
+}
+
 /**
- * Admin routes (e.g. /api/admin/servers) can run before `initializeDiscordBot()` finishes
- * (slash registration + login). Poll until the client exists and is ready, or timeout.
+ * Admin routes can hit before the gateway is ready. Tight-poll first (avoids missing a fast
+ * ClientReady between checks), then wait on ClientReady with timeout and listener cleanup.
  */
 export async function waitForDiscordClientReady() {
   if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID) return null;
-  const deadline = Date.now() + DISCORD_READY_MAX_MS;
-  while (Date.now() < deadline) {
-    const c = discordClient;
-    if (c?.isReady?.()) return c;
+  const started = Date.now();
+  const deadline = started + DISCORD_READY_MAX_MS;
+
+  while (!discordClient && Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, DISCORD_READY_POLL_MS));
   }
+
+  const client = discordClient;
+  if (!client) {
+    console.warn('[DISCORD BOT] waitForDiscordClientReady: no discordClient — bot init missing or failed');
+    return null;
+  }
+
+  if (clientIsReady(client)) return client;
+
+  const phase1End = Math.min(deadline, Date.now() + 3000);
+  while (Date.now() < phase1End && !clientIsReady(client)) {
+    await new Promise((r) => setTimeout(r, 25));
+  }
+
+  if (clientIsReady(client)) {
+    const elapsed = Date.now() - started;
+    if (elapsed > 5000) console.warn(`[DISCORD BOT] waitForDiscordClientReady: ready after ${elapsed}ms`);
+    return discordClient;
+  }
+
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) {
+    console.warn(
+      `[DISCORD BOT] waitForDiscordClientReady timed out after ${DISCORD_READY_MAX_MS}ms — admin guild checks may return null`
+    );
+    return null;
+  }
+
+  await new Promise((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(t);
+      client.removeListener(Events.ClientReady, onReady);
+      resolve();
+    };
+    const onReady = () => done();
+    const t = setTimeout(done, remaining);
+    client.once(Events.ClientReady, onReady);
+    if (clientIsReady(client)) done();
+  });
+
   const c = discordClient;
-  if (c?.isReady?.()) return c;
+  if (clientIsReady(c)) {
+    const elapsed = Date.now() - started;
+    if (elapsed > 5000) console.warn(`[DISCORD BOT] waitForDiscordClientReady: ready after ${elapsed}ms`);
+    return c;
+  }
+
   console.warn(
     `[DISCORD BOT] waitForDiscordClientReady timed out after ${DISCORD_READY_MAX_MS}ms — admin guild checks may return null`
   );
