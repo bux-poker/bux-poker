@@ -8,6 +8,91 @@ import { postTournamentEmbed, getDiscordClient } from "../discord/bot.js";
 
 const router = Router();
 const engine = new TournamentEngine();
+const DISCORD_API_V10 = "https://discord.com/api/v10";
+
+async function resolveBotGuildMembershipViaRest(rawServerId) {
+  const raw = process.env.DISCORD_BOT_TOKEN;
+  const token = raw ? String(raw).replace(/^(Bot|Bearer)\s*/i, "") : "";
+  const id = String(rawServerId ?? "").trim();
+  if (!token || !/^\d{17,20}$/.test(id)) return null;
+  try {
+    const res = await fetch(`${DISCORD_API_V10}/guilds/${encodeURIComponent(id)}`, {
+      method: "GET",
+      headers: { Authorization: `Bot ${token}` },
+    });
+    if (res.ok) return true;
+    if (res.status === 404) return false;
+    if (res.status === 401) {
+      console.warn("[ADMIN /servers] Discord REST 401 — invalid DISCORD_BOT_TOKEN");
+      return null;
+    }
+    return null;
+  } catch (e) {
+    console.warn("[ADMIN /servers] Discord REST guild check failed:", e?.message || e);
+    return null;
+  }
+}
+
+async function resolveBotGuildMembershipViaChannelRest(rawChannelId) {
+  const raw = process.env.DISCORD_BOT_TOKEN;
+  const token = raw ? String(raw).replace(/^(Bot|Bearer)\s*/i, "") : "";
+  const channelId = String(rawChannelId ?? "").trim();
+  if (!token || !/^\d{17,20}$/.test(channelId)) return null;
+  try {
+    const res = await fetch(`${DISCORD_API_V10}/channels/${encodeURIComponent(channelId)}`, {
+      method: "GET",
+      headers: { Authorization: `Bot ${token}` },
+    });
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return data?.guild_id ? true : null;
+    }
+    if (res.status === 404) return false;
+    if (res.status === 401) {
+      console.warn("[ADMIN /servers] Discord REST 401 (channel check) — invalid DISCORD_BOT_TOKEN");
+      return null;
+    }
+    return null;
+  } catch (e) {
+    console.warn("[ADMIN /servers] Discord REST channel check failed:", e?.message || e);
+    return null;
+  }
+}
+
+/**
+ * Whether the bot is in the guild. Cache-first, then REST fetch.
+ * @returns {Promise<boolean|null>} true = in guild, false = not in guild, null = Discord unavailable or transient error
+ */
+async function resolveBotGuildMembership(discordClient, rawServerId) {
+  const rest = await resolveBotGuildMembershipViaRest(rawServerId);
+  if (rest === true || rest === false) return rest;
+
+  if (!discordClient) return null;
+  const id = String(rawServerId ?? "").trim();
+  if (!/^\d{17,20}$/.test(id)) {
+    console.warn("[ADMIN /servers] Invalid Discord guild id:", rawServerId);
+    return false;
+  }
+  if (discordClient.guilds.cache.get(id)) return true;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const guild = await discordClient.guilds.fetch(id);
+      return !!guild;
+    } catch (e) {
+      const code = e?.code;
+      // Only 10004 means the bot is definitively not in this guild (or ID is wrong).
+      // Other errors (network, rate limit) must not become "bot not in server".
+      if (code === 10004) return false;
+      if (attempt === 0) {
+        await new Promise((r) => setTimeout(r, 80));
+        continue;
+      }
+      console.warn("[ADMIN /servers] guilds.fetch failed for", id, e?.message || e);
+      return null;
+    }
+  }
+  return null;
+}
 
 /** Deep delete tournament (same as DELETE /api/admin/tournaments/:id). */
 async function deleteTournamentCascade(tournamentId) {
@@ -79,13 +164,20 @@ router.get("/servers", async (req, res, next) => {
       orderBy: { serverName: "asc" },
     });
 
-    // Enrich with current bot membership status (fetch with .catch so Unknown Guild never throws)
+    // Enrich with bot membership: cache hit, else REST; unknown guild => false, transient errors => null
     const enrichedServers = await Promise.all(
       servers.map(async (server) => {
-        let isBotMember = false;
-        if (discordClient) {
-          const guild = await discordClient.guilds.fetch(server.serverId).catch(() => null);
-          isBotMember = !!guild;
+        let isBotMember = await resolveBotGuildMembership(
+          discordClient,
+          server.serverId
+        );
+        // Fallback: if serverId metadata is stale, the configured channel can still
+        // prove bot membership in that guild.
+        if (isBotMember !== true) {
+          const channelBased = await resolveBotGuildMembershipViaChannelRest(
+            server.announcementChannelId
+          );
+          if (channelBased === true) isBotMember = true;
         }
         return {
           ...server,
