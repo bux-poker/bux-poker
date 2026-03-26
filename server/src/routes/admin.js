@@ -158,6 +158,9 @@ router.use(requireAdminRole);
 // Get all configured Discord servers
 router.get("/servers", async (req, res, next) => {
   try {
+    res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     const discordClient = getDiscordClient();
     const servers = await prisma.discordServer.findMany({
       where: { enabled: true },

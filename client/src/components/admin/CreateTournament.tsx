@@ -122,6 +122,7 @@ export function CreateTournament() {
         if (!token) return;
 
         const response = await api.get('/api/admin/servers', {
+          params: { _ts: Date.now() },
           headers: { Authorization: `Bearer ${token}` },
         });
         setServers(response.data || []);
