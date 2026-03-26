@@ -16,7 +16,9 @@ COPY server ./
 RUN npx prisma generate --schema=../prisma/schema.prisma
 
 ENV NODE_ENV=production
+# Fly sets PORT to match fly.toml internal_port; default avoids listening on 3000 by mistake.
+ENV PORT=8080
 EXPOSE 8080
 
-# prestart runs migrations; then start (see server/package.json)
-CMD ["npm", "start"]
+# Migrations run in fly.toml [deploy].release_command — not here — so the HTTP server can bind before health checks.
+CMD ["node", "--dns-result-order=ipv4first", "src/index.js"]

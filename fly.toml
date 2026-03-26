@@ -8,6 +8,11 @@ primary_region = "ams"
 
 [env]
   NODE_ENV = "production"
+  PORT = "8080"
+
+# Run Prisma once per deploy; machine boot only starts Node (fast bind on :8080 for fly-proxy).
+[deploy]
+  release_command = "cd /app/server && node scripts/prisma-migrate-deploy-or-repair.mjs && npx prisma generate --schema=../prisma/schema.prisma"
 
 [http_service]
   internal_port = 8080
@@ -19,7 +24,7 @@ primary_region = "ams"
   [[http_service.checks]]
     interval = "15s"
     timeout = "10s"
-    grace_period = "180s"
+    grace_period = "60s"
     method = "GET"
     path = "/api/health"
 
