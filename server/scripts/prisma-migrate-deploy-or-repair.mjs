@@ -22,8 +22,9 @@ const sqlFile = path.join(__dirname, "sql", "ensure-start-scheduled-at.sql");
 
 const FAILED = "20260207120000_add_tournament_start_scheduled_at";
 
-const MIGRATE_MAX_ATTEMPTS = Number(process.env.PRISMA_MIGRATE_RETRY_ATTEMPTS || 8);
-const MIGRATE_RETRY_DELAY_MS = Number(process.env.PRISMA_MIGRATE_RETRY_DELAY_MS || 6000);
+// Keep startup responsive on Render: fail-open quickly on transient DB pool timeouts.
+const MIGRATE_MAX_ATTEMPTS = Number(process.env.PRISMA_MIGRATE_RETRY_ATTEMPTS || 2);
+const MIGRATE_RETRY_DELAY_MS = Number(process.env.PRISMA_MIGRATE_RETRY_DELAY_MS || 1000);
 
 function sh(cmd) {
   try {
