@@ -61,7 +61,11 @@ function getRestClient() {
   return cachedRestClient;
 }
 
-/** Fast check: token valid and outbound HTTPS to Discord works (does not use gateway). */
+/**
+ * Optional REST check. Only 401 is treated as fatal (bad token).
+ * Cloudflare often returns HTML "Access denied" / 429 from datacenter IPs (e.g. some PaaS);
+ * that blocks REST but the gateway (wss://gateway.discord.gg) may still work — we must not abort init.
+ */
 async function verifyDiscordRestToken(token) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 15000);
@@ -71,21 +75,41 @@ async function verifyDiscordRestToken(token) {
       signal: ctrl.signal,
     });
     const text = await res.text();
-    if (!res.ok) {
-      console.error('[DISCORD BOT] REST /users/@me failed:', res.status, text.slice(0, 400));
-      return { ok: false, status: res.status };
+    if (res.ok) {
+      try {
+        const j = JSON.parse(text);
+        console.log(`[DISCORD BOT] REST token OK (bot user id=${j.id})`);
+      } catch {
+        console.log('[DISCORD BOT] REST token OK');
+      }
+      return { ok: true };
     }
-    try {
-      const j = JSON.parse(text);
-      console.log(`[DISCORD BOT] REST token OK (bot user id=${j.id})`);
-    } catch {
-      console.log('[DISCORD BOT] REST token OK');
+    if (res.status === 401) {
+      console.error('[DISCORD BOT] REST /users/@me unauthorized (401):', text.slice(0, 200));
+      return {
+        ok: false,
+        fatal: true,
+        message:
+          'Discord bot token rejected (401). Regenerate the bot token in the Developer Portal and update DISCORD_BOT_TOKEN (no quotes or newlines).',
+      };
     }
-    return { ok: true };
+    const looksLikeCloudflareHtml =
+      text.includes('Cloudflare') ||
+      text.includes('Access denied') ||
+      /^\s*<!doctype html/i.test(text);
+    if (looksLikeCloudflareHtml || res.status === 429 || res.status === 403) {
+      console.warn(
+        `[DISCORD BOT] REST /users/@me not usable from this host (HTTP ${res.status}, likely Cloudflare/WAF). ` +
+          'Trying Discord gateway login anyway — REST-only features may fail until you use an egress IP Discord allows.'
+      );
+      return { ok: false, fatal: false, reason: 'rest_blocked_or_waf' };
+    }
+    console.warn('[DISCORD BOT] REST /users/@me failed:', res.status, text.slice(0, 300));
+    return { ok: false, fatal: false, reason: `http_${res.status}` };
   } catch (e) {
     const msg = e?.name === 'AbortError' ? 'request timed out (15s)' : (e?.message || String(e));
-    console.error('[DISCORD BOT] REST /users/@me error:', msg);
-    return { ok: false, error: msg };
+    console.warn('[DISCORD BOT] REST /users/@me error; will still try gateway:', msg);
+    return { ok: false, fatal: false, reason: msg };
   } finally {
     clearTimeout(t);
   }
@@ -138,13 +162,16 @@ export async function initializeDiscordBot() {
 
   const initTask = (async () => {
     try {
-      const restCheck = await verifyDiscordRestToken(token);
-      if (!restCheck.ok) {
-        throw new Error(
-          restCheck.status === 401
-            ? 'Discord bot token rejected (401). Regenerate the bot token in the Developer Portal and update DISCORD_BOT_TOKEN on Render (no quotes, no spaces).'
-            : 'Discord REST check failed — cannot reach api.discord.com or token invalid. See logs above.'
-        );
+      const skipPreflight =
+        process.env.DISCORD_REST_PREFLIGHT === '0' ||
+        process.env.DISCORD_REST_PREFLIGHT === 'false';
+      if (!skipPreflight) {
+        const restCheck = await verifyDiscordRestToken(token);
+        if (!restCheck.ok && restCheck.fatal) {
+          throw new Error(restCheck.message);
+        }
+      } else {
+        console.log('[DISCORD BOT] DISCORD_REST_PREFLIGHT disabled — skipping REST check');
       }
 
       const client = new Client({
@@ -208,8 +235,8 @@ export async function initializeDiscordBot() {
           client.destroy();
         } catch {}
         throw new Error(
-          `Discord gateway login timed out after ${DISCORD_LOGIN_TIMEOUT_MS}ms (REST token check passed). ` +
-            'Try setting NODE_OPTIONS=--dns-result-order=ipv4first on Render if this persists (IPv6 routing).'
+          `Discord gateway login timed out after ${DISCORD_LOGIN_TIMEOUT_MS}ms. ` +
+            'If logs also show Cloudflare blocking REST from this host, run the bot from hosting with a different egress IP (Discord often blocks some datacenter ranges).'
         );
       }
       // Mark online only after successful login.
