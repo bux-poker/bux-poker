@@ -37,6 +37,9 @@ function isAbortLikeError(err: unknown): boolean {
   );
 }
 
+/** One in-flight GET per session token — StrictMode remounts + route flicker share the same request (no NS_BINDING_ABORTED). */
+const adminServersInflight = new Map<string, Promise<unknown>>();
+
 export function CreateTournament() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -144,28 +147,39 @@ export function CreateTournament() {
       return;
     }
 
-    const ac = new AbortController();
     setLoadingServers(true);
+    let cancelled = false;
 
     const fetchServers = async () => {
+      let p = adminServersInflight.get(token);
+      if (!p) {
+        p = api
+          .get('/api/admin/servers', {
+            headers: { Authorization: `Bearer ${token}` },
+            // Match profile: /admin/servers enriches each row with Discord guild checks (cold Render can be slow).
+            timeout: 120_000,
+          })
+          .then((res) => res.data || [])
+          .finally(() => {
+            adminServersInflight.delete(token);
+          });
+        adminServersInflight.set(token, p);
+      }
       try {
-        const response = await api.get('/api/admin/servers', {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: ac.signal,
-          // Match profile: /admin/servers enriches each row with Discord guild checks (cold Render can be slow).
-          timeout: 120_000,
-        });
-        setServers(response.data || []);
+        const data = (await p) as DiscordServer[];
+        if (!cancelled) setServers(data);
       } catch (err) {
         if (isAbortLikeError(err)) return;
-        console.error('Failed to fetch servers:', err);
+        if (!cancelled) console.error('Failed to fetch servers:', err);
       } finally {
-        setLoadingServers(false);
+        if (!cancelled) setLoadingServers(false);
       }
     };
 
     void fetchServers();
-    return () => ac.abort();
+    return () => {
+      cancelled = true;
+    };
     // Depend on stable user id only — `user` object identity changes when localStorage hydrate then fetchProfile completes,
     // which was firing two parallel requests (first often aborted → noisy ECONNABORTED).
   }, [user?.id]);
