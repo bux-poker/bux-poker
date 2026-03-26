@@ -24,6 +24,17 @@ interface DiscordServer {
 /** One XHR per token — React StrictMode double-mount shares the same promise. */
 const adminServersInflight = new Map<string, Promise<DiscordServer[]>>();
 
+function isAbortLikeError(err: unknown): boolean {
+  if (err == null || typeof err !== 'object') return false;
+  const e = err as { code?: string; name?: string; message?: string };
+  return (
+    e.name === 'CanceledError' ||
+    e.code === 'ERR_CANCELED' ||
+    e.code === 'ECONNABORTED' ||
+    (typeof e.message === 'string' && e.message.toLowerCase().includes('aborted'))
+  );
+}
+
 export function CreateTournament() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -140,7 +151,8 @@ export function CreateTournament() {
         p = api
           .get('/api/admin/servers', {
             headers: { Authorization: `Bearer ${token}` },
-            timeout: 120_000,
+            // Server may wait for Discord login + guild checks; do not use a client timeout (0 = none).
+            timeout: 0,
           })
           .then((res) => (res.data || []) as DiscordServer[])
           .finally(() => {
@@ -152,7 +164,9 @@ export function CreateTournament() {
         const data = await p;
         if (!cancelled) setServers(data);
       } catch (err) {
-        if (!cancelled) console.error('Failed to fetch servers:', err);
+        if (!cancelled && !isAbortLikeError(err)) {
+          console.error('Failed to fetch servers:', err);
+        }
       } finally {
         if (!cancelled) setLoadingServers(false);
       }
