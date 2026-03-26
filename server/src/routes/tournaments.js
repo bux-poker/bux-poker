@@ -104,7 +104,7 @@ router.get("/:id/server-membership", authenticateToken, async (req, res) => {
     }
 
     const discordClient = getDiscordClient();
-    const discordReady = discordClient?.isReady?.();
+    const discordReady = discordClient && discordClient.guilds;
 
     if (!discordReady) {
       return res.json({

@@ -17,22 +17,13 @@ interface DiscordServer {
   serverName: string;
   inviteLink: string | null;
   setupCompleted: boolean;
-  /** true = verified in guild; false = not in guild; null = could not verify (retry / refresh) */
+  /** true = bot in guild, false = not in guild, null = could not verify (e.g. Discord offline) */
   isBotMember: boolean | null;
 }
 
-/** One XHR per token — React StrictMode double-mount shares the same promise. */
-const adminServersInflight = new Map<string, Promise<DiscordServer[]>>();
-
-function isAbortLikeError(err: unknown): boolean {
-  if (err == null || typeof err !== 'object') return false;
-  const e = err as { code?: string; name?: string; message?: string };
-  return (
-    e.name === 'CanceledError' ||
-    e.code === 'ERR_CANCELED' ||
-    e.code === 'ECONNABORTED' ||
-    (typeof e.message === 'string' && e.message.toLowerCase().includes('aborted'))
-  );
+function parseIntOrFallback(value: string | null | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 export function CreateTournament() {
@@ -49,9 +40,9 @@ export function CreateTournament() {
   const getInitialFormData = () => {
     const name = searchParams.get('name') || '';
     const description = searchParams.get('description') || '';
-    const maxPlayers = parseInt(searchParams.get('maxPlayers') || '100');
-    const seatsPerTable = parseInt(searchParams.get('seatsPerTable') || '9');
-    const startingChips = parseInt(searchParams.get('startingChips') || '10000');
+    const maxPlayers = parseIntOrFallback(searchParams.get('maxPlayers'), 100);
+    const seatsPerTable = parseIntOrFallback(searchParams.get('seatsPerTable'), 9);
+    const startingChips = parseIntOrFallback(searchParams.get('startingChips'), 10000);
     return {
       name,
       description,
@@ -130,53 +121,27 @@ export function CreateTournament() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (!user?.id) {
-      setServers([]);
-      setLoadingServers(false);
-      return;
-    }
-
-    const token = localStorage.getItem('sessionToken');
-    if (!token) {
-      setLoadingServers(false);
-      return;
-    }
-
-    let cancelled = false;
-    setLoadingServers(true);
-
-    const run = async () => {
-      let p = adminServersInflight.get(token);
-      if (!p) {
-        p = api
-          .get('/api/admin/servers', {
-            headers: { Authorization: `Bearer ${token}` },
-            // Server may wait for Discord login + guild checks; do not use a client timeout (0 = none).
-            timeout: 0,
-          })
-          .then((res) => (res.data || []) as DiscordServer[])
-          .finally(() => {
-            adminServersInflight.delete(token);
-          });
-        adminServersInflight.set(token, p);
-      }
+    // Fetch available Discord servers
+    const fetchServers = async () => {
       try {
-        const data = await p;
-        if (!cancelled) setServers(data);
+        const token = localStorage.getItem('sessionToken');
+        if (!token) return;
+
+        const response = await api.get('/api/admin/servers', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setServers(response.data || []);
       } catch (err) {
-        if (!cancelled && !isAbortLikeError(err)) {
-          console.error('Failed to fetch servers:', err);
-        }
+        console.error('Failed to fetch servers:', err);
       } finally {
-        if (!cancelled) setLoadingServers(false);
+        setLoadingServers(false);
       }
     };
 
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
+    if (user) {
+      fetchServers();
+    }
+  }, [user]);
 
   const toggleServerSelection = (serverId: string) => {
     setSelectedServerIds((prev) =>
@@ -543,7 +508,10 @@ export function CreateTournament() {
                 min="2"
                 value={formData.maxPlayers}
                 onChange={(e) =>
-                  setFormData({ ...formData, maxPlayers: parseInt(e.target.value) })
+                  setFormData({
+                    ...formData,
+                    maxPlayers: parseIntOrFallback(e.target.value, formData.maxPlayers),
+                  })
                 }
                 className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
               />
@@ -559,7 +527,10 @@ export function CreateTournament() {
                 max="10"
                 value={formData.seatsPerTable}
                 onChange={(e) =>
-                  setFormData({ ...formData, seatsPerTable: parseInt(e.target.value) })
+                  setFormData({
+                    ...formData,
+                    seatsPerTable: parseIntOrFallback(e.target.value, formData.seatsPerTable),
+                  })
                 }
                 className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
               />
@@ -572,7 +543,10 @@ export function CreateTournament() {
               <select
                 value={formData.startingChips}
                 onChange={(e) =>
-                  setFormData({ ...formData, startingChips: parseInt(e.target.value) })
+                  setFormData({
+                    ...formData,
+                    startingChips: parseIntOrFallback(e.target.value, formData.startingChips),
+                  })
                 }
                 className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
               >
@@ -610,7 +584,11 @@ export function CreateTournament() {
               type="number"
               min="1"
               value={blindRoundDuration}
-              onChange={(e) => handleBlindRoundDurationChange(parseInt(e.target.value))}
+              onChange={(e) =>
+                handleBlindRoundDurationChange(
+                  parseIntOrFallback(e.target.value, blindRoundDuration)
+                )
+              }
               className="mt-1 w-full max-w-xs rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
             />
           </div>
@@ -635,7 +613,11 @@ export function CreateTournament() {
                         min="1"
                         value={level.smallBlind}
                         onChange={(e) =>
-                          updateBlindLevel(index, 'smallBlind', parseInt(e.target.value))
+                          updateBlindLevel(
+                            index,
+                            'smallBlind',
+                            parseIntOrFallback(e.target.value, level.smallBlind)
+                          )
                         }
                         className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
                       />
@@ -647,7 +629,11 @@ export function CreateTournament() {
                         min="1"
                         value={level.bigBlind}
                         onChange={(e) =>
-                          updateBlindLevel(index, 'bigBlind', parseInt(e.target.value))
+                          updateBlindLevel(
+                            index,
+                            'bigBlind',
+                            parseIntOrFallback(e.target.value, level.bigBlind)
+                          )
                         }
                         className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
                       />
@@ -667,7 +653,9 @@ export function CreateTournament() {
                       <select
                         value={level.breakAfter || ''}
                         onChange={(e) => {
-                          const value = e.target.value ? parseInt(e.target.value) : undefined;
+                          const value = e.target.value
+                            ? parseIntOrFallback(e.target.value, level.breakAfter ?? 5)
+                            : undefined;
                           updateBlindLevelBreak(index, value);
                         }}
                         className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
@@ -712,7 +700,7 @@ export function CreateTournament() {
                 <label
                   key={server.id}
                   className={`flex cursor-pointer items-center gap-3 rounded border p-3 transition-colors ${
-                    server.isBotMember !== true || !server.setupCompleted
+                    server.isBotMember === false || !server.setupCompleted
                       ? 'border-slate-700 bg-slate-800/30 opacity-50'
                       : selectedServerIds.includes(server.serverId)
                       ? 'border-emerald-500 bg-emerald-500/10'
@@ -723,7 +711,7 @@ export function CreateTournament() {
                     type="checkbox"
                     checked={selectedServerIds.includes(server.serverId)}
                     onChange={() => toggleServerSelection(server.serverId)}
-                    disabled={server.isBotMember !== true || !server.setupCompleted}
+                    disabled={server.isBotMember === false || !server.setupCompleted}
                     className="h-4 w-4 rounded border-slate-600 text-emerald-600 focus:ring-emerald-500"
                   />
                   <div className="flex-1">
@@ -733,9 +721,7 @@ export function CreateTournament() {
                         <span className="text-xs text-amber-400">(Bot not in server)</span>
                       )}
                       {server.isBotMember === null && (
-                        <span className="text-xs text-slate-500">
-                          (Could not verify bot — refresh once Discord is connected)
-                        </span>
+                        <span className="text-xs text-slate-500">(Could not verify bot — check Discord is online)</span>
                       )}
                       {!server.setupCompleted && (
                         <span className="text-xs text-amber-400">(Setup incomplete)</span>

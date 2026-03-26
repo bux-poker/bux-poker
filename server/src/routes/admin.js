@@ -4,17 +4,14 @@ import { requireAdminRole } from "../middleware/admin.js";
 import { computeWebIsAdmin } from "../utils/webAdminStatus.js";
 import { TournamentEngine } from "../services/TournamentEngine.js";
 import { prisma } from "../config/database.js";
-import { postTournamentEmbed, waitForDiscordClientReady } from "../discord/bot.js";
+import { postTournamentEmbed, getDiscordClient } from "../discord/bot.js";
 
 const router = Router();
 const engine = new TournamentEngine();
 
-/** Max time /api/admin/servers waits on Discord. Render cold start + gateway often needs 15–25s; still below old 60s hang. */
-const ADMIN_SERVERS_DISCORD_WAIT_MS = Number(process.env.ADMIN_SERVERS_DISCORD_WAIT_MS || 28000);
-
 /**
- * Whether the bot is in the guild. Cache-first, then REST fetch with one retry.
- * @returns {Promise<boolean|null>} true = in guild, false = not in guild (Unknown Guild), null = offline / transient
+ * Whether the bot is in the guild. Cache-first, then REST fetch.
+ * @returns {Promise<boolean|null>} true = in guild, false = not in guild, null = Discord unavailable or transient error
  */
 async function resolveBotGuildMembership(discordClient, rawServerId) {
   if (!discordClient) return null;
@@ -29,7 +26,10 @@ async function resolveBotGuildMembership(discordClient, rawServerId) {
       const guild = await discordClient.guilds.fetch(id);
       return !!guild;
     } catch (e) {
-      if (e?.code === 10004) return false;
+      const code = e?.code;
+      // Only 10004 means the bot is definitively not in this guild (or ID is wrong).
+      // Other errors (network, rate limit) must not become "bot not in server".
+      if (code === 10004) return false;
       if (attempt === 0) {
         await new Promise((r) => setTimeout(r, 80));
         continue;
@@ -105,15 +105,13 @@ router.use(requireAdminRole);
 // Get all configured Discord servers
 router.get("/servers", async (req, res, next) => {
   try {
-    res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
-    res.setHeader("Pragma", "no-cache");
-
-    const discordClient = await waitForDiscordClientReady(ADMIN_SERVERS_DISCORD_WAIT_MS);
+    const discordClient = getDiscordClient();
     const servers = await prisma.discordServer.findMany({
       where: { enabled: true },
       orderBy: { serverName: "asc" },
     });
 
+    // Enrich with bot membership: cache hit, else REST; unknown guild => false, transient errors => null
     const enrichedServers = await Promise.all(
       servers.map(async (server) => {
         const isBotMember = await resolveBotGuildMembership(

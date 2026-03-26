@@ -42,22 +42,6 @@ const commands = [
 
 let discordClient = null;
 
-async function registerSlashCommandsInBackground(token, appId, guildId, commandBodies) {
-  const rest = new REST({ version: '10' }).setToken(token);
-  console.log('[DISCORD BOT] Registering slash commands (background)...');
-  try {
-    if (guildId) {
-      await rest.put(Routes.applicationGuildCommands(appId, guildId), { body: commandBodies });
-      console.log(`[DISCORD BOT] Registered ${commandBodies.length} guild commands`);
-    } else {
-      await rest.put(Routes.applicationCommands(appId), { body: commandBodies });
-      console.log(`[DISCORD BOT] Registered ${commandBodies.length} global commands`);
-    }
-  } catch (regErr) {
-    console.error('[DISCORD BOT] Slash command registration failed (bot stays online):', regErr?.message || regErr);
-  }
-}
-
 export async function initializeDiscordBot() {
   if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID) {
     console.log('[DISCORD BOT] Skipping initialization - missing credentials');
@@ -73,11 +57,29 @@ export async function initializeDiscordBot() {
         GatewayIntentBits.GuildMembers,
       ],
     });
-    // Expose immediately; login before slash registration so gateway is ready quickly
-    // (global rest.put can take 30–60s+ and was blocking /api/admin/servers for the whole wait).
-    discordClient = client;
 
-    // Handle interactions (slash commands and buttons) — register before login
+    // Register slash commands
+    const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
+
+    console.log('[DISCORD BOT] Registering slash commands...');
+
+    if (GUILD_ID) {
+      // Guild-specific commands (faster, for testing)
+      await rest.put(
+        Routes.applicationGuildCommands(DISCORD_CLIENT_ID, GUILD_ID),
+        { body: commands }
+      );
+      console.log(`[DISCORD BOT] Registered ${commands.length} guild commands`);
+    } else {
+      // Global commands (takes up to 1 hour to propagate)
+      await rest.put(
+        Routes.applicationCommands(DISCORD_CLIENT_ID),
+        { body: commands }
+      );
+      console.log(`[DISCORD BOT] Registered ${commands.length} global commands`);
+    }
+
+    // Handle interactions (slash commands and buttons)
     client.on('interactionCreate', async (interaction) => {
       try {
         if (interaction.isChatInputCommand()) {
@@ -117,15 +119,10 @@ export async function initializeDiscordBot() {
     });
 
     await client.login(DISCORD_TOKEN);
-
-    // Do not await — global command PUT can take 30–60s+ and must not block gateway readiness
-    // or keep the init promise chained behind Discord REST.
-    void registerSlashCommandsInBackground(DISCORD_TOKEN, DISCORD_CLIENT_ID, GUILD_ID, commands);
-
+    discordClient = client;
     return client;
   } catch (error) {
     console.error('[DISCORD BOT] Failed to initialize:', error);
-    discordClient = null;
     return null;
   }
 }
@@ -586,8 +583,8 @@ async function buildTournamentEmbed(tournament, discordUserId = null) {
 }
 
 export async function postTournamentEmbed(tournament, serverIds) {
-  if (!discordClient?.isReady?.()) {
-    console.warn('[DISCORD BOT] Cannot post embed - bot not ready');
+  if (!discordClient) {
+    console.warn('[DISCORD BOT] Cannot post embed - bot not initialized');
     return [];
   }
 
@@ -692,8 +689,8 @@ export async function postTournamentEmbed(tournament, serverIds) {
  * Update all Discord embeds for a tournament (e.g., when registration closes)
  */
 export async function updateTournamentEmbeds(tournamentId) {
-  if (!discordClient?.isReady?.()) {
-    console.warn('[DISCORD BOT] Cannot update embeds - bot not ready');
+  if (!discordClient) {
+    console.warn('[DISCORD BOT] Cannot update embeds - bot not initialized');
     return;
   }
 
@@ -763,8 +760,8 @@ export async function updateTournamentEmbeds(tournamentId) {
  * Announce league leg cancelled (fewer than 5 registered at T-2m).
  */
 export async function postLeagueLegCancelledEmbed(tournamentId, registeredCount) {
-  if (!discordClient?.isReady?.()) {
-    console.warn("[DISCORD BOT] Cannot post league cancel embed - bot not ready");
+  if (!discordClient) {
+    console.warn("[DISCORD BOT] Cannot post league cancel embed - bot not initialized");
     return [];
   }
 
@@ -832,8 +829,8 @@ function sortLeagueStandingsRows(rows) {
  * Post a winners embed to Discord with final standings.
  */
 export async function postTournamentWinnersEmbed(tournament) {
-  if (!discordClient?.isReady?.()) {
-    console.warn('[DISCORD BOT] Cannot post winners embed - bot not ready');
+  if (!discordClient) {
+    console.warn('[DISCORD BOT] Cannot post winners embed - bot not initialized');
     return [];
   }
 
@@ -1007,8 +1004,8 @@ export async function postTournamentWinnersEmbed(tournament) {
  * Post a "Game starting in 2 minutes" notification to all Discord servers
  */
 export async function postTournamentStartingEmbed(tournament) {
-  if (!discordClient?.isReady?.()) {
-    console.warn('[DISCORD BOT] Cannot post starting embed - bot not ready');
+  if (!discordClient) {
+    console.warn('[DISCORD BOT] Cannot post starting embed - bot not initialized');
     return [];
   }
 
@@ -1088,87 +1085,4 @@ export async function postTournamentStartingEmbed(tournament) {
 
 export function getDiscordClient() {
   return discordClient;
-}
-
-const DISCORD_READY_POLL_MS = 250;
-const DISCORD_READY_MAX_MS = Number(process.env.DISCORD_ADMIN_READY_TIMEOUT_MS || 60000);
-
-function clientIsReady(c) {
-  return Boolean(c && typeof c.isReady === 'function' && c.isReady());
-}
-
-/**
- * @param {number} [maxWaitMs] Total budget. `/api/admin/servers` passes a lower value so a dead bot
- *   does not hold HTTP open for 60s (common when init failed and discordClient stays null).
- */
-export async function waitForDiscordClientReady(maxWaitMs = DISCORD_READY_MAX_MS) {
-  if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID) return null;
-  const started = Date.now();
-  const deadline = started + maxWaitMs;
-
-  // If bot init failed, discordClient stays null forever — do not burn the full maxWaitMs polling.
-  const assignCap = Math.min(
-    Number(process.env.DISCORD_CLIENT_ASSIGN_WAIT_MS || 5000),
-    maxWaitMs
-  );
-  const assignDeadline = started + assignCap;
-  while (!discordClient && Date.now() < assignDeadline) {
-    await new Promise((r) => setTimeout(r, DISCORD_READY_POLL_MS));
-  }
-
-  const client = discordClient;
-  if (!client) {
-    console.warn(
-      '[DISCORD BOT] waitForDiscordClientReady: no discordClient after assign window — bot init missing, failed, or wrong env on this host (see [DISCORD BOT] logs)'
-    );
-    return null;
-  }
-
-  if (clientIsReady(client)) return client;
-
-  const phase1End = Math.min(deadline, Date.now() + 3000);
-  while (Date.now() < phase1End && !clientIsReady(client)) {
-    await new Promise((r) => setTimeout(r, 25));
-  }
-
-  if (clientIsReady(client)) {
-    const elapsed = Date.now() - started;
-    if (elapsed > 5000) console.warn(`[DISCORD BOT] waitForDiscordClientReady: ready after ${elapsed}ms`);
-    return discordClient;
-  }
-
-  const remaining = deadline - Date.now();
-  if (remaining <= 0) {
-    console.warn(
-      `[DISCORD BOT] waitForDiscordClientReady timed out after ${maxWaitMs}ms — admin guild checks may return null`
-    );
-    return null;
-  }
-
-  await new Promise((resolve) => {
-    let settled = false;
-    const done = () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(t);
-      client.removeListener(Events.ClientReady, onReady);
-      resolve();
-    };
-    const onReady = () => done();
-    const t = setTimeout(done, remaining);
-    client.once(Events.ClientReady, onReady);
-    if (clientIsReady(client)) done();
-  });
-
-  const c = discordClient;
-  if (clientIsReady(c)) {
-    const elapsed = Date.now() - started;
-    if (elapsed > 5000) console.warn(`[DISCORD BOT] waitForDiscordClientReady: ready after ${elapsed}ms`);
-    return c;
-  }
-
-  console.warn(
-    `[DISCORD BOT] waitForDiscordClientReady timed out after ${maxWaitMs}ms — admin guild checks may return null`
-  );
-  return null;
 }

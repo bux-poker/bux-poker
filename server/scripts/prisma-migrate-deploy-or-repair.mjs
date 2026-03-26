@@ -25,53 +25,6 @@ const FAILED = "20260207120000_add_tournament_start_scheduled_at";
 const MIGRATE_MAX_ATTEMPTS = Number(process.env.PRISMA_MIGRATE_RETRY_ATTEMPTS || 8);
 const MIGRATE_RETRY_DELAY_MS = Number(process.env.PRISMA_MIGRATE_RETRY_DELAY_MS || 6000);
 
-/**
- * Prisma migrate uses pg_advisory_lock; Neon / Supabase poolers often time out (P1002).
- * Use a direct (non-pooler) URL for migrate only. See:
- * https://www.prisma.io/docs/orm/prisma-migrate/workflows/development-and-production#direct-database-url
- */
-function neonDirectUrlFromPooler(databaseUrl) {
-  if (!databaseUrl || typeof databaseUrl !== "string") return null;
-  if (!databaseUrl.includes("-pooler.")) return null;
-  try {
-    const normalized = databaseUrl.replace(/^postgresql:/i, "postgres:");
-    const u = new URL(normalized);
-    if (!u.hostname.includes("-pooler.")) return null;
-    u.hostname = u.hostname.replace("-pooler.", ".");
-    const out = u.toString().replace(/^postgres:/, "postgresql:");
-    return out;
-  } catch {
-    return null;
-  }
-}
-
-function resolveMigrateDatabaseUrl() {
-  const explicit =
-    process.env.DIRECT_DATABASE_URL ||
-    process.env.DATABASE_URL_UNPOOLED ||
-    process.env.NEON_DATABASE_URL_DIRECT;
-  if (explicit) {
-    console.log("[PRESTART] Using DIRECT_DATABASE_URL (or *_UNPOOLED) for migrate only");
-    return explicit;
-  }
-  const pool = process.env.DATABASE_URL;
-  const derived = neonDirectUrlFromPooler(pool);
-  if (derived) {
-    console.log(
-      "[PRESTART] Neon pooler detected — using derived direct host for migrate deploy only (avoids advisory-lock P1002)"
-    );
-    return derived;
-  }
-  return pool;
-}
-
-function migrateProcessEnv() {
-  const env = { ...process.env };
-  const url = resolveMigrateDatabaseUrl();
-  if (url) env.DATABASE_URL = url;
-  return env;
-}
-
 function sh(cmd) {
   try {
     return execSync(cmd, {
@@ -79,7 +32,6 @@ function sh(cmd) {
       encoding: "utf8",
       maxBuffer: 16 * 1024 * 1024,
       stdio: ["ignore", "pipe", "pipe"],
-      env: migrateProcessEnv(),
     });
   } catch (e) {
     const stdout = e.stdout?.toString?.() ?? "";
