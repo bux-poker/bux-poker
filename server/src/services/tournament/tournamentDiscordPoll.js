@@ -22,6 +22,7 @@ function isPrismaPressureError(err) {
  * Unlike league legs (posted at T-1h by leagueDiscordPoll), single tournaments are
  * supposed to post immediately on create; however, Discord init/network hiccups
  * can cause the immediate attempt to be skipped. This poll fills that gap.
+ * Standalone tournaments only (league legs use leagueDiscordPoll at T-1h).
  */
 export function startTournamentDiscordPoll() {
   if (intervalId) return;
@@ -55,6 +56,8 @@ async function runTournamentDiscordTick() {
     where: {
       status: { in: ["SCHEDULED", "REGISTERING"] },
       posts: { some: { messageId: null } },
+      // League legs are posted at T-1h by leagueDiscordPoll only — do not post here.
+      leagueGames: { none: {} },
     },
     include: {
       posts: { include: { server: true } },

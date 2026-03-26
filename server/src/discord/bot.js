@@ -42,9 +42,62 @@ const commands = [
 
 let discordClient = null;
 
+/** Waiters: resolve(discordClient | null) when client is set or init is definitively skipped/failed. */
+let discordClientWaiters = [];
+
+const DISCORD_CLIENT_WAIT_MS = 75_000;
+
+function flushDiscordClientWaiters() {
+  const c = discordClient;
+  const waiters = discordClientWaiters;
+  discordClientWaiters = [];
+  for (const cb of waiters) {
+    try {
+      cb(c);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/**
+ * Resolves when the bot client exists and has emitted ready (safe for guild/channel API).
+ * Use before posting embeds so tournament create does not race `initializeDiscordBot()`.
+ */
+export async function waitForDiscordClientReady() {
+  let client = discordClient;
+  if (!client) {
+    client = await new Promise((resolve) => {
+      const t = setTimeout(() => resolve(null), DISCORD_CLIENT_WAIT_MS);
+      discordClientWaiters.push((c) => {
+        clearTimeout(t);
+        resolve(c);
+      });
+    });
+  }
+  if (!client) return null;
+  if (client.isReady()) return client;
+  try {
+    await new Promise((resolve, reject) => {
+      const t = setTimeout(
+        () => reject(new Error("Discord ClientReady timeout")),
+        DISCORD_CLIENT_WAIT_MS
+      );
+      client.once(Events.ClientReady, () => {
+        clearTimeout(t);
+        resolve();
+      });
+    });
+  } catch {
+    return null;
+  }
+  return client.isReady() ? client : null;
+}
+
 export async function initializeDiscordBot() {
   if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID) {
     console.log('[DISCORD BOT] Skipping initialization - missing credentials');
+    flushDiscordClientWaiters();
     return null;
   }
 
@@ -120,9 +173,12 @@ export async function initializeDiscordBot() {
 
     await client.login(DISCORD_TOKEN);
     discordClient = client;
+    flushDiscordClientWaiters();
     return client;
   } catch (error) {
     console.error('[DISCORD BOT] Failed to initialize:', error);
+    discordClient = null;
+    flushDiscordClientWaiters();
     return null;
   }
 }
@@ -583,8 +639,9 @@ async function buildTournamentEmbed(tournament, discordUserId = null) {
 }
 
 export async function postTournamentEmbed(tournament, serverIds) {
-  if (!discordClient) {
-    console.warn('[DISCORD BOT] Cannot post embed - bot not initialized');
+  const client = await waitForDiscordClientReady();
+  if (!client) {
+    console.warn('[DISCORD BOT] Cannot post embed - bot not ready or not initialized');
     return [];
   }
 
@@ -627,7 +684,7 @@ export async function postTournamentEmbed(tournament, serverIds) {
   for (const server of servers) {
     try {
       console.log(`[DISCORD BOT] Posting to server: ${server.serverName} (${server.serverId})`);
-      const guild = await discordClient.guilds.fetch(server.serverId).catch(() => null);
+      const guild = await client.guilds.fetch(server.serverId).catch(() => null);
       if (!guild) {
         console.warn(`[DISCORD BOT] Bot not in server ${server.serverName} (${server.serverId}), skipping`);
         continue;
