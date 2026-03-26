@@ -21,6 +21,9 @@ interface DiscordServer {
   isBotMember: boolean | null;
 }
 
+/** One XHR per token — React StrictMode double-mount shares the same promise. */
+const adminServersInflight = new Map<string, Promise<DiscordServer[]>>();
+
 export function CreateTournament() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -122,24 +125,43 @@ export function CreateTournament() {
       return;
     }
 
-    const fetchServers = async () => {
-      try {
-        const token = localStorage.getItem('sessionToken');
-        if (!token) return;
+    const token = localStorage.getItem('sessionToken');
+    if (!token) {
+      setLoadingServers(false);
+      return;
+    }
 
-        const response = await api.get('/api/admin/servers', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setServers(response.data || []);
+    let cancelled = false;
+    setLoadingServers(true);
+
+    const run = async () => {
+      let p = adminServersInflight.get(token);
+      if (!p) {
+        p = api
+          .get('/api/admin/servers', {
+            headers: { Authorization: `Bearer ${token}` },
+            timeout: 120_000,
+          })
+          .then((res) => (res.data || []) as DiscordServer[])
+          .finally(() => {
+            adminServersInflight.delete(token);
+          });
+        adminServersInflight.set(token, p);
+      }
+      try {
+        const data = await p;
+        if (!cancelled) setServers(data);
       } catch (err) {
-        console.error('Failed to fetch servers:', err);
+        if (!cancelled) console.error('Failed to fetch servers:', err);
       } finally {
-        setLoadingServers(false);
+        if (!cancelled) setLoadingServers(false);
       }
     };
 
-    setLoadingServers(true);
-    void fetchServers();
+    void run();
+    return () => {
+      cancelled = true;
+    };
   }, [user?.id]);
 
   const toggleServerSelection = (serverId: string) => {

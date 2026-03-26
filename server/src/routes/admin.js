@@ -4,7 +4,7 @@ import { requireAdminRole } from "../middleware/admin.js";
 import { computeWebIsAdmin } from "../utils/webAdminStatus.js";
 import { TournamentEngine } from "../services/TournamentEngine.js";
 import { prisma } from "../config/database.js";
-import { postTournamentEmbed, getDiscordClient } from "../discord/bot.js";
+import { postTournamentEmbed, waitForDiscordClientReady } from "../discord/bot.js";
 
 const router = Router();
 const engine = new TournamentEngine();
@@ -105,7 +105,7 @@ router.get("/servers", async (req, res, next) => {
     res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
     res.setHeader("Pragma", "no-cache");
 
-    const discordClient = getDiscordClient();
+    const discordClient = await waitForDiscordClientReady();
     const servers = await prisma.discordServer.findMany({
       where: { enabled: true },
       orderBy: { serverName: "asc" },

@@ -57,6 +57,8 @@ export async function initializeDiscordBot() {
         GatewayIntentBits.GuildMembers,
       ],
     });
+    // Expose immediately so waitForDiscordClientReady() can poll until ClientReady (slash registration may take a long time).
+    discordClient = client;
 
     // Register slash commands
     const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
@@ -119,10 +121,10 @@ export async function initializeDiscordBot() {
     });
 
     await client.login(DISCORD_TOKEN);
-    discordClient = client;
     return client;
   } catch (error) {
     console.error('[DISCORD BOT] Failed to initialize:', error);
+    discordClient = null;
     return null;
   }
 }
@@ -583,8 +585,8 @@ async function buildTournamentEmbed(tournament, discordUserId = null) {
 }
 
 export async function postTournamentEmbed(tournament, serverIds) {
-  if (!discordClient) {
-    console.warn('[DISCORD BOT] Cannot post embed - bot not initialized');
+  if (!discordClient?.isReady?.()) {
+    console.warn('[DISCORD BOT] Cannot post embed - bot not ready');
     return [];
   }
 
@@ -689,8 +691,8 @@ export async function postTournamentEmbed(tournament, serverIds) {
  * Update all Discord embeds for a tournament (e.g., when registration closes)
  */
 export async function updateTournamentEmbeds(tournamentId) {
-  if (!discordClient) {
-    console.warn('[DISCORD BOT] Cannot update embeds - bot not initialized');
+  if (!discordClient?.isReady?.()) {
+    console.warn('[DISCORD BOT] Cannot update embeds - bot not ready');
     return;
   }
 
@@ -760,8 +762,8 @@ export async function updateTournamentEmbeds(tournamentId) {
  * Announce league leg cancelled (fewer than 5 registered at T-2m).
  */
 export async function postLeagueLegCancelledEmbed(tournamentId, registeredCount) {
-  if (!discordClient) {
-    console.warn("[DISCORD BOT] Cannot post league cancel embed - bot not initialized");
+  if (!discordClient?.isReady?.()) {
+    console.warn("[DISCORD BOT] Cannot post league cancel embed - bot not ready");
     return [];
   }
 
@@ -829,8 +831,8 @@ function sortLeagueStandingsRows(rows) {
  * Post a winners embed to Discord with final standings.
  */
 export async function postTournamentWinnersEmbed(tournament) {
-  if (!discordClient) {
-    console.warn('[DISCORD BOT] Cannot post winners embed - bot not initialized');
+  if (!discordClient?.isReady?.()) {
+    console.warn('[DISCORD BOT] Cannot post winners embed - bot not ready');
     return [];
   }
 
@@ -1004,8 +1006,8 @@ export async function postTournamentWinnersEmbed(tournament) {
  * Post a "Game starting in 2 minutes" notification to all Discord servers
  */
 export async function postTournamentStartingEmbed(tournament) {
-  if (!discordClient) {
-    console.warn('[DISCORD BOT] Cannot post starting embed - bot not initialized');
+  if (!discordClient?.isReady?.()) {
+    console.warn('[DISCORD BOT] Cannot post starting embed - bot not ready');
     return [];
   }
 
@@ -1085,4 +1087,27 @@ export async function postTournamentStartingEmbed(tournament) {
 
 export function getDiscordClient() {
   return discordClient;
+}
+
+const DISCORD_READY_POLL_MS = 250;
+const DISCORD_READY_MAX_MS = Number(process.env.DISCORD_ADMIN_READY_TIMEOUT_MS || 60000);
+
+/**
+ * Admin routes (e.g. /api/admin/servers) can run before `initializeDiscordBot()` finishes
+ * (slash registration + login). Poll until the client exists and is ready, or timeout.
+ */
+export async function waitForDiscordClientReady() {
+  if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID) return null;
+  const deadline = Date.now() + DISCORD_READY_MAX_MS;
+  while (Date.now() < deadline) {
+    const c = discordClient;
+    if (c?.isReady?.()) return c;
+    await new Promise((r) => setTimeout(r, DISCORD_READY_POLL_MS));
+  }
+  const c = discordClient;
+  if (c?.isReady?.()) return c;
+  console.warn(
+    `[DISCORD BOT] waitForDiscordClientReady timed out after ${DISCORD_READY_MAX_MS}ms — admin guild checks may return null`
+  );
+  return null;
 }
