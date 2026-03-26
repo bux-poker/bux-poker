@@ -4,11 +4,16 @@ import { prisma } from '../config/database.js';
 
 dotenv.config();
 
-const DISCORD_TOKEN = process.env.DISCORD_BOT_TOKEN;
-const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID;
-const GUILD_ID = process.env.DISCORD_GUILD_ID; // Optional: for guild-specific commands
+/** Render/secret managers often append a newline — breaks Bot auth silently or hangs gateway. */
+function getBotToken() {
+  const raw = process.env.DISCORD_BOT_TOKEN;
+  return typeof raw === 'string' ? raw.trim() : '';
+}
 
-if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID) {
+const DISCORD_CLIENT_ID = (process.env.DISCORD_CLIENT_ID || '').trim();
+const GUILD_ID = (process.env.DISCORD_GUILD_ID || '').trim() || undefined; // Optional: guild-specific commands
+
+if (!getBotToken() || !DISCORD_CLIENT_ID) {
   console.warn('[DISCORD BOT] Missing DISCORD_BOT_TOKEN or DISCORD_CLIENT_ID - Discord bot disabled');
 }
 
@@ -43,11 +48,51 @@ const commands = [
 let discordClient = null;
 let discordInitPromise = null;
 const DISCORD_LOGIN_TIMEOUT_MS = Number(process.env.DISCORD_LOGIN_TIMEOUT_MS || 45000);
-const restClient = DISCORD_TOKEN
-  ? new REST({ version: "10" }).setToken(DISCORD_TOKEN)
-  : null;
+let cachedRestClient = null;
+let cachedRestToken = null;
+
+function getRestClient() {
+  const token = getBotToken();
+  if (!token) return null;
+  if (cachedRestToken !== token) {
+    cachedRestClient = new REST({ version: '10' }).setToken(token);
+    cachedRestToken = token;
+  }
+  return cachedRestClient;
+}
+
+/** Fast check: token valid and outbound HTTPS to Discord works (does not use gateway). */
+async function verifyDiscordRestToken(token) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const res = await fetch('https://discord.com/api/v10/users/@me', {
+      headers: { Authorization: `Bot ${token}` },
+      signal: ctrl.signal,
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      console.error('[DISCORD BOT] REST /users/@me failed:', res.status, text.slice(0, 400));
+      return { ok: false, status: res.status };
+    }
+    try {
+      const j = JSON.parse(text);
+      console.log(`[DISCORD BOT] REST token OK (bot user id=${j.id})`);
+    } catch {
+      console.log('[DISCORD BOT] REST token OK');
+    }
+    return { ok: true };
+  } catch (e) {
+    const msg = e?.name === 'AbortError' ? 'request timed out (15s)' : (e?.message || String(e));
+    console.error('[DISCORD BOT] REST /users/@me error:', msg);
+    return { ok: false, error: msg };
+  } finally {
+    clearTimeout(t);
+  }
+}
 
 async function sendMessageViaDiscordRest(channelId, payload) {
+  const restClient = getRestClient();
   if (!restClient || !channelId) return null;
   return restClient.post(Routes.channelMessages(channelId), { body: payload });
 }
@@ -82,16 +127,26 @@ export async function initializeDiscordBot() {
     return discordInitPromise;
   }
 
+  const token = getBotToken();
   console.log(
-    `[DISCORD BOT] Init requested (token=${DISCORD_TOKEN ? "set" : "missing"}, clientId=${DISCORD_CLIENT_ID ? "set" : "missing"})`
+    `[DISCORD BOT] Init requested (token=${token ? 'set' : 'missing'}, clientId=${DISCORD_CLIENT_ID ? 'set' : 'missing'}, loginTimeoutMs=${DISCORD_LOGIN_TIMEOUT_MS})`
   );
-  if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID) {
+  if (!token || !DISCORD_CLIENT_ID) {
     console.log('[DISCORD BOT] Skipping initialization - missing credentials');
     return null;
   }
 
   const initTask = (async () => {
     try {
+      const restCheck = await verifyDiscordRestToken(token);
+      if (!restCheck.ok) {
+        throw new Error(
+          restCheck.status === 401
+            ? 'Discord bot token rejected (401). Regenerate the bot token in the Developer Portal and update DISCORD_BOT_TOKEN on Render (no quotes, no spaces).'
+            : 'Discord REST check failed — cannot reach api.discord.com or token invalid. See logs above.'
+        );
+      }
+
       const client = new Client({
         intents: [
           GatewayIntentBits.Guilds,
@@ -100,6 +155,9 @@ export async function initializeDiscordBot() {
           GatewayIntentBits.GuildMembers,
         ],
       });
+
+      client.on('error', (err) => console.error('[DISCORD BOT] Gateway client error:', err?.message || err));
+      client.on('warn', (msg) => console.warn('[DISCORD BOT] Gateway client warn:', msg));
 
     // Handle interactions (slash commands and buttons)
     client.on('interactionCreate', async (interaction) => {
@@ -140,21 +198,25 @@ export async function initializeDiscordBot() {
       console.log(`[DISCORD BOT] Logged in as ${client.user.tag}`);
     });
 
+      console.log('[DISCORD BOT] Calling client.login() (gateway)...');
       const loginResult = await Promise.race([
-        client.login(DISCORD_TOKEN),
+        client.login(token),
         new Promise((resolve) => setTimeout(() => resolve("__login_timeout__"), DISCORD_LOGIN_TIMEOUT_MS)),
       ]);
       if (loginResult === "__login_timeout__") {
         try {
           client.destroy();
         } catch {}
-        throw new Error(`Discord login timed out after ${DISCORD_LOGIN_TIMEOUT_MS}ms`);
+        throw new Error(
+          `Discord gateway login timed out after ${DISCORD_LOGIN_TIMEOUT_MS}ms (REST token check passed). ` +
+            'Try setting NODE_OPTIONS=--dns-result-order=ipv4first on Render if this persists (IPv6 routing).'
+        );
       }
       // Mark online only after successful login.
       discordClient = client;
       // Command registration must never block process startup/port binding.
       void registerSlashCommandsInBackground(
-        DISCORD_TOKEN,
+        token,
         DISCORD_CLIENT_ID,
         GUILD_ID,
         commands
