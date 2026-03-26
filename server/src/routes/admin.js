@@ -171,6 +171,13 @@ router.post("/tournaments", async (req, res, next) => {
       blindLevelsJson,
       serverIds = [], // Array of Discord server IDs to post to
     } = req.body;
+    const embedPost = {
+      attempted: false,
+      selectedServers: Array.isArray(serverIds) ? serverIds.length : 0,
+      configuredServers: 0,
+      postedCount: 0,
+      error: null,
+    };
 
     // Calculate prize places: 1 place per 4 registered players
     // Initially set to 0 since no one is registered yet
@@ -244,6 +251,7 @@ router.post("/tournaments", async (req, res, next) => {
             setupCompleted: true,
           },
         });
+        embedPost.configuredServers = discordServers.length;
 
         // Create post entries for each server (messageId will be null until post succeeds)
         await Promise.all(
@@ -274,9 +282,12 @@ router.post("/tournaments", async (req, res, next) => {
 
       // Now attempt to post tournament embed to Discord
       try {
-        await postTournamentEmbed(tournament, serverIds);
+        embedPost.attempted = true;
+        const posts = await postTournamentEmbed(tournament, serverIds);
+        embedPost.postedCount = Array.isArray(posts) ? posts.length : 0;
       } catch (error) {
         console.error("[ADMIN] Error posting tournament embed:", error);
+        embedPost.error = error?.message || "embed_post_failed";
         // Don't fail the tournament creation if embed posting fails
         // Posts are already created, so servers will still show
       }
@@ -301,7 +312,10 @@ router.post("/tournaments", async (req, res, next) => {
       },
     });
 
-    res.status(201).json(tournamentWithPosts);
+    res.status(201).json({
+      ...tournamentWithPosts,
+      embedPost,
+    });
   } catch (err) {
     next(err);
   }
