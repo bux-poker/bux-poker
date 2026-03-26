@@ -19,6 +19,19 @@ interface DiscordServer {
   setupCompleted: boolean;
   /** true = verified in guild; false = not in guild; null = could not verify (retry / refresh) */
   isBotMember: boolean | null;
+  /** Present when isBotMember is null — safe diagnostic from API */
+  botMembershipReason?: string;
+}
+
+function botMembershipHint(reason: string | undefined): string {
+  if (!reason) return 'Could not verify — deploy latest API or retry after ~20s.';
+  const m: Record<string, string> = {
+    no_bot_token: 'API missing DISCORD_BOT_TOKEN (set on Render and redeploy).',
+    discord_unauthorized: 'Discord rejected the bot token (401). Update token in Developer Portal + Render.',
+    could_not_verify:
+      'REST + gateway could not confirm (bot offline, wrong guild id, or enable Server Members intent + redeploy).',
+  };
+  return m[reason] ?? reason;
 }
 
 /** One XHR per token — React StrictMode double-mount shares the same promise. */
@@ -733,12 +746,14 @@ export function CreateTournament() {
                         <span className="text-xs text-amber-400">(Bot not in server)</span>
                       )}
                       {server.isBotMember === null && (
-                        <span className="text-xs text-slate-500">
-                          (Could not verify bot — refresh once Discord is connected)
+                        <span className="max-w-md text-xs text-slate-500">
+                          ({botMembershipHint(server.botMembershipReason)})
                         </span>
                       )}
                       {!server.setupCompleted && (
-                        <span className="text-xs text-amber-400">(Setup incomplete)</span>
+                        <span className="text-xs text-amber-400">
+                          (Setup incomplete — run /setup in this Discord server)
+                        </span>
                       )}
                     </div>
                   </div>

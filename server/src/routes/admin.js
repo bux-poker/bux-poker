@@ -4,12 +4,18 @@ import { requireAdminRole } from "../middleware/admin.js";
 import { computeWebIsAdmin } from "../utils/webAdminStatus.js";
 import { TournamentEngine } from "../services/TournamentEngine.js";
 import { prisma } from "../config/database.js";
-import { getDiscordClient, postTournamentEmbed } from "../discord/bot.js";
+import {
+  getDiscordClient,
+  postTournamentEmbed,
+  waitForDiscordClientReady,
+} from "../discord/bot.js";
 
 const router = Router();
 const engine = new TournamentEngine();
 
 const DISCORD_API_V10 = "https://discord.com/api/v10";
+/** After REST + member checks are inconclusive, wait for gateway (Render cold start). */
+const DISCORD_GATEWAY_WAIT_MS = Number(process.env.DISCORD_ADMIN_GATEWAY_WAIT_MS || 18000);
 
 /** Cached bot user id from GET /users/@me (same token as guild checks). */
 let cachedBotUserId = null;
@@ -46,6 +52,11 @@ async function resolveBotGuildMembershipViaMemberEndpoint(guildId, token) {
     console.warn("[ADMIN /servers] Discord members lookup 401 — invalid DISCORD_BOT_TOKEN");
     return null;
   }
+  if (res.status === 403) {
+    console.warn(
+      "[ADMIN /servers] GET guild member returned 403 (often missing Server Members intent in portal — gateway will be tried)"
+    );
+  }
   return null;
 }
 
@@ -55,8 +66,17 @@ async function resolveBotGuildMembershipViaMemberEndpoint(guildId, token) {
  */
 async function resolveBotGuildMembershipViaGateway(guildId) {
   try {
-    const client = getDiscordClient();
-    if (!client?.isReady?.()) return null;
+    let client = getDiscordClient();
+    if (!client?.isReady?.()) {
+      console.log(
+        `[ADMIN /servers] Discord client not ready yet — waiting up to ${DISCORD_GATEWAY_WAIT_MS}ms (cold start)`
+      );
+      client = await waitForDiscordClientReady(DISCORD_GATEWAY_WAIT_MS);
+    }
+    if (!client?.isReady?.()) {
+      console.warn("[ADMIN /servers] Discord gateway never became ready — bot token missing, init failed, or wrong process");
+      return null;
+    }
     if (client.guilds.cache.has(guildId)) return true;
     await client.guilds.fetch(guildId);
     return true;
@@ -112,27 +132,30 @@ async function resolveBotGuildMembershipRestGuildGet(guildId, token) {
   return undefined;
 }
 
-async function resolveBotGuildMembership(rawServerId) {
+/**
+ * @returns {Promise<{ ok: boolean | null, reason?: string }>}
+ */
+async function resolveBotGuildMembershipDetailed(rawServerId) {
   const raw = process.env.DISCORD_BOT_TOKEN;
   const token = raw ? String(raw).replace(/^(Bot|Bearer)\s*/i, "") : "";
   const id = String(rawServerId ?? "").trim();
-  if (!token) return null;
+  if (!token) return { ok: null, reason: "no_bot_token" };
   if (!/^\d{17,20}$/.test(id)) {
     console.warn("[ADMIN /servers] Invalid Discord guild id:", rawServerId);
-    return false;
+    return { ok: false };
   }
 
   const primary = await resolveBotGuildMembershipRestGuildGet(id, token);
-  if (primary === true || primary === false) return primary;
-  if (primary === null) return null;
+  if (primary === true || primary === false) return { ok: primary };
+  if (primary === null) return { ok: null, reason: "discord_unauthorized" };
 
   const viaMember = await resolveBotGuildMembershipViaMemberEndpoint(id, token);
-  if (viaMember === true || viaMember === false) return viaMember;
+  if (viaMember === true || viaMember === false) return { ok: viaMember };
 
   const viaGw = await resolveBotGuildMembershipViaGateway(id);
-  if (viaGw === true || viaGw === false) return viaGw;
+  if (viaGw === true || viaGw === false) return { ok: viaGw };
 
-  return null;
+  return { ok: null, reason: "could_not_verify" };
 }
 
 /** Deep delete tournament (same as DELETE /api/admin/tournaments/:id). */
@@ -208,10 +231,14 @@ router.get("/servers", async (req, res, next) => {
     });
 
     const enrichedServers = await Promise.all(
-      servers.map(async (server) => ({
-        ...server,
-        isBotMember: await resolveBotGuildMembership(server.serverId),
-      }))
+      servers.map(async (server) => {
+        const { ok, reason } = await resolveBotGuildMembershipDetailed(server.serverId);
+        return {
+          ...server,
+          isBotMember: ok,
+          ...(ok === null && reason ? { botMembershipReason: reason } : {}),
+        };
+      })
     );
 
     res.json(enrichedServers);
