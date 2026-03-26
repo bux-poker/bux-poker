@@ -14,17 +14,16 @@ const DISCORD_API_V10 = "https://discord.com/api/v10";
 /**
  * Whether the bot is in the guild — Discord REST only (GET /guilds/:id).
  * Does not depend on the gateway client or ClientReady, so /admin is not blocked on WebSocket startup.
- * @returns {Promise<{ ok: boolean | null, reason?: string }>}
- *   ok true = in guild, false = not in guild, null = could not determine (reason explains why).
+ * @returns {Promise<boolean|null>} true = in guild, false = not in guild, null = no token / transient / rate limit
  */
 async function resolveBotGuildMembership(rawServerId) {
   const raw = process.env.DISCORD_BOT_TOKEN;
   const token = raw ? String(raw).replace(/^(Bot|Bearer)\s*/i, "") : "";
   const id = String(rawServerId ?? "").trim();
-  if (!token) return { ok: null, reason: "no_bot_token" };
+  if (!token) return null;
   if (!/^\d{17,20}$/.test(id)) {
     console.warn("[ADMIN /servers] Invalid Discord guild id:", rawServerId);
-    return { ok: false };
+    return false;
   }
 
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -33,18 +32,18 @@ async function resolveBotGuildMembership(rawServerId) {
         method: "GET",
         headers: { Authorization: `Bot ${token}` },
       });
-      if (res.ok) return { ok: true };
+      if (res.ok) return true;
       if (res.status === 404) {
         const body = await res.json().catch(() => ({}));
-        if (body.code === 10004) return { ok: false };
-        return { ok: false };
+        if (body.code === 10004) return false;
+        return false;
       }
       if (res.status === 401) {
         console.warn("[ADMIN /servers] Discord REST 401 — invalid or missing DISCORD_BOT_TOKEN");
-        return { ok: null, reason: "discord_unauthorized" };
+        return null;
       }
       if (res.status === 403) {
-        return { ok: false };
+        return false;
       }
       if (res.status === 429 && attempt === 0) {
         const ra = res.headers.get("retry-after");
@@ -52,21 +51,18 @@ async function resolveBotGuildMembership(rawServerId) {
         await new Promise((r) => setTimeout(r, Math.min(Number.isFinite(sec) ? sec * 1000 : 1000, 5000)));
         continue;
       }
-      if (res.status === 429) {
-        return { ok: null, reason: "discord_rate_limited" };
-      }
       console.warn("[ADMIN /servers] Discord REST guild lookup HTTP", res.status, id);
-      return { ok: null, reason: `discord_http_${res.status}` };
+      return null;
     } catch (e) {
       if (attempt === 0) {
         await new Promise((r) => setTimeout(r, 80));
         continue;
       }
       console.warn("[ADMIN /servers] Discord REST guild lookup error", id, e?.message || e);
-      return { ok: null, reason: "network_error" };
+      return null;
     }
   }
-  return { ok: null, reason: "unknown" };
+  return null;
 }
 
 /** Deep delete tournament (same as DELETE /api/admin/tournaments/:id). */
@@ -142,14 +138,10 @@ router.get("/servers", async (req, res, next) => {
     });
 
     const enrichedServers = await Promise.all(
-      servers.map(async (server) => {
-        const { ok, reason } = await resolveBotGuildMembership(server.serverId);
-        return {
-          ...server,
-          isBotMember: ok,
-          ...(ok === null && reason ? { botMembershipReason: reason } : {}),
-        };
-      })
+      servers.map(async (server) => ({
+        ...server,
+        isBotMember: await resolveBotGuildMembership(server.serverId),
+      }))
     );
 
     res.json(enrichedServers);

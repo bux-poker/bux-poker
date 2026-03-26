@@ -19,32 +19,6 @@ interface DiscordServer {
   setupCompleted: boolean;
   /** true = verified in guild; false = not in guild; null = could not verify (retry / refresh) */
   isBotMember: boolean | null;
-  /** When isBotMember is null, server-only hint (no secrets). */
-  botMembershipReason?: string;
-}
-
-/** Maps API `botMembershipReason` codes to admin-facing text. */
-function formatBotMembershipReason(code: string | undefined): string {
-  if (!code) {
-    return 'Could not verify — use Retry or check DISCORD_BOT_TOKEN on the API host.';
-  }
-  const fixed: Record<string, string> = {
-    no_bot_token:
-      'DISCORD_BOT_TOKEN is not set on the API server (e.g. Render) — add the bot token and redeploy.',
-    discord_unauthorized:
-      'Discord rejected the bot token (401). Regenerate the token in the Developer Portal and update Render.',
-    discord_rate_limited:
-      'Discord rate limited this check — wait a minute and click Retry verification.',
-    network_error:
-      'API server could not reach Discord — try again later or check outbound network / DNS on the host.',
-    unknown: 'Verification failed for an unknown reason — Retry or check API logs.',
-  };
-  if (fixed[code]) return fixed[code];
-  const m = /^discord_http_(\d+)$/.exec(code);
-  if (m) {
-    return `Discord returned HTTP ${m[1]} — try Retry later or check Discord status.`;
-  }
-  return code;
 }
 
 /** One XHR per token — React StrictMode double-mount shares the same promise. */
@@ -772,10 +746,10 @@ export function CreateTournament() {
                       )}
                       {server.isBotMember === null && (
                         <span
-                          className="max-w-xl text-xs text-slate-500"
-                          title="The API host calls Discord REST (GET /guilds/:id). This is not the browser WebSocket."
+                          className="text-xs text-slate-500"
+                          title="The API host checks Discord with your bot token (REST). This is unrelated to the website WebSocket. If it persists, confirm DISCORD_BOT_TOKEN on Render and that the bot is in the server."
                         >
-                          ({formatBotMembershipReason(server.botMembershipReason)})
+                          (Could not verify — Discord API did not confirm; use Retry or check bot token on the server)
                         </span>
                       )}
                       {!server.setupCompleted && (
