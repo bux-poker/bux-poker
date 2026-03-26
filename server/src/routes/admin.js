@@ -4,158 +4,41 @@ import { requireAdminRole } from "../middleware/admin.js";
 import { computeWebIsAdmin } from "../utils/webAdminStatus.js";
 import { TournamentEngine } from "../services/TournamentEngine.js";
 import { prisma } from "../config/database.js";
-import {
-  getDiscordClient,
-  postTournamentEmbed,
-  waitForDiscordClientReady,
-} from "../discord/bot.js";
+import { postTournamentEmbed, waitForDiscordClientReady } from "../discord/bot.js";
 
 const router = Router();
 const engine = new TournamentEngine();
 
-const DISCORD_API_V10 = "https://discord.com/api/v10";
-/** After REST + member checks are inconclusive, wait for gateway (Render cold start). */
-const DISCORD_GATEWAY_WAIT_MS = Number(process.env.DISCORD_ADMIN_GATEWAY_WAIT_MS || 18000);
-
-/** Cached bot user id from GET /users/@me (same token as guild checks). */
-let cachedBotUserId = null;
-
-async function getDiscordBotUserId(token) {
-  if (cachedBotUserId) return cachedBotUserId;
-  const res = await fetch(`${DISCORD_API_V10}/users/@me`, {
-    method: "GET",
-    headers: { Authorization: `Bot ${token}` },
-  });
-  if (!res.ok) return null;
-  const u = await res.json().catch(() => ({}));
-  const id = u?.id != null ? String(u.id) : "";
-  if (!/^\d{17,20}$/.test(id)) return null;
-  cachedBotUserId = id;
-  return cachedBotUserId;
-}
+/** Max time /api/admin/servers waits on Discord. Render cold start + gateway often needs 15–25s; still below old 60s hang. */
+const ADMIN_SERVERS_DISCORD_WAIT_MS = Number(process.env.ADMIN_SERVERS_DISCORD_WAIT_MS || 28000);
 
 /**
- * GET /guilds/:id/members/:botId — works when GET /guilds/:id returns 403/5xx but the bot is still a member.
- * Requires Server Members intent (already enabled for this bot).
- * @returns {Promise<boolean|null>} true/false if Discord answered; null if inconclusive
+ * Whether the bot is in the guild. Cache-first, then REST fetch with one retry.
+ * @returns {Promise<boolean|null>} true = in guild, false = not in guild (Unknown Guild), null = offline / transient
  */
-async function resolveBotGuildMembershipViaMemberEndpoint(guildId, token) {
-  const botId = await getDiscordBotUserId(token);
-  if (!botId) return null;
-  const res = await fetch(
-    `${DISCORD_API_V10}/guilds/${encodeURIComponent(guildId)}/members/${encodeURIComponent(botId)}`,
-    { method: "GET", headers: { Authorization: `Bot ${token}` } }
-  );
-  if (res.ok) return true;
-  if (res.status === 404) return false;
-  if (res.status === 401) {
-    console.warn("[ADMIN /servers] Discord members lookup 401 — invalid DISCORD_BOT_TOKEN");
-    return null;
+async function resolveBotGuildMembership(discordClient, rawServerId) {
+  if (!discordClient) return null;
+  const id = String(rawServerId ?? "").trim();
+  if (!/^\d{17,20}$/.test(id)) {
+    console.warn("[ADMIN /servers] Invalid Discord guild id:", rawServerId);
+    return false;
   }
-  if (res.status === 403) {
-    console.warn(
-      "[ADMIN /servers] GET guild member returned 403 (often missing Server Members intent in portal — gateway will be tried)"
-    );
-  }
-  return null;
-}
-
-/**
- * Gateway cache / fetch — ground truth when REST is flaky (e.g. Discord or edge 5xx).
- * @returns {Promise<boolean|null>}
- */
-async function resolveBotGuildMembershipViaGateway(guildId) {
-  try {
-    let client = getDiscordClient();
-    if (!client?.isReady?.()) {
-      console.log(
-        `[ADMIN /servers] Discord client not ready yet — waiting up to ${DISCORD_GATEWAY_WAIT_MS}ms (cold start)`
-      );
-      client = await waitForDiscordClientReady(DISCORD_GATEWAY_WAIT_MS);
-    }
-    if (!client?.isReady?.()) {
-      console.warn("[ADMIN /servers] Discord gateway never became ready — bot token missing, init failed, or wrong process");
-      return null;
-    }
-    if (client.guilds.cache.has(guildId)) return true;
-    await client.guilds.fetch(guildId);
-    return true;
-  } catch (e) {
-    const code = e?.code;
-    const msg = String(e?.message || "");
-    if (code === 10004 || msg.includes("Unknown Guild")) return false;
-    return null;
-  }
-}
-
-/**
- * Primary: GET /guilds/:id. On 403/5xx/transient, fall back to member endpoint then gateway (not "unknown").
- * @returns {Promise<boolean|null>} true / false / null (null = no token or 401 on REST)
- */
-async function resolveBotGuildMembershipRestGuildGet(guildId, token) {
+  if (discordClient.guilds.cache.get(id)) return true;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await fetch(`${DISCORD_API_V10}/guilds/${encodeURIComponent(guildId)}`, {
-        method: "GET",
-        headers: { Authorization: `Bot ${token}` },
-      });
-      if (res.ok) return true;
-      if (res.status === 404) {
-        const body = await res.json().catch(() => ({}));
-        if (body.code === 10004) return false;
-        return false;
-      }
-      if (res.status === 401) {
-        console.warn("[ADMIN /servers] Discord REST 401 — invalid or missing DISCORD_BOT_TOKEN");
-        return null;
-      }
-      // 403/5xx: do not assume "not in guild" — use member + gateway fallbacks
-      if (res.status === 403) return undefined;
-      if (res.status === 429 && attempt === 0) {
-        const ra = res.headers.get("retry-after");
-        const sec = ra ? Number(ra) : 1;
-        await new Promise((r) => setTimeout(r, Math.min(Number.isFinite(sec) ? sec * 1000 : 1000, 5000)));
-        continue;
-      }
-      if (res.status === 429) return undefined;
-      console.warn("[ADMIN /servers] Discord REST guild lookup HTTP", res.status, guildId);
-      return undefined;
+      const guild = await discordClient.guilds.fetch(id);
+      return !!guild;
     } catch (e) {
+      if (e?.code === 10004) return false;
       if (attempt === 0) {
         await new Promise((r) => setTimeout(r, 80));
         continue;
       }
-      console.warn("[ADMIN /servers] Discord REST guild lookup error", guildId, e?.message || e);
-      return undefined;
+      console.warn("[ADMIN /servers] guilds.fetch failed for", id, e?.message || e);
+      return null;
     }
   }
-  return undefined;
-}
-
-/**
- * @returns {Promise<{ ok: boolean | null, reason?: string }>}
- */
-async function resolveBotGuildMembershipDetailed(rawServerId) {
-  const raw = process.env.DISCORD_BOT_TOKEN;
-  const token = raw ? String(raw).replace(/^(Bot|Bearer)\s*/i, "") : "";
-  const id = String(rawServerId ?? "").trim();
-  if (!token) return { ok: null, reason: "no_bot_token" };
-  if (!/^\d{17,20}$/.test(id)) {
-    console.warn("[ADMIN /servers] Invalid Discord guild id:", rawServerId);
-    return { ok: false };
-  }
-
-  const primary = await resolveBotGuildMembershipRestGuildGet(id, token);
-  if (primary === true || primary === false) return { ok: primary };
-  if (primary === null) return { ok: null, reason: "discord_unauthorized" };
-
-  const viaMember = await resolveBotGuildMembershipViaMemberEndpoint(id, token);
-  if (viaMember === true || viaMember === false) return { ok: viaMember };
-
-  const viaGw = await resolveBotGuildMembershipViaGateway(id);
-  if (viaGw === true || viaGw === false) return { ok: viaGw };
-
-  return { ok: null, reason: "could_not_verify" };
+  return null;
 }
 
 /** Deep delete tournament (same as DELETE /api/admin/tournaments/:id). */
@@ -225,6 +108,7 @@ router.get("/servers", async (req, res, next) => {
     res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
     res.setHeader("Pragma", "no-cache");
 
+    const discordClient = await waitForDiscordClientReady(ADMIN_SERVERS_DISCORD_WAIT_MS);
     const servers = await prisma.discordServer.findMany({
       where: { enabled: true },
       orderBy: { serverName: "asc" },
@@ -232,11 +116,13 @@ router.get("/servers", async (req, res, next) => {
 
     const enrichedServers = await Promise.all(
       servers.map(async (server) => {
-        const { ok, reason } = await resolveBotGuildMembershipDetailed(server.serverId);
+        const isBotMember = await resolveBotGuildMembership(
+          discordClient,
+          server.serverId
+        );
         return {
           ...server,
-          isBotMember: ok,
-          ...(ok === null && reason ? { botMembershipReason: reason } : {}),
+          isBotMember,
         };
       })
     );
