@@ -665,15 +665,31 @@ export async function postTournamentEmbed(tournament, serverIds) {
   for (const server of servers) {
     try {
       console.log(`[DISCORD BOT] Posting to server: ${server.serverName} (${server.serverId})`);
-      const guild = await discordClient.guilds.fetch(server.serverId).catch(() => null);
-      if (!guild) {
-        console.warn(`[DISCORD BOT] Bot not in server ${server.serverName} (${server.serverId}), skipping`);
-        continue;
+      let channel = null;
+      let guild = await discordClient.guilds.fetch(server.serverId).catch(() => null);
+      if (guild) {
+        channel = await guild.channels.fetch(server.announcementChannelId).catch(() => null);
       }
-      const channel = await guild.channels.fetch(server.announcementChannelId);
+      // Fallback for stale/incorrect stored guild IDs: channel id is globally unique.
+      // If this works, posting can continue even when membership verification says false.
+      if (!channel && server.announcementChannelId) {
+        channel = await discordClient.channels.fetch(server.announcementChannelId).catch(() => null);
+        if (channel?.guild) {
+          guild = channel.guild;
+          if (String(guild.id) !== String(server.serverId)) {
+            console.warn(
+              `[DISCORD BOT] Server ID mismatch for ${server.serverName}: stored=${server.serverId}, channelGuild=${guild.id}`
+            );
+          }
+        }
+      }
 
       if (!channel || !channel.isTextBased()) {
         console.warn(`[DISCORD BOT] Invalid channel for server ${server.serverName}`);
+        continue;
+      }
+      if (!guild) {
+        console.warn(`[DISCORD BOT] Could not resolve guild for server ${server.serverName}`);
         continue;
       }
 
