@@ -42,23 +42,10 @@ const commands = [
 
 let discordClient = null;
 
-async function registerSlashCommandsInBackground(token, appId, guildId, commandBodies) {
-  const rest = new REST({ version: '10' }).setToken(token);
-  console.log('[DISCORD BOT] Registering slash commands (background)...');
-  try {
-    if (guildId) {
-      await rest.put(Routes.applicationGuildCommands(appId, guildId), { body: commandBodies });
-      console.log(`[DISCORD BOT] Registered ${commandBodies.length} guild commands`);
-    } else {
-      await rest.put(Routes.applicationCommands(appId), { body: commandBodies });
-      console.log(`[DISCORD BOT] Registered ${commandBodies.length} global commands`);
-    }
-  } catch (regErr) {
-    console.error('[DISCORD BOT] Slash command registration failed (bot stays online):', regErr?.message || regErr);
-  }
-}
-
 export async function initializeDiscordBot() {
+  console.log(
+    `[DISCORD BOT] Init requested (token=${DISCORD_TOKEN ? "set" : "missing"}, clientId=${DISCORD_CLIENT_ID ? "set" : "missing"})`
+  );
   if (!DISCORD_TOKEN || !DISCORD_CLIENT_ID) {
     console.log('[DISCORD BOT] Skipping initialization - missing credentials');
     return null;
@@ -73,8 +60,27 @@ export async function initializeDiscordBot() {
         GatewayIntentBits.GuildMembers,
       ],
     });
-    // Expose client early so posting checks can observe startup progress.
-    discordClient = client;
+
+    // Register slash commands
+    const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
+
+    console.log('[DISCORD BOT] Registering slash commands...');
+
+    if (GUILD_ID) {
+      // Guild-specific commands (faster, for testing)
+      await rest.put(
+        Routes.applicationGuildCommands(DISCORD_CLIENT_ID, GUILD_ID),
+        { body: commands }
+      );
+      console.log(`[DISCORD BOT] Registered ${commands.length} guild commands`);
+    } else {
+      // Global commands (takes up to 1 hour to propagate)
+      await rest.put(
+        Routes.applicationCommands(DISCORD_CLIENT_ID),
+        { body: commands }
+      );
+      console.log(`[DISCORD BOT] Registered ${commands.length} global commands`);
+    }
 
     // Handle interactions (slash commands and buttons)
     client.on('interactionCreate', async (interaction) => {
@@ -116,12 +122,10 @@ export async function initializeDiscordBot() {
     });
 
     await client.login(DISCORD_TOKEN);
-    // Do not block bot readiness on command registration.
-    void registerSlashCommandsInBackground(DISCORD_TOKEN, DISCORD_CLIENT_ID, GUILD_ID, commands);
+    discordClient = client;
     return client;
   } catch (error) {
     console.error('[DISCORD BOT] Failed to initialize:', error);
-    discordClient = null;
     return null;
   }
 }

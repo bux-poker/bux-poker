@@ -36,17 +36,26 @@ resumeScheduledStartTimersForSeatedTournaments(tournamentPollEngine).catch((err)
 startTournamentAutomationPoll(tournamentPollEngine);
 startLeagueDiscordPoll();
 
-// Initialize Discord bot (non-blocking)
-initializeDiscordBot().catch((err) => {
-  console.error("[DISCORD BOT] Failed to initialize:", err);
-});
-
 async function start() {
   if (process.env.REDIS_URL) {
     await connectRedis().catch((err) => {
       console.warn("[REDIS] Session store unavailable, using memory:", err?.message);
     });
   }
+  const discordRequired = process.env.DISCORD_REQUIRED !== "false";
+  const bot = await initializeDiscordBot().catch((err) => {
+    console.error("[DISCORD BOT] Failed to initialize:", err);
+    return null;
+  });
+  if (bot) {
+    console.log("[DISCORD BOT] Online");
+  } else if (discordRequired) {
+    console.error("[DISCORD BOT] Offline and DISCORD_REQUIRED is true; exiting process");
+    process.exit(1);
+  } else {
+    console.warn("[DISCORD BOT] Offline but DISCORD_REQUIRED=false; continuing");
+  }
+
   server.listen(PORT, () => {
     // eslint-disable-next-line no-console
     console.log(`BUX Poker server listening on port ${PORT}`);
