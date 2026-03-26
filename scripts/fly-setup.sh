@@ -17,7 +17,7 @@ echo "==> Login (browser will open if needed)"
 fly auth whoami 2>/dev/null || fly auth login
 
 echo "==> App (ignore error if it already exists)"
-fly apps create bux-poker-server 2>/dev/null || true
+fly apps create bux-poker 2>/dev/null || true
 
 if [[ -z "${REDIS_URL:-}" ]]; then
   set -a
@@ -36,4 +36,4 @@ echo "==> Secrets (from server/.env + production URLs)"
 echo "==> Deploy"
 fly deploy
 
-echo "==> Done. Next: Vercel → VITE_API_BASE_URL + VITE_SOCKET_URL = https://bux-poker-server.fly.dev"
+echo "==> Done. Next: Vercel → VITE_API_BASE_URL + VITE_SOCKET_URL = https://bux-poker.fly.dev"

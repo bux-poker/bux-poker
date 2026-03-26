@@ -16,7 +16,7 @@ COPY server ./
 RUN npx prisma generate --schema=../prisma/schema.prisma
 
 ENV NODE_ENV=production
-EXPOSE 3000
+EXPOSE 8080
 
 # prestart runs migrations; then start (see server/package.json)
 CMD ["npm", "start"]

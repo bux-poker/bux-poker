@@ -5,7 +5,7 @@
 # Then set secrets (copy from Render dashboard), e.g.:
 #   fly secrets set DATABASE_URL="..." REDIS_URL="..." SESSION_SECRET="..." JWT_SECRET="..." \
 #     DISCORD_CLIENT_ID="..." DISCORD_CLIENT_SECRET="..." DISCORD_BOT_TOKEN="..." \
-#     CLIENT_URL="https://bux-poker.pro" API_BASE_URL="https://bux-poker-server.fly.dev"
+#     CLIENT_URL="https://bux-poker.pro" API_BASE_URL="https://bux-poker.fly.dev"
 
 set -euo pipefail
 export PATH="${HOME}/.fly/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}"
@@ -21,7 +21,7 @@ fi
 fly auth whoami
 
 # Safe if app already exists
-fly apps create bux-poker-server 2>/dev/null || true
+fly apps create bux-poker 2>/dev/null || true
 
 fly deploy
 

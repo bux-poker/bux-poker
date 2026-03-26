@@ -45,9 +45,11 @@ async function start() {
       console.warn("[REDIS] Session store unavailable, using memory:", err?.message);
     });
   }
-  server.listen(PORT, () => {
+  // Fly.io / Docker: must bind 0.0.0.0 so the edge proxy can reach the process (not only localhost).
+  const host = process.env.LISTEN_HOST || "0.0.0.0";
+  server.listen(PORT, host, () => {
     // eslint-disable-next-line no-console
-    console.log(`BUX Poker server listening on port ${PORT}`);
+    console.log(`BUX Poker server listening on ${host}:${PORT}`);
   });
 
   // Discord gateway often fails from some cloud egress IPs (Cloudflare "Access denied"). Set DISCORD_BOT_ENABLED=false on that host and run the bot elsewhere.

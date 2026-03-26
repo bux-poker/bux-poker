@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Configure axios defaults — set VITE_API_BASE_URL on Vercel to your API host (e.g. Fly .fly.dev).
 const apiBaseUrl =
-  import.meta.env.VITE_API_BASE_URL || 'https://bux-poker-server.fly.dev';
+  import.meta.env.VITE_API_BASE_URL || 'https://bux-poker.fly.dev';
 axios.defaults.baseURL = apiBaseUrl;
 axios.defaults.withCredentials = true;
 

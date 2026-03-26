@@ -4,7 +4,7 @@
 #
 # Usage (from repo root):
 #   export REDIS_URL='redis://...'   # from Render → Redis or Upstash
-#   export FLY_APP_HOST='https://bux-poker-server.fly.dev'   # optional; must match fly.toml app name
+#   export FLY_APP_HOST='https://bux-poker.fly.dev'   # optional; must match fly.toml app name
 #   ./scripts/fly-secrets-from-local-env.sh
 #
 set -euo pipefail
@@ -30,7 +30,7 @@ set -a
 source "${ENV_FILE}"
 set +a
 
-FLY_API="${FLY_APP_HOST:-https://bux-poker-server.fly.dev}"
+FLY_API="${FLY_APP_HOST:-https://bux-poker.fly.dev}"
 FLY_API="${FLY_API%/}"
 
 export CLIENT_URL="${PRODUCTION_CLIENT_URL:-https://bux-poker.pro}"
