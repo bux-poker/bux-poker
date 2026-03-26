@@ -9,8 +9,8 @@ import { postTournamentEmbed, waitForDiscordClientReady } from "../discord/bot.j
 const router = Router();
 const engine = new TournamentEngine();
 
-/** Max time /api/admin/servers waits on Discord; avoids 60s browser hang if gateway never becomes ready. */
-const ADMIN_SERVERS_DISCORD_WAIT_MS = Number(process.env.ADMIN_SERVERS_DISCORD_WAIT_MS || 12000);
+/** Max time /api/admin/servers waits on Discord. Render cold start + gateway often needs 15–25s; still below old 60s hang. */
+const ADMIN_SERVERS_DISCORD_WAIT_MS = Number(process.env.ADMIN_SERVERS_DISCORD_WAIT_MS || 28000);
 
 /**
  * Whether the bot is in the guild. Cache-first, then REST fetch with one retry.
