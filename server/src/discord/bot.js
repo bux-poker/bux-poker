@@ -41,6 +41,7 @@ const commands = [
 ];
 
 let discordClient = null;
+let discordInitPromise = null;
 
 async function registerSlashCommandsInBackground(token, appId, guildId, commandBodies) {
   const rest = new REST({ version: '10' }).setToken(token);
@@ -65,6 +66,13 @@ async function registerSlashCommandsInBackground(token, appId, guildId, commandB
 }
 
 export async function initializeDiscordBot() {
+  if (discordClient?.isReady?.()) {
+    return discordClient;
+  }
+  if (discordInitPromise) {
+    return discordInitPromise;
+  }
+
   console.log(
     `[DISCORD BOT] Init requested (token=${DISCORD_TOKEN ? "set" : "missing"}, clientId=${DISCORD_CLIENT_ID ? "set" : "missing"})`
   );
@@ -73,17 +81,16 @@ export async function initializeDiscordBot() {
     return null;
   }
 
-  try {
-    const client = new Client({
-      intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        // Required so we can fetch guild members and read role assignments for /api/admin/check
-        GatewayIntentBits.GuildMembers,
-      ],
-    });
-    // Expose client early so other paths can observe startup status.
-    discordClient = client;
+  const initTask = (async () => {
+    try {
+      const client = new Client({
+        intents: [
+          GatewayIntentBits.Guilds,
+          GatewayIntentBits.GuildMessages,
+          // Required so we can fetch guild members and read role assignments for /api/admin/check
+          GatewayIntentBits.GuildMembers,
+        ],
+      });
 
     // Handle interactions (slash commands and buttons)
     client.on('interactionCreate', async (interaction) => {
@@ -124,20 +131,28 @@ export async function initializeDiscordBot() {
       console.log(`[DISCORD BOT] Logged in as ${client.user.tag}`);
     });
 
-    await client.login(DISCORD_TOKEN);
-    // Command registration must never block process startup/port binding.
-    void registerSlashCommandsInBackground(
-      DISCORD_TOKEN,
-      DISCORD_CLIENT_ID,
-      GUILD_ID,
-      commands
-    );
-    return client;
-  } catch (error) {
-    console.error('[DISCORD BOT] Failed to initialize:', error);
-    discordClient = null;
-    return null;
-  }
+      await client.login(DISCORD_TOKEN);
+      // Mark online only after successful login.
+      discordClient = client;
+      // Command registration must never block process startup/port binding.
+      void registerSlashCommandsInBackground(
+        DISCORD_TOKEN,
+        DISCORD_CLIENT_ID,
+        GUILD_ID,
+        commands
+      );
+      return client;
+    } catch (error) {
+      console.error('[DISCORD BOT] Failed to initialize:', error);
+      discordClient = null;
+      return null;
+    } finally {
+      discordInitPromise = null;
+    }
+  })();
+
+  discordInitPromise = initTask;
+  return initTask;
 }
 
 async function handleSetupCommand(interaction) {

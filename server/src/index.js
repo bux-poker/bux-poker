@@ -36,6 +36,32 @@ resumeScheduledStartTimersForSeatedTournaments(tournamentPollEngine).catch((err)
 startTournamentAutomationPoll(tournamentPollEngine);
 startLeagueDiscordPoll();
 const DISCORD_INIT_TIMEOUT_MS = Number(process.env.DISCORD_INIT_TIMEOUT_MS || 12000);
+const DISCORD_INIT_RETRY_MS = Number(process.env.DISCORD_INIT_RETRY_MS || 30000);
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function ensureDiscordBotOnlineLoop() {
+  while (true) {
+    try {
+      const bot = await Promise.race([
+        initializeDiscordBot(),
+        sleep(DISCORD_INIT_TIMEOUT_MS).then(() => null),
+      ]);
+      if (bot) {
+        console.log("[DISCORD BOT] Online");
+        return;
+      }
+      console.warn(
+        `[DISCORD BOT] Init did not complete within ${DISCORD_INIT_TIMEOUT_MS}ms; retrying in ${DISCORD_INIT_RETRY_MS}ms`
+      );
+    } catch (err) {
+      console.error("[DISCORD BOT] Failed to initialize:", err);
+    }
+    await sleep(DISCORD_INIT_RETRY_MS);
+  }
+}
 
 async function start() {
   if (process.env.REDIS_URL) {
@@ -48,23 +74,8 @@ async function start() {
     console.log(`BUX Poker server listening on port ${PORT}`);
   });
 
-  // Never block port binding on Discord initialization.
-  void Promise.race([
-    initializeDiscordBot(),
-    new Promise((resolve) => setTimeout(() => resolve(null), DISCORD_INIT_TIMEOUT_MS)),
-  ])
-    .then((bot) => {
-      if (bot) {
-        console.log("[DISCORD BOT] Online");
-      } else {
-        console.warn(
-          `[DISCORD BOT] Init did not complete within ${DISCORD_INIT_TIMEOUT_MS}ms; service stays online`
-        );
-      }
-    })
-    .catch((err) => {
-      console.error("[DISCORD BOT] Failed to initialize:", err);
-    });
+  // Never block port binding; keep retrying Discord init until bot is online.
+  void ensureDiscordBotOnlineLoop();
 }
 start();
 
