@@ -41,9 +41,13 @@ function sh(cmd) {
   } catch (e) {
     const stdout = e.stdout?.toString?.() ?? "";
     const stderr = e.stderr?.toString?.() ?? "";
-    const err = new Error(stdout + stderr);
+    const message = e.message?.toString?.() ?? "";
+    const err = new Error(stdout + stderr || message);
     err.status = e.status;
     err.combined = stdout + stderr;
+    err.originalMessage = message;
+    err.killed = e.killed;
+    err.signal = e.signal;
     throw err;
   }
 }
@@ -59,6 +63,15 @@ function isMigrateLockOrPoolTimeout(combined) {
     combined.includes("P1002") ||
     combined.includes("Timed out trying to acquire") ||
     combined.includes("timed out")
+  );
+}
+
+function isExecTimeoutError(err, combined) {
+  const msg = `${combined || ""} ${err?.originalMessage || ""}`.toLowerCase();
+  return (
+    err?.signal === "SIGTERM" ||
+    msg.includes("etimedout") ||
+    msg.includes("timed out")
   );
 }
 
@@ -99,7 +112,7 @@ async function main() {
     if (!fixable) {
       // On hosted Postgres poolers (e.g. Neon), transient P1002 timeouts are common during deploy.
       // Do not block process boot on this class of failure.
-      if (isMigrateLockOrPoolTimeout(combined)) {
+      if (isMigrateLockOrPoolTimeout(combined) || isExecTimeoutError(e, combined)) {
         console.warn(
           "[PRESTART] migrate deploy timed out after retries; continuing startup (will retry on next boot)"
         );
