@@ -23,8 +23,11 @@ const sqlFile = path.join(__dirname, "sql", "ensure-start-scheduled-at.sql");
 const FAILED = "20260207120000_add_tournament_start_scheduled_at";
 
 // Keep startup responsive on Render: fail-open quickly on transient DB pool timeouts.
-const MIGRATE_MAX_ATTEMPTS = Number(process.env.PRISMA_MIGRATE_RETRY_ATTEMPTS || 2);
+const MIGRATE_MAX_ATTEMPTS = Number(process.env.PRISMA_MIGRATE_RETRY_ATTEMPTS || 1);
 const MIGRATE_RETRY_DELAY_MS = Number(process.env.PRISMA_MIGRATE_RETRY_DELAY_MS || 1000);
+const MIGRATE_COMMAND_TIMEOUT_MS = Number(
+  process.env.PRISMA_MIGRATE_COMMAND_TIMEOUT_MS || 8000
+);
 
 function sh(cmd) {
   try {
@@ -33,6 +36,7 @@ function sh(cmd) {
       encoding: "utf8",
       maxBuffer: 16 * 1024 * 1024,
       stdio: ["ignore", "pipe", "pipe"],
+      timeout: MIGRATE_COMMAND_TIMEOUT_MS,
     });
   } catch (e) {
     const stdout = e.stdout?.toString?.() ?? "";
@@ -53,7 +57,8 @@ function isMigrateLockOrPoolTimeout(combined) {
   return (
     combined.includes("advisory lock") ||
     combined.includes("P1002") ||
-    combined.includes("Timed out trying to acquire")
+    combined.includes("Timed out trying to acquire") ||
+    combined.includes("timed out")
   );
 }
 
