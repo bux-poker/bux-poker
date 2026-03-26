@@ -1,7 +1,10 @@
 import dotenv from "dotenv";
 import { app, server, io, PORT } from "./config/server.js";
 import { registerSocketHandlers } from "./modules/socket-handlers/index.js";
-import { initializeDiscordBot } from "./discord/bot.js";
+import {
+  ensureDiscordBotOnlineLoop,
+  isDiscordBotLoopEnabled,
+} from "./discord/botLoop.js";
 import {
   TournamentEngine,
   startScheduledStartPoll,
@@ -35,33 +38,6 @@ resumeScheduledStartTimersForSeatedTournaments(tournamentPollEngine).catch((err)
 // At (startTime - 2m): close registration, seat players, arm countdown to startTime
 startTournamentAutomationPoll(tournamentPollEngine);
 startLeagueDiscordPoll();
-const DISCORD_INIT_TIMEOUT_MS = Number(process.env.DISCORD_INIT_TIMEOUT_MS || 50000);
-const DISCORD_INIT_RETRY_MS = Number(process.env.DISCORD_INIT_RETRY_MS || 15000);
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function ensureDiscordBotOnlineLoop() {
-  while (true) {
-    try {
-      const bot = await Promise.race([
-        initializeDiscordBot(),
-        sleep(DISCORD_INIT_TIMEOUT_MS).then(() => null),
-      ]);
-      if (bot) {
-        console.log("[DISCORD BOT] Online");
-        return;
-      }
-      console.warn(
-        `[DISCORD BOT] Init did not complete within ${DISCORD_INIT_TIMEOUT_MS}ms; retrying in ${DISCORD_INIT_RETRY_MS}ms`
-      );
-    } catch (err) {
-      console.error("[DISCORD BOT] Failed to initialize:", err);
-    }
-    await sleep(DISCORD_INIT_RETRY_MS);
-  }
-}
 
 async function start() {
   if (process.env.REDIS_URL) {
@@ -74,8 +50,14 @@ async function start() {
     console.log(`BUX Poker server listening on port ${PORT}`);
   });
 
-  // Never block port binding; keep retrying Discord init until bot is online.
-  void ensureDiscordBotOnlineLoop();
+  // Discord gateway often fails from some cloud egress IPs (Cloudflare "Access denied"). Set DISCORD_BOT_ENABLED=false on that host and run the bot elsewhere.
+  if (isDiscordBotLoopEnabled()) {
+    void ensureDiscordBotOnlineLoop();
+  } else {
+    console.warn(
+      "[DISCORD BOT] Loop disabled (DISCORD_BOT_ENABLED=false). No gateway login on this process."
+    );
+  }
 }
 start();
 

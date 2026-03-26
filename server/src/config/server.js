@@ -23,6 +23,10 @@ if (!fs.existsSync(uploadsRoot)) {
 }
 
 const app = express();
+// Required behind Fly.io / Render / other reverse proxies so secure cookies + sessions see HTTPS.
+if (process.env.NODE_ENV === "production" || process.env.TRUST_PROXY === "1") {
+  app.set("trust proxy", 1);
+}
 const server = createServer(app);
 
 // CORS configuration
