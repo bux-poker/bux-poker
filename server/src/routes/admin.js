@@ -167,17 +167,19 @@ router.get("/servers", async (req, res, next) => {
     // Enrich with bot membership: cache hit, else REST; unknown guild => false, transient errors => null
     const enrichedServers = await Promise.all(
       servers.map(async (server) => {
-        let isBotMember = await resolveBotGuildMembership(
-          discordClient,
-          server.serverId
+        // Authoritative check for configured servers: channel membership via REST.
+        // This avoids false negatives when stored serverId is stale/mismatched.
+        const channelBased = await resolveBotGuildMembershipViaChannelRest(
+          server.announcementChannelId
         );
-        // Fallback: if serverId metadata is stale, the configured channel can still
-        // prove bot membership in that guild.
-        if (isBotMember !== true) {
-          const channelBased = await resolveBotGuildMembershipViaChannelRest(
-            server.announcementChannelId
+        let isBotMember = channelBased;
+
+        // Fallback to guild-id checks only if channel-based verification is unavailable.
+        if (isBotMember === null) {
+          isBotMember = await resolveBotGuildMembership(
+            discordClient,
+            server.serverId
           );
-          if (channelBased === true) isBotMember = true;
         }
         return {
           ...server,
