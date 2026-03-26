@@ -9,6 +9,14 @@ import { postTournamentEmbed, getDiscordClient } from "../discord/bot.js";
 const router = Router();
 const engine = new TournamentEngine();
 const DISCORD_API_V10 = "https://discord.com/api/v10";
+const ADMIN_SERVERS_MEMBERSHIP_TIMEOUT_MS = Number(process.env.ADMIN_SERVERS_MEMBERSHIP_TIMEOUT_MS || 2500);
+
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
+}
 
 async function resolveBotGuildMembershipViaRest(rawServerId) {
   const raw = process.env.DISCORD_BOT_TOKEN;
@@ -132,6 +140,8 @@ router.use(requireAdminRole);
 // Get all configured Discord servers
 router.get("/servers", async (req, res, next) => {
   try {
+    res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
     const discordClient = getDiscordClient();
     const servers = await prisma.discordServer.findMany({
       where: { enabled: true },
@@ -139,11 +149,11 @@ router.get("/servers", async (req, res, next) => {
     });
 
     // Enrich with bot membership: cache hit, else REST; unknown guild => false, transient errors => null
-    const enrichedServers = await Promise.all(
+    const enrichedServers = await Promise.allSettled(
       servers.map(async (server) => {
-        const isBotMember = await resolveBotGuildMembership(
-          discordClient,
-          server.serverId
+        const isBotMember = await withTimeout(
+          resolveBotGuildMembership(discordClient, server.serverId),
+          ADMIN_SERVERS_MEMBERSHIP_TIMEOUT_MS
         );
         return {
           ...server,
@@ -152,7 +162,12 @@ router.get("/servers", async (req, res, next) => {
       })
     );
 
-    res.json(enrichedServers);
+    const payload = enrichedServers.map((item, idx) =>
+      item.status === "fulfilled"
+        ? item.value
+        : { ...servers[idx], isBotMember: null }
+    );
+    res.json(payload);
   } catch (err) {
     next(err);
   }
