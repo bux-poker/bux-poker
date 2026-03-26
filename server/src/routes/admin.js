@@ -9,6 +9,35 @@ import { postTournamentEmbed, getDiscordClient } from "../discord/bot.js";
 const router = Router();
 const engine = new TournamentEngine();
 
+/**
+ * Whether the bot is in the guild. Cache-first, then REST fetch with one retry.
+ * @returns {Promise<boolean|null>} true = in guild, false = not in guild (Unknown Guild), null = offline / transient
+ */
+async function resolveBotGuildMembership(discordClient, rawServerId) {
+  if (!discordClient) return null;
+  const id = String(rawServerId ?? "").trim();
+  if (!/^\d{17,20}$/.test(id)) {
+    console.warn("[ADMIN /servers] Invalid Discord guild id:", rawServerId);
+    return false;
+  }
+  if (discordClient.guilds.cache.get(id)) return true;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const guild = await discordClient.guilds.fetch(id);
+      return !!guild;
+    } catch (e) {
+      if (e?.code === 10004) return false;
+      if (attempt === 0) {
+        await new Promise((r) => setTimeout(r, 80));
+        continue;
+      }
+      console.warn("[ADMIN /servers] guilds.fetch failed for", id, e?.message || e);
+      return null;
+    }
+  }
+  return null;
+}
+
 /** Deep delete tournament (same as DELETE /api/admin/tournaments/:id). */
 async function deleteTournamentCascade(tournamentId) {
   const games = await prisma.game.findMany({
@@ -73,20 +102,21 @@ router.use(requireAdminRole);
 // Get all configured Discord servers
 router.get("/servers", async (req, res, next) => {
   try {
+    res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+
     const discordClient = getDiscordClient();
     const servers = await prisma.discordServer.findMany({
       where: { enabled: true },
       orderBy: { serverName: "asc" },
     });
 
-    // Enrich with current bot membership status (fetch with .catch so Unknown Guild never throws)
     const enrichedServers = await Promise.all(
       servers.map(async (server) => {
-        let isBotMember = false;
-        if (discordClient) {
-          const guild = await discordClient.guilds.fetch(server.serverId).catch(() => null);
-          isBotMember = !!guild;
-        }
+        const isBotMember = await resolveBotGuildMembership(
+          discordClient,
+          server.serverId
+        );
         return {
           ...server,
           isBotMember,

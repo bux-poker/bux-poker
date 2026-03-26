@@ -17,7 +17,8 @@ interface DiscordServer {
   serverName: string;
   inviteLink: string | null;
   setupCompleted: boolean;
-  isBotMember: boolean;
+  /** true = verified in guild; false = not in guild; null = could not verify (retry / refresh) */
+  isBotMember: boolean | null;
 }
 
 export function CreateTournament() {
@@ -115,7 +116,12 @@ export function CreateTournament() {
   }, [searchParams]);
 
   useEffect(() => {
-    // Fetch available Discord servers
+    if (!user?.id) {
+      setServers([]);
+      setLoadingServers(false);
+      return;
+    }
+
     const fetchServers = async () => {
       try {
         const token = localStorage.getItem('sessionToken');
@@ -132,10 +138,9 @@ export function CreateTournament() {
       }
     };
 
-    if (user) {
-      fetchServers();
-    }
-  }, [user]);
+    setLoadingServers(true);
+    void fetchServers();
+  }, [user?.id]);
 
   const toggleServerSelection = (serverId: string) => {
     setSelectedServerIds((prev) =>
@@ -671,7 +676,7 @@ export function CreateTournament() {
                 <label
                   key={server.id}
                   className={`flex cursor-pointer items-center gap-3 rounded border p-3 transition-colors ${
-                    !server.isBotMember || !server.setupCompleted
+                    server.isBotMember !== true || !server.setupCompleted
                       ? 'border-slate-700 bg-slate-800/30 opacity-50'
                       : selectedServerIds.includes(server.serverId)
                       ? 'border-emerald-500 bg-emerald-500/10'
@@ -682,14 +687,19 @@ export function CreateTournament() {
                     type="checkbox"
                     checked={selectedServerIds.includes(server.serverId)}
                     onChange={() => toggleServerSelection(server.serverId)}
-                    disabled={!server.isBotMember || !server.setupCompleted}
+                    disabled={server.isBotMember !== true || !server.setupCompleted}
                     className="h-4 w-4 rounded border-slate-600 text-emerald-600 focus:ring-emerald-500"
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{server.serverName}</span>
-                      {!server.isBotMember && (
+                      {server.isBotMember === false && (
                         <span className="text-xs text-amber-400">(Bot not in server)</span>
+                      )}
+                      {server.isBotMember === null && (
+                        <span className="text-xs text-slate-500">
+                          (Could not verify bot — refresh once Discord is connected)
+                        </span>
                       )}
                       {!server.setupCompleted && (
                         <span className="text-xs text-amber-400">(Setup incomplete)</span>
