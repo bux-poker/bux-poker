@@ -35,6 +35,7 @@ resumeScheduledStartTimersForSeatedTournaments(tournamentPollEngine).catch((err)
 // At (startTime - 2m): close registration, seat players, arm countdown to startTime
 startTournamentAutomationPoll(tournamentPollEngine);
 startLeagueDiscordPoll();
+const DISCORD_INIT_TIMEOUT_MS = Number(process.env.DISCORD_INIT_TIMEOUT_MS || 12000);
 
 async function start() {
   if (process.env.REDIS_URL) {
@@ -42,20 +43,28 @@ async function start() {
       console.warn("[REDIS] Session store unavailable, using memory:", err?.message);
     });
   }
-  const bot = await initializeDiscordBot().catch((err) => {
-    console.error("[DISCORD BOT] Failed to initialize:", err);
-    return null;
-  });
-  if (bot) {
-    console.log("[DISCORD BOT] Online");
-  } else {
-    console.warn("[DISCORD BOT] Offline; continuing startup so service remains deployable");
-  }
-
   server.listen(PORT, () => {
     // eslint-disable-next-line no-console
     console.log(`BUX Poker server listening on port ${PORT}`);
   });
+
+  // Never block port binding on Discord initialization.
+  void Promise.race([
+    initializeDiscordBot(),
+    new Promise((resolve) => setTimeout(() => resolve(null), DISCORD_INIT_TIMEOUT_MS)),
+  ])
+    .then((bot) => {
+      if (bot) {
+        console.log("[DISCORD BOT] Online");
+      } else {
+        console.warn(
+          `[DISCORD BOT] Init did not complete within ${DISCORD_INIT_TIMEOUT_MS}ms; service stays online`
+        );
+      }
+    })
+    .catch((err) => {
+      console.error("[DISCORD BOT] Failed to initialize:", err);
+    });
 }
 start();
 
