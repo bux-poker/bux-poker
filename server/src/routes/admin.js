@@ -184,6 +184,15 @@ router.get("/servers", async (req, res, next) => {
             server.serverId
           );
         }
+        // Hard unblock: if setup is complete and a channel is configured, do not
+        // keep UI stuck in "could not verify" due to transient Discord timeouts.
+        if (
+          isBotMember === null &&
+          server.setupCompleted &&
+          server.announcementChannelId
+        ) {
+          isBotMember = true;
+        }
         return {
           ...server,
           isBotMember,
