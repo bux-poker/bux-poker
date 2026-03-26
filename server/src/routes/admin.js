@@ -4,37 +4,61 @@ import { requireAdminRole } from "../middleware/admin.js";
 import { computeWebIsAdmin } from "../utils/webAdminStatus.js";
 import { TournamentEngine } from "../services/TournamentEngine.js";
 import { prisma } from "../config/database.js";
-import { postTournamentEmbed, waitForDiscordClientReady } from "../discord/bot.js";
+import { postTournamentEmbed } from "../discord/bot.js";
 
 const router = Router();
 const engine = new TournamentEngine();
 
-/** Max time /api/admin/servers waits on Discord. Render cold start + gateway often needs 15–25s; still below old 60s hang. */
-const ADMIN_SERVERS_DISCORD_WAIT_MS = Number(process.env.ADMIN_SERVERS_DISCORD_WAIT_MS || 28000);
+const DISCORD_API_V10 = "https://discord.com/api/v10";
 
 /**
- * Whether the bot is in the guild. Cache-first, then REST fetch with one retry.
- * @returns {Promise<boolean|null>} true = in guild, false = not in guild (Unknown Guild), null = offline / transient
+ * Whether the bot is in the guild — Discord REST only (GET /guilds/:id).
+ * Does not depend on the gateway client or ClientReady, so /admin is not blocked on WebSocket startup.
+ * @returns {Promise<boolean|null>} true = in guild, false = not in guild, null = no token / transient / rate limit
  */
-async function resolveBotGuildMembership(discordClient, rawServerId) {
-  if (!discordClient) return null;
+async function resolveBotGuildMembership(rawServerId) {
+  const raw = process.env.DISCORD_BOT_TOKEN;
+  const token = raw ? String(raw).replace(/^(Bot|Bearer)\s*/i, "") : "";
   const id = String(rawServerId ?? "").trim();
+  if (!token) return null;
   if (!/^\d{17,20}$/.test(id)) {
     console.warn("[ADMIN /servers] Invalid Discord guild id:", rawServerId);
     return false;
   }
-  if (discordClient.guilds.cache.get(id)) return true;
+
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const guild = await discordClient.guilds.fetch(id);
-      return !!guild;
+      const res = await fetch(`${DISCORD_API_V10}/guilds/${encodeURIComponent(id)}`, {
+        method: "GET",
+        headers: { Authorization: `Bot ${token}` },
+      });
+      if (res.ok) return true;
+      if (res.status === 404) {
+        const body = await res.json().catch(() => ({}));
+        if (body.code === 10004) return false;
+        return false;
+      }
+      if (res.status === 401) {
+        console.warn("[ADMIN /servers] Discord REST 401 — invalid or missing DISCORD_BOT_TOKEN");
+        return null;
+      }
+      if (res.status === 403) {
+        return false;
+      }
+      if (res.status === 429 && attempt === 0) {
+        const ra = res.headers.get("retry-after");
+        const sec = ra ? Number(ra) : 1;
+        await new Promise((r) => setTimeout(r, Math.min(Number.isFinite(sec) ? sec * 1000 : 1000, 5000)));
+        continue;
+      }
+      console.warn("[ADMIN /servers] Discord REST guild lookup HTTP", res.status, id);
+      return null;
     } catch (e) {
-      if (e?.code === 10004) return false;
       if (attempt === 0) {
         await new Promise((r) => setTimeout(r, 80));
         continue;
       }
-      console.warn("[ADMIN /servers] guilds.fetch failed for", id, e?.message || e);
+      console.warn("[ADMIN /servers] Discord REST guild lookup error", id, e?.message || e);
       return null;
     }
   }
@@ -108,23 +132,16 @@ router.get("/servers", async (req, res, next) => {
     res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
     res.setHeader("Pragma", "no-cache");
 
-    const discordClient = await waitForDiscordClientReady(ADMIN_SERVERS_DISCORD_WAIT_MS);
     const servers = await prisma.discordServer.findMany({
       where: { enabled: true },
       orderBy: { serverName: "asc" },
     });
 
     const enrichedServers = await Promise.all(
-      servers.map(async (server) => {
-        const isBotMember = await resolveBotGuildMembership(
-          discordClient,
-          server.serverId
-        );
-        return {
-          ...server,
-          isBotMember,
-        };
-      })
+      servers.map(async (server) => ({
+        ...server,
+        isBotMember: await resolveBotGuildMembership(server.serverId),
+      }))
     );
 
     res.json(enrichedServers);
