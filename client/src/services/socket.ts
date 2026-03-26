@@ -12,13 +12,14 @@ export function getSocket(): Socket {
     socket = io(SOCKET_URL, {
       withCredentials: true,
       path: "/socket.io",
-      transports: ["websocket", "polling"],
+      // Polling first: more reliable through reverse proxies; Engine upgrades to websocket when stable.
+      transports: ["polling", "websocket"],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 15000,
       randomizationFactor: 0.5,
-      timeout: 30000,
+      timeout: 45000,
     });
 
     // Make socket available to shared components via window
