@@ -26,6 +26,17 @@ function parseIntOrFallback(value: string | null | undefined, fallback: number):
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function isAbortLikeError(err: unknown): boolean {
+  if (err == null || typeof err !== 'object') return false;
+  const e = err as { code?: string; name?: string; message?: string };
+  return (
+    e.name === 'CanceledError' ||
+    e.code === 'ERR_CANCELED' ||
+    e.code === 'ECONNABORTED' ||
+    (typeof e.message === 'string' && e.message.toLowerCase().includes('aborted'))
+  );
+}
+
 export function CreateTournament() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -121,27 +132,43 @@ export function CreateTournament() {
   }, [searchParams]);
 
   useEffect(() => {
-    // Fetch available Discord servers
+    if (!user?.id) {
+      setServers([]);
+      setLoadingServers(false);
+      return;
+    }
+
+    const token = localStorage.getItem('sessionToken');
+    if (!token) {
+      setLoadingServers(false);
+      return;
+    }
+
+    const ac = new AbortController();
+    setLoadingServers(true);
+
     const fetchServers = async () => {
       try {
-        const token = localStorage.getItem('sessionToken');
-        if (!token) return;
-
         const response = await api.get('/api/admin/servers', {
           headers: { Authorization: `Bearer ${token}` },
+          signal: ac.signal,
+          // Match profile: /admin/servers enriches each row with Discord guild checks (cold Render can be slow).
+          timeout: 120_000,
         });
         setServers(response.data || []);
       } catch (err) {
+        if (isAbortLikeError(err)) return;
         console.error('Failed to fetch servers:', err);
       } finally {
         setLoadingServers(false);
       }
     };
 
-    if (user) {
-      fetchServers();
-    }
-  }, [user]);
+    void fetchServers();
+    return () => ac.abort();
+    // Depend on stable user id only — `user` object identity changes when localStorage hydrate then fetchProfile completes,
+    // which was firing two parallel requests (first often aborted → noisy ECONNABORTED).
+  }, [user?.id]);
 
   const toggleServerSelection = (serverId: string) => {
     setSelectedServerIds((prev) =>
