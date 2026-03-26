@@ -1,39 +1,27 @@
-/**
- * Base URL for Socket.IO (must be http:// or https://). The client upgrades to WebSocket itself;
- * passing wss:// breaks the polling transport and can cause flaky connections behind proxies.
- */
+// For WebSocket connections in production, we need to use wss:// instead of https://
 export const getWebSocketUrl = () => {
   console.log('getWebSocketUrl called with:', {
     VITE_SOCKET_URL: import.meta.env.VITE_SOCKET_URL,
-    VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
     hostname: window.location.hostname,
     location: window.location.href
   });
-
-  const raw =
-    import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_API_BASE_URL;
-  if (raw) {
-    const trimmed = String(raw).replace(/\/$/, '');
-    console.log('Using socket base URL:', trimmed);
-    return trimmed;
+  
+  if (import.meta.env.VITE_SOCKET_URL) {
+    const url = import.meta.env.VITE_SOCKET_URL.replace('https://', 'wss://').replace('http://', 'ws://');
+    console.log('Using VITE_SOCKET_URL:', url);
+    return url;
   }
-
-  const isProduction =
-    window.location.hostname !== 'localhost' &&
-    window.location.hostname !== '127.0.0.1';
-  console.log('Production check:', {
-    hostname: window.location.hostname,
-    isProduction
-  });
-
+  
+  // Check if we're in production by looking at the current URL
+  const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+  console.log('Production check:', { hostname: window.location.hostname, isProduction });
+  
   if (isProduction) {
-    console.error(
-      '[socket] VITE_SOCKET_URL or VITE_API_BASE_URL must be set for production builds'
-    );
-    return 'https://localhost:3000';
+    console.log('Returning production WebSocket URL: wss://bux-spades-server.fly.dev');
+    return 'wss://bux-spades-server.fly.dev';
   }
-  console.log('Returning development Socket.IO URL: http://localhost:3000');
-  return 'http://localhost:3000';
+  console.log('Returning development WebSocket URL: ws://localhost:3000');
+  return 'ws://localhost:3000';
 };
 
 export const createSocketConfig = (token: string, userId: string, username: string, avatar?: string) => {
@@ -43,9 +31,8 @@ export const createSocketConfig = (token: string, userId: string, username: stri
   
   console.log('SocketManager: Device detection:', { isMobile, isSafari });
   
-  // Polling first survives strict proxies (e.g. some PaaS edges) better than WS-first; upgrade still allowed.
   return {
-    transports: ['polling', 'websocket'],
+    transports: isMobile ? ['polling', 'websocket'] : ['websocket', 'polling'], // Prefer polling on mobile
     auth: {
       token,
       userId,

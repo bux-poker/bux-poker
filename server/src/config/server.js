@@ -179,8 +179,6 @@ const io = new Server(server, {
   transports: ['polling', 'websocket'],
   pingInterval: SOCKET_PING_MS,
   pingTimeout: SOCKET_PING_TIMEOUT_MS,
-  // Avoid permessage-deflate on WS; some proxies mishandle compressed frames and drop the socket.
-  perMessageDeflate: false,
 });
 console.log(
   `[SOCKET.IO] pingInterval=${SOCKET_PING_MS}ms pingTimeout=${SOCKET_PING_TIMEOUT_MS}ms`
