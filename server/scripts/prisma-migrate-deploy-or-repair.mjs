@@ -91,6 +91,14 @@ async function main() {
     const fixable =
       combined.includes("P3009") && combined.includes(FAILED);
     if (!fixable) {
+      // On hosted Postgres poolers (e.g. Neon), transient P1002 timeouts are common during deploy.
+      // Do not block process boot on this class of failure.
+      if (isMigrateLockOrPoolTimeout(combined)) {
+        console.warn(
+          "[PRESTART] migrate deploy timed out after retries; continuing startup (will retry on next boot)"
+        );
+        process.exit(0);
+      }
       console.error("[PRESTART] migrate deploy failed (not auto-repairable).");
       process.exit(e.status ?? 1);
     }
