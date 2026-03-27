@@ -1,5 +1,6 @@
 import { prisma } from "../../config/database.js";
 import { HandEvaluator } from "./HandEvaluator.js";
+import { persistAllPlayerStacksFromHandState } from "./persistHandStacks.js";
 import { tableState } from "./tableState.js";
 import { postDealerMessage } from "./dealerMessages.js";
 import { emitGameState } from "./emitGameState.js";
@@ -401,15 +402,8 @@ export async function handleShowdownCore(gameId, io, options = {}) {
     }
   }
 
-  // Persist chips and pot=0 so idle poll and next hand work; then clear state and start next hand
-  for (const p of activePlayers) {
-    await prisma.player
-      .update({ where: { id: p.id }, data: { chips: p.chips } })
-      .catch((err) => {
-        if (err?.code === "P2025") return;
-        console.error(`[SHOWDOWN] Error persisting chips for player ${p.id}:`, err);
-      });
-  }
+  // Persist every seat (incl. folded); only writing active players left stale DB stacks.
+  await persistAllPlayerStacksFromHandState(state, "[SHOWDOWN]");
   await prisma.game
     .update({ where: { id: gameId }, data: { pot: 0 } })
     .catch((err) => console.error("[SHOWDOWN] Error zeroing game pot:", err));

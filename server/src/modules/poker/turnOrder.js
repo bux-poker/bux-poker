@@ -1,4 +1,5 @@
 import { prisma } from "../../config/database.js";
+import { persistAllPlayerStacksFromHandState } from "./persistHandStacks.js";
 import { tableState, turnTimers, hasActiveHand } from "./tableState.js";
 import { resetPlayerRowIfNotEliminated } from "./safeHandCleanupDb.js";
 import { postDealerMessage } from "./dealerMessages.js";
@@ -200,9 +201,7 @@ export async function moveToNextPlayer(gameId, io) {
         await emitIfTournamentCompleted(game.tournament.id, io);
       }
     }
-    await prisma.player
-      .update({ where: { id: winner.id }, data: { chips: winner.chips } })
-      .catch(() => {});
+    await persistAllPlayerStacksFromHandState(state, "[POKER] turnOrder-fold-win");
     await prisma.game
       .update({ where: { id: gameId }, data: { pot: 0 } })
       .catch(() => {});

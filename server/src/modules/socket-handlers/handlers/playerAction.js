@@ -8,6 +8,7 @@ import { advanceToNextStreet } from "../../poker/advanceStreet.js";
 import { emitIfTournamentCompleted } from "../../poker/tableTournamentHooks.js";
 import { checkAndAdvanceBlindLevel } from "../../poker/blindLevel.js";
 import { cleanupHandAndStartNext } from "../../poker/handCleanup.js";
+import { persistAllPlayerStacksFromHandState } from "../../poker/persistHandStacks.js";
 import {
   clearHoleCardsIfEliminated,
   resetPlayerRowIfNotEliminated,
@@ -120,10 +121,12 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
             });
           }
 
-          await prisma.player.update({
-            where: { id: winner.id },
-            data: { chips: winner.chips }
-          }).catch(err => console.error("[POKER] Error updating winner chips:", err));
+          await persistAllPlayerStacksFromHandState(
+            state,
+            "[POKER] fold-win"
+          ).catch((err) =>
+            console.error("[POKER] Error persisting stacks after fold win:", err)
+          );
           await prisma.game.update({
             where: { id: gameId },
             data: { pot: 0 }

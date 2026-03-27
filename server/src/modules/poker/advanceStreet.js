@@ -7,6 +7,7 @@ import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/
 import { handleShowdown, runCinematicAllInShowdown } from "./showdown.js";
 import { cleanupHandAndStartNext } from "./handCleanup.js";
 import { startTurnTimer } from "./turnTimers.js";
+import { persistAllPlayerStacksFromHandState } from "./persistHandStacks.js";
 import { resetPlayerRowIfNotEliminated } from "./safeHandCleanupDb.js";
 
 export async function advanceToNextStreet(gameId, io) {
@@ -138,17 +139,7 @@ export async function advanceToNextStreet(gameId, io) {
       tableState.set(gameId, state);
     }
 
-    await prisma.player
-      .update({ where: { id: winner.id }, data: { chips: winner.chips } })
-      .catch((err) => {
-        if (err?.code === "P2025") {
-          console.log(
-            `[POKER] Player ${winner.id} already removed (consolidation), skipping chip update`
-          );
-        } else {
-          console.error(`[POKER] Error updating chips for player ${winner.id}:`, err);
-        }
-      });
+    await persistAllPlayerStacksFromHandState(state, "[POKER] advance-one-left");
     await prisma.game
       .update({ where: { id: gameId }, data: { pot: 0 } })
       .catch((err) =>
@@ -315,23 +306,10 @@ export async function advanceToNextStreet(gameId, io) {
           tableState.set(gameId, state);
         }
 
-        await prisma.player
-          .update({
-            where: { id: bbPlayer.id },
-            data: { chips: bbPlayer.chips },
-          })
-          .catch((err) => {
-            if (err?.code === "P2025") {
-              console.log(
-                `[POKER] Player ${bbPlayer.id} already removed (consolidation), skipping chip update`
-              );
-            } else {
-              console.error(
-                `[POKER] Error updating chips for player ${bbPlayer.id}:`,
-                err
-              );
-            }
-          });
+        await persistAllPlayerStacksFromHandState(
+          state,
+          "[POKER] advance-all-folded"
+        );
         await prisma.game
           .update({
             where: { id: gameId },
