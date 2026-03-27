@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import type { PokerTableProps } from "./pokerTableTypes";
 import {
   ACTION_OVERLAY_FADE_MS,
@@ -43,6 +43,11 @@ export function usePokerTableActionOverlays(
     .sort()
     .join("|");
 
+  const overlaySig = useMemo(() => buildPlayersOverlaySig(players), [players]);
+
+  const playersRef = useRef(players);
+  playersRef.current = players;
+
   const [actionOverlays, setActionOverlays] = useState<
     Record<string, { action: string; timestamp: number }>
   >({});
@@ -52,17 +57,18 @@ export function usePokerTableActionOverlays(
   const lastOverlaySigRef = useRef<string>("");
   const lastPermanentCleanupSigRef = useRef<string>("");
   useEffect(() => {
-    const sig = buildPlayersOverlaySig(players);
+    const sig = overlaySig;
     if (sig === lastOverlaySigRef.current) return;
     lastOverlaySigRef.current = sig;
 
+    const ps = playersRef.current;
     setActionOverlays((prev) => {
       const now = Date.now();
       const newOverlays: Record<string, { action: string; timestamp: number }> = { ...prev };
       const nextSeenKeys: Record<string, string> = {};
       let changed = false;
 
-      players.forEach((player) => {
+      ps.forEach((player) => {
         const playerId = player.id || player.userId || "";
         const lastAction = player.lastAction || "";
         const actionKey = lastAction ? String(player.lastActionSeq || 0) : "";
@@ -92,15 +98,15 @@ export function usePokerTableActionOverlays(
       lastSeenActionKeyRef.current = nextSeenKeys;
       return changed ? newOverlays : prev;
     });
-  }, [players]);
+  }, [overlaySig]);
 
   useEffect(() => {
-    const sig = buildPlayersOverlaySig(players);
+    const sig = overlaySig;
     if (sig === lastPermanentCleanupSigRef.current) return;
     lastPermanentCleanupSigRef.current = sig;
 
     const playerById: Record<string, { status?: string; chips: number }> = {};
-    players.forEach((p) => {
+    playersRef.current.forEach((p) => {
       const playerId = p.id || p.userId || "";
       playerById[playerId] = { status: p.status, chips: p.chips ?? 0 };
     });
@@ -133,7 +139,7 @@ export function usePokerTableActionOverlays(
       });
       return changed ? next : prev;
     });
-  }, [players]);
+  }, [overlaySig]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -156,22 +162,23 @@ export function usePokerTableActionOverlays(
   }, []);
 
   useEffect(() => {
+    const ps = playersRef.current;
     const isLikelyNewHand =
       !showdownActive &&
       currentBet === 0 &&
       communityLen === 0 &&
-      players.every((p) => (p.contribution || 0) === 0);
+      ps.every((p) => (p.contribution || 0) === 0);
     if (!isLikelyNewHand) {
       wasLikelyNewHandRef.current = false;
       return;
     }
     if (wasLikelyNewHandRef.current) return;
     wasLikelyNewHandRef.current = true;
-    lastOverlaySigRef.current = "";
-    lastPermanentCleanupSigRef.current = "";
+    const syncSig = buildPlayersOverlaySig(ps);
+    lastOverlaySigRef.current = syncSig;
+    lastPermanentCleanupSigRef.current = syncSig;
     lastSeenActionKeyRef.current = {};
     setActionOverlays((prev) => (Object.keys(prev).length === 0 ? prev : {}));
-    // Stable deps only: do not list `players` or `communityCards[]` (new refs every socket tick).
   }, [showdownActive, currentBet, communityLen, contribSig]);
 
   return {
