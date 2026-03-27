@@ -155,6 +155,13 @@ export function PokerGameView() {
     latestTournamentIdRef.current = tournament?.id;
   }, [gameState, tournament?.id]);
 
+  /** Latest tournament + gameState for blind clock tick (avoids effect deps on whole `tournament` object). */
+  const nextBlindClockRef = useRef<{
+    tournament: typeof tournament;
+    gameState: GameStatePayload | null;
+  }>({ tournament: null, gameState: null });
+  nextBlindClockRef.current = { tournament, gameState };
+
   // Preload card images when entering a game so they render instantly
   useEffect(() => {
     if (id) preloadCards();
@@ -174,7 +181,7 @@ export function PokerGameView() {
     if (!gameState?.tournamentId || !tournament) return;
     const interval = setInterval(() => refetchTournament({ silent: true }), 10000);
     return () => clearInterval(interval);
-  }, [gameState?.tournamentId, tournament, refetchTournament]);
+  }, [gameState?.tournamentId, tournament?.id, refetchTournament]);
 
   /** If DB says we're seated on another game (reseated), leave stale /game/:id + wait overlay. */
   useEffect(() => {
@@ -643,24 +650,26 @@ export function PokerGameView() {
     });
   }, [tournament?.status, (tournament as any)?.startScheduledAt]);
 
-  // Next blind / break countdown — anchor-based when server provides schedule fields (else legacy elapsed-time)
+  // Next blind / break countdown — anchor-based when server provides schedule fields (else legacy elapsed-time).
+  // Do not depend on `tournament` identity (refetch creates a new object every time → effect storm + update depth).
   useEffect(() => {
-    if (!tournament) {
-      setNextBlindTime("--:--");
-      return;
-    }
-
-    if (!tournament.startedAt) {
-      setNextBlindTime("--:--");
-      return;
-    }
-
-    if (tournament.status !== "RUNNING" && tournament.status !== "ACTIVE") {
-      setNextBlindTime("--:--");
-      return;
-    }
-
     const tick = () => {
+      const { tournament, gameState } = nextBlindClockRef.current;
+      if (!tournament) {
+        setNextBlindTime("--:--");
+        return;
+      }
+
+      if (!tournament.startedAt) {
+        setNextBlindTime("--:--");
+        return;
+      }
+
+      if (tournament.status !== "RUNNING" && tournament.status !== "ACTIVE") {
+        setNextBlindTime("--:--");
+        return;
+      }
+
       const json =
         typeof tournament.blindLevels === "string"
           ? tournament.blindLevels
@@ -726,7 +735,7 @@ export function PokerGameView() {
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  }, [tournament, gameState?.currentBlindLevel]);
+  }, []);
 
   useEffect(() => {
     if (!scheduleModal || scheduleModal.kind !== "LEVEL_UP") return;

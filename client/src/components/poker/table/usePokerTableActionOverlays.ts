@@ -47,11 +47,16 @@ export function usePokerTableActionOverlays(
           ) {
             displayAction = "ALL_IN";
           }
-          newOverlays[playerId] = {
-            action: displayAction,
-            timestamp: now,
-          };
-          changed = true;
+          // lastActionSeq can bump on every game-state broadcast even when the visible action is unchanged;
+          // updating overlay state then caused infinite re-renders.
+          const prevAction = prev[playerId]?.action;
+          if (prevAction !== displayAction) {
+            newOverlays[playerId] = {
+              action: displayAction,
+              timestamp: now,
+            };
+            changed = true;
+          }
         }
       });
 

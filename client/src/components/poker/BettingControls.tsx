@@ -99,7 +99,10 @@ export function BettingControls({
       setRaiseAmount(defaultClamped);
       return;
     }
-    setRaiseAmount((a) => Math.max(inputMin, Math.min(inputMax, a)));
+    setRaiseAmount((a) => {
+      const clamped = Math.max(inputMin, Math.min(inputMax, a));
+      return clamped === a ? a : clamped;
+    });
   }, [
     lineKey,
     street,
