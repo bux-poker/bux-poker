@@ -5,50 +5,24 @@ import {
   ensureDiscordBotOnlineLoop,
   isDiscordBotLoopEnabled,
 } from "./discord/botLoop.js";
-import {
-  TournamentEngine,
-  startScheduledStartPoll,
-  startIdleTablesPoll,
-  resumeScheduledStartTimersForSeatedTournaments,
-  startTournamentAutomationPoll,
-} from "./services/TournamentEngine.js";
-import { startLeagueDiscordPoll } from "./services/league/leagueDiscordPoll.js";
 import { connectRedis } from "./config/redis.js";
-import { resumeBlindLevelTimersForRunningTournaments } from "./services/tournament/blindTimer.js";
-import { getIO } from "./modules/poker/tableState.js";
 
 dotenv.config();
 
 registerSocketHandlers(io);
 
-// Blind timers live in memory — restore them after deploy so levels keep advancing.
-resumeBlindLevelTimersForRunningTournaments({ getIO }).catch((err) =>
-  console.error("[TOURNAMENT] resumeBlindLevelTimersForRunningTournaments:", err)
-);
-
-// Single engine instance for background polls (admin routes use their own engine; behavior is stateless)
-const tournamentPollEngine = new TournamentEngine();
-
-// Poll for tournaments whose scheduled start time has passed (survives process restart)
-startScheduledStartPoll(tournamentPollEngine);
-startIdleTablesPoll(tournamentPollEngine);
-resumeScheduledStartTimersForSeatedTournaments(tournamentPollEngine).catch((err) =>
-  console.error("[TOURNAMENT] resumeScheduledStartTimersForSeatedTournaments:", err)
-);
-// At (startTime - 2m): close registration, seat players, arm countdown to startTime
-startTournamentAutomationPoll(tournamentPollEngine);
-startLeagueDiscordPoll();
-
-async function start() {
-  // Bind HTTP first — never await Redis before listen() or Fly health checks fail (Redis may hang if URL is wrong/unreachable).
+async function listenFirst() {
   const host = process.env.LISTEN_HOST || "0.0.0.0";
-  // Fly must match fly.toml internal_port (8080). If PORT is missing, prod defaults to 8080 — not 3000.
   const port =
     Number(process.env.PORT) ||
     (process.env.NODE_ENV === "production" ? 8080 : Number(PORT) || 3000);
-  server.listen(port, host, () => {
-    // eslint-disable-next-line no-console
-    console.log(`BUX Poker server listening on ${host}:${port}`);
+  await new Promise((resolve, reject) => {
+    server.listen(port, host, () => {
+      // eslint-disable-next-line no-console
+      console.log(`BUX Poker server listening on ${host}:${port}`);
+      resolve();
+    });
+    server.once("error", reject);
   });
 
   if (process.env.REDIS_URL) {
@@ -57,7 +31,6 @@ async function start() {
     });
   }
 
-  // Discord gateway often fails from some cloud egress IPs (Cloudflare "Access denied"). Set DISCORD_BOT_ENABLED=false on that host and run the bot elsewhere.
   if (isDiscordBotLoopEnabled()) {
     void ensureDiscordBotOnlineLoop();
   } else {
@@ -66,5 +39,44 @@ async function start() {
     );
   }
 }
-start();
 
+async function startBackgroundPolls() {
+  const [
+    { TournamentEngine, startScheduledStartPoll, startIdleTablesPoll, resumeScheduledStartTimersForSeatedTournaments, startTournamentAutomationPoll },
+    { startLeagueDiscordPoll },
+    { resumeBlindLevelTimersForRunningTournaments },
+    { getIO },
+  ] = await Promise.all([
+    import("./services/TournamentEngine.js"),
+    import("./services/league/leagueDiscordPoll.js"),
+    import("./services/tournament/blindTimer.js"),
+    import("./modules/poker/tableState.js"),
+  ]);
+
+  resumeBlindLevelTimersForRunningTournaments({ getIO }).catch((err) =>
+    console.error("[TOURNAMENT] resumeBlindLevelTimersForRunningTournaments:", err)
+  );
+
+  const tournamentPollEngine = new TournamentEngine();
+  startScheduledStartPoll(tournamentPollEngine);
+  startIdleTablesPoll(tournamentPollEngine);
+  resumeScheduledStartTimersForSeatedTournaments(tournamentPollEngine).catch((err) =>
+    console.error("[TOURNAMENT] resumeScheduledStartTimersForSeatedTournaments:", err)
+  );
+  startTournamentAutomationPoll(tournamentPollEngine);
+  startLeagueDiscordPoll();
+}
+
+async function bootstrap() {
+  await listenFirst();
+  try {
+    await startBackgroundPolls();
+  } catch (err) {
+    console.error("[BOOT] Background polls failed (HTTP still listening):", err);
+  }
+}
+
+bootstrap().catch((err) => {
+  console.error("[BOOT] Fatal (listen failed):", err);
+  process.exit(1);
+});
