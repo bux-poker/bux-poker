@@ -2,7 +2,20 @@ import { prisma } from "../../config/database.js";
 import { hasActiveHand } from "../../modules/poker/tableState.js";
 
 /**
- * Audit chip conservation: total chips in tournament must equal expected (registrations * startingChips).
+ * Chip pool invariant: every seated `Player` row was created with `startingChips`.
+ * Total in play = (number of player rows in this tournament) × startingChips.
+ * Registration count can differ (registered but not seated, or admin/test seating edge cases),
+ * so we must NOT use registration count alone for conservation math.
+ */
+async function getExpectedChipTotal(tournamentId, startingChips) {
+  const playerRowCount = await prisma.player.count({
+    where: { game: { tournamentId } },
+  });
+  return { expectedTotal: playerRowCount * startingChips, playerRowCount };
+}
+
+/**
+ * Audit chip conservation: total chips in tournament must equal expected (player rows × startingChips).
  * Logs error if mismatch - chips must NEVER be created or destroyed.
  */
 export async function auditChipConservation(tournamentId) {
@@ -10,11 +23,22 @@ export async function auditChipConservation(tournamentId) {
     where: { id: tournamentId },
     include: {
       registrations: { where: { status: "CONFIRMED" } },
-      games: { include: { players: true } }
-    }
+      games: { include: { players: true } },
+    },
   });
   if (!tournament) return;
-  const expectedTotal = tournament.registrations.length * tournament.startingChips;
+
+  const { expectedTotal, playerRowCount } = await getExpectedChipTotal(
+    tournamentId,
+    tournament.startingChips
+  );
+  const regCount = tournament.registrations?.length ?? 0;
+  if (regCount !== playerRowCount) {
+    console.warn(
+      `[TOURNAMENT] Chip audit: CONFIRMED registrations (${regCount}) !== player rows (${playerRowCount}) for ${tournamentId} — using player rows for expected total`
+    );
+  }
+
   let playerChipsTotal = 0;
   let gamePotTotal = 0;
   for (const game of tournament.games || []) {
@@ -28,33 +52,41 @@ export async function auditChipConservation(tournamentId) {
     hasActiveHand(g.id)
   ).length;
   if (actualTotal !== expectedTotal) {
-    const msg = `[TOURNAMENT] CHIP CONSERVATION ${activeHandCount > 0 ? "PENDING" : "VIOLATION"}: tournament ${tournamentId} has ${actualTotal} chips (players: ${playerChipsTotal}, game pots: ${gamePotTotal}), expected ${expectedTotal} (${tournament.registrations.length} players × ${tournament.startingChips} starting). Difference: ${actualTotal - expectedTotal}${activeHandCount > 0 ? `, activeHands=${activeHandCount}` : ""}`;
+    const msg = `[TOURNAMENT] CHIP CONSERVATION ${
+      activeHandCount > 0 ? "PENDING" : "VIOLATION"
+    }: tournament ${tournamentId} has ${actualTotal} chips (players: ${playerChipsTotal}, game pots: ${gamePotTotal}), expected ${expectedTotal} (${playerRowCount} player rows × ${tournament.startingChips} starting). Difference: ${
+      actualTotal - expectedTotal
+    }${activeHandCount > 0 ? `, activeHands=${activeHandCount}` : ""}`;
     if (activeHandCount > 0) {
-      // Mid-hand audits can transiently undercount chips that still sit in in-memory betting state.
       console.warn(msg);
     } else {
       console.error(msg);
     }
   } else {
-    console.log(`[TOURNAMENT] Chip audit OK: ${actualTotal} chips (expected ${expectedTotal})`);
+    console.log(
+      `[TOURNAMENT] Chip audit OK: ${actualTotal} chips (expected ${expectedTotal})`
+    );
   }
 }
 
 /**
  * At tournament completion, force chip conservation by reconciling any drift to the sole winner.
- * This is a safety net for edge-case race conditions across hand cleanup/consolidation.
+ * Only **adds** missing chips to the winner — never subtracts (negative diff means data bug; do not destroy stacks).
  */
 export async function reconcileChipConservationOnCompletion(tournamentId) {
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
     include: {
-      registrations: { where: { status: "CONFIRMED" } },
-      games: { include: { players: true } }
-    }
+      games: { include: { players: true } },
+    },
   });
   if (!tournament) return;
 
-  const expectedTotal = tournament.registrations.length * tournament.startingChips;
+  const { expectedTotal, playerRowCount } = await getExpectedChipTotal(
+    tournamentId,
+    tournament.startingChips
+  );
+
   let playerChipsTotal = 0;
   let gamePotTotal = 0;
   for (const game of tournament.games || []) {
@@ -67,27 +99,40 @@ export async function reconcileChipConservationOnCompletion(tournamentId) {
   const diff = expectedTotal - actualTotal;
   if (diff === 0) return;
 
-  const winner = await prisma.player.findFirst({
-    where: { game: { tournamentId }, chips: { gt: 0 }, status: { not: "ELIMINATED" } },
-    orderBy: { chips: "desc" }
-  });
-  if (!winner) {
-    console.error(`[TOURNAMENT] CHIP RECONCILE FAILED: no winner found for ${tournamentId}, diff=${diff}`);
+  if (diff < 0) {
+    console.error(
+      `[TOURNAMENT] CHIP RECONCILE SKIPPED: actual (${actualTotal}) > expected (${expectedTotal}) for ${tournamentId} (${playerRowCount} rows × ${tournament.startingChips}). Negative diff ${diff} — would incorrectly remove chips; investigate duplicates or audit logic.`
+    );
     return;
   }
 
-  const newChips = Math.max(0, (winner.chips || 0) + diff);
+  const winner = await prisma.player.findFirst({
+    where: {
+      game: { tournamentId },
+      chips: { gt: 0 },
+      status: { not: "ELIMINATED" },
+    },
+    orderBy: { chips: "desc" },
+  });
+  if (!winner) {
+    console.error(
+      `[TOURNAMENT] CHIP RECONCILE FAILED: no winner found for ${tournamentId}, diff=${diff}`
+    );
+    return;
+  }
+
+  const prevChips = winner.chips || 0;
+  const newChips = prevChips + diff;
   await prisma.player.update({
     where: { id: winner.id },
-    data: { chips: newChips }
+    data: { chips: newChips },
   });
-  // Zero lingering game pots so all chips sit with players at completion.
   await prisma.game.updateMany({
     where: { tournamentId },
-    data: { pot: 0 }
+    data: { pot: 0 },
   });
 
   console.warn(
-    `[TOURNAMENT] CHIP RECONCILE APPLIED: tournament ${tournamentId}, expected=${expectedTotal}, actual=${actualTotal}, diff=${diff}, winner=${winner.id}, chips ${winner.chips} -> ${newChips}`
+    `[TOURNAMENT] CHIP RECONCILE APPLIED: tournament ${tournamentId}, expected=${expectedTotal}, actual=${actualTotal}, diff=+${diff}, winner=${winner.id}, chips ${prevChips} -> ${newChips}`
   );
 }
