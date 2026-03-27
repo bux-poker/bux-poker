@@ -19,7 +19,7 @@ import { TournamentLobbyModal } from "../../components/tournament/TournamentLobb
 import { soundManager, type SoundName } from "../../utils/soundManager";
 import { preloadCards } from "../../utils/cardPreloader";
 import { getHandDescription } from "@shared/utils/handEvaluator";
-import type { GameStatePayload } from "./pokerGameViewTypes";
+import { type GameStatePayload, showdownWinnersCount, getShowdownWinnersList } from "./pokerGameViewTypes";
 import { handBlocksConsolidationWaitOverlay } from "./handBlocksConsolidationWaitOverlay";
 import { parseCommunityCards } from "./parseCommunityCards";
 import {
@@ -436,7 +436,7 @@ export function PokerGameView() {
       if (payload.id && id && payload.id !== id) return;
 
       // Start of new hand: clear any cached/stale card data so we never show previous hand's cards
-      const hasWinnerPayload = (payload.showdownResults?.winners?.length ?? 0) > 0;
+      const hasWinnerPayload = showdownWinnersCount(payload.showdownResults) > 0;
       const isNewHand = (payload.street === "PREFLOP" || !payload.street) && !payload.showdownActive && !hasWinnerPayload;
       const normalized: GameStatePayload = isNewHand
         ? {
@@ -959,7 +959,7 @@ export function PokerGameView() {
     const prevShowdownResults = prevGameState.showdownResults;
     const currentShowdownResults = gameState.showdownResults;
     if (!prevShowdownResults && currentShowdownResults) {
-      const winners = currentShowdownResults.winners || [];
+      const winners = getShowdownWinnersList(currentShowdownResults);
       const myPlayerWon = winners.some((w: any) => w.userId === user.id || w.playerId === user.id);
       if (myPlayerWon) {
         soundManager.play('pot-win');

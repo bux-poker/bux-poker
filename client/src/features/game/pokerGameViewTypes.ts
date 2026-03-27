@@ -16,14 +16,30 @@ export interface PlayerViewModel {
 }
 
 /** Server `showdownResults` on `game-state` (winner list, etc.). */
+export type ShowdownWinnerRow = {
+  userId?: string;
+  playerId?: string;
+  name?: string;
+  handCategory?: string;
+  potWon?: number;
+};
+
 export interface ShowdownResultsPayload {
-  winners?: Array<{
-    userId?: string;
-    playerId?: string;
-    name?: string;
-    handCategory?: string;
-    potWon?: number;
-  }>;
+  winners?: ShowdownWinnerRow[];
+}
+
+/** Safe access — some TS projects narrow optional object props to `{}` when truthy. */
+export function getShowdownWinnersList(
+  sr: ShowdownResultsPayload | null | undefined
+): ShowdownWinnerRow[] {
+  const w = sr?.winners;
+  return Array.isArray(w) ? w : [];
+}
+
+export function showdownWinnersCount(
+  sr: ShowdownResultsPayload | null | undefined
+): number {
+  return getShowdownWinnersList(sr).length;
 }
 
 /** Payload from server `game-state` (subset used for the table view). */
