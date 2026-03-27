@@ -15,7 +15,18 @@ export interface PlayerViewModel {
   lastActionSeq?: number;
 }
 
-/** Payload from server `game-state` (subset used by the table view). */
+/** Server `showdownResults` on `game-state` (winner list, etc.). */
+export interface ShowdownResultsPayload {
+  winners?: Array<{
+    userId?: string;
+    playerId?: string;
+    name?: string;
+    handCategory?: string;
+    potWon?: number;
+  }>;
+}
+
+/** Payload from server `game-state` (subset used for the table view). */
 export interface GameStatePayload {
   id: string;
   tournamentId?: string;
@@ -35,7 +46,7 @@ export interface GameStatePayload {
   currentBet?: number;
   minimumRaise?: number;
   showdownActive?: boolean;
-  showdownResults?: unknown;
+  showdownResults?: ShowdownResultsPayload | null;
   /** Cinematic / all-in runout — everyone’s cards were already exposed. */
   showdownForcedReveal?: boolean;
   /** This viewer may choose show or muck (loser optional reveal). */
