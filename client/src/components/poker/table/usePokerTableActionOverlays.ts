@@ -130,10 +130,11 @@ export function usePokerTableActionOverlays(
       currentBet === 0 &&
       (communityCards?.length || 0) === 0 &&
       players.every((p) => (p.contribution || 0) === 0);
-    if (isLikelyNewHand) {
-      lastSeenActionKeyRef.current = {};
-      setActionOverlays({});
-    }
+    if (!isLikelyNewHand) return;
+    lastSeenActionKeyRef.current = {};
+    // `players` is a new array reference on most socket ticks; always calling setActionOverlays({})
+    // retriggered this effect and caused "Maximum update depth exceeded" while preflop idle.
+    setActionOverlays((prev) => (Object.keys(prev).length === 0 ? prev : {}));
   }, [showdownActive, currentBet, communityCards, players]);
 
   return {

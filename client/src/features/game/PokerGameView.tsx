@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getSocket } from "../../services/socket";
 import { PokerTable } from "../../components/poker/PokerTable";
@@ -149,6 +149,26 @@ export function PokerGameView() {
   const { user } = useAuth();
   const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
 
+  /** Stable across refetches when seat rows are unchanged (avoids effect churn on new `players` array refs). */
+  const tournamentPlayersSeatSig = useMemo(() => {
+    if (!tournament?.players?.length) return "";
+    return tournament.players
+      .map(
+        (p: { userId?: string; gameId?: string; status?: string }) =>
+          `${String(p.userId ?? "")}:${String(p.gameId ?? "")}:${String(p.status ?? "")}`
+      )
+      .sort()
+      .join("|");
+  }, [tournament?.players]);
+
+  const myTournamentPlayerSig = useMemo(() => {
+    if (!tournament?.players?.length || !user?.id) return "";
+    const me = tournament.players.find((p: { userId?: string }) => String(p.userId) === String(user.id));
+    if (!me) return "";
+    const m = me as { status?: string; finishingPlace?: number; position?: number };
+    return `${m.status ?? ""}:${m.finishingPlace ?? ""}:${m.position ?? ""}`;
+  }, [tournament?.players, user?.id]);
+
   useEffect(() => {
     latestGameStateRef.current = gameState;
     latestGameTournamentIdRef.current = gameState?.tournamentId;
@@ -161,6 +181,9 @@ export function PokerGameView() {
     gameState: GameStatePayload | null;
   }>({ tournament: null, gameState: null });
   nextBlindClockRef.current = { tournament, gameState };
+
+  const tournamentRef = useRef(tournament);
+  tournamentRef.current = tournament;
 
   // Preload card images when entering a game so they render instantly
   useEffect(() => {
@@ -185,8 +208,9 @@ export function PokerGameView() {
 
   /** If DB says we're seated on another game (reseated), leave stale /game/:id + wait overlay. */
   useEffect(() => {
-    if (!user?.id || !id || !gameState?.tournamentId || !tournament?.players?.length) return;
-    const me = tournament.players.find(
+    const t = tournamentRef.current;
+    if (!user?.id || !id || !gameState?.tournamentId || !t?.players?.length) return;
+    const me = t.players.find(
       (p: { userId?: string; status?: string; gameId?: string }) =>
         String(p.userId) === String(user.id)
     );
@@ -196,7 +220,7 @@ export function PokerGameView() {
     setConsolidationWaiting(null);
     setPendingConsolidationWaiting(null);
     navigate(`/game/${correctGameId}`, { replace: true });
-  }, [tournament?.players, user?.id, id, gameState?.tournamentId, navigate]);
+  }, [tournamentPlayersSeatSig, user?.id, id, gameState?.tournamentId, navigate]);
   const lastTournamentStatusRef = useRef<string | null>(null);
   const lastPlayerStatusRef = useRef<string | null>(null);
 
@@ -768,6 +792,7 @@ export function PokerGameView() {
   // Detect when the local user is eliminated from the tournament or wins it,
   // and show a simple modal with their final position / winner announcement.
   useEffect(() => {
+    const tournament = tournamentRef.current;
     if (!tournament || !user) return;
 
     const anyTournament: any = tournament as any;
@@ -800,7 +825,7 @@ export function PokerGameView() {
     if (finishedFirst && !winnerModalOpen) {
       setWinnerModalOpen(true);
     }
-  }, [tournament, user, winnerModalOpen]);
+  }, [myTournamentPlayerSig, tournament?.status, tournament?.id, user, winnerModalOpen]);
 
   // Sound effects: Play sounds when game state changes
   useEffect(() => {
