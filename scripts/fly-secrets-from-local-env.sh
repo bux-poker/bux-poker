@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Load secrets from server/.env and push them to Fly (no secrets committed to git).
-# REDIS_URL is not in most local .files — set it from your Render dashboard first.
+# REDIS_URL must be a resolvable host from Fly (e.g. Upstash *.upstash.io, or Fly Redis).
+# Do not use a hostname with no domain (ENOTFOUND) or Render-internal-only names.
 #
 # Usage (from repo root):
-#   export REDIS_URL='redis://...'   # from Render → Redis or Upstash
+#   export REDIS_URL='rediss://default:PASSWORD@HOST.upstash.io:6379'   # full URL from provider
 #   export FLY_APP_HOST='https://bux-poker.fly.dev'   # optional; must match fly.toml app name
 #   ./scripts/fly-secrets-from-local-env.sh
 #
@@ -19,8 +20,8 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 
 if [[ -z "${REDIS_URL:-}" ]]; then
-  echo "Export REDIS_URL first (copy from Render → your Redis add-on), e.g.:"
-  echo "  export REDIS_URL='redis://...'"
+  echo "Export REDIS_URL first (full hostname from Upstash/Fly Redis dashboard), e.g.:"
+  echo "  export REDIS_URL='rediss://default:...@....upstash.io:6379'"
   exit 1
 fi
 
