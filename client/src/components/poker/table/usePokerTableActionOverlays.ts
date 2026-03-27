@@ -9,6 +9,24 @@ import {
 
 type Player = PokerTableProps["players"][number];
 
+/** Stable string for overlay-related player fields (avoids setState every socket tick). */
+function buildPlayersOverlaySig(players: Player[]): string {
+  return players
+    .map((p) => {
+      const id = p.id || p.userId || "";
+      return [
+        id,
+        String(p.lastAction ?? ""),
+        String(p.lastActionSeq ?? 0),
+        String(p.status ?? ""),
+        String(p.chips ?? 0),
+        String(p.contribution ?? 0),
+      ].join(":");
+    })
+    .sort()
+    .join("|");
+}
+
 /**
  * Tracks last-action overlays on seat avatars (FOLD/CHECK/ALL IN, etc.) with fade and new-hand reset.
  */
@@ -24,7 +42,13 @@ export function usePokerTableActionOverlays(
   const lastSeenActionKeyRef = useRef<Record<string, string>>({});
   const wasLikelyNewHandRef = useRef(false);
 
+  const lastOverlaySigRef = useRef<string>("");
+  const lastPermanentCleanupSigRef = useRef<string>("");
   useEffect(() => {
+    const sig = buildPlayersOverlaySig(players);
+    if (sig === lastOverlaySigRef.current) return;
+    lastOverlaySigRef.current = sig;
+
     setActionOverlays((prev) => {
       const now = Date.now();
       const newOverlays: Record<string, { action: string; timestamp: number }> = { ...prev };
@@ -40,7 +64,6 @@ export function usePokerTableActionOverlays(
           const st = (player.status || "").toUpperCase();
           const la = String(lastAction).toUpperCase();
           let displayAction = lastAction;
-          // Server may have sent BET/RAISE/CALL before lastAction normalization; match ALL IN overlay to 0 chips.
           if (
             (player.chips ?? 0) === 0 &&
             st === "ALL_IN" &&
@@ -48,8 +71,6 @@ export function usePokerTableActionOverlays(
           ) {
             displayAction = "ALL_IN";
           }
-          // lastActionSeq can bump on every game-state broadcast even when the visible action is unchanged;
-          // updating overlay state then caused infinite re-renders.
           const prevAction = prev[playerId]?.action;
           if (prevAction !== displayAction) {
             newOverlays[playerId] = {
@@ -62,12 +83,15 @@ export function usePokerTableActionOverlays(
       });
 
       lastSeenActionKeyRef.current = nextSeenKeys;
-      // `players` is often a new array each render; returning `{ ...prev }` without changes caused an infinite loop.
       return changed ? newOverlays : prev;
     });
   }, [players]);
 
   useEffect(() => {
+    const sig = buildPlayersOverlaySig(players);
+    if (sig === lastPermanentCleanupSigRef.current) return;
+    lastPermanentCleanupSigRef.current = sig;
+
     const playerById: Record<string, { status?: string; chips: number }> = {};
     players.forEach((p) => {
       const playerId = p.id || p.userId || "";
@@ -90,7 +114,6 @@ export function usePokerTableActionOverlays(
         const action = normalizeAction(overlay.action);
         const status = (player.status || "").toUpperCase();
         const keepFold = action === "FOLD" && status === "FOLDED";
-        // Do not treat chips===0 alone as all-in (0-chip players waiting for the next hand are not ALL_IN here).
         const keepAllIn =
           action === "ALLIN" &&
           status !== "ELIMINATED" &&
@@ -135,10 +158,10 @@ export function usePokerTableActionOverlays(
       wasLikelyNewHandRef.current = false;
       return;
     }
-    // Only fire once per transition into "new hand" state; otherwise we keep resetting
-    // lastSeenAction keys every render and can bounce overlays forever.
     if (wasLikelyNewHandRef.current) return;
     wasLikelyNewHandRef.current = true;
+    lastOverlaySigRef.current = "";
+    lastPermanentCleanupSigRef.current = "";
     lastSeenActionKeyRef.current = {};
     setActionOverlays((prev) => (Object.keys(prev).length === 0 ? prev : {}));
   }, [showdownActive, currentBet, communityCards, players]);

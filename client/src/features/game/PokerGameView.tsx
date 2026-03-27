@@ -144,6 +144,8 @@ export function PokerGameView() {
   const handActionPendingRef = useRef(false);
   const prevTurnUserIdRef = useRef<string | null>(null);
   const preActionRef = useRef<PreActionKind | null>(null);
+  /** Only clear pre-action when transitioning into FOLDED (not every socket tick). */
+  const wasFoldedRef = useRef(false);
   const handleActionRef = useRef<(action: string, amount: number) => void>(() => {});
   const [preActionSelected, setPreActionSelected] = useState<PreActionKind | null>(null);
   const { user } = useAuth();
@@ -651,7 +653,11 @@ export function PokerGameView() {
         setTournamentCountdown(null);
         clearInterval(interval);
       } else {
-        setTournamentCountdown(prev => prev ? { ...prev, seconds: remaining } : null);
+        setTournamentCountdown((prev) => {
+          if (!prev) return null;
+          if (prev.seconds === remaining) return prev;
+          return { ...prev, seconds: remaining };
+        });
       }
     }, 1000); // update once per second
 
@@ -1036,10 +1042,12 @@ export function PokerGameView() {
   useEffect(() => {
     if (!gameState || !user?.id) return;
     const me = gameState.players.find((p) => p.userId === user.id || p.id === user.id);
-    if (me?.status === "FOLDED") {
+    const folded = me?.status === "FOLDED";
+    if (folded && !wasFoldedRef.current) {
       preActionRef.current = null;
       setPreActionSelected(null);
     }
+    wasFoldedRef.current = !!folded;
   }, [gameState, user?.id]);
 
   useEffect(() => {
