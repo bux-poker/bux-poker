@@ -28,6 +28,7 @@ export function usePokerTableActionOverlays(
       const now = Date.now();
       const newOverlays: Record<string, { action: string; timestamp: number }> = { ...prev };
       const nextSeenKeys: Record<string, string> = {};
+      let changed = false;
 
       players.forEach((player) => {
         const playerId = player.id || player.userId || "";
@@ -50,11 +51,13 @@ export function usePokerTableActionOverlays(
             action: displayAction,
             timestamp: now,
           };
+          changed = true;
         }
       });
 
       lastSeenActionKeyRef.current = nextSeenKeys;
-      return newOverlays;
+      // `players` is often a new array each render; returning `{ ...prev }` without changes caused an infinite loop.
+      return changed ? newOverlays : prev;
     });
   }, [players]);
 
@@ -67,12 +70,14 @@ export function usePokerTableActionOverlays(
 
     setActionOverlays((prev) => {
       const next = { ...prev };
+      let changed = false;
       Object.keys(next).forEach((playerId) => {
         const overlay = next[playerId];
         if (!isPermanentAction(overlay.action)) return;
         const player = playerById[playerId];
         if (!player) {
           delete next[playerId];
+          changed = true;
           return;
         }
 
@@ -87,9 +92,10 @@ export function usePokerTableActionOverlays(
           status === "ALL_IN";
         if (!keepFold && !keepAllIn) {
           delete next[playerId];
+          changed = true;
         }
       });
-      return next;
+      return changed ? next : prev;
     });
   }, [players]);
 
@@ -98,13 +104,15 @@ export function usePokerTableActionOverlays(
       const now = Date.now();
       setActionOverlays((prev) => {
         const updated = { ...prev };
+        let changed = false;
         Object.keys(updated).forEach((playerId) => {
           const overlay = updated[playerId];
           if (!isPermanentAction(overlay.action) && now - overlay.timestamp >= ACTION_OVERLAY_FADE_MS) {
             delete updated[playerId];
+            changed = true;
           }
         });
-        return updated;
+        return changed ? updated : prev;
       });
     }, 100);
 
