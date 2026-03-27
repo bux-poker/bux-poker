@@ -172,6 +172,12 @@ export function PokerGameView() {
     return `${m.status ?? ""}:${m.finishingPlace ?? ""}:${m.position ?? ""}`;
   }, [tournament?.players, user?.id]);
 
+  /** Stable reference for table; parseCommunityCards() alone allocates a new [] every call. */
+  const communityCards = useMemo((): Card[] => {
+    if (!gameState?.communityCards) return [];
+    return parseCommunityCards(gameState.communityCards);
+  }, [gameState?.communityCards]);
+
   useEffect(() => {
     latestGameStateRef.current = gameState;
     latestGameTournamentIdRef.current = gameState?.tournamentId;
@@ -1105,8 +1111,6 @@ export function PokerGameView() {
   if (!gameState) {
     return null;
   }
-
-  const communityCards = parseCommunityCards(gameState.communityCards);
 
   // Convert players to format expected by Chat component
   const chatPlayers: Player[] = gameState.players.map((p) => ({

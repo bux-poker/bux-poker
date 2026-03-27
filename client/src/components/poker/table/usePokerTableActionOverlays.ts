@@ -36,6 +36,13 @@ export function usePokerTableActionOverlays(
   currentBet: number,
   communityCards: PokerTableProps["communityCards"]
 ) {
+  /** Stable deps: parent often passes a new [] from JSON.parse every render — do not put that ref on useEffect. */
+  const communityLen = Array.isArray(communityCards) ? communityCards.length : 0;
+  const contribSig = players
+    .map((p) => `${p.id || p.userId || ""}:${p.contribution ?? 0}`)
+    .sort()
+    .join("|");
+
   const [actionOverlays, setActionOverlays] = useState<
     Record<string, { action: string; timestamp: number }>
   >({});
@@ -152,7 +159,7 @@ export function usePokerTableActionOverlays(
     const isLikelyNewHand =
       !showdownActive &&
       currentBet === 0 &&
-      (communityCards?.length || 0) === 0 &&
+      communityLen === 0 &&
       players.every((p) => (p.contribution || 0) === 0);
     if (!isLikelyNewHand) {
       wasLikelyNewHandRef.current = false;
@@ -164,7 +171,8 @@ export function usePokerTableActionOverlays(
     lastPermanentCleanupSigRef.current = "";
     lastSeenActionKeyRef.current = {};
     setActionOverlays((prev) => (Object.keys(prev).length === 0 ? prev : {}));
-  }, [showdownActive, currentBet, communityCards, players]);
+    // Stable deps only: do not list `players` or `communityCards[]` (new refs every socket tick).
+  }, [showdownActive, currentBet, communityLen, contribSig]);
 
   return {
     actionOverlays,
