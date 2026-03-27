@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import axios from './AxiosConfig';
+import axios, { isBenignClientAbort } from './AxiosConfig';
 
 interface User {
   id: string;
@@ -69,6 +69,9 @@ export const useAuthMethods = ({ setUser, setError, setLoading }: UseAuthMethods
         }
         return null;
       } catch (error: any) {
+        if (isBenignClientAbort(error)) {
+          return null;
+        }
         const status = error.response?.status;
         if (status === 503) {
           console.warn(

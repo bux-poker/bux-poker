@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import axios from 'axios';
+import axios from '../AuthContext/hooks/AxiosConfig';
 
 const AuthCallback: React.FC = () => {
   const navigate = useNavigate();
@@ -13,10 +13,11 @@ const AuthCallback: React.FC = () => {
       try {
         console.log('Fetching profile with token:', token);
         const response = await axios.get('/api/auth/profile', {
-          headers: { 
+          headers: {
             Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           },
+          timeout: 120_000,
         });
         
         if (response.data?.user) {
