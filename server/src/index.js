@@ -40,17 +40,19 @@ startTournamentAutomationPoll(tournamentPollEngine);
 startLeagueDiscordPoll();
 
 async function start() {
+  // Bind HTTP first — never await Redis before listen() or Fly health checks fail (Redis may hang if URL is wrong/unreachable).
+  const host = process.env.LISTEN_HOST || "0.0.0.0";
+  const port = Number(process.env.PORT) || Number(PORT) || 8080;
+  server.listen(port, host, () => {
+    // eslint-disable-next-line no-console
+    console.log(`BUX Poker server listening on ${host}:${port}`);
+  });
+
   if (process.env.REDIS_URL) {
-    await connectRedis().catch((err) => {
+    connectRedis().catch((err) => {
       console.warn("[REDIS] Session store unavailable, using memory:", err?.message);
     });
   }
-  // Fly.io / Docker: must bind 0.0.0.0 so the edge proxy can reach the process (not only localhost).
-  const host = process.env.LISTEN_HOST || "0.0.0.0";
-  server.listen(PORT, host, () => {
-    // eslint-disable-next-line no-console
-    console.log(`BUX Poker server listening on ${host}:${PORT}`);
-  });
 
   // Discord gateway often fails from some cloud egress IPs (Cloudflare "Access denied"). Set DISCORD_BOT_ENABLED=false on that host and run the bot elsewhere.
   if (isDiscordBotLoopEnabled()) {
