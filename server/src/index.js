@@ -42,7 +42,10 @@ startLeagueDiscordPoll();
 async function start() {
   // Bind HTTP first — never await Redis before listen() or Fly health checks fail (Redis may hang if URL is wrong/unreachable).
   const host = process.env.LISTEN_HOST || "0.0.0.0";
-  const port = Number(process.env.PORT) || Number(PORT) || 8080;
+  // Fly must match fly.toml internal_port (8080). If PORT is missing, prod defaults to 8080 — not 3000.
+  const port =
+    Number(process.env.PORT) ||
+    (process.env.NODE_ENV === "production" ? 8080 : Number(PORT) || 3000);
   server.listen(port, host, () => {
     // eslint-disable-next-line no-console
     console.log(`BUX Poker server listening on ${host}:${port}`);
