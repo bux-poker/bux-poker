@@ -75,9 +75,23 @@ const getRedisConfig = () => {
   const isProduction = process.env.NODE_ENV === "production";
 
   if (process.env.REDIS_URL) {
+    const extraPassword = (process.env.REDIS_PASSWORD ?? "").trim();
+    // Upstash URLs embed default:password — only add top-level password if you intentionally
+    // split secret (avoids empty/wrong REDIS_PASSWORD from Fly breaking AUTH).
+    const base =
+      extraPassword.length > 0
+        ? { url: process.env.REDIS_URL, password: extraPassword }
+        : { url: process.env.REDIS_URL };
+
+    // Fly → Upstash: prefer IPv4; avoids flaky TLS/handshake "Socket closed unexpectedly" on some paths.
     return {
-      url: process.env.REDIS_URL,
-      password: process.env.REDIS_PASSWORD,
+      ...base,
+      socket: {
+        family: 4,
+        connectTimeout: 15_000,
+        keepAlive: true,
+        keepAliveInitialDelay: 10_000,
+      },
     };
   }
 
