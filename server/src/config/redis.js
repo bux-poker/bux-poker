@@ -20,6 +20,23 @@ function warnIfRedisHostSuspicious() {
 
 warnIfRedisHostSuspicious();
 
+/** Log hostname only (no password) so Fly logs confirm which Redis endpoint is active. */
+function logRedisConfiguredHost() {
+  const raw = process.env.REDIS_URL;
+  if (!raw || typeof raw !== "string") return;
+  try {
+    const normalized = raw.replace(/^rediss:\/\//i, "http://").replace(/^redis:\/\//i, "http://");
+    const u = new URL(normalized);
+    // eslint-disable-next-line no-console
+    console.log("[REDIS] Configured host:", u.hostname);
+  } catch {
+    // eslint-disable-next-line no-console
+    console.warn("[REDIS] Could not parse REDIS_URL for host logging");
+  }
+}
+
+logRedisConfiguredHost();
+
 // Redis configuration for different environments
 const getRedisConfig = () => {
   const isProduction = process.env.NODE_ENV === 'production';

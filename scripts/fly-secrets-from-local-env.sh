@@ -25,11 +25,17 @@ if [[ -z "${REDIS_URL:-}" ]]; then
   exit 1
 fi
 
+# IMPORTANT: server/.env often contains an old or truncated REDIS_URL. Sourcing .env would
+# overwrite the value you just exported — that is how Fly ended up with ENOTFOUND hostnames.
+REDIS_URL_FROM_EXPORT="${REDIS_URL}"
+
 # Export every VAR=value from .env for this shell only
 set -a
 # shellcheck disable=SC1090
 source "${ENV_FILE}"
 set +a
+
+export REDIS_URL="${REDIS_URL_FROM_EXPORT}"
 
 FLY_API="${FLY_APP_HOST:-https://bux-poker.fly.dev}"
 FLY_API="${FLY_API%/}"
