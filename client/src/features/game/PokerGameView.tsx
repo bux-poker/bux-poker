@@ -96,7 +96,8 @@ export function PokerGameView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [gameState, setGameState] = useState<GameStatePayload | null>(null);
-  const [prevGameState, setPrevGameState] = useState<GameStatePayload | null>(null);
+  /** Previous game-state snapshot for sound logic (must not use setState inside setState). */
+  const prevGameStateRef = useRef<GameStatePayload | null>(null);
   const [connecting, setConnecting] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [turnTimer, setTurnTimer] = useState<{ userId: string; expiresAt: number; duration: number } | null>(null);
@@ -302,14 +303,13 @@ export function PokerGameView() {
           return; // Polling was stopped, don't refetch
         }
         
-        console.log('[BLIND TIMER] Refetching tournament data to check for startedAt...');
         refetchTournament({ silent: true }).then(() => {
           // After refetch, the tournament object will be updated and this useEffect will re-run
           // If tournament.startedAt is now set, the interval will be cleared
         }).catch((err) => {
           // Silently ignore refetch errors (they're expected during normal operation)
           if (err.name !== 'CanceledError' && err.code !== 'ERR_CANCELED' && err.message !== 'Request aborted') {
-            console.error('[BLIND TIMER] Error refetching tournament:', err);
+            console.error('[tournament] poll refetch error:', err);
           }
         });
       }, 5000); // Increased to 5 seconds to reduce polling frequency
@@ -341,7 +341,6 @@ export function PokerGameView() {
     // Listen for tournament-started socket event to refetch immediately
     const handleTournamentStarted = (data: { tournamentId: string; startedAt: string }) => {
       if (data.tournamentId === latestGameTournamentIdRef.current || data.tournamentId === latestTournamentIdRef.current) {
-        console.log('[BLIND TIMER] Tournament started event received, refetching tournament data...');
         pollingActiveRef.current = false;
         refetchTournament();
         setTournamentCountdown(null);
@@ -464,10 +463,7 @@ export function PokerGameView() {
         setBlindWaitMessage(null);
       }
 
-      setGameState((prev) => {
-        if (prev) setPrevGameState(prev);
-        return normalized;
-      });
+      setGameState(normalized);
       // Clear turn timer when it's no longer this player's turn so we don't show timer after they acted
       const currentTurn = (normalized as { currentTurnUserId?: string | null }).currentTurnUserId ?? null;
       setTurnTimer((prev) => {
@@ -835,7 +831,12 @@ export function PokerGameView() {
 
   // Sound effects: Play sounds when game state changes
   useEffect(() => {
-    if (!gameState || !prevGameState || !user) return;
+    if (!gameState || !user) return;
+    const prevGameState = prevGameStateRef.current;
+    if (!prevGameState) {
+      prevGameStateRef.current = gameState;
+      return;
+    }
 
     // 1. Turn sound: Play when it becomes my turn (string compare for id type consistency)
     const prevWasMyTurn = String(prevGameState.currentTurnUserId ?? "") === String(user.id ?? "");
@@ -971,8 +972,10 @@ export function PokerGameView() {
         soundManager.play('pot-win');
       }
     }
+
+    prevGameStateRef.current = gameState;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState, user]); // Only run when gameState changes, prevGameState is captured in closure
+  }, [gameState, user]);
 
   // If consolidation-waiting arrived during an active hand, surface it immediately after hand ends.
   useEffect(() => {
