@@ -22,6 +22,7 @@ export function usePokerTableActionOverlays(
     Record<string, { action: string; timestamp: number }>
   >({});
   const lastSeenActionKeyRef = useRef<Record<string, string>>({});
+  const wasLikelyNewHandRef = useRef(false);
 
   useEffect(() => {
     setActionOverlays((prev) => {
@@ -130,10 +131,15 @@ export function usePokerTableActionOverlays(
       currentBet === 0 &&
       (communityCards?.length || 0) === 0 &&
       players.every((p) => (p.contribution || 0) === 0);
-    if (!isLikelyNewHand) return;
+    if (!isLikelyNewHand) {
+      wasLikelyNewHandRef.current = false;
+      return;
+    }
+    // Only fire once per transition into "new hand" state; otherwise we keep resetting
+    // lastSeenAction keys every render and can bounce overlays forever.
+    if (wasLikelyNewHandRef.current) return;
+    wasLikelyNewHandRef.current = true;
     lastSeenActionKeyRef.current = {};
-    // `players` is a new array reference on most socket ticks; always calling setActionOverlays({})
-    // retriggered this effect and caused "Maximum update depth exceeded" while preflop idle.
     setActionOverlays((prev) => (Object.keys(prev).length === 0 ? prev : {}));
   }, [showdownActive, currentBet, communityCards, players]);
 
