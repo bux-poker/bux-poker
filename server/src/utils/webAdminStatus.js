@@ -16,7 +16,7 @@ function redisAdminKey(discordId, serverCount) {
 
 async function redisAdminGet(discordId, serverCount) {
   try {
-    if (!redisClient.isOpen) return null;
+    if (!redisClient?.isOpen) return null;
     const raw = await redisClient.get(redisAdminKey(discordId, serverCount));
     if (raw === "1") return true;
     if (raw === "0") return false;
@@ -29,7 +29,7 @@ async function redisAdminGet(discordId, serverCount) {
 
 async function redisAdminSet(discordId, serverCount, isAdmin, ttlMs) {
   try {
-    if (!redisClient.isOpen) return;
+    if (!redisClient?.isOpen) return;
     const sec = Math.max(1, Math.ceil(ttlMs / 1000));
     await redisClient.set(redisAdminKey(discordId, serverCount), isAdmin ? "1" : "0", {
       EX: sec,
