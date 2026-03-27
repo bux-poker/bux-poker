@@ -92,6 +92,35 @@ function computePreActionForGameState(
   return null;
 }
 
+function gameStateSignature(gs: GameStatePayload): string {
+  const playersSig = (gs.players || [])
+    .map((p) => {
+      const pid = String(p.id ?? p.userId ?? "");
+      return [
+        pid,
+        String(p.status ?? ""),
+        String(p.chips ?? 0),
+        String(p.contribution ?? 0),
+        String(p.lastAction ?? ""),
+        String(p.lastActionSeq ?? 0),
+      ].join(":");
+    })
+    .sort()
+    .join("|");
+
+  return [
+    String(gs.id ?? ""),
+    String(gs.tournamentId ?? ""),
+    String(gs.street ?? ""),
+    String(gs.currentBet ?? 0),
+    String(gs.pot ?? 0),
+    String(gs.currentTurnUserId ?? ""),
+    String(gs.showdownActive ?? false),
+    String(gs.communityCards ?? ""),
+    playersSig,
+  ].join("||");
+}
+
 export function PokerGameView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -463,7 +492,13 @@ export function PokerGameView() {
       }
 
       setGameState((prev) => {
-        if (prev) setPrevGameState(prev);
+        if (prev) {
+          // Prevent redundant updates when server re-sends an equivalent snapshot.
+          if (gameStateSignature(prev) === gameStateSignature(normalized)) {
+            return prev;
+          }
+          setPrevGameState(prev);
+        }
         return normalized;
       });
       // Clear turn timer when it's no longer this player's turn so we don't show timer after they acted
