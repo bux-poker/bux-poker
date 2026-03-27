@@ -398,20 +398,27 @@ export class TournamentService {
     try {
       return await prisma.tournamentRegistration.create({
         data: {
-        tournamentId,
-        userId,
-        status: "CONFIRMED"
+          tournamentId,
+          userId,
+          status: "CONFIRMED"
         }
       });
     } catch (error) {
-      // Handle race condition where registration was created between check and create
-      if (error.code === 'P2002' && error.meta?.target?.includes('tournamentId_userId')) {
-        // Registration was created by another request, return it
-        return prisma.tournamentRegistration.findUnique({
+      // Prisma meta.target can be either "tournamentId_userId" or ["tournamentId","userId"].
+      const target = error?.meta?.target;
+      const targetText = Array.isArray(target) ? target.join(",") : String(target || "");
+      const isTournamentUserUnique =
+        error?.code === "P2002" &&
+        (targetText.includes("tournamentId_userId") ||
+          (targetText.includes("tournamentId") && targetText.includes("userId")));
+
+      if (isTournamentUserUnique) {
+        const existingAfterRace = await prisma.tournamentRegistration.findUnique({
           where: {
             tournamentId_userId: { tournamentId, userId }
-      }
-    });
+          }
+        });
+        if (existingAfterRace) return existingAfterRace;
       }
       throw error;
     }

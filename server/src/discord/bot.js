@@ -425,20 +425,25 @@ async function handleRegisterButton(interaction, tournamentId) {
       return;
     }
 
-    // Register user using upsert to handle race conditions
+    // Register user (race-safe)
     try {
-    await prisma.tournamentRegistration.create({
-      data: {
-        tournamentId: tournamentId,
-        userId: user.id,
-        status: 'CONFIRMED',
-      },
-    });
+      await prisma.tournamentRegistration.create({
+        data: {
+          tournamentId: tournamentId,
+          userId: user.id,
+          status: 'CONFIRMED',
+        },
+      });
     } catch (error) {
-      // Handle race condition where registration was created between check and create
-      if (error.code === 'P2002' && error.meta?.target?.includes('tournamentId_userId')) {
-        // Registration was created by another request, just return success
-        // The embed update below will handle the state correctly
+      // Prisma meta.target can be "tournamentId_userId" or ["tournamentId","userId"].
+      const target = error?.meta?.target;
+      const targetText = Array.isArray(target) ? target.join(',') : String(target || '');
+      const isTournamentUserUnique =
+        error?.code === 'P2002' &&
+        (targetText.includes('tournamentId_userId') ||
+          (targetText.includes('tournamentId') && targetText.includes('userId')));
+
+      if (isTournamentUserUnique) {
         console.log('[DISCORD BOT] Race condition: registration already exists, continuing...');
       } else {
         throw error; // Re-throw if it's a different error

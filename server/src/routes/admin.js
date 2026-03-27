@@ -828,24 +828,55 @@ router.post("/tournaments/:id/add-test-players", async (req, res, next) => {
         }
         createdRegistrations.push(existingRegistration);
       } else {
-        // Create new registration with CONFIRMED status (ready to play)
-        const registration = await prisma.tournamentRegistration.create({
-          data: {
-            tournamentId: tournament.id,
-            userId: testUser.id,
-            status: "CONFIRMED",
-          },
-          include: {
-            user: {
-              select: {
-                id: true,
-                username: true,
-                avatarUrl: true,
+        // Create new registration with CONFIRMED status (ready to play).
+        // Handle race if another request registers the same user concurrently.
+        try {
+          const registration = await prisma.tournamentRegistration.create({
+            data: {
+              tournamentId: tournament.id,
+              userId: testUser.id,
+              status: "CONFIRMED",
+            },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  avatarUrl: true,
+                },
               },
             },
-          },
-        });
-        createdRegistrations.push(registration);
+          });
+          createdRegistrations.push(registration);
+        } catch (error) {
+          const target = error?.meta?.target;
+          const targetText = Array.isArray(target) ? target.join(",") : String(target || "");
+          const isTournamentUserUnique =
+            error?.code === "P2002" &&
+            (targetText.includes("tournamentId_userId") ||
+              (targetText.includes("tournamentId") && targetText.includes("userId")));
+
+          if (!isTournamentUserUnique) throw error;
+
+          const existingAfterRace = await prisma.tournamentRegistration.findUnique({
+            where: {
+              tournamentId_userId: {
+                tournamentId: tournament.id,
+                userId: testUser.id,
+              },
+            },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  avatarUrl: true,
+                },
+              },
+            },
+          });
+          if (existingAfterRace) createdRegistrations.push(existingAfterRace);
+        }
       }
     }
 
