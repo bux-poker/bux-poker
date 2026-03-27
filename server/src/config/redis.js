@@ -84,8 +84,10 @@ const getRedisConfig = () => {
         : { url: process.env.REDIS_URL };
 
     // Fly → Upstash: prefer IPv4; avoids flaky TLS/handshake "Socket closed unexpectedly" on some paths.
+    // Upstash often closes idle TCP — node-redis only sends PING if pingInterval is set (default: off).
     return {
       ...base,
+      pingInterval: 30_000,
       socket: {
         family: 4,
         connectTimeout: 15_000,
@@ -119,12 +121,8 @@ redisClient.on("error", (err) => {
   }
 });
 
-redisClient.on("connect", () => {
-  console.log("[REDIS] Connected to Redis");
-});
-
 redisClient.on("ready", () => {
-  console.log("[REDIS] Ready to accept commands");
+  console.log("[REDIS] Ready (commands accepted)");
 });
 
 redisClient.on("end", () => {
@@ -134,7 +132,6 @@ redisClient.on("end", () => {
 async function connectRedis() {
   try {
     await redisClient.connect();
-    console.log("[REDIS] Successfully connected to Redis");
   } catch (error) {
     console.error("[REDIS] Failed to connect:", error);
   }
