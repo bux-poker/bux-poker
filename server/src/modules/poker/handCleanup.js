@@ -4,6 +4,7 @@
  */
 import { prisma } from "../../config/database.js";
 import { tableState } from "./tableState.js";
+import { persistAllPlayerStacksFromHandState } from "./persistHandStacks.js";
 import { resetPlayerRowIfNotEliminated } from "./safeHandCleanupDb.js";
 import { isEligibleToDealNextHand } from "./playerEligibility.js";
 
@@ -21,38 +22,46 @@ export function cleanupHandAndStartNext(gameId, io, state, startHandForGame, del
       .catch((err) => console.error("[POKER] handCleanup: failed to zero pot:", err?.message));
 
     setTimeout(() => {
-    const savedPlayers = [...state.players];
-    tableState.delete(gameId);
-
-    const resetPromises = savedPlayers
-      .filter((p) => p.status !== "ELIMINATED" && p.chips > 0)
-      .map((p) =>
-        resetPlayerRowIfNotEliminated(p.id).catch((err) => {
-          console.error(`[POKER] Error resetting player ${p.id} in hand cleanup:`, err?.message);
-        })
-      );
-
-    Promise.all(resetPromises).then(async () => {
-      const gameForNext = await prisma.game
-        .findUnique({
-          where: { id: gameId },
-          include: { players: { include: { user: true } }, tournament: true },
-        })
-        .catch(() => null);
-
-      if (
-        gameForNext &&
-        gameForNext.players.filter(isEligibleToDealNextHand).length >= 2 &&
-        io
-      ) {
+      void (async () => {
         try {
-          await startHandForGame(gameId, io);
-          console.log(`[POKER] Started next hand after hand-already-ended cleanup for game ${gameId}`);
+          await persistAllPlayerStacksFromHandState(state, "[POKER] handCleanup");
         } catch (err) {
-          console.error("[POKER] Error starting new hand after hand-already-ended cleanup:", err?.message);
+          console.error("[POKER] handCleanup: persist stacks failed:", err?.message);
         }
-      }
-    });
-  }, delayMs);
+
+        const savedPlayers = [...state.players];
+        tableState.delete(gameId);
+
+        const resetPromises = savedPlayers
+          .filter((p) => p.status !== "ELIMINATED" && p.chips > 0)
+          .map((p) =>
+            resetPlayerRowIfNotEliminated(p.id).catch((err) => {
+              console.error(`[POKER] Error resetting player ${p.id} in hand cleanup:`, err?.message);
+            })
+          );
+
+        await Promise.all(resetPromises);
+
+        const gameForNext = await prisma.game
+          .findUnique({
+            where: { id: gameId },
+            include: { players: { include: { user: true } }, tournament: true },
+          })
+          .catch(() => null);
+
+        if (
+          gameForNext &&
+          gameForNext.players.filter(isEligibleToDealNextHand).length >= 2 &&
+          io
+        ) {
+          try {
+            await startHandForGame(gameId, io);
+            console.log(`[POKER] Started next hand after hand-already-ended cleanup for game ${gameId}`);
+          } catch (err) {
+            console.error("[POKER] Error starting new hand after hand-already-ended cleanup:", err?.message);
+          }
+        }
+      })();
+    }, delayMs);
   })();
 }

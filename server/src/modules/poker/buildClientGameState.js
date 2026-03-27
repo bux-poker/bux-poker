@@ -137,11 +137,19 @@ export function buildClientGameState(game, state, viewerUserId) {
     ? [...state.players]
     : [...(game.players || [])];
   if (state?.players?.length && game.players?.length) {
-    const seen = new Set(playersForDisplay.map((p) => p.id));
+    const seenIds = new Set(playersForDisplay.map((p) => p.id));
+    const seenUserIds = new Set(
+      playersForDisplay
+        .map((p) => normalizeUserId(p.userId))
+        .filter((u) => u != null && u !== "")
+    );
     for (const gp of game.players) {
-      if (gp.status === "ELIMINATED" || seen.has(gp.id)) continue;
+      if (gp.status === "ELIMINATED" || seenIds.has(gp.id)) continue;
+      const uid = normalizeUserId(gp.userId);
+      if (uid && seenUserIds.has(uid)) continue;
       playersForDisplay.push(gp);
-      seen.add(gp.id);
+      seenIds.add(gp.id);
+      if (uid) seenUserIds.add(uid);
     }
     playersForDisplay.sort(
       (a, b) => (a.seatNumber ?? 0) - (b.seatNumber ?? 0)
@@ -187,15 +195,23 @@ export function buildClientGameState(game, state, viewerUserId) {
         const hide =
           parsed &&
           shouldHideHoleCardsFromViewer(p, viewerUserId, optionalRevealPhase);
-        // Seats merged from DB mid-hand (e.g. just reseated) are not in this hand — strip stale
-        // lastAction/ALL_IN from the previous table/hand so we do not show "ALL IN" on 0-chip waiters.
+        // Seats merged from DB mid-hand are not in this hand — strip stale lastAction/ALL_IN.
+        // Never coerce real ELIMINATED (or other truth from DB) into ACTIVE; that looked like "resurrections".
+        const statusForWaiter =
+          inCurrentHand
+            ? p.status
+            : p.status === "ELIMINATED"
+              ? "ELIMINATED"
+              : p.status === "FOLDED"
+                ? "ACTIVE"
+                : p.status || "ACTIVE";
         return {
           id: p.id,
           userId: p.userId,
           name: p.user?.username || "Player",
           chips: p.chips,
           seatNumber: p.seatNumber,
-          status: inCurrentHand ? p.status : "ACTIVE",
+          status: statusForWaiter,
           avatarUrl: p.user?.avatarUrl || null,
           lastAction: inCurrentHand ? p.lastAction || null : null,
           lastActionSeq: inCurrentHand ? p.lastActionSeq || 0 : 0,
