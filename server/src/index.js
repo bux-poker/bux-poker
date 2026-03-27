@@ -1,15 +1,8 @@
 import dotenv from "dotenv";
 import { app, server, io, PORT } from "./config/server.js";
-import { registerSocketHandlers } from "./modules/socket-handlers/index.js";
-import {
-  ensureDiscordBotOnlineLoop,
-  isDiscordBotLoopEnabled,
-} from "./discord/botLoop.js";
 import { connectRedis } from "./config/redis.js";
 
 dotenv.config();
-
-registerSocketHandlers(io);
 
 async function listenFirst() {
   const host = process.env.LISTEN_HOST || "0.0.0.0";
@@ -31,6 +24,9 @@ async function listenFirst() {
     });
   }
 
+  const { ensureDiscordBotOnlineLoop, isDiscordBotLoopEnabled } = await import(
+    "./discord/botLoop.js"
+  );
   if (isDiscordBotLoopEnabled()) {
     void ensureDiscordBotOnlineLoop();
   } else {
@@ -69,6 +65,8 @@ async function startBackgroundPolls() {
 
 async function bootstrap() {
   await listenFirst();
+  const { registerSocketHandlers } = await import("./modules/socket-handlers/index.js");
+  registerSocketHandlers(io);
   try {
     await startBackgroundPolls();
   } catch (err) {

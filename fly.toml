@@ -9,6 +9,8 @@ primary_region = "ams"
 [env]
   NODE_ENV = "production"
   PORT = "8080"
+  # Explicit bind for Fly proxy checks (avoid any host default ambiguity during deploy).
+  LISTEN_HOST = "0.0.0.0"
 
 # Run Prisma once per deploy; machine boot only starts Node (fast bind on :8080 for fly-proxy).
 # ha=false: poker uses in-memory tableState; Fly's default (ha=true) creates 2 machines and breaks games.
