@@ -1,9 +1,11 @@
 import { prisma } from "../../config/database.js";
+import { tableState } from "../../modules/poker/tableState.js";
 import { awardStalePotAndZeroGame } from "./stalePotRecovery.js";
 import { tryAdvanceBlindsIfDue } from "./blindLevels.js";
 import { isGameConsolidationWaiting } from "./consolidateTables.js";
 
-const STUCK_THRESHOLD_MS = 45000;
+/** Slightly above human turn timer (20s) so recovery runs if auto-action path failed. */
+const STUCK_THRESHOLD_MS = 23000;
 const IDLE_POLL_INTERVAL_MS = 15000;
 
 let idleTablesPollInterval = null;
@@ -104,6 +106,10 @@ export function startIdleTablesPoll(engine) {
           // but a race/desync made hasActiveHand false briefly, or ordering ran recovery before
           // checking hand — nuking chips and confusing turn order for real players.
           if ((game.pot ?? 0) > 0 && !hasActiveHand(game.id)) {
+            if (!tableState.has(game.id)) {
+              // Another Fly machine may hold in-memory state for this game; do not touch DB pot here.
+              continue;
+            }
             if (isGameConsolidationWaiting(game.id)) {
               console.log(
                 `[TOURNAMENT] Skipping stale-pot recovery for game ${game.id} — consolidation wait active for this table`

@@ -8,10 +8,19 @@ import { handleTestPlayerAction } from "./testPlayers.js";
 import { postDealerMessage } from "./dealerMessages.js";
 import { prisma } from "../../config/database.js";
 import { normalizeUserId } from "./normalizeUserId.js";
+import { isTournamentGameTerminal } from "./tournamentGameGuard.js";
 
 export function startTurnTimer(gameId, userId, io) {
+  void startTurnTimerAsync(gameId, userId, io);
+}
+
+async function startTurnTimerAsync(gameId, userId, io) {
   const state = tableState.get(gameId);
   if (!state) return;
+
+  if (await isTournamentGameTerminal(gameId)) {
+    return;
+  }
 
   const existingTimer = turnTimers.get(gameId);
   if (existingTimer) {
@@ -202,6 +211,11 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
       return;
     }
 
+    if (await isTournamentGameTerminal(gameId)) {
+      turnTimers.delete(gameId);
+      return;
+    }
+
     // Release this turn's slot before actions / moveToNextPlayer (which starts a new timer).
     turnTimers.delete(gameId);
 
@@ -272,6 +286,17 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
       `[POKER] turn-timer expiry auto-action: ${canCheck ? "CHECK" : "FOLD"} for ${playerName || userId} (currentBet=${currentBet}, contribution=${myContribution})`
     );
 
+    const activePlayerIds = stateAfter.players
+      .filter((p) => p.status !== "FOLDED" && p.status !== "ELIMINATED")
+      .map((p) => p.id);
+    const bettingComplete = stateAfter.bettingRound?.isBettingComplete(
+      activePlayerIds,
+      stateAfter.lastRaiseUserId,
+      stateAfter.currentTurnUserId,
+      stateAfter.players,
+      stateAfter.actedPlayersInRound || new Set()
+    );
+
     const game = await prisma.game.findUnique({
       where: { id: gameId },
       include: {
@@ -284,7 +309,12 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
 
     if (!game) return;
 
-    await moveToNextPlayer(gameId, io);
+    if (bettingComplete) {
+      const { advanceToNextStreet } = await import("./advanceStreet.js");
+      await advanceToNextStreet(gameId, io);
+    } else {
+      await moveToNextPlayer(gameId, io);
+    }
 
     const stateNow = tableState.get(gameId);
     await emitGameStateWithGame(gameId, io, game, stateNow || stateAfter);

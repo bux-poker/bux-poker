@@ -46,10 +46,19 @@ export function hasActiveHand(gameId) {
 
   if (state.showdownActive) return true;
 
-  // A table with fewer than 2 active contenders should not block consolidation (once pot is 0).
   const activeContenders = (state.players || []).filter(
     (p) => p.status !== "FOLDED" && p.status !== "ELIMINATED"
   ).length;
+
+  // Mid-hand with a betting round but missing turn/street in memory (zombie) — still active.
+  if (
+    activeContenders >= 2 &&
+    state.bettingRound &&
+    !state.handEnded
+  ) {
+    return true;
+  }
+
   if (activeContenders < 2) return false;
 
   if (state.currentTurnUserId) return true;

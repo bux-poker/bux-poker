@@ -14,6 +14,24 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Serialize showdown per table — concurrent handleShowdown calls (advanceStreet + moveToNextPlayer + timers) double-award the pot and break chip conservation. */
+const showdownSerializeTail = new Map();
+
+async function runShowdownSerialized(gameId, fn) {
+  const prev = showdownSerializeTail.get(gameId) || Promise.resolve();
+  let resolveDone;
+  const done = new Promise((r) => {
+    resolveDone = r;
+  });
+  showdownSerializeTail.set(gameId, prev.then(() => done));
+  await prev;
+  try {
+    return await fn();
+  } finally {
+    resolveDone();
+  }
+}
+
 /** Dealt into this hand (folded players still have hole cards until cleanup). */
 function hasTwoHoleCards(player) {
   let hc = player.holeCards;
@@ -85,6 +103,12 @@ export function tryAccelerateShowdownCleanup(gameId, io) {
 }
 
 export async function handleShowdownCore(gameId, io, options = {}) {
+  return runShowdownSerialized(gameId, () =>
+    handleShowdownCoreImpl(gameId, io, options)
+  );
+}
+
+async function handleShowdownCoreImpl(gameId, io, options = {}) {
   const state = tableState.get(gameId);
   if (!state) return;
 

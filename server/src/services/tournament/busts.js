@@ -1,5 +1,5 @@
 import { prisma } from "../../config/database.js";
-import { auditChipConservation, reconcileChipConservationOnCompletion } from "./chipAudit.js";
+import { auditChipConservation } from "./chipAudit.js";
 
 const _onPlayersBustLocks = new Map();
 const _lastConsolidateAt = new Map(); // tournamentId -> ms
@@ -143,7 +143,6 @@ export async function doOnPlayersBust(tournamentId, playerIds, deps) {
         where: { id: tournamentId },
         data: { status: "COMPLETED" }
       });
-      await reconcileChipConservationOnCompletion(tournamentId);
       await auditChipConservation(tournamentId);
       try {
         const tournament = await prisma.tournament.findUnique({

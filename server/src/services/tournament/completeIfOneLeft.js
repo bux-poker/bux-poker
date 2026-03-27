@@ -1,5 +1,5 @@
 import { prisma } from "../../config/database.js";
-import { auditChipConservation, reconcileChipConservationOnCompletion } from "./chipAudit.js";
+import { auditChipConservation } from "./chipAudit.js";
 import { clearAllStateForGames } from "../../modules/poker/tableState.js";
 
 /**
@@ -46,7 +46,6 @@ export async function completeTournamentIfOneLeft(tournamentId) {
   });
   clearAllStateForGames(gameRows.map((r) => r.id));
 
-  await reconcileChipConservationOnCompletion(tournamentId);
   await auditChipConservation(tournamentId);
 
   try {
