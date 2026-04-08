@@ -104,10 +104,14 @@ export async function advanceToNextStreet(gameId, io) {
   // One player left (everyone else folded) – award pot and start next hand. Must run BEFORE shouldAutoShowdown,
   // otherwise we hit runCinematicAllInShowdown which returns when activePlayers.length < 2 and the pot is never awarded.
   if (activePlayers.length === 1 && !state.handEnded) {
-    const { shouldBlockFoldWinPotAward } = await import("./foldWinGuard.js");
+    const {
+      persistBlockedFoldWinPotToDatabase,
+      shouldBlockFoldWinPotAward,
+    } = await import("./foldWinGuard.js");
     const winner = activePlayers[0];
     const totalPot = state.pot;
     if (await shouldBlockFoldWinPotAward(gameId)) {
+      await persistBlockedFoldWinPotToDatabase(gameId, state);
       tableState.delete(gameId);
       return;
     }

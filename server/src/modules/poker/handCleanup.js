@@ -17,10 +17,6 @@ import { isEligibleToDealNextHand } from "./playerEligibility.js";
  */
 export function cleanupHandAndStartNext(gameId, io, state, startHandForGame, delayMs = 500) {
   (async () => {
-    await prisma.game
-      .update({ where: { id: gameId }, data: { pot: 0 } })
-      .catch((err) => console.error("[POKER] handCleanup: failed to zero pot:", err?.message));
-
     setTimeout(() => {
       void (async () => {
         try {
@@ -28,6 +24,12 @@ export function cleanupHandAndStartNext(gameId, io, state, startHandForGame, del
         } catch (err) {
           console.error("[POKER] handCleanup: persist stacks failed:", err?.message);
         }
+
+        await prisma.game
+          .update({ where: { id: gameId }, data: { pot: 0 } })
+          .catch((err) =>
+            console.error("[POKER] handCleanup: failed to zero pot:", err?.message)
+          );
 
         const savedPlayers = [...state.players];
         tableState.delete(gameId);

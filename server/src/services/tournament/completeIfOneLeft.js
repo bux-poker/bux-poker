@@ -31,13 +31,33 @@ export async function completeTournamentIfOneLeft(tournamentId) {
   });
   if (verifyCount !== 1) return false;
 
-  await prisma.player.update({
-    where: { id: winner.id },
-    data: { finishingPlace: 1 }
-  });
-  await prisma.tournament.update({
-    where: { id: tournamentId },
-    data: { status: "COMPLETED" }
+  await prisma.$transaction(async (tx) => {
+    const gamesWithPot = await tx.game.findMany({
+      where: { tournamentId },
+      select: { pot: true },
+    });
+    const potSum = gamesWithPot.reduce((s, g) => s + (g.pot ?? 0), 0);
+
+    await tx.player.update({
+      where: { id: winner.id },
+      data: {
+        finishingPlace: 1,
+        ...(potSum > 0 ? { chips: { increment: potSum } } : {}),
+      },
+    });
+    await tx.tournament.update({
+      where: { id: tournamentId },
+      data: { status: "COMPLETED" },
+    });
+    if (potSum > 0) {
+      await tx.game.updateMany({
+        where: { tournamentId },
+        data: { pot: 0 },
+      });
+      console.log(
+        `[TOURNAMENT] Credited ${potSum} from lingering game pot(s) to winner before completion (${tournamentId})`
+      );
+    }
   });
 
   const gameRows = await prisma.game.findMany({

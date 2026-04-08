@@ -78,7 +78,10 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
             cleanupHandAndStartNext(gameId, io, state, startHandForGame);
             return;
           }
-          const { shouldBlockFoldWinPotAward } = await import("../../poker/foldWinGuard.js");
+          const {
+            persistBlockedFoldWinPotToDatabase,
+            shouldBlockFoldWinPotAward,
+          } = await import("../../poker/foldWinGuard.js");
           const winner = activePlayersAfterAction[0];
           const collectedPot = state.bettingRound.getTotalPot();
           const totalPot = state.pot + collectedPot;
@@ -87,6 +90,7 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
           const isUncalledBet = lastRaiserUserId && lastRaiserUserId === winner.userId && currentBet > 0;
 
           if (await shouldBlockFoldWinPotAward(gameId)) {
+            await persistBlockedFoldWinPotToDatabase(gameId, state);
             tableState.delete(gameId);
             return;
           }

@@ -66,6 +66,12 @@ export function startIdleTablesPoll(engine) {
         for (const game of games) {
           if (game.players.length === 0) {
             if (hasActiveHand(game.id)) continue;
+            if ((game.pot ?? 0) > 0) {
+              console.warn(
+                `[TOURNAMENT] Empty table ${game.tableNumber} (game ${game.id}) has DB pot=${game.pot}; not marking COMPLETED (chip conservation)`
+              );
+              continue;
+            }
             await prisma.game.update({ where: { id: game.id }, data: { status: "COMPLETED", pot: 0 } });
             console.log(`[TOURNAMENT] Closed empty table ${game.tableNumber} (game ${game.id})`);
             continue;
