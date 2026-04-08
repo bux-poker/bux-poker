@@ -227,6 +227,28 @@ export function isTournamentConsolidationWaiting(tournamentId) {
   return !!s && s.size > 0;
 }
 
+/**
+ * How many tables share this consolidation-wait slice (1 = only this table; 2+ = balance merge).
+ * Used for accurate dealer / UI copy.
+ */
+export function getConsolidationWaitPeersCount(gameId) {
+  if (!gameId) return 0;
+  for (const s of _consolidationWaitByTournament.values()) {
+    if (s.has(gameId)) return s.size;
+  }
+  return 0;
+}
+
+const CONSOLIDATION_WAIT_MSG_SINGLE =
+  "Finish this hand before players are moved for tournament reseating.";
+const CONSOLIDATION_WAIT_MSG_MULTI =
+  "Table balance: waiting for other table(s) in this merge to finish their hands — yours may already be done. Please wait.";
+
+export function consolidationWaitMessageForGame(gameId) {
+  const n = getConsolidationWaitPeersCount(gameId);
+  return n <= 1 ? CONSOLIDATION_WAIT_MSG_SINGLE : CONSOLIDATION_WAIT_MSG_MULTI;
+}
+
 /** Upper cap per consolidation run (avoid huge tx bursts); below we use estimated need. */
 const MAX_BALANCE_MOVES_CAP = 24;
 
@@ -330,9 +352,12 @@ async function emitConsolidationWaitToGames(gameIds, tournamentId, io) {
   if (!io) return;
   const { emitGameState } = await import("../../modules/poker/emitGameState.js");
   const { tableState } = await import("../../modules/poker/tableState.js");
-  for (const gid of gameIds) {
+  const ids = [...new Set(gameIds)].filter(Boolean);
+  const waitMessage =
+    ids.length <= 1 ? CONSOLIDATION_WAIT_MSG_SINGLE : CONSOLIDATION_WAIT_MSG_MULTI;
+  for (const gid of ids) {
     io.to(`game:${gid}`).emit("consolidation-waiting", {
-      message: "Waiting for this table's hand to finish before reseating...",
+      message: waitMessage,
       tournamentId,
     });
     try {
