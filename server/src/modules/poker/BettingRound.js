@@ -3,6 +3,13 @@
 
 import { normalizeUserId } from "./normalizeUserId.js";
 
+/** True if the player cannot bet further this hand (turn order excludes ALL_IN even if chips are stale > 0). */
+function isEffectivelyAllIn(player) {
+  if (!player) return false;
+  if (player.status === "ALL_IN") return true;
+  return (player.chips ?? 0) === 0;
+}
+
 export class BettingRound {
   constructor({ smallBlind, bigBlind, startingPot = 0 }) {
     this.smallBlind = smallBlind;
@@ -90,9 +97,9 @@ export class BettingRound {
   areAllPlayersAllIn(activePlayerIds, allPlayers) {
     if (activePlayerIds.length === 0) return false;
     
-    return activePlayerIds.every(id => {
-      const player = allPlayers.find(p => p.id === id);
-      return player && player.chips === 0;
+    return activePlayerIds.every((id) => {
+      const player = allPlayers.find((p) => p.id === id);
+      return player && isEffectivelyAllIn(player);
     });
   }
 
@@ -112,13 +119,13 @@ export class BettingRound {
     if (activePlayerIds.length <= 1) return true; // Only one or zero active players
     
     // Get contributions for all active players
-    const contributions = activePlayerIds.map(id => {
-      const player = allPlayers.find(p => p.id === id);
+    const contributions = activePlayerIds.map((id) => {
+      const player = allPlayers.find((p) => p.id === id);
       return {
         id,
         contribution: this.getPlayerContribution(id),
         chips: player?.chips || 0,
-        isAllIn: (player?.chips || 0) === 0
+        isAllIn: isEffectivelyAllIn(player),
       };
     });
     const maxContribution = Math.max(...contributions.map(c => c.contribution));
@@ -169,11 +176,11 @@ export class BettingRound {
       const idsToCheck = presentPlayerIds
         ? activePlayerIds.filter(id => presentPlayerIds.has(id))
         : activePlayerIds;
-      const activePlayerInfo = idsToCheck.map(id => {
-        const player = allPlayers.find(p => p.id === id);
+      const activePlayerInfo = idsToCheck.map((id) => {
+        const player = allPlayers.find((p) => p.id === id);
         return {
           userId: player?.userId || id,
-          isAllIn: (player?.chips || 0) === 0
+          isAllIn: isEffectivelyAllIn(player),
         };
       });
       
