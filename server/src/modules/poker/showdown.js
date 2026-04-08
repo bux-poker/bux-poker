@@ -509,33 +509,42 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
       })
       .catch(() => null);
 
-    // Schedule cleanup BEFORE onPlayerBust: bust can trigger consolidateTables which waits for
-    // all hands to finish. If we hadn't scheduled this yet, this table would still have state
-    // and we'd never return to schedule it – deadlock.
+    // Schedule cleanup BEFORE bust/consolidation work. Awaiting onPlayerBust/onPlayersBust used to
+    // block here while consolidateTables → waitForGameIdsToFinishHands polls other tables for
+    // minutes: that froze showdown (serialized queue), starved the idle poll if anything awaited
+    // the same chain, and matched Fly logs (no [SHOWDOWN] lines after "going to showdown").
     scheduleShowdownTableCleanup(gameId, io, cleanupDelayMs);
 
     if (game?.tournament?.id) {
-      const { TournamentEngine } = await import("../../services/TournamentEngine.js");
-      const tournamentEngine = new TournamentEngine();
+      const tournamentId = game.tournament.id;
       const busted = state.players.filter((p) => p.chips <= 0 && p.status !== "ELIMINATED");
-      for (const p of busted) {
-        // onPlayerBust → markPlayerBust must run BEFORE prisma sets ELIMINATED; otherwise
-        // markPlayerBust returns early and never writes finishingPlace (lobby shows wrong rank).
-        await tournamentEngine.onPlayerBust(game.tournament.id, p.id).catch((err) => {
-          console.error("[SHOWDOWN] Error notifying tournament of player bust:", err);
-        });
-        p.status = "ELIMINATED";
-        await prisma.player
-          .update({ where: { id: p.id }, data: { status: "ELIMINATED", chips: 0 } })
-          .catch((err) => {
-            if (err?.code === "P2025") return;
-            console.error(`[SHOWDOWN] Error marking busted player ${p.id}:`, err);
-          });
-      }
       if (busted.length > 0) {
-        io.emit("tournament_updated", { tournamentId: game.tournament.id });
+        const { TournamentEngine } = await import("../../services/TournamentEngine.js");
+        const tournamentEngine = new TournamentEngine();
+        for (const p of busted) {
+          p.status = "ELIMINATED";
+        }
+        console.log(
+          `[SHOWDOWN] game ${gameId}: scheduling async onPlayersBust (${busted.length} player(s)) + consolidation — not blocking showdown completion`
+        );
+        void tournamentEngine
+          .onPlayersBust(
+            tournamentId,
+            busted.map((p) => p.id)
+          )
+          .then(async () => {
+            io.emit("tournament_updated", { tournamentId });
+            await emitIfTournamentCompleted(tournamentId, io);
+          })
+          .catch((err) => {
+            console.error(
+              "[SHOWDOWN] Async onPlayersBust/consolidate after showdown failed:",
+              err?.message || err
+            );
+          });
+      } else {
+        await emitIfTournamentCompleted(tournamentId, io);
       }
-      await emitIfTournamentCompleted(game.tournament.id, io);
     }
   }
 }
