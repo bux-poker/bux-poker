@@ -56,18 +56,39 @@ export async function auditChipConservation(tournamentId) {
     );
   }
 
-  let playerChipsTotal = 0;
-  let gamePotTotal = 0;
+  // Use aggregates so totals match Postgres even if nested `include` omits closed tables/players.
+  const [playerChipAgg, gamePotAgg] = await Promise.all([
+    prisma.player.aggregate({
+      where: { game: { tournamentId } },
+      _sum: { chips: true },
+    }),
+    prisma.game.aggregate({
+      where: { tournamentId },
+      _sum: { pot: true },
+    }),
+  ]);
+  const playerChipsTotal = playerChipAgg._sum.chips ?? 0;
+  const gamePotTotal = gamePotAgg._sum.pot ?? 0;
+  const actualTotal = playerChipsTotal + gamePotTotal;
+
+  let nestedSum = 0;
+  let nestedPots = 0;
   for (const game of tournament.games || []) {
-    gamePotTotal += game.pot ?? 0;
+    nestedPots += game.pot ?? 0;
     for (const p of game.players || []) {
-      playerChipsTotal += p.chips ?? 0;
+      nestedSum += p.chips ?? 0;
     }
   }
-  const actualTotal = playerChipsTotal + gamePotTotal;
-  const activeGames = (tournament.games || []).filter((g) =>
-    hasActiveHand(g.id)
-  );
+  if (nestedSum + nestedPots !== actualTotal) {
+    console.warn(
+      `[TOURNAMENT] Chip audit: nested include sum ${nestedSum + nestedPots} !== aggregate ${actualTotal} for ${tournamentId} — using aggregate (investigate relation payload)`
+    );
+  }
+  const gameRowsForMem = await prisma.game.findMany({
+    where: { tournamentId },
+    select: { id: true },
+  });
+  const activeGames = gameRowsForMem.filter((g) => hasActiveHand(g.id));
   const activeHandCount = activeGames.length;
   let inMemoryPotSum = 0;
   for (const g of activeGames) {

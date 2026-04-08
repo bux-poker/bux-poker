@@ -20,7 +20,17 @@ export async function persistAllPlayerStacksFromHandState(
         prisma.player
           .update({
             where: { id: p.id },
-            data: { chips: Math.max(0, p.chips ?? 0) },
+            data: {
+              chips: (() => {
+                const c = p.chips ?? 0;
+                if (c < 0) {
+                  console.error(
+                    `${logTag} NEGATIVE in-memory chips for player ${p.id} (${c}) — clamping to 0; chip pool may be wrong (investigate showdown/reconcile)`
+                  );
+                }
+                return Math.max(0, c);
+              })(),
+            },
           })
           .catch((err) => {
             if (err?.code === "P2025") return;
