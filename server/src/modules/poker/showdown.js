@@ -14,6 +14,55 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Worst possible showdown rank — loses any real hand; still participates in side-pot math. */
+const INVALID_SHOWDOWN_HAND = Object.freeze({
+  category: "INVALID",
+  strength: -1,
+  bestFive: [],
+});
+
+/** Clockwise seat order starting at the first seat strictly after the button, then wrapping. */
+function orderSeatsClockwiseFromDealer(seatNumbers, dealerSeat) {
+  const u = [...new Set(seatNumbers)].sort((a, b) => a - b);
+  if (u.length === 0) return [];
+  const d = dealerSeat ?? u[0];
+  const after = u.filter((s) => s > d);
+  const wrap = u.filter((s) => s <= d);
+  return [...after, ...wrap];
+}
+
+/** Split `total` across tied winners: equal base, remainder as +1 chips to first seats after button. */
+function distributePotAcrossTiedWinners(total, tiedHandResults, state, totalWon, logLabel) {
+  const n = tiedHandResults.length;
+  if (n === 0 || total <= 0) return;
+  const base = Math.floor(total / n);
+  const extra = total % n;
+  const ordered = orderTiedHandResultsForOddChip(tiedHandResults, state);
+  ordered.forEach((winner, i) => {
+    const amount = base + (i < extra ? 1 : 0);
+    if (amount <= 0) return;
+    const pl = winner.player;
+    const cur = totalWon.get(pl.id) || 0;
+    totalWon.set(pl.id, cur + amount);
+    pl.chips += amount;
+    console.log(
+      `${logLabel} +${amount} chips to ${pl.name || pl.userId} (seat ${pl.seatNumber})`
+    );
+  });
+}
+
+function orderTiedHandResultsForOddChip(tiedResults, state) {
+  if (tiedResults.length <= 1) return [...tiedResults];
+  const seats = tiedResults.map((r) => r.player.seatNumber);
+  const order = orderSeatsClockwiseFromDealer(seats, state.dealerSeat);
+  const rank = new Map(order.map((s, i) => [s, i]));
+  return [...tiedResults].sort(
+    (a, b) =>
+      (rank.get(a.player.seatNumber) ?? 99) -
+      (rank.get(b.player.seatNumber) ?? 99)
+  );
+}
+
 /** Serialize showdown per table — concurrent handleShowdown calls (advanceStreet + moveToNextPlayer + timers) double-award the pot and break chip conservation. */
 const showdownSerializeTail = new Map();
 
@@ -165,10 +214,14 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
         console.warn(
           `[SHOWDOWN] Player ${
             player.name || player.userId
-          } (seat ${player.seatNumber}) has invalid hole cards:`,
+          } (seat ${player.seatNumber}) has invalid hole cards — ranked last (cannot beat any valid hand):`,
           player.holeCards
         );
-        return { player, hand: null, strength: -1 };
+        return {
+          player,
+          hand: { ...INVALID_SHOWDOWN_HAND },
+          strength: INVALID_SHOWDOWN_HAND.strength,
+        };
       }
 
       const sevenCards = [...state.communityCards, ...holeCards];
@@ -184,25 +237,34 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
         }
       );
 
-      const hand = evaluator.evaluateBestHand(sevenCards);
-
-      console.log(
-        `[SHOWDOWN] Player ${
-          player.name || player.userId
-        } (seat ${player.seatNumber}, id: ${
-          player.id
-        }): ${hand.category}, strength=${hand.strength}, bestFive=${JSON.stringify(
-          hand.bestFive
-        )}`
-      );
-
-      return {
-        player,
-        hand,
-        strength: hand.strength,
-      };
-    })
-    .filter((result) => result.hand !== null);
+      try {
+        const hand = evaluator.evaluateBestHand(sevenCards);
+        console.log(
+          `[SHOWDOWN] Player ${
+            player.name || player.userId
+          } (seat ${player.seatNumber}, id: ${
+            player.id
+          }): ${hand.category}, strength=${hand.strength}, bestFive=${JSON.stringify(
+            hand.bestFive
+          )}`
+        );
+        return {
+          player,
+          hand,
+          strength: hand.strength,
+        };
+      } catch (e) {
+        console.error(
+          `[SHOWDOWN] evaluateBestHand failed for ${player.name || player.userId}:`,
+          e?.message || e
+        );
+        return {
+          player,
+          hand: { ...INVALID_SHOWDOWN_HAND },
+          strength: INVALID_SHOWDOWN_HAND.strength,
+        };
+      }
+    });
 
   let totalWon;
   let sidePots = [];
@@ -218,26 +280,12 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
     totalContributions.set(player.id, handContribution + currentContribution);
   });
 
-  if (handResults.length === 0 && activePlayers.length > 0) {
-    console.error(
-      `[SHOWDOWN] No valid hole cards for showdown (game ${gameId}, pot=${state.pot}) — ` +
-        "using equal-strength fallback so the full pot is still awarded."
-    );
-    for (const player of activePlayers) {
-      handResults.push({
-        player,
-        hand: { category: "MUCKED", strength: 0, bestFive: [] },
-        strength: 0,
-      });
-    }
+  if (activePlayers.length === 0 || handResults.length === 0) {
+    console.error(`[SHOWDOWN] Cannot distribute: no active players (game ${gameId})`);
+    return;
   }
 
-  if (handResults.length === 0) {
-    console.error(
-      `[SHOWDOWN] Cannot distribute: no active players with evaluable hands (game ${gameId})`
-    );
-    return;
-  } else {
+  {
     const maxStrength = Math.max(...handResults.map((r) => r.strength));
     const winners = handResults.filter((r) => r.strength === maxStrength);
 
@@ -280,7 +328,7 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
       const contributorCount = Array.from(totalContributions.entries()).filter(
         ([, c]) => c >= currentLevel
       ).length;
-      const eligiblePlayerIds = Array.from(totalContributions.entries())
+      let eligiblePlayerIds = Array.from(totalContributions.entries())
         .filter(
           ([id, contribution]) =>
             contribution >= currentLevel && nonFoldedIds.has(id)
@@ -292,6 +340,9 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
       const potAmount = (currentLevel - previousLevel) * contributorCount;
 
       if (potAmount > 0) {
+        if (eligiblePlayerIds.length === 0 && activePlayers.length > 0) {
+          eligiblePlayerIds = activePlayers.map((p) => p.id);
+        }
         sidePots.push({
           level: currentLevel,
           amount: potAmount,
@@ -333,8 +384,12 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
         );
       }
     } else if (sidePots.length === 0 && actualPot > 0) {
+      const maxContrib = Math.max(
+        0,
+        ...Array.from(totalContributions.values())
+      );
       sidePots.push({
-        level: contributionAmounts[contributionAmounts.length - 1] || 0,
+        level: maxContrib,
         amount: actualPot,
         eligiblePlayerIds: activePlayers.map((p) => p.id),
       });
@@ -345,48 +400,47 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
 
     for (const pot of sidePots) {
       if (pot.amount <= 0) continue;
-      const eligibleHandResults = handResults.filter((r) =>
+      let eligibleHandResults = handResults.filter((r) =>
         pot.eligiblePlayerIds.includes(r.player.id)
       );
-      let potWinners;
-      if (eligibleHandResults.length > 0) {
-        const maxStrength = Math.max(
-          ...eligibleHandResults.map((r) => r.strength)
+      if (eligibleHandResults.length === 0 && pot.eligiblePlayerIds.length > 0) {
+        console.error(
+          `[SHOWDOWN] BUG: side pot level ${pot.level} missing hand rows for eligible IDs — recovering seats from table state (worst rank until fixed)`
         );
-        potWinners = eligibleHandResults.filter(
-          (r) => r.strength === maxStrength
-        );
-      } else {
-        const eligiblePlayers = activePlayers.filter((p) =>
-          pot.eligiblePlayerIds.includes(p.id)
-        );
-        const fallback =
-          eligiblePlayers.length > 0 ? eligiblePlayers : activePlayers;
-        console.warn(
-          `[SHOWDOWN] Side pot ${pot.level}: no evaluated hands for eligible IDs — splitting ${pot.amount} across ${fallback.length} player(s) (chip conservation)`
-        );
-        potWinners = fallback.map((player) => ({ player }));
+        eligibleHandResults = pot.eligiblePlayerIds
+          .map((id) =>
+            state.players.find(
+              (p) =>
+                p.id === id &&
+                p.status !== "FOLDED" &&
+                p.status !== "ELIMINATED"
+            )
+          )
+          .filter(Boolean)
+          .map((player) => ({
+            player,
+            hand: { ...INVALID_SHOWDOWN_HAND },
+            strength: INVALID_SHOWDOWN_HAND.strength,
+          }));
       }
-      const potPerWinner = Math.floor(pot.amount / potWinners.length);
-      const remainder = pot.amount % potWinners.length;
-
-      console.log(
-        `[SHOWDOWN] Side pot ${pot.level}: ${potWinners.length} winner(s) for ${pot.amount} chips`
-      );
-
-      potWinners.forEach((winner, index) => {
-        const amount = potPerWinner + (index === 0 ? remainder : 0);
-        if (amount <= 0) return;
-        const pl = winner.player;
-        const currentWon = totalWon.get(pl.id) || 0;
-        totalWon.set(pl.id, currentWon + amount);
-        pl.chips += amount;
-        console.log(
-          `[SHOWDOWN]   Distributing ${amount} chips to ${
-            pl.name || pl.userId
-          } (seat ${pl.seatNumber}) from side pot level ${pot.level}`
+      if (eligibleHandResults.length === 0) {
+        console.error(
+          `[SHOWDOWN] BUG: side pot level ${pot.level} still has no seat rows — using full showdown field (game ${gameId})`
         );
-      });
+        eligibleHandResults = [...handResults];
+      }
+      const maxS = Math.max(...eligibleHandResults.map((r) => r.strength));
+      const potWinners = eligibleHandResults.filter((r) => r.strength === maxS);
+      console.log(
+        `[SHOWDOWN] Side pot ${pot.level}: ${potWinners.length} winner(s) tie at strength ${maxS} for ${pot.amount} chips`
+      );
+      distributePotAcrossTiedWinners(
+        pot.amount,
+        potWinners,
+        state,
+        totalWon,
+        `[SHOWDOWN] Side pot ${pot.level}`
+      );
     }
   }
 
@@ -398,23 +452,18 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
     const diff = state.pot - totalDistributed;
     if (diff > 0) {
       console.error(
-        `[SHOWDOWN] CHIP LEAK: distributed ${totalDistributed} but pot was ${state.pot} (shortfall ${diff}) - awarding remainder to winner`
+        `[SHOWDOWN] CHIP LEAK: distributed ${totalDistributed} but pot was ${state.pot} (shortfall ${diff}) — splitting among best hand(s) (odd chip from button)`
       );
       if (handResults.length > 0) {
         const maxStrength = Math.max(...handResults.map((r) => r.strength));
-        const winners = handResults.filter(
-          (r) => r.strength === maxStrength
-        );
+        const winners = handResults.filter((r) => r.strength === maxStrength);
         if (winners.length > 0) {
-          winners[0].player.chips += diff;
-          totalWon.set(
-            winners[0].player.id,
-            (totalWon.get(winners[0].player.id) || 0) + diff
-          );
-          console.log(
-            `[SHOWDOWN]   Awarded ${diff} chips to ${
-              winners[0].player.name || winners[0].player.userId
-            } to fix leak`
+          distributePotAcrossTiedWinners(
+            diff,
+            winners,
+            state,
+            totalWon,
+            "[SHOWDOWN] leak fix"
           );
         }
       }
@@ -450,10 +499,13 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
     .catch((err) => console.error("[SHOWDOWN] Error zeroing game pot:", err));
   state.pot = 0;
 
-  // Set showdownResults with hand category and winning cards for client + dealer messages
-  const maxStrength = Math.max(...handResults.map((r) => r.strength));
+  // Everyone who won any slice of the pot (main + side pots), strongest display order
   const showdownWinners = handResults
-    .filter((r) => r.strength === maxStrength)
+    .filter((r) => (totalWon.get(r.player.id) || 0) > 0)
+    .sort(
+      (a, b) =>
+        (totalWon.get(b.player.id) || 0) - (totalWon.get(a.player.id) || 0)
+    )
     .map((r) => {
       const potWon = totalWon.get(r.player.id) || 0;
       const name = r.player.name || r.player.user?.username || r.player.userId;
@@ -463,7 +515,9 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
         name,
         potWon,
         handCategory: r.hand?.category || null,
-        hand: r.hand ? { category: r.hand.category, cards: r.hand.bestFive || [] } : null,
+        hand: r.hand
+          ? { category: r.hand.category, cards: r.hand.bestFive || [] }
+          : null,
       };
     });
   const forcedReveal = options.forcedReveal === true;
