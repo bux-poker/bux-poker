@@ -592,16 +592,18 @@ export async function doConsolidateTables(tournamentId, deps) {
             const first = [...movers].sort(
               (a, b) => a.seatNumber - b.seatNumber
             )[0];
+            const newChips = (first.chips ?? 0) + orphanPot;
             await tx.player.update({
               where: { id: first.id },
-              data: { chips: (first.chips ?? 0) + orphanPot },
+              data: { chips: newChips },
             });
+            first.chips = newChips;
             console.log(
               `[TOURNAMENT] Orphan pot ${orphanPot} from table ${closeG.tableNumber} → player ${first.id}`
             );
           } else if (orphanPot > 0) {
             console.error(
-              `[TOURNAMENT] Orphan pot ${orphanPot} on table ${closeG.tableNumber} but no players to credit`
+              `[TOURNAMENT] Orphan pot ${orphanPot} on table ${closeG.tableNumber} but no MOVE_ELIGIBLE movers — will try leftovers below`
             );
           }
 
@@ -630,12 +632,102 @@ export async function doConsolidateTables(tournamentId, deps) {
             );
           }
 
+          // MOVE_ELIGIBLE-only movers left 0-chip live rows and ELIMINATED rows on the closing game.
+          // Closing it without relocating them orphans DB rows on a COMPLETED table (ghost seats / missing at showdown).
+          const graveyardsForClose = [];
+          const leftovers = await tx.player.findMany({
+            where: { gameId: closeG.id },
+            select: {
+              id: true,
+              userId: true,
+              seatNumber: true,
+              chips: true,
+              status: true,
+            },
+          });
+
+          if (orphanPot > 0 && movers.length === 0 && leftovers.length > 0) {
+            const credit = leftovers.find(
+              (r) => r.status !== "ELIMINATED" && (r.chips ?? 0) > 0
+            );
+            if (credit) {
+              const nc = (credit.chips ?? 0) + orphanPot;
+              await tx.player.update({
+                where: { id: credit.id },
+                data: { chips: nc },
+              });
+              credit.chips = nc;
+              console.log(
+                `[TOURNAMENT] Orphan pot ${orphanPot} from table ${closeG.tableNumber} → leftover player ${credit.id}`
+              );
+            } else {
+              console.error(
+                `[TOURNAMENT] Orphan pot ${orphanPot} on table ${closeG.tableNumber} — no chip-positive row to credit`
+              );
+            }
+          }
+
+          for (const p of leftovers) {
+            if (p.status === "ELIMINATED") {
+              let placed = false;
+              for (const gy of graveyardsForClose) {
+                placed = await assignPlayerToFirstAvailableGame(
+                  tx,
+                  p.id,
+                  [gy.id],
+                  seatsPerTable
+                );
+                if (placed) break;
+              }
+              while (!placed) {
+                const gy = await createConsolidationGraveyardGame(tx, tournamentId);
+                graveyardsForClose.push(gy);
+                placed = await assignPlayerToFirstAvailableGame(
+                  tx,
+                  p.id,
+                  [gy.id],
+                  seatsPerTable
+                );
+              }
+              console.log(
+                `[TOURNAMENT] Pre-close: moved eliminated row ${p.id} off closing table ${closeG.tableNumber} to graveyard`
+              );
+            } else {
+              const dst = pickDest();
+              const seat = worstSeatOnDestination(dst);
+              touchedDestIds.push(dst.id);
+              await tx.player.update({
+                where: { id: p.id },
+                data: { gameId: dst.id, seatNumber: seat },
+              });
+              dst.rows.push({
+                id: p.id,
+                seatNumber: seat,
+                chips: p.chips,
+                userId: p.userId,
+                status: p.status ?? "ACTIVE",
+              });
+              console.log(
+                `[TOURNAMENT] Pre-close: moved leftover live row user ${p.userId} (${p.status}, chips=${p.chips}) off table ${closeG.tableNumber} → table ${dst.tableNumber} seat ${seat}`
+              );
+            }
+          }
+
+          const stillOnClose = await tx.player.count({
+            where: { gameId: closeG.id },
+          });
+          if (stillOnClose > 0) {
+            throw new Error(
+              `[TOURNAMENT] Invariant failed: ${stillOnClose} player row(s) still on closing game ${closeG.id}`
+            );
+          }
+
           await tx.game.update({
             where: { id: closeG.id },
             data: { status: "COMPLETED", pot: 0 },
           });
           console.log(
-            `[TOURNAMENT] Closed game ${closeG.id} (table ${closeG.tableNumber}) after migrating ${movers.length} player(s)`
+            `[TOURNAMENT] Closed game ${closeG.id} (table ${closeG.tableNumber}) after migrating ${movers.length} chip-positive mover(s) + ${leftovers.length} leftover row(s)`
           );
         });
 
@@ -646,9 +738,18 @@ export async function doConsolidateTables(tournamentId, deps) {
           deps.clearAllStateForGames([closeG.id]);
           const uniqueDest = [...new Set(touchedDestIds)];
           for (const did of uniqueDest) {
-            if (!(await deps.hasActiveHand(did))) {
-              deps.clearAllStateForGames([did]);
+            if (await deps.hasActiveHand(did)) continue;
+            const potCheck = await prisma.game.findUnique({
+              where: { id: did },
+              select: { pot: true, tableNumber: true },
+            });
+            if ((potCheck?.pot ?? 0) > 0) {
+              console.warn(
+                `[TOURNAMENT] Skip clearAllState for destination game ${did} (table ${potCheck?.tableNumber}) — DB pot ${potCheck.pot} (avoid mid-hand wipe)`
+              );
+              continue;
             }
+            deps.clearAllStateForGames([did]);
           }
         } catch (e) {
           console.warn("[TOURNAMENT] Could not clear game state:", e?.message);
@@ -873,7 +974,17 @@ export async function doConsolidateTables(tournamentId, deps) {
           try {
             deps.clearAllStateForGames([srcGameTx.id]);
             if (!(await deps.hasActiveHand(dstGameTx.id))) {
-              deps.clearAllStateForGames([dstGameTx.id]);
+              const potDst = await prisma.game.findUnique({
+                where: { id: dstGameTx.id },
+                select: { pot: true },
+              });
+              if ((potDst?.pot ?? 0) === 0) {
+                deps.clearAllStateForGames([dstGameTx.id]);
+              } else {
+                console.warn(
+                  `[TOURNAMENT] Skip clearAllState for balance destination ${dstGameTx.id} — DB pot ${potDst.pot}`
+                );
+              }
             }
           } catch (e) {
             console.warn("[TOURNAMENT] Balance clear state:", e?.message);
