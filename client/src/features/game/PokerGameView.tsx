@@ -150,7 +150,10 @@ export function PokerGameView() {
   const handleActionRef = useRef<(action: string, amount: number) => void>(() => {});
   const [preActionSelected, setPreActionSelected] = useState<PreActionKind | null>(null);
   const { user } = useAuth();
-  const { tournament, refetch: refetchTournament } = useTournament(gameState?.tournamentId);
+  /** Keeps GET /api/tournaments/:id loading when game-state drops tournamentId but consolidation sockets still name the MTT. */
+  const [socketTournamentIdHint, setSocketTournamentIdHint] = useState<string | null>(null);
+  const effectiveTournamentId = gameState?.tournamentId ?? socketTournamentIdHint ?? undefined;
+  const { tournament, refetch: refetchTournament } = useTournament(effectiveTournamentId);
 
   /** Stable across refetches when seat rows are unchanged (avoids effect churn on new `players` array refs). */
   const tournamentPlayersSeatSig = useMemo(() => {
@@ -194,6 +197,10 @@ export function PokerGameView() {
   const tournamentRef = useRef(tournament);
   tournamentRef.current = tournament;
 
+  useEffect(() => {
+    setSocketTournamentIdHint(null);
+  }, [id]);
+
   // Preload card images when entering a game so they render instantly
   useEffect(() => {
     if (id) preloadCards();
@@ -210,15 +217,69 @@ export function PokerGameView() {
 
   // Keep tournament data fresh (remainingPlayers, etc.) when in active game (silent = no loading flash)
   useEffect(() => {
-    if (!gameState?.tournamentId || !tournament) return;
+    if (!effectiveTournamentId || !tournament) return;
     const interval = setInterval(() => refetchTournament({ silent: true }), 10000);
     return () => clearInterval(interval);
-  }, [gameState?.tournamentId, tournament?.id, refetchTournament]);
+  }, [effectiveTournamentId, tournament?.id, refetchTournament]);
+
+  const wrongTableByTournamentPayload = useMemo(() => {
+    if (!user?.id || !id || !tournament?.players?.length) return false;
+    const me = tournament.players.find(
+      (p: { userId?: string; gameId?: string; status?: string }) =>
+        String(p.userId) === String(user.id)
+    );
+    if (!me || me.status === "ELIMINATED") return false;
+    const gid = (me as { gameId?: string }).gameId;
+    return !!(gid && String(gid) !== String(id));
+  }, [tournamentPlayersSeatSig, user?.id, id, tournament?.players]);
+
+  /** Authoritative seat game from DB while consolidation UI is up or standings already disagree with the route. */
+  useEffect(() => {
+    const tid = effectiveTournamentId;
+    if (!tid || !user?.id || !id) return;
+    const needPoll =
+      !!pendingConsolidationWaiting ||
+      !!consolidationWaiting ||
+      wrongTableByTournamentPayload;
+    if (!needPoll) return;
+
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const sessionToken =
+          typeof localStorage !== "undefined" ? localStorage.getItem("sessionToken") : null;
+        const res = await api.get<{ gameId?: string }>(`/api/tournaments/${tid}/my-table`, {
+          headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
+        });
+        const gid = res.data?.gameId;
+        if (cancelled || !gid || String(gid) === String(id)) return;
+        setConsolidationWaiting(null);
+        setPendingConsolidationWaiting(null);
+        navigate(`/game/${gid}`, { replace: true });
+      } catch {
+        /* 404 / network — retry on next tick */
+      }
+    };
+    void tick();
+    const interval = setInterval(() => void tick(), 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [
+    effectiveTournamentId,
+    user?.id,
+    id,
+    navigate,
+    pendingConsolidationWaiting,
+    consolidationWaiting,
+    wrongTableByTournamentPayload,
+  ]);
 
   /** If DB says we're seated on another game (reseated), leave stale /game/:id + wait overlay. */
   useEffect(() => {
     const t = tournamentRef.current;
-    if (!user?.id || !id || !gameState?.tournamentId || !t?.players?.length) return;
+    if (!user?.id || !id || !t?.id || !t?.players?.length) return;
     const me = t.players.find(
       (p: { userId?: string; status?: string; gameId?: string }) =>
         String(p.userId) === String(user.id)
@@ -229,7 +290,7 @@ export function PokerGameView() {
     setConsolidationWaiting(null);
     setPendingConsolidationWaiting(null);
     navigate(`/game/${correctGameId}`, { replace: true });
-  }, [tournamentPlayersSeatSig, user?.id, id, gameState?.tournamentId, navigate]);
+  }, [tournamentPlayersSeatSig, user?.id, id, tournament?.id, navigate]);
   const lastTournamentStatusRef = useRef<string | null>(null);
   const lastPlayerStatusRef = useRef<string | null>(null);
 
@@ -283,12 +344,11 @@ export function PokerGameView() {
   
   // Refetch tournament data when gameState changes to get updated status/startedAt
   useEffect(() => {
-    if (gameState?.tournamentId) {
-      // Refetch tournament data whenever gameState.tournamentId changes
+    if (effectiveTournamentId) {
       refetchTournament();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState?.tournamentId]); // refetchTournament is stable (memoized), so we can omit it
+  }, [effectiveTournamentId]); // refetchTournament is stable (memoized), so we can omit it
   
   // Also refetch periodically if tournament is SEATED but hasn't started yet (waiting for 2-minute countdown)
   // Track polling state with a ref to prevent unnecessary refetches
@@ -526,6 +586,7 @@ export function PokerGameView() {
       const matchesGameState = payload.tournamentId === latestGameTournamentIdRef.current;
       const matchesTournament = payload.tournamentId === latestTournamentIdRef.current;
       if (matchesGameState || matchesTournament) {
+        setSocketTournamentIdHint(payload.tournamentId);
         const currentState = latestGameStateRef.current;
         if (handBlocksConsolidationWaitOverlay(currentState, handActionPendingRef)) {
           // Defer popup while hand is active; show it as soon as hand ends.
@@ -548,6 +609,7 @@ export function PokerGameView() {
     socket.on("consolidation-complete", async (payload: { tournamentId: string }) => {
       const tid = payload?.tournamentId;
       if (!tid || !user?.id || !id) return;
+      setSocketTournamentIdHint(tid);
       let t: any = null;
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
@@ -565,12 +627,7 @@ export function PokerGameView() {
       if (!myEntry) return;
       setConsolidationWaiting(null);
       setPendingConsolidationWaiting(null);
-      if (
-        tid === latestGameTournamentIdRef.current ||
-        tid === latestTournamentIdRef.current
-      ) {
-        refetchTournament({ silent: true });
-      }
+      setTimeout(() => void refetchTournament({ silent: true }), 0);
       if (myEntry.gameId && String(myEntry.gameId) !== String(id)) {
         navigate(`/game/${myEntry.gameId}`, { replace: true });
       }
