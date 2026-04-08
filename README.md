@@ -24,7 +24,7 @@ Still needed for full polish:
 - Backend: Node.js, Express, Socket.IO, Prisma
 - Data: PostgreSQL (persistent), Redis (session store)
 - Auth: Discord OAuth (Vercel serverless token exchange in prod; Passport on API server for local/dev fallback)
-- Hosting: Vercel (frontend), Railway (backend), Supabase (Postgres)
+- Hosting: Vercel (frontend), Fly.io (`bux-poker` — see `fly.toml`), Supabase (Postgres)
 
 ## Repository Layout
 
@@ -162,30 +162,30 @@ If Root Directory were **empty** (repo root), you’d need a different layout; t
 
 Production login uses **`/oauth/discord`** (rewritten to serverless). It is **not** under **`/api`** on purpose: many setups proxy **`/api/*`** on the apex/www host to **Render**, which would send Discord’s `redirect_uri` back to Render and hit the blocked IP.
 
-The **token exchange** runs in **`api/discord-oauth/callback.ts`** (public path **`/oauth/discord/callback`**) on Vercel’s IP. Render still runs Socket.IO + REST; **`JWT_SECRET` must match Render exactly** so issued JWTs validate on the API.
+The **token exchange** runs in **`api/discord-oauth/callback.ts`** (public path **`/oauth/discord/callback`**) on Vercel’s IP. The **API / Socket.IO** host (e.g. Fly.io) still validates those JWTs; **`JWT_SECRET` must match that backend exactly**.
 
 **Vercel → Environment variables (required for login)**
 
 | Variable | Purpose |
 |----------|---------|
-| `JWT_SECRET` | **Same as Render** — if missing, callback fails |
-| `DATABASE_URL` | **Same Postgres as Render** (pooler URL is fine) — if missing, user upsert fails |
-| `DISCORD_CLIENT_ID` | Same as Render |
-| `DISCORD_CLIENT_SECRET` | Same as Render |
-| `CLIENT_URL` | Where to redirect after login, e.g. `https://www.bux-poker.pro` — **not** `http://localhost:5173` (that value is for Render/local `.env` only). If it’s wrong, the serverless callback now falls back to the request `Host`. |
+| `JWT_SECRET` | **Same as API backend** — if missing, callback fails |
+| `DATABASE_URL` | **Same Postgres as API backend** (pooler URL is fine) — if missing, user upsert fails |
+| `DISCORD_CLIENT_ID` | Same as API backend |
+| `DISCORD_CLIENT_SECRET` | Same as API backend |
+| `CLIENT_URL` | Where to redirect after login, e.g. `https://www.bux-poker.pro` — **not** `http://localhost:5173` (that value is for API/local `.env` only). If it’s wrong, the serverless callback now falls back to the request `Host`. |
 
 Optional: `DISCORD_VERCEL_CALLBACK_URL` (full callback URL, must match Discord portal — use if you change path), `DISCORD_API_USER_AGENT`.
 
-You can remove **`DISCORD_CALLBACK_URL`** from Vercel (that’s for the Render server); it is **not** read by the serverless handlers.
+You can remove **`DISCORD_CALLBACK_URL`** from Vercel (that’s for the Express API server); it is **not** read by the serverless handlers.
 
-Do **not** set **`NODE_ENV=development`** on the Vercel frontend project — it can confuse tooling. Login uses **hostname** (not `import.meta.env.DEV`) so production never follows `VITE_API_BASE_URL` to Render for OAuth.
+Do **not** set **`NODE_ENV=development`** on the Vercel frontend project — it can confuse tooling. Login uses **hostname** (not `import.meta.env.DEV`) so production never follows `VITE_API_BASE_URL` to the API host for OAuth.
 
 **Discord Developer Portal → OAuth2 → Redirects** — add (and remove stale `/api/auth/...` on the **site** host if you no longer use it there):
 
 - `https://www.bux-poker.pro/oauth/discord/callback` (and/or apex `https://bux-poker.pro/oauth/discord/callback`)
 - Preview: `https://<project>.vercel.app/oauth/discord/callback`
 
-Render’s **`/api/auth/discord/callback`** can stay in Discord only if you still start OAuth from the Render host; production on Vercel should use **`/oauth/...`** only.
+The API host’s **`/api/auth/discord/callback`** can stay in Discord only if you still start OAuth from that host; production on Vercel should use **`/oauth/...`** only.
 
 **Local dev:** Login still uses **`/api/auth/discord`** → Vite proxies `/api` → Express (Passport).
 
@@ -223,9 +223,23 @@ render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 500 -o text --text "[TURN ORDER]
 render logs -r srv-d5kbqpnfte5s73cin3q0 --limit 200 -o text --text "player-action"
 ```
 
-If **`[AUTH]`** logs show **`429`** / **`1015`** on the token step, Discord is **rate-limiting or blocking** outbound requests from Render’s IP — not a wrong secret or redirect URI. The server **retries** token exchange and `users/@me` with backoff (and `Retry-After` when present). If login still fails: wait 15–30+ minutes, **Manual Deploy** on Render (egress IP may change), avoid rapid repeated “Login with Discord” clicks. Successful logins show **`[AUTH] Successfully authenticated user:`**.
+### Fly.io: fetch logs (CLI)
 
-- Use a persistent backend process for websockets (Railway works well).
+**App:** `bux-poker` (see root **`fly.toml`**). Run from a shell where the Fly CLI is installed (`~/.fly/bin/fly` or `fly` on PATH).
+
+```bash
+fly auth login          # if you see Error: 401 Unauthorized
+fly auth whoami
+
+# Recent lines (no ripgrep needed — use grep -E)
+fly logs -a bux-poker -n | grep -E 'TOURNAMENT|Pre-close|consolidation|SHOWDOWN|clearAllState|\[AUTH\]'
+```
+
+If logs still return **401**, you are not authenticated: run **`fly auth login`**, or unset a bad **`FLY_API_TOKEN`** in the environment and log in again. **`LISTEN_HOST=0.0.0.0`** and **`[deploy] ha = false`** in `fly.toml` matter for Socket.IO and in-memory `tableState` (do not run two machines for this app without a shared adapter).
+
+If **`[AUTH]`** logs show **`429`** / **`1015`** on the token step, Discord is **rate-limiting or blocking** outbound requests from your **API host’s egress IP** (Fly, Render, etc.) — not a wrong secret or redirect URI. The server **retries** token exchange and `users/@me` with backoff (and `Retry-After` when present). If login still fails: wait 15–30+ minutes, redeploy the API (egress IP may change), avoid rapid repeated “Login with Discord” clicks. Successful logins show **`[AUTH] Successfully authenticated user:`**.
+
+- Use a **single** persistent process (or Redis Socket.IO adapter) for websockets; Fly **`ha = false`** matches that for this app.
 - Set `CLIENT_URL` correctly in backend env for CORS. **Vercel previews** (`https://…bux-poker….vercel.app`) are **allowed automatically** (hostname ends with `.vercel.app` and contains `bux-poker`). To disable that, set **`CORS_STRICT_VERCEL=true`**. You can still add one-off origins with **`CORS_EXTRA_ORIGINS`** (comma-separated).
 - **Discord OAuth redirect:** In the Discord Developer Portal, the redirect URL must match **`DISCORD_CALLBACK_URL`** on Render exactly. Either use **`https://<your-api-host>/api/auth/discord/callback`** (recommended) or **`https://<your-api-host>/callback`** — the server redirects `/callback` to the real handler so login is not stuck after “Authorize”.
 - **Discord / Cloudflare HTML 429:** If logs show HTML (`<!doctype`) on token exchange, the host egress IP is often blocked. The server sends a proper **`User-Agent`** (override with **`DISCORD_API_USER_AGENT`** if needed). **Manual Deploy** on Render may change IP; otherwise wait or move API egress.
