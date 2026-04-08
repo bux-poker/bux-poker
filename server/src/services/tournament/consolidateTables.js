@@ -3,6 +3,11 @@ import { auditChipConservation } from "./chipAudit.js";
 import { resyncGamesToMaxBlindLevel } from "./blindLevels.js";
 import { reconcileOrphanDbPotsForTournament } from "./stalePotRecovery.js";
 import {
+  analyzeTableBalance,
+  pickBalanceEndpoints,
+  tournamentNeedsConsolidation,
+} from "./tableBalanceTargets.js";
+import {
   pickNextBigBlindMover,
   pickWorstOpenSeat,
 } from "./balanceSeatSelection.js";
@@ -221,29 +226,8 @@ export function isTournamentConsolidationWaiting(tournamentId) {
   return !!s && s.size > 0;
 }
 
-/** Max one-table-to-table moves per consolidation run (idle poll calls this ~15s). */
-const MAX_BALANCE_MOVES_PER_RUN = 12;
-
-/**
- * Pick source (most chip-positive players) and destination (fewest) for spread balancing.
- * Returns null if no move is needed or possible.
- */
-function pickBalanceEndpoints(games) {
-  const nonempty = games.filter((g) => (g.players?.length ?? 0) > 0);
-  if (nonempty.length < 2) return null;
-  const sz = nonempty.map((g) => ({ g, n: g.players.length }));
-  const mx = Math.max(...sz.map((s) => s.n));
-  const mn = Math.min(...sz.map((s) => s.n));
-  if (mx - mn <= 1) return null;
-  const srcGame = sz
-    .filter((s) => s.n === mx)
-    .sort((a, b) => b.g.tableNumber - a.g.tableNumber)[0].g;
-  const dstGame = sz
-    .filter((s) => s.n === mn)
-    .sort((a, b) => a.g.tableNumber - b.g.tableNumber)[0].g;
-  if (srcGame.id === dstGame.id) return null;
-  return { srcGame, dstGame };
-}
+/** One chip-positive mover per idle poll / consolidation run (canonical balance). */
+const MAX_BALANCE_MOVES_PER_RUN = 1;
 
 async function emitRoomsGameState(gameIds, io) {
   if (!io) return;
@@ -385,16 +369,10 @@ export async function doConsolidateTables(tournamentId, deps) {
   });
 
   const totalCount = games.reduce((sum, g) => sum + (g.players?.length ?? 0), 0);
-  const tablesNeeded = Math.max(1, Math.ceil(totalCount / seatsPerTable));
-  const counts = games.map(g => g.players?.length ?? 0).filter(c => c > 0);
-  const maxC = counts.length ? Math.max(...counts) : 0;
-  const minC = counts.length ? Math.min(...counts) : 0;
-  const spread = maxC - minC;
-
-  const maxSpread = 1;
-  if (games.length <= tablesNeeded && spread <= maxSpread) {
+  const balPreview = analyzeTableBalance(games, seatsPerTable);
+  if (!tournamentNeedsConsolidation(games, seatsPerTable)) {
     console.log(
-      `[TOURNAMENT] Skipping consolidation: ${games.length} ACTIVE game(s) ≤ tablesNeeded=${tablesNeeded} (${totalCount} players, seatsPerTable=${seatsPerTable}), counts [${counts.join(",")}], spread ${spread}`
+      `[TOURNAMENT] Skipping consolidation: canonical table balance OK (${totalCount} players, ${games.length} ACTIVE game(s), seatsPerTable=${seatsPerTable}, target [${balPreview.targets.join(",")}])`
     );
     return games;
   }
@@ -772,47 +750,42 @@ export async function doConsolidateTables(tournamentId, deps) {
       }
     }
 
-    games = await prisma.game.findMany({
+    let bgames = await prisma.game.findMany({
       where: { tournamentId, status: "ACTIVE" },
       include: {
         players: {
-          where: MOVE_ELIGIBLE,
+          where: NOT_ELIMINATED,
           include: { user: true },
+          orderBy: { seatNumber: "asc" },
         },
       },
       orderBy: { tableNumber: "asc" },
     });
 
-    const totalPlayersLive = games.reduce(
+    const totalPlayersLive = bgames.reduce(
       (s, g) => s + (g.players?.length ?? 0),
       0
     );
     if (totalPlayersLive === 0) {
       console.log(`[TOURNAMENT] No players remaining, skipping redistribution`);
-      return games;
+      return bgames;
     }
 
-    const countsLive = games
-      .map((g) => g.players?.length ?? 0)
-      .filter((c) => c > 0);
-    const maxLive = countsLive.length ? Math.max(...countsLive) : 0;
-    const minLive = countsLive.length ? Math.min(...countsLive) : 0;
-    const spreadLive = maxLive - minLive;
-
+    let balLive = analyzeTableBalance(bgames, seatsPerTable);
     console.log(
-      `[TOURNAMENT] Live counts: ${games
+      `[TOURNAMENT] Live counts: ${bgames
         .map((g) => `${g.tableNumber}:${g.players?.length ?? 0}`)
-        .join(", ")} — spread ${spreadLive}`
+        .join(", ")} — canonical [${balLive.targets.join(",")}] (T=${balLive.T})`
     );
 
-    if (spreadLive > 1) {
+    if (!balLive.distributionOk && balLive.nonempty.length === balLive.T) {
       let balanceMoves = 0;
       while (balanceMoves < MAX_BALANCE_MOVES_PER_RUN) {
-        games = await prisma.game.findMany({
+        bgames = await prisma.game.findMany({
           where: { tournamentId, status: "ACTIVE" },
           include: {
             players: {
-              where: MOVE_ELIGIBLE,
+              where: NOT_ELIMINATED,
               include: { user: true },
               orderBy: { seatNumber: "asc" },
             },
@@ -820,51 +793,60 @@ export async function doConsolidateTables(tournamentId, deps) {
           orderBy: { tableNumber: "asc" },
         });
 
-        const pairPreWait = pickBalanceEndpoints(games);
+        const pairPreWait = pickBalanceEndpoints(bgames, seatsPerTable);
         if (!pairPreWait) break;
         const { srcGame, dstGame } = pairPreWait;
 
-        const waitSrc = [srcGame.id];
-        registerConsolidationWait(tournamentId, waitSrc);
+        const waitBalanceIds = [srcGame.id, dstGame.id];
+        registerConsolidationWait(tournamentId, waitBalanceIds);
         let progressed = false;
         try {
           const io = deps.getIO();
-          if (await deps.hasActiveHand(srcGame.id)) {
+          const srcHand = await deps.hasActiveHand(srcGame.id);
+          const dstHand = await deps.hasActiveHand(dstGame.id);
+          if (srcHand || dstHand) {
             console.log(
-              `[TOURNAMENT] Balance: wait only table ${srcGame.tableNumber} (largest); table ${dstGame.tableNumber} keeps playing`
+              `[TOURNAMENT] Balance: waiting for hands to finish on tables ${srcGame.tableNumber} (largest) and ${dstGame.tableNumber} (smallest) before moving one seated player`
             );
-            if (io) await emitConsolidationWaitToGames(waitSrc, tournamentId, io);
-            await waitForGameIdsToFinishHands(waitSrc, waitDeps);
+            if (io)
+              await emitConsolidationWaitToGames(waitBalanceIds, tournamentId, io);
+            await waitForGameIdsToFinishHands(waitBalanceIds, waitDeps);
           }
           await new Promise((r) => setTimeout(r, 1500));
 
-          if (await deps.hasActiveHand(srcGame.id)) {
+          if (
+            (await deps.hasActiveHand(srcGame.id)) ||
+            (await deps.hasActiveHand(dstGame.id))
+          ) {
             console.log(
-              `[TOURNAMENT] Balance: source table ${srcGame.tableNumber} still in hand — stop for this run`
+              `[TOURNAMENT] Balance: a source/destination table still in hand — stop for this run`
             );
             break;
           }
 
           // Hands can change chip counts / eligibility; re-pick endpoints after wait (avoids "missing src/dst").
-          games = await prisma.game.findMany({
+          bgames = await prisma.game.findMany({
             where: { tournamentId, status: "ACTIVE" },
             include: {
               players: {
-                where: MOVE_ELIGIBLE,
+                where: NOT_ELIMINATED,
                 include: { user: true },
                 orderBy: { seatNumber: "asc" },
               },
             },
             orderBy: { tableNumber: "asc" },
           });
-          const pairPostWait = pickBalanceEndpoints(games);
+          const pairPostWait = pickBalanceEndpoints(bgames, seatsPerTable);
           if (!pairPostWait) break;
           const srcGameTx = pairPostWait.srcGame;
           const dstGameTx = pairPostWait.dstGame;
 
-          if (await deps.hasActiveHand(srcGameTx.id)) {
+          if (
+            (await deps.hasActiveHand(srcGameTx.id)) ||
+            (await deps.hasActiveHand(dstGameTx.id))
+          ) {
             console.log(
-              `[TOURNAMENT] Balance: source table ${srcGameTx.tableNumber} (post-refresh) still in hand — stop for this run`
+              `[TOURNAMENT] Balance: source or destination still in hand (post-refresh) — stop for this run`
             );
             break;
           }
@@ -1005,14 +987,18 @@ export async function doConsolidateTables(tournamentId, deps) {
           progressed = true;
           balanceMoves++;
         } finally {
-          unregisterConsolidationWait(tournamentId, waitSrc);
+          unregisterConsolidationWait(tournamentId, waitBalanceIds);
         }
 
         if (!progressed) break;
       }
+    } else if (!balLive.distributionOk) {
+      console.log(
+        `[TOURNAMENT] Balance deferred: seated table count ${balLive.nonempty.length} !== canonical T ${balLive.T} (close-table wave should run first)`
+      );
     } else {
       console.log(
-        `[TOURNAMENT] Spread ≤ 1 — no player moves (seats unchanged except closed tables)`
+        `[TOURNAMENT] Seated counts match canonical distribution — no balance moves this run`
       );
     }
 
@@ -1020,26 +1006,25 @@ export async function doConsolidateTables(tournamentId, deps) {
       where: { tournamentId, status: "ACTIVE" },
       include: {
         players: {
-          where: MOVE_ELIGIBLE,
+          where: NOT_ELIMINATED,
         },
       },
     });
 
-    const playerCounts = updatedGames.map((g) => g.players.length);
-    const minPlayers = Math.min(...playerCounts);
-    const maxPlayers = Math.max(...playerCounts);
+    const endBal = analyzeTableBalance(updatedGames, seatsPerTable);
+    const seatedCounts = updatedGames.map((g) => g.players.length);
 
     console.log(
-      `[TOURNAMENT] Rebalancing complete. Player counts per table:`,
-      playerCounts
+      `[TOURNAMENT] Rebalancing complete. Seated (non-eliminated) per table:`,
+      seatedCounts
     );
     console.log(
-      `[TOURNAMENT] Min: ${minPlayers}, Max: ${maxPlayers}, Difference: ${maxPlayers - minPlayers}`
+      `[TOURNAMENT] Canonical target [${endBal.targets.join(",")}] — distributionOk=${endBal.distributionOk}`
     );
 
-    if (maxPlayers - minPlayers > 1) {
+    if (!endBal.distributionOk) {
       console.warn(
-        `[TOURNAMENT] WARNING: Tables are not balanced! Max difference is ${maxPlayers - minPlayers}`
+        `[TOURNAMENT] WARNING: Seated counts still differ from canonical distribution`
       );
     }
 
@@ -1059,8 +1044,16 @@ export async function doConsolidateTables(tournamentId, deps) {
 
     try {
       const io = deps.getIO();
-      if (io) {
-        for (const g of updatedGames) {
+      if (io && endBal.distributionOk && !endBal.needCloseEmptyShells) {
+        const chipPositiveGames = await prisma.game.findMany({
+          where: { tournamentId, status: "ACTIVE" },
+          include: {
+            players: {
+              where: MOVE_ELIGIBLE,
+            },
+          },
+        });
+        for (const g of chipPositiveGames) {
           if (
             g.players.length >= 2 &&
             !(await deps.hasActiveHand(g.id))
@@ -1068,7 +1061,7 @@ export async function doConsolidateTables(tournamentId, deps) {
             try {
               await deps.startHandForGame(g.id, io);
               console.log(
-                `[TOURNAMENT] Started hand for table ${g.tableNumber} after rebalancing (${g.players.length} players)`
+                `[TOURNAMENT] Started hand for table ${g.tableNumber} after rebalancing (${g.players.length} chip-positive players)`
               );
             } catch (err) {
               console.error(

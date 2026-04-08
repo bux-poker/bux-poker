@@ -3,6 +3,10 @@ import { tableState } from "../../modules/poker/tableState.js";
 import { logUnreconciledDbPot } from "./stalePotRecovery.js";
 import { tryAdvanceBlindsIfDue } from "./blindLevels.js";
 import { isGameConsolidationWaiting } from "./consolidateTables.js";
+import {
+  analyzeTableBalance,
+  tournamentNeedsConsolidation,
+} from "./tableBalanceTargets.js";
 
 /** Slightly above human turn timer (20s) so recovery runs if auto-action path failed. */
 const STUCK_THRESHOLD_MS = 23000;
@@ -56,13 +60,11 @@ export function startIdleTablesPoll(engine) {
           }
         });
         const totalCount = games.reduce((sum, g) => sum + (g.players?.length ?? 0), 0);
-        const tablesNeeded = Math.max(1, Math.ceil(totalCount / seatsPerTable));
-        const counts = games.map((g) => g.players?.length ?? 0).filter((c) => c > 0);
-        const spread = counts.length >= 2 ? Math.max(...counts) - Math.min(...counts) : 0;
-        const maxSpread = 1;
-        const needsConsolidation = games.length > tablesNeeded || spread > maxSpread;
-        /** Avoid starting new hands right before a merge; still run stuck-hand recovery below. */
-        const skipStartHandForConsolidation = needsConsolidation && totalCount >= 2;
+        const balanceInfo = analyzeTableBalance(games, seatsPerTable);
+        const needsConsolidation = tournamentNeedsConsolidation(
+          games,
+          seatsPerTable
+        );
         for (const game of games) {
           if (game.players.length === 0) {
             if (hasActiveHand(game.id)) continue;
@@ -138,9 +140,6 @@ export function startIdleTablesPoll(engine) {
             continue;
           }
           try {
-            if (skipStartHandForConsolidation) {
-              continue;
-            }
             const blockedBySchedule =
               !!blindAdvance?.inBreak ||
               !!blindAdvance?.waiting ||
@@ -160,7 +159,7 @@ export function startIdleTablesPoll(engine) {
         }
         if (needsConsolidation && totalCount >= 2) {
           console.log(
-            `[TOURNAMENT] Idle poll: scheduling consolidate tournament ${t.id} — ${games.length} ACTIVE game(s), ${totalCount} players, seatsPerTable=${seatsPerTable}, tablesNeeded=${tablesNeeded}, counts=[${counts.join(",")}], spread=${spread}`
+            `[TOURNAMENT] Idle poll: scheduling consolidate tournament ${t.id} — ${games.length} ACTIVE game(s), ${totalCount} players, seatsPerTable=${seatsPerTable}, canonical [${balanceInfo.targets.join(",")}], T=${balanceInfo.T}, distributionOk=${balanceInfo.distributionOk}, needCloseShells=${balanceInfo.needCloseEmptyShells}`
           );
           void engine.consolidateTables(t.id).catch((err) => {
             const code = err?.code ?? "";

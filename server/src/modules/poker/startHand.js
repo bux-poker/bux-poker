@@ -62,6 +62,34 @@ export async function startHandForGameBody(gameId, io) {
   }
 
   if (game.tournamentId) {
+    const { canStartHandOnTournamentTable } = await import(
+      "../../services/tournament/tableBalanceTargets.js"
+    );
+    const tableBal = await canStartHandOnTournamentTable(
+      game.tournamentId,
+      gameId
+    );
+    if (!tableBal.allowed) {
+      if (io) {
+        const st = tableState.get(gameId);
+        const g = await prisma.game.findUnique({
+          where: { id: gameId },
+          include: gameStartInclude,
+        });
+        if (g) {
+          await emitGameStateWithGame(gameId, io, g, st ?? null);
+        } else {
+          await emitGameState(gameId, io, st ?? null);
+        }
+      }
+      console.log(
+        `[POKER] Not starting hand on game ${gameId} — tournament table balance (${tableBal.reason ?? "blocked"})`
+      );
+      return;
+    }
+  }
+
+  if (game.tournamentId) {
     const { tryAdvanceBlindsIfDue } = await import(
       "../../services/tournament/blindLevels.js"
     );
