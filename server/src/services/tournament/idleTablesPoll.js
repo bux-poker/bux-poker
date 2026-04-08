@@ -61,23 +61,8 @@ export function startIdleTablesPoll(engine) {
         const spread = counts.length >= 2 ? Math.max(...counts) - Math.min(...counts) : 0;
         const maxSpread = 1;
         const needsConsolidation = games.length > tablesNeeded || spread > maxSpread;
-        if (needsConsolidation && totalCount >= 2) {
-          try {
-            console.log(
-              `[TOURNAMENT] Idle poll: consolidate tournament ${t.id} — ${games.length} ACTIVE game(s), ${totalCount} players, seatsPerTable=${seatsPerTable}, tablesNeeded=${tablesNeeded}, counts=[${counts.join(",")}], spread=${spread}`
-            );
-            await engine.consolidateTables(t.id);
-          } catch (err) {
-            const code = err?.code ?? "";
-            const meta = err?.meta != null ? JSON.stringify(err.meta) : "";
-            console.error(
-              "[TOURNAMENT] Idle-poll consolidation failed:",
-              err?.message || code || String(err),
-              meta
-            );
-          }
-          continue;
-        }
+        /** Avoid starting new hands right before a merge; still run stuck-hand recovery below. */
+        const skipStartHandForConsolidation = needsConsolidation && totalCount >= 2;
         for (const game of games) {
           if (game.players.length === 0) {
             if (hasActiveHand(game.id)) continue;
@@ -147,6 +132,9 @@ export function startIdleTablesPoll(engine) {
             continue;
           }
           try {
+            if (skipStartHandForConsolidation) {
+              continue;
+            }
             const blockedBySchedule =
               !!blindAdvance?.inBreak ||
               !!blindAdvance?.waiting ||
@@ -163,6 +151,20 @@ export function startIdleTablesPoll(engine) {
           } catch (err) {
             console.error(`[TOURNAMENT] Idle-table start failed for game ${game.id}:`, err);
           }
+        }
+        if (needsConsolidation && totalCount >= 2) {
+          console.log(
+            `[TOURNAMENT] Idle poll: scheduling consolidate tournament ${t.id} — ${games.length} ACTIVE game(s), ${totalCount} players, seatsPerTable=${seatsPerTable}, tablesNeeded=${tablesNeeded}, counts=[${counts.join(",")}], spread=${spread}`
+          );
+          void engine.consolidateTables(t.id).catch((err) => {
+            const code = err?.code ?? "";
+            const meta = err?.meta != null ? JSON.stringify(err.meta) : "";
+            console.error(
+              "[TOURNAMENT] Idle-poll consolidation failed:",
+              err?.message || code || String(err),
+              meta
+            );
+          });
         }
       }
     } catch (err) {

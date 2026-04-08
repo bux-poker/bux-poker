@@ -1,5 +1,6 @@
 import { prisma } from "../../config/database.js";
 import { TexasHoldem } from "./TexasHoldem.js";
+import { isEffectivelyAllIn } from "./BettingRound.js";
 import { tableState, turnTimers } from "./tableState.js";
 import { postDealerMessage } from "./dealerMessages.js";
 import { emitGameStateWithGame } from "./emitGameState.js";
@@ -41,12 +42,16 @@ export async function advanceToNextStreet(gameId, io) {
       chips: p.chips || 0,
     }));
     const maxContrib = Math.max(...contributions.map((c) => c.contribution));
-    const allEqualOrAllIn = contributions.every(
-      (c) => c.contribution === maxContrib || c.chips === 0
-    );
+    const allEqualOrAllIn = contributions.every((c) => {
+      const p = activePlayers.find((pl) => pl.id === c.id);
+      return c.contribution === maxContrib || isEffectivelyAllIn(p);
+    });
     if (!allEqualOrAllIn) {
       const contribStr = contributions
-        .map((c) => `${c.chips === 0 ? "ALL-IN" : c.contribution}`)
+        .map((c) => {
+          const p = activePlayers.find((pl) => pl.id === c.id);
+          return isEffectivelyAllIn(p) ? "ALL-IN" : c.contribution;
+        })
         .join(", ");
       console.error(
         `[POKER] advanceToNextStreet: REFUSING – contributions not equal (max=${maxContrib}). [${contribStr}]. Not advancing.`

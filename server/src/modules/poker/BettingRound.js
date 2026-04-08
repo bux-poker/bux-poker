@@ -4,7 +4,7 @@
 import { normalizeUserId } from "./normalizeUserId.js";
 
 /** True if the player cannot bet further this hand (turn order excludes ALL_IN even if chips are stale > 0). */
-function isEffectivelyAllIn(player) {
+export function isEffectivelyAllIn(player) {
   if (!player) return false;
   if (player.status === "ALL_IN") return true;
   return (player.chips ?? 0) === 0;
