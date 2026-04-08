@@ -40,6 +40,23 @@ export function countsMatchCanonical(nonemptyCounts, totalPlayers, seatsPerTable
 }
 
 /**
+ * Minimum number of "move one seated player from a fuller table to a sparser table" steps
+ * needed when tables are sorted by seated count and paired with sorted canonical targets
+ * (same multiset sum; greedy largest→smallest reaches canonical in this many moves or fewer).
+ *
+ * @param {number[]} actualSorted
+ * @param {number[]} targetSorted
+ */
+export function minBalanceMovesSortedMatch(actualSorted, targetSorted) {
+  if (actualSorted.length !== targetSorted.length) return 0;
+  let m = 0;
+  for (let i = 0; i < actualSorted.length; i++) {
+    m += Math.max(0, actualSorted[i] - targetSorted[i]);
+  }
+  return m;
+}
+
+/**
  * @param {{ id: string, players?: { length: number }[], tableNumber?: number }[]} activeGames
  * @param {number} seatsPerTable
  * @returns {{ total: number, T: number, nonempty: typeof activeGames, needCloseEmptyShells: boolean, distributionOk: boolean }}
@@ -76,7 +93,7 @@ export function tournamentNeedsConsolidation(activeGames, seatsPerTable) {
 }
 
 /**
- * Source = table with most seated players, destination = fewest (one chip-positive mover per run).
+ * Source = table with most seated players, destination = fewest (one chip-positive mover per txn).
  * @param {{ id: string, players?: unknown[], tableNumber?: number }[]} activeGames — non-eliminated players populated
  * @param {number} seatsPerTable
  * @returns {{ srcGame: object, dstGame: object } | null}

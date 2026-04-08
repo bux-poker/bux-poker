@@ -4,6 +4,7 @@ import { resyncGamesToMaxBlindLevel } from "./blindLevels.js";
 import { reconcileOrphanDbPotsForTournament } from "./stalePotRecovery.js";
 import {
   analyzeTableBalance,
+  minBalanceMovesSortedMatch,
   pickBalanceEndpoints,
   tournamentNeedsConsolidation,
 } from "./tableBalanceTargets.js";
@@ -226,8 +227,8 @@ export function isTournamentConsolidationWaiting(tournamentId) {
   return !!s && s.size > 0;
 }
 
-/** One chip-positive mover per idle poll / consolidation run (canonical balance). */
-const MAX_BALANCE_MOVES_PER_RUN = 1;
+/** Upper cap per consolidation run (avoid huge tx bursts); below we use estimated need. */
+const MAX_BALANCE_MOVES_CAP = 24;
 
 async function emitRoomsGameState(gameIds, io) {
   if (!io) return;
@@ -778,9 +779,26 @@ export async function doConsolidateTables(tournamentId, deps) {
         .join(", ")} — canonical [${balLive.targets.join(",")}] (T=${balLive.T})`
     );
 
+    // If nonempty table count > canonical T (e.g. 63 players still on 8 shells after a bust), the
+    // close-table wave above moves all chip-positive players off the closing table in one txn — not
+    // this per-player loop. Here we only fix wrong multisets when nonempty.length already equals T.
+
     if (!balLive.distributionOk && balLive.nonempty.length === balLive.T) {
+      const sortedCounts = balLive.nonempty
+        .map((g) => g.players.length)
+        .sort((a, b) => a - b);
+      const targetSorted = [...balLive.targets].sort((a, b) => a - b);
+      const movesNeeded = minBalanceMovesSortedMatch(sortedCounts, targetSorted);
+      const maxBalanceMovesThisRun = Math.min(
+        MAX_BALANCE_MOVES_CAP,
+        Math.max(1, movesNeeded)
+      );
+      console.log(
+        `[TOURNAMENT] Balance plan: ~${movesNeeded} player move(s) to canonical; will run up to ${maxBalanceMovesThisRun} this pass`
+      );
+
       let balanceMoves = 0;
-      while (balanceMoves < MAX_BALANCE_MOVES_PER_RUN) {
+      while (balanceMoves < maxBalanceMovesThisRun) {
         bgames = await prisma.game.findMany({
           where: { tournamentId, status: "ACTIVE" },
           include: {
