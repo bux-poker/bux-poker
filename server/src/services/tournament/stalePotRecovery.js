@@ -1,27 +1,51 @@
 import { prisma } from "../../config/database.js";
 
 /**
- * "Stale pot" = game.pot > 0 in DB but no active hand. This is a BUG: when a hand ends
- * we should always award the pot to the winner and persist pot=0. If we're here, that
- * didn't happen (e.g. race where we cleared state before the DB update completed).
+ * DB `game.pot` should only be non-zero while a hand is logically in progress and
+ * mirrored by in-memory state, or briefly during persistence. If we see pot > 0 with
+ * no defensible in-memory hand, we must NOT zero it — that destroyed chip conservation.
  *
- * We do NOT award to anyone – we don't know who won. We zero the pot so the table can
- * start the next hand, and log. Chips in that pot are lost. Fix hand-end paths so we
- * always award to the winner and persist before clearing state; then we never hit this.
+ * Log loudly; operators fix via proper hand completion / persistence.
  *
  * @param {string} gameId
  * @param {number} potAmount
- * @returns {Promise<void>}
+ * @param {string} [context]
+ */
+export function logUnreconciledDbPot(gameId, potAmount, context = "") {
+  if (!gameId || (potAmount ?? 0) <= 0) return;
+  console.error(
+    `[TOURNAMENT] UNRECONCILED DB POT: game=${gameId} pot=${potAmount} ${context}. Not zeroing — investigate hand-completion / persistence.`
+  );
+}
+
+/**
+ * @deprecated Use logUnreconciledDbPot. Never zero pots without a matching stack update.
  */
 export async function awardStalePotAndZeroGame(gameId, potAmount) {
-  if (!gameId || (potAmount ?? 0) <= 0) {
-    await prisma.game.update({ where: { id: gameId }, data: { pot: 0 } }).catch(() => {});
-    return;
-  }
-
-  console.error(
-    `[TOURNAMENT] STALE POT BUG: game ${gameId} had pot=${potAmount} but no active hand – we never awarded the winner. Zeroing pot so table can continue; chips lost. Fix hand-end paths to always award winner and persist pot=0 before clearing state.`
+  logUnreconciledDbPot(
+    gameId,
+    potAmount,
+    "(legacy caller — should use fail-closed path instead)"
   );
+  /* intentionally do not update DB */
+}
 
-  await prisma.game.update({ where: { id: gameId }, data: { pot: 0 } }).catch(() => {});
+/**
+ * Fail-closed guard for starting a new hand: unreconciled DB pot blocks deal.
+ * @param {string} gameId
+ * @returns {Promise<{ ok: true } | { ok: false, pot: number }>}
+ */
+export async function assertDbPotZeroForNewHand(gameId) {
+  const row = await prisma.game
+    .findUnique({
+      where: { id: gameId },
+      select: { pot: true },
+    })
+    .catch(() => null);
+  const pot = row?.pot ?? 0;
+  if (pot > 0) {
+    logUnreconciledDbPot(gameId, pot, "(blocking startHand)");
+    return { ok: false, pot };
+  }
+  return { ok: true };
 }

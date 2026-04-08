@@ -1,18 +1,12 @@
 import { prisma } from "../../config/database.js";
-import {
-  hasActiveHand,
-  forceStuckPlayerToAct,
-  clearAllStateForGames,
-} from "../../modules/poker/tableState.js";
+import { hasActiveHand, forceStuckPlayerToAct } from "../../modules/poker/tableState.js";
 
 const _blindWaitActiveSince = new Map(); // gameId -> first-seen-active timestamp
 const _blindWaitLastForce = new Map(); // gameId -> last forceStuckPlayerToAct attempt
-const _blindWaitNuked = new Set(); // gameIds already hard-reset in this active stretch
 const _blindAdvanceLocks = new Map(); // tournamentId -> in-flight blind advancement promise
 
 const BLIND_WAIT_STUCK_MS = 90_000;
 const BLIND_WAIT_FORCE_THROTTLE_MS = 30_000;
-const BLIND_WAIT_NUKE_MS = 150_000;
 
 async function recoverStuckHandsWhileBlindWaiting(tournamentId, games, io) {
   const now = Date.now();
@@ -21,24 +15,12 @@ async function recoverStuckHandsWhileBlindWaiting(tournamentId, games, io) {
     if (!active) {
       _blindWaitActiveSince.delete(g.id);
       _blindWaitLastForce.delete(g.id);
-      _blindWaitNuked.delete(g.id);
       continue;
     }
 
     if (!_blindWaitActiveSince.has(g.id)) _blindWaitActiveSince.set(g.id, now);
     const activeForMs = now - (_blindWaitActiveSince.get(g.id) ?? now);
     const waitSec = Math.round(activeForMs / 1000);
-
-    if (activeForMs >= BLIND_WAIT_NUKE_MS && !_blindWaitNuked.has(g.id)) {
-      _blindWaitNuked.add(g.id);
-      clearAllStateForGames([g.id]);
-      console.warn(
-        `[TOURNAMENT] Blind wait recovery: cleared stuck hand state at table ${g.tableNumber} after ${waitSec}s (tournament ${tournamentId})`
-      );
-      _blindWaitActiveSince.delete(g.id);
-      _blindWaitLastForce.delete(g.id);
-      continue;
-    }
 
     if (activeForMs >= BLIND_WAIT_STUCK_MS) {
       const last = _blindWaitLastForce.get(g.id) ?? 0;
@@ -331,7 +313,6 @@ async function tryAdvanceBlindsIfDueImpl(tournamentId, io, options = { emitDeale
     for (const g of [..._blindWaitActiveSince.keys()]) {
       _blindWaitActiveSince.delete(g);
       _blindWaitLastForce.delete(g);
-      _blindWaitNuked.delete(g);
     }
     return { advanced: false, waiting: false };
   }

@@ -13,7 +13,7 @@ import { startTurnTimer } from "./turnTimers.js";
 import { advanceToNextStreet } from "./advanceStreet.js";
 import { emitIfTournamentCompleted } from "./tableTournamentHooks.js";
 import { isGameConsolidationWaiting } from "../../services/tournament/consolidateTables.js";
-import { awardStalePotAndZeroGame } from "../../services/tournament/stalePotRecovery.js";
+import { assertDbPotZeroForNewHand } from "../../services/tournament/stalePotRecovery.js";
 import { isEligibleToDealNextHand } from "./playerEligibility.js";
 
 const gameStartInclude = {
@@ -266,6 +266,20 @@ export async function startHandForGameBody(gameId, io) {
     throw new Error(`BUG: Same player (${sbPlayer.name || sbPlayer.id}) would post both SB and BB. Dealer: ${dealerSeat}, SB: ${sbSeat}, BB: ${bbSeat}`);
   }
 
+  const potGate = await assertDbPotZeroForNewHand(gameId);
+  if (!potGate.ok) {
+    if (io) {
+      const g = await prisma.game.findUnique({
+        where: { id: gameId },
+        include: gameStartInclude,
+      });
+      if (g) {
+        await emitGameStateWithGame(gameId, io, g, tableState.get(gameId));
+      }
+    }
+    return;
+  }
+
   const deck = tournamentEngine.createShuffledDeck();
   const activeDealtPlayers = game.players
     .filter(p => p.status !== 'ELIMINATED' && p.chips > 0)
@@ -426,15 +440,6 @@ export async function startHandForGameBody(gameId, io) {
 
   if (utgPlayer) {
     console.log(`[POKER] UTG calculation: dealer=${dealerSeat}, sb=${sbSeat}, bb=${bbSeat}, utg=${utgSeat} (${utgPlayer.user?.username || utgPlayer.userId})`);
-  }
-
-  const previousPot = game.pot ?? 0;
-  if (previousPot > 0) {
-    console.warn(
-      `[POKER] Recovery: awarding stale pot=${previousPot} to players at game ${gameId} then zeroing (pot should have been awarded when previous hand ended)`
-    );
-    await awardStalePotAndZeroGame(gameId, previousPot);
-    game.pot = 0;
   }
 
   const state = {

@@ -1,6 +1,6 @@
 import { prisma } from "../../config/database.js";
 import { tableState } from "../../modules/poker/tableState.js";
-import { awardStalePotAndZeroGame } from "./stalePotRecovery.js";
+import { logUnreconciledDbPot } from "./stalePotRecovery.js";
 import { tryAdvanceBlindsIfDue } from "./blindLevels.js";
 import { isGameConsolidationWaiting } from "./consolidateTables.js";
 
@@ -101,11 +101,11 @@ export function startIdleTablesPoll(engine) {
               );
               continue;
             }
-            console.warn(
-              `[TOURNAMENT] Idle-table recovery: zeroing stale DB pot=${game.pot} at game ${game.id} (table ${game.tableNumber}) — no active in-memory hand`
+            logUnreconciledDbPot(
+              game.id,
+              game.pot,
+              `(idle poll table ${game.tableNumber}, no in-memory hand; not zeroing)`
             );
-            await awardStalePotAndZeroGame(game.id, game.pot);
-            game.pot = 0;
           }
           if (hasActiveHand(game.id)) {
             const turnStarted = getTurnStartedAt(game.id);

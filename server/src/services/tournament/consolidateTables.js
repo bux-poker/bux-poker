@@ -260,7 +260,7 @@ async function emitRoomsGameState(gameIds, io) {
 
 /**
  * Wait until listed games have no active hand. If a hand is stuck 90s+, force current player to act.
- * If forcing does not clear the hand (broken in-memory state), clear table state after ~2.5m so consolidation can proceed.
+ * Does not nuke in-memory state (that could strand chips vs DB).
  * @param {string[]} gameIds
  * @param {{ hasActiveHand: (gameId: string) => Promise<boolean>, forceStuckPlayerToAct: (gameId: string, io: object) => Promise<boolean>, getIO: () => object, getTableNumber?: (gameId: string) => Promise<number|undefined>, clearAllStateForGames?: (gameIds: string[]) => void }} deps
  */
@@ -274,11 +274,8 @@ export function waitForGameIdsToFinishHands(gameIds, deps) {
   const stuckThresholdMs = 90000;
   /** Do not hammer force every 2s once stuck — applyPlayerAction may succeed without finishing the hand. */
   const forceThrottleMs = 30000;
-  /** Wall-clock time with a still-active hand before clearing in-memory state (last resort). */
-  const nukeStuckAfterMs = 150000;
   const activeSince = new Map();
   const lastForceAttempt = new Map();
-  const nukeDone = new Set();
 
   return new Promise((resolve) => {
     const checkHands = async () => {
@@ -300,25 +297,6 @@ export function waitForGameIdsToFinishHands(gameIds, deps) {
             } catch {
               /* ignore */
             }
-          }
-
-          if (
-            stuckForMs >= nukeStuckAfterMs &&
-            typeof deps.clearAllStateForGames === "function" &&
-            !nukeDone.has(gameId)
-          ) {
-            nukeDone.add(gameId);
-            try {
-              deps.clearAllStateForGames([gameId]);
-              console.warn(
-                `[TOURNAMENT] ${tableLabel}: cleared stuck in-memory hand after ${waitingFor.toFixed(0)}s (consolidation wait)`
-              );
-            } catch (e) {
-              console.warn(`[TOURNAMENT] Nuke stuck state failed for ${tableLabel}:`, e?.message);
-            }
-            activeSince.delete(gameId);
-            lastForceAttempt.delete(gameId);
-            continue;
           }
 
           if (stuckForMs >= stuckThresholdMs) {
@@ -345,7 +323,6 @@ export function waitForGameIdsToFinishHands(gameIds, deps) {
         } else {
           activeSince.delete(gameId);
           lastForceAttempt.delete(gameId);
-          nukeDone.delete(gameId);
         }
       }
 
@@ -582,28 +559,58 @@ export async function doConsolidateTables(tournamentId, deps) {
           const movers = await tx.player.findMany({
             where: { gameId: closeG.id, ...MOVE_ELIGIBLE },
           });
+          const allOnCloseBeforeMoves = await tx.player.findMany({
+            where: { gameId: closeG.id },
+            select: {
+              id: true,
+              userId: true,
+              seatNumber: true,
+              chips: true,
+              status: true,
+            },
+          });
           const closeRow = await tx.game.findUnique({
             where: { id: closeG.id },
             select: { pot: true, tableNumber: true },
           });
           const orphanPot = closeRow?.pot ?? 0;
+          let orphanRemaining = orphanPot;
 
-          if (orphanPot > 0 && movers.length > 0) {
+          if (orphanRemaining > 0 && movers.length > 0) {
             const first = [...movers].sort(
               (a, b) => a.seatNumber - b.seatNumber
             )[0];
-            const newChips = (first.chips ?? 0) + orphanPot;
+            const newChips = (first.chips ?? 0) + orphanRemaining;
             await tx.player.update({
               where: { id: first.id },
               data: { chips: newChips },
             });
             first.chips = newChips;
             console.log(
-              `[TOURNAMENT] Orphan pot ${orphanPot} from table ${closeG.tableNumber} → player ${first.id}`
+              `[TOURNAMENT] Orphan pot ${orphanPot} from table ${closeG.tableNumber} → first mover ${first.id}`
             );
-          } else if (orphanPot > 0) {
-            console.error(
-              `[TOURNAMENT] Orphan pot ${orphanPot} on table ${closeG.tableNumber} but no MOVE_ELIGIBLE movers — will try leftovers below`
+            orphanRemaining = 0;
+          } else if (orphanRemaining > 0) {
+            const live = allOnCloseBeforeMoves.find(
+              (r) => r.status !== "ELIMINATED"
+            );
+            if (live) {
+              const nc = (live.chips ?? 0) + orphanRemaining;
+              await tx.player.update({
+                where: { id: live.id },
+                data: { chips: nc },
+              });
+              live.chips = nc;
+              console.log(
+                `[TOURNAMENT] Orphan pot ${orphanPot} from table ${closeG.tableNumber} → player ${live.id} (only non-eliminated row on closing table)`
+              );
+              orphanRemaining = 0;
+            }
+          }
+
+          if (orphanRemaining > 0) {
+            throw new Error(
+              `[TOURNAMENT] Refusing to close table ${closeG.tableNumber} (${closeG.id}): cannot credit orphan DB pot=${orphanRemaining} to any non-eliminated player`
             );
           }
 
@@ -645,27 +652,6 @@ export async function doConsolidateTables(tournamentId, deps) {
               status: true,
             },
           });
-
-          if (orphanPot > 0 && movers.length === 0 && leftovers.length > 0) {
-            const credit = leftovers.find(
-              (r) => r.status !== "ELIMINATED" && (r.chips ?? 0) > 0
-            );
-            if (credit) {
-              const nc = (credit.chips ?? 0) + orphanPot;
-              await tx.player.update({
-                where: { id: credit.id },
-                data: { chips: nc },
-              });
-              credit.chips = nc;
-              console.log(
-                `[TOURNAMENT] Orphan pot ${orphanPot} from table ${closeG.tableNumber} → leftover player ${credit.id}`
-              );
-            } else {
-              console.error(
-                `[TOURNAMENT] Orphan pot ${orphanPot} on table ${closeG.tableNumber} — no chip-positive row to credit`
-              );
-            }
-          }
 
           for (const p of leftovers) {
             if (p.status === "ELIMINATED") {
