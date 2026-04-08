@@ -46,15 +46,20 @@ function parsePlayerHoleCards(p) {
 }
 
 /**
- * Table UI should not show empty stacks except real all-in (0 chips, still in the pot).
+ * Table UI should not show empty stacks except real all-in (0 chips, still in this hand).
  * DB rows merged mid-hand for reseats could otherwise appear as ACTIVE 0-chip ghosts.
+ * Stale ALL_IN + 0 chips from the *previous* hand must not appear when a new hand only
+ * dealt to chip-positive players (game-state merge pulls full DB roster).
  * Always include the viewer so bust / elimination flows still see their row in payload.
+ * @param {Set<string>|null} inHandPlayerIds — player ids in this hand's in-memory state; null if no hand state.
  */
-function includePlayerInClientTableList(p, viewerUserIdNorm) {
+function includePlayerInClientTableList(p, viewerUserIdNorm, inHandPlayerIds) {
   if (p.status === "ELIMINATED") return false;
-  const chips = p.chips ?? 0;
+  const chips = Number(p.chips ?? 0);
   if (chips > 0) return true;
-  if (p.status === "ALL_IN") return true;
+  const inThisHand =
+    inHandPlayerIds != null && inHandPlayerIds.has(p.id);
+  if (p.status === "ALL_IN" && inThisHand) return true;
   if (
     viewerUserIdNorm != null &&
     normalizeUserId(p.userId) === viewerUserIdNorm
@@ -147,6 +152,9 @@ export function buildClientGameState(game, state, viewerUserId) {
       if (gp.status === "ELIMINATED" || seenIds.has(gp.id)) continue;
       const uid = normalizeUserId(gp.userId);
       if (uid && seenUserIds.has(uid)) continue;
+      // Reseats during a hand only move chip-positive players; 0-chip DB rows here are
+      // busted / stale ALL_IN from other hands — do not merge (avoids seat spam before filter).
+      if (Number(gp.chips ?? 0) <= 0) continue;
       playersForDisplay.push(gp);
       seenIds.add(gp.id);
       if (uid) seenUserIds.add(uid);
@@ -187,7 +195,7 @@ export function buildClientGameState(game, state, viewerUserId) {
     showdownForcedReveal: isNewHand ? false : showdownForcedReveal,
     showdownNeedsChoice: isNewHand ? false : showdownNeedsChoice,
     players: playersForDisplay
-      .filter((p) => includePlayerInClientTableList(p, vuNorm))
+      .filter((p) => includePlayerInClientTableList(p, vuNorm, inHandPlayerIds))
       .map((p) => {
         const inCurrentHand =
           inHandPlayerIds == null || inHandPlayerIds.has(p.id);

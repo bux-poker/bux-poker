@@ -15,6 +15,13 @@ export function handBlocksConsolidationWaitOverlay(
   if (state.showdownActive) return true;
   if (state.currentTurnUserId) return true;
   if ((state.currentBet ?? 0) > 0) return true;
-  if (parseCommunityCards(state.communityCards).length > 0) return true;
+  const boardLen = parseCommunityCards(state.communityCards).length;
+  if (boardLen > 0) {
+    // After pot is awarded the server may still send the river board until the next hand;
+    // that used to hide the consolidation / reseat popup forever (looked "stuck").
+    const handResolved =
+      (state.showdownResults?.winners?.length ?? 0) > 0 && !state.showdownActive;
+    if (!handResolved) return true;
+  }
   return false;
 }
