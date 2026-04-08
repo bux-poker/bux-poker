@@ -1,5 +1,6 @@
 import { prisma } from "../../config/database.js";
 import { hasActiveHand, forceStuckPlayerToAct } from "../../modules/poker/tableState.js";
+import { reconcileOrphanDbPotsForTournament } from "./stalePotRecovery.js";
 
 const _blindWaitActiveSince = new Map(); // gameId -> first-seen-active timestamp
 const _blindWaitLastForce = new Map(); // gameId -> last forceStuckPlayerToAct attempt
@@ -215,6 +216,9 @@ export async function maybeFinalizeBlindPeriodAnchor(tournamentId, io) {
 
   const barrier = tournament.blindScheduleBarrier ?? 0;
   if (barrier <= 0) return false;
+
+  await reconcileOrphanDbPotsForTournament(tournamentId);
+
   const games = await prisma.game.findMany({
     where: { tournamentId, status: "ACTIVE" },
     include: {

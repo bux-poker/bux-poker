@@ -1,6 +1,7 @@
 import { prisma } from "../../config/database.js";
 import { auditChipConservation } from "./chipAudit.js";
 import { resyncGamesToMaxBlindLevel } from "./blindLevels.js";
+import { reconcileOrphanDbPotsForTournament } from "./stalePotRecovery.js";
 import {
   pickNextBigBlindMover,
   pickWorstOpenSeat,
@@ -8,9 +9,8 @@ import {
 
 /**
  * Tell clients to refetch tournament + navigate if their gameId changed.
- * Must run after EACH wave that mutates seats — a later wave can `return` early
- * (hand still up / pot) and skip the end-of-function emit, leaving moved users
- * stuck on the old /game/:id URL.
+ * `doConsolidateTables` always invokes this from `finally` so early returns
+ * (hand still up / DB pot abort) still notify clients.
  */
 async function emitConsolidationResync(io, tournamentId) {
   if (!io) return;
@@ -414,6 +414,8 @@ export async function doConsolidateTables(tournamentId, deps) {
   };
 
   try {
+    await reconcileOrphanDbPotsForTournament(tournamentId);
+
     // Close one excess table per wave; only the closing table waits for its hand (destinations keep playing).
     while (true) {
       games = await prisma.game.findMany({
@@ -768,7 +770,6 @@ export async function doConsolidateTables(tournamentId, deps) {
           }
         }
       }
-      await emitConsolidationResync(ioWave, tournamentId);
     }
 
     games = await prisma.game.findMany({
@@ -1000,7 +1001,6 @@ export async function doConsolidateTables(tournamentId, deps) {
               }
             }
           }
-          await emitConsolidationResync(ioPush, tournamentId);
 
           progressed = true;
           balanceMoves++;
@@ -1086,22 +1086,14 @@ export async function doConsolidateTables(tournamentId, deps) {
       );
     }
 
-    try {
-      const io = deps.getIO();
-      if (io) {
-        for (const g of updatedGames) {
-          io.to(`game:${g.id}`).emit("tournament_updated", { tournamentId });
-        }
-        io.emit("tournament_updated", { tournamentId });
-        // Clients use this to leave the old table URL and join-table on the new game (not only when a hand was started above).
-        io.emit("consolidation-complete", { tournamentId });
-      }
-    } catch (e) {
-      console.warn("[TOURNAMENT] Could not emit tournament_updated:", e?.message);
-    }
-
     return updatedGames;
   } finally {
+    try {
+      const ioFinal = deps.getIO();
+      if (ioFinal) await emitConsolidationResync(ioFinal, tournamentId);
+    } catch (e) {
+      console.warn("[TOURNAMENT] consolidation resync (finally):", e?.message);
+    }
     clearConsolidationWaitTournament(tournamentId);
   }
 }
