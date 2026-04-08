@@ -1,6 +1,9 @@
 import { prisma } from "../../config/database.js";
 import { auditChipConservation } from "./chipAudit.js";
-import { clearAllStateForGames } from "../../modules/poker/tableState.js";
+import {
+  clearAllStateForGames,
+  hasActiveHand,
+} from "../../modules/poker/tableState.js";
 
 /**
  * If exactly one player has chips and is not eliminated, mark tournament COMPLETED.
@@ -30,6 +33,19 @@ export async function completeTournamentIfOneLeft(tournamentId) {
     where: { game: { tournamentId }, chips: { gt: 0 }, status: { not: "ELIMINATED" } }
   });
   if (verifyCount !== 1) return false;
+
+  const activeGames = await prisma.game.findMany({
+    where: { tournamentId, status: "ACTIVE" },
+    select: { id: true, tableNumber: true },
+  });
+  for (const g of activeGames) {
+    if (hasActiveHand(g.id)) {
+      console.log(
+        `[TOURNAMENT] Deferring completion: active hand still in memory on game ${g.id} (table ${g.tableNumber ?? "?"})`
+      );
+      return false;
+    }
+  }
 
   await prisma.$transaction(async (tx) => {
     const gamesWithPot = await tx.game.findMany({

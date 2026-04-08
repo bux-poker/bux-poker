@@ -36,15 +36,16 @@ export function hasActiveHand(gameId) {
   const state = tableState.get(gameId);
   if (!state) return false;
 
-  // Hand explicitly ended (winner awarded / cleanup pending) should not block consolidation.
-  if (state.handEnded) return false;
-
-  // Chips still in the pot means the hand is not fully settled in memory (e.g. awarding/showdown).
-  // Must run BEFORE the activeContenders shortcut — that shortcut can false-negative during
-  // fold-win or broken state (e.g. consolidation cleared other fields but async path still running).
+  // handleShowdownCore sets handEnded=true at the START of showdown, then distributes the pot,
+  // then persistAllPlayerStacksFromHandState + DB pot zero. If we short-circuit on handEnded
+  // first, hasActiveHand is false while state.pot > 0 and DB stacks are still pre-award —
+  // consolidation can move players and clearAllStateForGames, destroying chip conservation
+  // (multi-table only; single table rarely hits balance/merge during the same ms window).
   if ((state.pot ?? 0) > 0) return true;
 
   if (state.showdownActive) return true;
+
+  if (state.handEnded) return false;
 
   const activeContenders = (state.players || []).filter(
     (p) => p.status !== "FOLDED" && p.status !== "ELIMINATED"
