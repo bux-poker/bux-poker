@@ -63,6 +63,88 @@ function orderTiedHandResultsForOddChip(tiedResults, state) {
   );
 }
 
+function sumTotalWonMap(totalWon) {
+  let s = 0;
+  for (const v of totalWon.values()) {
+    s += Number(v) || 0;
+  }
+  return s;
+}
+
+/**
+ * After side-pot awards, guarantee sum(stack deltas recorded in totalWon) === potToAward exactly.
+ * Uses table-best hand for top-up and reverse-by-won for clawback, then a single-seat micro adjust if needed.
+ */
+function reconcilePotAwardToExact(
+  potToAward,
+  handResults,
+  state,
+  totalWon,
+  gameId
+) {
+  const tableNuts = () => {
+    const maxS = Math.max(...handResults.map((r) => r.strength));
+    return handResults.filter((r) => r.strength === maxS);
+  };
+
+  for (let iter = 0; iter < 16; iter++) {
+    const distributed = sumTotalWonMap(totalWon);
+    const delta = potToAward - distributed;
+    if (delta === 0) return;
+
+    if (delta > 0) {
+      const winners = tableNuts();
+      if (winners.length === 0) break;
+      distributePotAcrossTiedWinners(
+        delta,
+        winners,
+        state,
+        totalWon,
+        `[SHOWDOWN] exactness top-up`
+      );
+      continue;
+    }
+
+    let need = -delta;
+    const rows = Array.from(totalWon.entries())
+      .filter(([, w]) => w > 0)
+      .sort((a, b) => b[1] - a[1]);
+    for (const [playerId, won] of rows) {
+      if (need <= 0) break;
+      const player = state.players.find((p) => p.id === playerId);
+      if (!player) continue;
+      const stack = Math.max(0, Number(player.chips) || 0);
+      const take = Math.min(need, won, stack);
+      if (take <= 0) continue;
+      totalWon.set(playerId, won - take);
+      player.chips -= take;
+      need -= take;
+      console.warn(
+        `[SHOWDOWN] exactness clawback -${take} from ${player.name || player.userId} (game ${gameId})`
+      );
+    }
+  }
+
+  let residual = potToAward - sumTotalWonMap(totalWon);
+  if (residual !== 0 && handResults.length > 0) {
+    const w =
+      orderTiedHandResultsForOddChip(tableNuts(), state)[0] || handResults[0];
+    w.player.chips += residual;
+    totalWon.set(w.player.id, (totalWon.get(w.player.id) || 0) + residual);
+    console.error(
+      `[SHOWDOWN] exactness final adjust ${residual} to ${w.player.name || w.player.userId} (game ${gameId})`
+    );
+    residual = potToAward - sumTotalWonMap(totalWon);
+  }
+
+  const finalSum = sumTotalWonMap(totalWon);
+  if (finalSum !== potToAward) {
+    console.error(
+      `[SHOWDOWN] FATAL pot invariant: game=${gameId} potToAward=${potToAward} totalWonSum=${finalSum}`
+    );
+  }
+}
+
 /** Serialize showdown per table — concurrent handleShowdown calls (advanceStreet + moveToNextPlayer + timers) double-award the pot and break chip conservation. */
 const showdownSerializeTail = new Map();
 
@@ -285,6 +367,8 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
     return;
   }
 
+  let potToAward = 0;
+
   {
     const maxStrength = Math.max(...handResults.map((r) => r.strength));
     const winners = handResults.filter((r) => r.strength === maxStrength);
@@ -395,8 +479,31 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
       });
     }
 
+    potToAward = state.pot;
+    const contribSum = Array.from(totalContributions.values()).reduce(
+      (a, b) => a + b,
+      0
+    );
+    if (contribSum !== potToAward) {
+      console.error(
+        `[SHOWDOWN] contribution sum ${contribSum} !== pot ${potToAward} (game ${gameId}) — awarding by pot size; fix betting/pot merge`
+      );
+    }
+
+    let layerSum = sidePots.reduce((s, p) => s + p.amount, 0);
+    if (sidePots.length > 0 && layerSum !== potToAward) {
+      const fix = potToAward - layerSum;
+      sidePots[sidePots.length - 1].amount += fix;
+      layerSum = potToAward;
+      console.warn(
+        `[SHOWDOWN] adjusted last side-pot layer by ${fix} so Σlayers === pot (${potToAward})`
+      );
+    }
+
     totalWon = new Map();
-    activePlayers.forEach((p) => totalWon.set(p.id, 0));
+    for (const p of state.players) {
+      if (p.status !== "ELIMINATED") totalWon.set(p.id, 0);
+    }
 
     for (const pot of sidePots) {
       if (pot.amount <= 0) continue;
@@ -444,52 +551,13 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
     }
   }
 
-  const totalDistributed = Array.from(totalWon.values()).reduce(
-    (s, a) => s + a,
-    0
-  );
-  if (totalDistributed !== state.pot) {
-    const diff = state.pot - totalDistributed;
-    if (diff > 0) {
-      console.error(
-        `[SHOWDOWN] CHIP LEAK: distributed ${totalDistributed} but pot was ${state.pot} (shortfall ${diff}) — splitting among best hand(s) (odd chip from button)`
-      );
-      if (handResults.length > 0) {
-        const maxStrength = Math.max(...handResults.map((r) => r.strength));
-        const winners = handResults.filter((r) => r.strength === maxStrength);
-        if (winners.length > 0) {
-          distributePotAcrossTiedWinners(
-            diff,
-            winners,
-            state,
-            totalWon,
-            "[SHOWDOWN] leak fix"
-          );
-        }
-      }
-    } else if (diff < 0) {
-      console.error(
-        `[SHOWDOWN] CHIP CREATION: distributed ${totalDistributed} but pot was ${state.pot} (excess ${-diff}) - removing excess from winners`
-      );
-      const sorted = Array.from(totalWon.entries()).sort(
-        (a, b) => b[1] - a[1]
-      );
-      let remaining = -diff;
-      for (const [playerId, won] of sorted) {
-        if (remaining <= 0) break;
-        const player = activePlayers.find((p) => p.id === playerId);
-        if (!player) continue;
-        const take = Math.min(won, remaining);
-        totalWon.set(playerId, won - take);
-        player.chips -= take;
-        remaining -= take;
-        console.log(
-          `[SHOWDOWN]   Removed ${take} chips from ${
-            player.name || player.userId
-          } to fix creation`
-        );
-      }
-    }
+  reconcilePotAwardToExact(potToAward, handResults, state, totalWon, gameId);
+
+  const verified = sumTotalWonMap(totalWon);
+  if (verified !== potToAward) {
+    console.error(
+      `[SHOWDOWN] post-reconcile mismatch game=${gameId} pot=${potToAward} sum=${verified}`
+    );
   }
 
   // Persist every seat (incl. folded); only writing active players left stale DB stacks.
