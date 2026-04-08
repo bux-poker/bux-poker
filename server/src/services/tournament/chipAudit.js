@@ -1,5 +1,22 @@
 import { prisma } from "../../config/database.js";
-import { hasActiveHand } from "../../modules/poker/tableState.js";
+import { hasActiveHand, tableState } from "../../modules/poker/tableState.js";
+
+/** Pot accumulated in memory for a table (DB `Game.pot` is often 0 mid-hand). */
+function inMemoryPotForGame(gameId) {
+  const state = tableState.get(gameId);
+  if (!state) return 0;
+  let fromRound = 0;
+  const r = state.bettingRound;
+  if (r && typeof r.getTotalPot === "function") {
+    try {
+      const x = r.getTotalPot();
+      fromRound = typeof x === "number" && !Number.isNaN(x) ? x : 0;
+    } catch {
+      fromRound = 0;
+    }
+  }
+  return (state.pot ?? 0) + fromRound;
+}
 
 /**
  * Chip pool invariant: every seated `Player` row was created with `startingChips`.
@@ -48,16 +65,32 @@ export async function auditChipConservation(tournamentId) {
     }
   }
   const actualTotal = playerChipsTotal + gamePotTotal;
-  const activeHandCount = (tournament.games || []).filter((g) =>
+  const activeGames = (tournament.games || []).filter((g) =>
     hasActiveHand(g.id)
-  ).length;
+  );
+  const activeHandCount = activeGames.length;
+  let inMemoryPotSum = 0;
+  for (const g of activeGames) {
+    inMemoryPotSum += inMemoryPotForGame(g.id);
+  }
+  const reconciledTotal = actualTotal + inMemoryPotSum;
+
   if (actualTotal !== expectedTotal) {
+    const diff = actualTotal - expectedTotal;
+    const reconciledOk =
+      activeHandCount > 0 && reconciledTotal === expectedTotal;
     const msg = `[TOURNAMENT] CHIP CONSERVATION ${
-      activeHandCount > 0 ? "PENDING" : "VIOLATION"
-    }: tournament ${tournamentId} has ${actualTotal} chips (players: ${playerChipsTotal}, game pots: ${gamePotTotal}), expected ${expectedTotal} (${playerRowCount} player rows × ${tournament.startingChips} starting). Difference: ${
-      actualTotal - expectedTotal
-    }${activeHandCount > 0 ? `, activeHands=${activeHandCount}` : ""}`;
-    if (activeHandCount > 0) {
+      activeHandCount > 0 && !reconciledOk ? "PENDING" : reconciledOk ? "OK_RECONCILED" : "VIOLATION"
+    }: tournament ${tournamentId} DB total ${actualTotal} (players ${playerChipsTotal}, game pots ${gamePotTotal}), expected ${expectedTotal} (${playerRowCount} rows × ${tournament.startingChips}). Diff ${diff}${
+      activeHandCount > 0
+        ? `, activeHands=${activeHandCount}, inMemoryPotSum=${inMemoryPotSum}, db+memory=${reconciledTotal}`
+        : ""
+    }`;
+    if (reconciledOk) {
+      console.log(
+        `${msg} — matches after adding in-flight tableState pots (not a chip leak).`
+      );
+    } else if (activeHandCount > 0) {
       console.warn(msg);
     } else {
       console.error(msg);

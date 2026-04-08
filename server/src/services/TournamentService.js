@@ -322,10 +322,24 @@ export class TournamentService {
         );
         livePlayers = sortTournamentStandings(livePlayers);
 
+        // Max blind level index across live tables so lobby/modal match anchor clock (same as in-game).
+        let canonicalBlindLevelIndex = 0;
+        for (const g of tournament.games || []) {
+          const hasLivePlayer = (g.players || []).some(
+            (p) => p.status !== "ELIMINATED"
+          );
+          if (!hasLivePlayer) continue;
+          if (g.status != null && g.status !== "ACTIVE") continue;
+          const idx =
+            typeof g.currentBlindLevel === "number" ? g.currentBlindLevel : 0;
+          canonicalBlindLevelIndex = Math.max(canonicalBlindLevelIndex, idx);
+        }
+
         return {
           ...tournament,
           startedAt: tournament.startedAt, // Include startedAt for blind timer
           blindLevels: blindLevels, // Add parsed blind levels
+          canonicalBlindLevelIndex,
           registeredCount: registeredCount,
           remainingPlayers: remainingPlayers, // Players still in tournament (not eliminated; includes all-in)
           prizePlaces: calculatedPrizePlaces, // Calculate dynamically based on registrations

@@ -8,7 +8,10 @@ import { TournamentTimestamp } from './TournamentTimestamp';
 import { formatLocalDateTime } from '../../utils/formatLocalDateTime';
 import { AddToHomeScreen } from '../AddToHomeScreen';
 import api from '../../services/api';
-import { getBlindScheduleForTournament } from '@shared/utils/tournamentBlindSchedule';
+import {
+  getBlindScheduleForTournament,
+  getBlindCountdownFromTournamentSchedule,
+} from '@shared/utils/tournamentBlindSchedule';
 
 type Tab = 'players' | 'blinds' | 'prizes' | 'tables';
 
@@ -177,26 +180,59 @@ export function TournamentLobby() {
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       setRunningTime(`${hours}h ${minutes}m`);
 
-      // Same schedule math as server (includes breakAfter between levels)
+      // Blind display: anchor + canonical level (matches tables) when server uses barrier scheduling.
       if (blindLevels.length > 0 && (tournament as any).startedAt) {
         const json =
           typeof tournament.blindLevels === 'string'
             ? tournament.blindLevels
             : JSON.stringify(blindLevels.length ? blindLevels : []);
-        const sched = getBlindScheduleForTournament((tournament as any).startedAt, json, Date.now());
-        if (sched) {
-          const currentLevel = blindLevels[sched.currentLevelIndex];
-          setCurrentBlindLevel(currentLevel ?? null);
-          if (sched.atLastLevel || sched.msUntilNextLevel == null) {
+        const tt = tournament as any;
+        const useAnchor =
+          tt.awaitingHandsForBlindClock === true ||
+          tt.blindPeriodAnchorAt != null ||
+          tt.tournamentBreakUntilAt != null;
+
+        if (useAnchor) {
+          const levelIdx =
+            typeof tt.canonicalBlindLevelIndex === 'number'
+              ? tt.canonicalBlindLevelIndex
+              : 0;
+          const clock = getBlindCountdownFromTournamentSchedule({
+            blindPeriodAnchorAt: tt.blindPeriodAnchorAt,
+            awaitingHandsForBlindClock: !!tt.awaitingHandsForBlindClock,
+            tournamentBreakUntilAt: tt.tournamentBreakUntilAt,
+            currentLevelIndex: Math.min(levelIdx, blindLevels.length - 1),
+            blindLevels,
+            nowMs: Date.now(),
+          });
+          const idx = Math.min(levelIdx, blindLevels.length - 1);
+          setCurrentBlindLevel(blindLevels[idx] ?? null);
+          if (clock.phase === 'final') {
             setNextBlindLevel(null);
-            setNextBlindIn(sched.atLastLevel ? '∞' : '--:--');
+            setNextBlindIn('∞');
           } else {
-            const nextIdx = sched.currentLevelIndex + 1;
-            setNextBlindLevel(blindLevels[nextIdx] ?? null);
-            const ms = sched.msUntilNextLevel;
-            const mins = Math.floor(ms / 60000);
-            const secs = Math.floor((ms % 60000) / 1000);
-            setNextBlindIn(`${mins}:${secs.toString().padStart(2, '0')}`);
+            const nextIdx = idx + 1;
+            setNextBlindLevel(
+              nextIdx < blindLevels.length ? blindLevels[nextIdx] ?? null : null
+            );
+            setNextBlindIn(clock.label);
+          }
+        } else {
+          const sched = getBlindScheduleForTournament((tournament as any).startedAt, json, Date.now());
+          if (sched) {
+            const currentLevel = blindLevels[sched.currentLevelIndex];
+            setCurrentBlindLevel(currentLevel ?? null);
+            if (sched.atLastLevel || sched.msUntilNextLevel == null) {
+              setNextBlindLevel(null);
+              setNextBlindIn(sched.atLastLevel ? '∞' : '--:--');
+            } else {
+              const nextIdx = sched.currentLevelIndex + 1;
+              setNextBlindLevel(blindLevels[nextIdx] ?? null);
+              const ms = sched.msUntilNextLevel;
+              const mins = Math.floor(ms / 60000);
+              const secs = Math.floor((ms % 60000) / 1000);
+              setNextBlindIn(`${mins}:${secs.toString().padStart(2, '0')}`);
+            }
           }
         }
       }

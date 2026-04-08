@@ -143,7 +143,10 @@ export async function doOnPlayersBust(tournamentId, playerIds, deps) {
         where: { id: tournamentId },
         data: { status: "COMPLETED" }
       });
-      await auditChipConservation(tournamentId);
+      // Defer audit so final hand cleanup / persist can finish (avoids false PENDING from in-memory pot).
+      setTimeout(() => {
+        void auditChipConservation(tournamentId);
+      }, 5000);
       try {
         const tournament = await prisma.tournament.findUnique({
           where: { id: tournamentId },

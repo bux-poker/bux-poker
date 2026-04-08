@@ -21,13 +21,24 @@ export interface Tournament {
   seatsPerTable: number;
   startingChips: number;
   blindLevels: any; // JSON structure
+  /** Max `currentBlindLevel` across live ACTIVE games; use with anchor blind clock in lobby. */
+  canonicalBlindLevelIndex?: number;
+  blindPeriodAnchorAt?: string | null;
+  awaitingHandsForBlindClock?: boolean;
+  tournamentBreakUntilAt?: string | null;
   prizePlaces: number;
   registeredCount?: number;
   remainingPlayers?: number;
   createdBy: string | any;
   createdAt: Date | string;
   servers?: TournamentServer[];
-  games?: Array<{ id: string; tableNumber: number; players?: Array<{ id: string; userId: string; status: string; chips?: number; user?: { username?: string } }> }>;
+  games?: Array<{
+    id: string;
+    tableNumber: number;
+    status?: string;
+    currentBlindLevel?: number | null;
+    players?: Array<{ id: string; userId: string; status: string; chips?: number; user?: { username?: string } }>;
+  }>;
   /** Full registration list + standings fields (from GET /api/tournaments/:id) */
   players?: Array<{
     userId: string;

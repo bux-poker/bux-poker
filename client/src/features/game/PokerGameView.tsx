@@ -725,10 +725,16 @@ export function PokerGameView() {
           setNextBlindTime("--:--");
           return;
         }
-        const levelIdx =
+        const rawIdx =
           typeof gameState?.currentBlindLevel === "number"
             ? gameState.currentBlindLevel
-            : 0;
+            : typeof tt.canonicalBlindLevelIndex === "number"
+              ? tt.canonicalBlindLevelIndex
+              : 0;
+        const levelIdx = Math.min(
+          Math.max(0, rawIdx),
+          Math.max(0, blindLevels.length - 1)
+        );
         const clock = getBlindCountdownFromTournamentSchedule({
           blindPeriodAnchorAt: tt.blindPeriodAnchorAt,
           awaitingHandsForBlindClock: !!tt.awaitingHandsForBlindClock,

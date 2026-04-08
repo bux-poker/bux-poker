@@ -136,12 +136,20 @@ export function TournamentLobbyModal({
     tournament?.status === 'RUNNING' || tournament?.status === 'ACTIVE';
   const registeredCount = tournament?.registeredCount ?? 0;
   const remainingPlayers = (tournament as any)?.remainingPlayers ?? players.filter((p) => p.status !== 'ELIMINATED').length;
-  const currentBlindLevelIndex =
-    gameState?.smallBlind != null && gameState?.bigBlind != null && blindLevels.length > 0
+  const fromTableBlinds =
+    gameState?.smallBlind != null &&
+    gameState?.bigBlind != null &&
+    blindLevels.length > 0
       ? blindLevels.findIndex(
           (l) => l.smallBlind === gameState.smallBlind && l.bigBlind === gameState.bigBlind
         )
       : -1;
+  const apiCanonical =
+    typeof (tournament as any)?.canonicalBlindLevelIndex === 'number'
+      ? (tournament as any).canonicalBlindLevelIndex
+      : -1;
+  const currentBlindLevelIndex =
+    fromTableBlinds >= 0 ? fromTableBlinds : apiCanonical >= 0 ? apiCanonical : -1;
 
   const canAddTestPlayers =
     isAdmin &&
