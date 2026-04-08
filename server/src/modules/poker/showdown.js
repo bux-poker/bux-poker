@@ -218,10 +218,23 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
     totalContributions.set(player.id, handContribution + currentContribution);
   });
 
+  if (handResults.length === 0 && activePlayers.length > 0) {
+    console.error(
+      `[SHOWDOWN] No valid hole cards for showdown (game ${gameId}, pot=${state.pot}) — ` +
+        "using equal-strength fallback so the full pot is still awarded."
+    );
+    for (const player of activePlayers) {
+      handResults.push({
+        player,
+        hand: { category: "MUCKED", strength: 0, bestFive: [] },
+        strength: 0,
+      });
+    }
+  }
+
   if (handResults.length === 0) {
     console.error(
-      `[SHOWDOWN] FATAL: No valid hands evaluated for game ${gameId} with pot=${state.pot}. ` +
-        "Refusing to distribute chips; table should be investigated and restarted."
+      `[SHOWDOWN] Cannot distribute: no active players with evaluable hands (game ${gameId})`
     );
     return;
   } else {
@@ -332,22 +345,27 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
 
     for (const pot of sidePots) {
       if (pot.amount <= 0) continue;
-      let potWinners;
       const eligibleHandResults = handResults.filter((r) =>
         pot.eligiblePlayerIds.includes(r.player.id)
       );
-      if (eligibleHandResults.length === 0) {
-        console.warn(
-          `[SHOWDOWN] Side pot ${pot.level}: no eligible players found, skipping this pot distribution`
-        );
-        continue;
-      } else {
+      let potWinners;
+      if (eligibleHandResults.length > 0) {
         const maxStrength = Math.max(
           ...eligibleHandResults.map((r) => r.strength)
         );
         potWinners = eligibleHandResults.filter(
           (r) => r.strength === maxStrength
         );
+      } else {
+        const eligiblePlayers = activePlayers.filter((p) =>
+          pot.eligiblePlayerIds.includes(p.id)
+        );
+        const fallback =
+          eligiblePlayers.length > 0 ? eligiblePlayers : activePlayers;
+        console.warn(
+          `[SHOWDOWN] Side pot ${pot.level}: no evaluated hands for eligible IDs — splitting ${pot.amount} across ${fallback.length} player(s) (chip conservation)`
+        );
+        potWinners = fallback.map((player) => ({ player }));
       }
       const potPerWinner = Math.floor(pot.amount / potWinners.length);
       const remainder = pot.amount % potWinners.length;
@@ -359,15 +377,14 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
       potWinners.forEach((winner, index) => {
         const amount = potPerWinner + (index === 0 ? remainder : 0);
         if (amount <= 0) return;
-        const currentWon = totalWon.get(winner.player.id) || 0;
-        totalWon.set(winner.player.id, currentWon + amount);
-        winner.player.chips += amount;
+        const pl = winner.player;
+        const currentWon = totalWon.get(pl.id) || 0;
+        totalWon.set(pl.id, currentWon + amount);
+        pl.chips += amount;
         console.log(
           `[SHOWDOWN]   Distributing ${amount} chips to ${
-            winner.player.name || winner.player.userId
-          } (seat ${winner.player.seatNumber}) from side pot level ${
-            pot.level
-          }`
+            pl.name || pl.userId
+          } (seat ${pl.seatNumber}) from side pot level ${pot.level}`
         );
       });
     }
