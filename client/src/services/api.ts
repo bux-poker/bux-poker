@@ -1,5 +1,8 @@
 import axios from "axios";
-import { getClientApiBaseUrl } from "@shared/utils/clientApiBaseUrl";
+import {
+  enforceBuxPokerSameOriginApiBase,
+  getClientApiBaseUrl,
+} from "@shared/utils/clientApiBaseUrl";
 
 const API_BASE_URL = getClientApiBaseUrl();
 
@@ -8,6 +11,8 @@ export const api = axios.create({
   withCredentials: true,
   timeout: 45000,
 });
+
+enforceBuxPokerSameOriginApiBase(api);
 
 api.interceptors.response.use(
   (response) => response,

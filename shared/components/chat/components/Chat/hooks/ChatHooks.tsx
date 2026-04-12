@@ -5,7 +5,10 @@ import { useState, useEffect, useRef } from 'react';
 import { useSocket } from '../../../../../features/auth/SocketContext';
 import { useAuth } from '../../../../../features/auth/AuthContext';
 import axios from 'axios';
-import { getClientApiBaseUrl } from '@shared/utils/clientApiBaseUrl';
+import {
+  enforceBuxPokerSameOriginApiBase,
+  getClientApiBaseUrl,
+} from '@shared/utils/clientApiBaseUrl';
 import type { ChatMessage } from "../../../Chat";
 import type { Player } from '../../../../../types/game';
 
@@ -15,6 +18,8 @@ const api = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true
 });
+
+enforceBuxPokerSameOriginApiBase(api);
 
 // Intercept requests to add auth token
 api.interceptors.request.use((config) => {

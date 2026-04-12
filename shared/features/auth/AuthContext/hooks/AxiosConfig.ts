@@ -1,8 +1,12 @@
 import axios from 'axios';
-import { getClientApiBaseUrl } from '@shared/utils/clientApiBaseUrl';
+import {
+  enforceBuxPokerSameOriginApiBase,
+  getClientApiBaseUrl,
+} from '@shared/utils/clientApiBaseUrl';
 
 const apiBaseUrl = getClientApiBaseUrl();
 axios.defaults.baseURL = apiBaseUrl;
+enforceBuxPokerSameOriginApiBase(axios);
 axios.defaults.withCredentials = true;
 
 const isDev = import.meta.env.DEV;
