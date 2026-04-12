@@ -1,8 +1,8 @@
 import axios from 'axios';
 
-// Configure axios defaults — set VITE_API_BASE_URL on Vercel to your API host (e.g. Fly .fly.dev).
-const apiBaseUrl =
-  import.meta.env.VITE_API_BASE_URL || 'https://bux-poker.fly.dev';
+// Same-origin /api in production (Vercel rewrites to Fly). Override VITE_API_BASE_URL only if the
+// static app is hosted without that proxy (then set it to your API origin, e.g. https://….fly.dev).
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '';
 axios.defaults.baseURL = apiBaseUrl;
 axios.defaults.withCredentials = true;
 

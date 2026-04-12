@@ -1,9 +1,10 @@
 import { io, Socket } from "socket.io-client";
 
+/** WebSockets are not proxied through Vercel; default Fly host in prod when env vars omit it. */
 const SOCKET_URL =
   import.meta.env.VITE_SOCKET_URL ??
   import.meta.env.VITE_API_BASE_URL ??
-  "http://localhost:3000";
+  (import.meta.env.PROD ? "https://bux-poker.fly.dev" : "http://localhost:3000");
 
 let socket: Socket | null = null;
 

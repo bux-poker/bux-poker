@@ -30,30 +30,53 @@ if (process.env.NODE_ENV === "production" || process.env.TRUST_PROXY === "1") {
 const server = createServer(app);
 
 // CORS configuration
-const allowedOrigins = [
+const allowedOriginsSet = new Set([
   "http://localhost:5173",
-  "http://localhost:3000"
-];
+  "http://localhost:3000",
+]);
 
-if (process.env.CLIENT_URL) {
-  allowedOrigins.push(process.env.CLIENT_URL);
-  // Also add www version if main domain is provided
-  if (process.env.CLIENT_URL.startsWith('https://') && !process.env.CLIENT_URL.includes('www.')) {
-    allowedOrigins.push(process.env.CLIENT_URL.replace('https://', 'https://www.'));
+/** Apex ⟷ www for HTTPS production domains (not Vercel previews). */
+function counterpartHttpsWww(origin) {
+  if (!origin || !origin.startsWith("https://")) return null;
+  try {
+    const u = new URL(origin);
+    const h = u.hostname.toLowerCase();
+    if (h.endsWith(".vercel.app") || h === "localhost" || h === "127.0.0.1") return null;
+    const port = u.port ? `:${u.port}` : "";
+    if (h.startsWith("www.")) {
+      return `https://${h.slice(4)}${port}`;
+    }
+    return `https://www.${h}${port}`;
+  } catch {
+    return null;
   }
 }
 
+function addClientSiteOrigins(url) {
+  const trimmed = String(url || "").trim().replace(/\/+$/, "");
+  if (!trimmed) return;
+  allowedOriginsSet.add(trimmed);
+  const other = counterpartHttpsWww(trimmed);
+  if (other && other !== trimmed) allowedOriginsSet.add(other);
+}
+
+if (process.env.CLIENT_URL) {
+  addClientSiteOrigins(process.env.CLIENT_URL);
+}
+
 if (process.env.CLIENT_URL_ALT) {
-  allowedOrigins.push(process.env.CLIENT_URL_ALT);
+  addClientSiteOrigins(process.env.CLIENT_URL_ALT);
 }
 
 // Comma-separated extra origins (e.g. Vercel preview URLs): https://foo.vercel.app,https://bar.vercel.app
 if (process.env.CORS_EXTRA_ORIGINS) {
   for (const o of process.env.CORS_EXTRA_ORIGINS.split(",")) {
     const trimmed = o.trim();
-    if (trimmed) allowedOrigins.push(trimmed);
+    if (trimmed) allowedOriginsSet.add(trimmed);
   }
 }
+
+const allowedOrigins = [...allowedOriginsSet];
 
 /**
  * Vercel preview deploys use unique subdomains each time. Allow https://*.vercel.app when the

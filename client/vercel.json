@@ -34,6 +34,10 @@
       "destination": "/api/discord-oauth/callback"
     },
     {
+      "source": "/api/:path*",
+      "destination": "https://bux-poker.fly.dev/api/:path*"
+    },
+    {
       "source": "/((?!api(?:/|$)).*)",
       "destination": "/index.html"
     }
