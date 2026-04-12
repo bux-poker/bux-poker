@@ -5,13 +5,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useSocket } from '../../../../../features/auth/SocketContext';
 import { useAuth } from '../../../../../features/auth/AuthContext';
 import axios from 'axios';
+import { getClientApiBaseUrl } from '@shared/utils/clientApiBaseUrl';
 import type { ChatMessage } from "../../../Chat";
 import type { Player } from '../../../../../types/game';
 
-// Create api client for shared components
-const API_BASE_URL = typeof window !== 'undefined' 
-  ? (import.meta.env?.VITE_API_BASE_URL || '')
-  : '';
+const API_BASE_URL = getClientApiBaseUrl();
 
 const api = axios.create({
   baseURL: API_BASE_URL,

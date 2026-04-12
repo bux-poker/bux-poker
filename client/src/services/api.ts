@@ -1,9 +1,7 @@
 import axios from "axios";
+import { getClientApiBaseUrl } from "@shared/utils/clientApiBaseUrl";
 
-// Use relative URL for local dev (goes through Vite proxy)
-// Or use env var for production
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "";
+const API_BASE_URL = getClientApiBaseUrl();
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
