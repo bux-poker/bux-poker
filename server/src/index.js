@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 import { app, server, io, PORT } from "./config/server.js";
-import { connectRedis } from "./config/redis.js";
+import { connectRedis, redisClient } from "./config/redis.js";
 
 dotenv.config();
 
@@ -18,9 +18,9 @@ async function listenFirst() {
     server.once("error", reject);
   });
 
-  if (process.env.REDIS_URL) {
+  if (redisClient) {
     connectRedis().catch((err) => {
-      console.warn("[REDIS] Session store unavailable, using memory:", err?.message);
+      console.warn("[REDIS] connect failed:", err?.message);
     });
   }
 

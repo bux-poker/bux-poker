@@ -1,6 +1,9 @@
 import "dotenv/config";
 import { createClient } from "redis";
 
+/** When set on Fly, do not create a Redis client (dead REDIS_URL was causing session/502 issues behind Vercel). */
+const skipRedisClient = process.env.ALLOW_MEMORY_SESSIONS === "1";
+
 function parseRedisHostname(raw) {
   try {
     const normalized = raw.replace(/^rediss:\/\//i, "http://").replace(/^redis:\/\//i, "http://");
@@ -11,16 +14,26 @@ function parseRedisHostname(raw) {
 }
 
 /**
- * Production must use a real Redis reachable from Fly (e.g. Fly `fly redis create` → *.upstash.io).
+ * Production normally requires Redis (sessions). Set ALLOW_MEMORY_SESSIONS=1 to run without
+ * REDIS_URL on a single machine (fly.toml ha=false); sessions reset on restart — emergency only.
  * Render internal hostnames (no public DNS) will never resolve here.
  */
 function assertProductionRedisConfig() {
   if (process.env.NODE_ENV !== "production") return;
 
   const raw = process.env.REDIS_URL;
-  if (!raw || typeof raw !== "string" || !raw.trim()) {
+  const hasUrl = raw && typeof raw === "string" && raw.trim();
+  const memoryOk = process.env.ALLOW_MEMORY_SESSIONS === "1";
+
+  if (!hasUrl) {
+    if (memoryOk) {
+      console.warn(
+        "[REDIS] ALLOW_MEMORY_SESSIONS=1 and no REDIS_URL — using in-memory sessions (lost on restart). Add Redis when you can."
+      );
+      return;
+    }
     console.error(
-      "[REDIS] FATAL: REDIS_URL is required in production. Run: ./scripts/fly-redis-setup.sh"
+      "[REDIS] FATAL: REDIS_URL is required in production. Run: ./scripts/fly-redis-setup.sh — or set ALLOW_MEMORY_SESSIONS=1 temporarily."
     );
     process.exit(1);
   }
@@ -43,6 +56,12 @@ function assertProductionRedisConfig() {
 
 assertProductionRedisConfig();
 
+if (skipRedisClient) {
+  console.warn(
+    "[REDIS] ALLOW_MEMORY_SESSIONS=1 — Redis client disabled; sessions use in-memory store (Fly single machine)."
+  );
+}
+
 /** Warn if hostname looks like a truncated internal name (log only; assert above already exits in prod). */
 function warnIfRedisHostSuspicious() {
   if (process.env.NODE_ENV === "production") return;
@@ -60,6 +79,7 @@ function warnIfRedisHostSuspicious() {
 warnIfRedisHostSuspicious();
 
 function logRedisConfiguredHost() {
+  if (skipRedisClient) return;
   const raw = process.env.REDIS_URL;
   if (!raw || typeof raw !== "string") return;
   const hostname = parseRedisHostname(raw);
@@ -71,65 +91,56 @@ function logRedisConfiguredHost() {
 
 logRedisConfiguredHost();
 
-const getRedisConfig = () => {
-  const isProduction = process.env.NODE_ENV === "production";
-
-  if (process.env.REDIS_URL) {
-    const extraPassword = (process.env.REDIS_PASSWORD ?? "").trim();
-    // Upstash URLs embed default:password — only add top-level password if you intentionally
-    // split secret (avoids empty/wrong REDIS_PASSWORD from Fly breaking AUTH).
-    const base =
-      extraPassword.length > 0
-        ? { url: process.env.REDIS_URL, password: extraPassword }
-        : { url: process.env.REDIS_URL };
-
-    // Fly → Upstash: prefer IPv4; avoids flaky TLS/handshake "Socket closed unexpectedly" on some paths.
-    // Upstash often closes idle TCP — node-redis only sends PING if pingInterval is set (default: off).
-    return {
-      ...base,
-      pingInterval: 30_000,
-      socket: {
-        family: 4,
-        connectTimeout: 15_000,
-        keepAlive: true,
-        keepAliveInitialDelay: 10_000,
-      },
-    };
-  }
-
-  if (isProduction) {
-    // Unreachable if assertProductionRedisConfig ran; kept for clarity.
-    throw new Error("REDIS_URL missing in production");
-  }
+function getRedisConfigForUrl(url) {
+  const extraPassword = (process.env.REDIS_PASSWORD ?? "").trim();
+  const base =
+    extraPassword.length > 0
+      ? { url, password: extraPassword }
+      : { url };
 
   return {
-    url: "redis://localhost:6379",
-    password: undefined,
+    ...base,
+    pingInterval: 30_000,
+    socket: {
+      family: 4,
+      connectTimeout: 15_000,
+      keepAlive: true,
+      keepAliveInitialDelay: 10_000,
+    },
   };
-};
+}
 
-const redisClient = createClient(getRedisConfig());
+const redisUrlProd = skipRedisClient ? "" : (process.env.REDIS_URL || "").trim();
+const redisClient =
+  redisUrlProd.length > 0
+    ? createClient(getRedisConfigForUrl(process.env.REDIS_URL))
+    : process.env.NODE_ENV === "production"
+      ? null
+      : createClient(getRedisConfigForUrl("redis://localhost:6379"));
 
 let lastRedisErrorLog = 0;
 const REDIS_ERROR_LOG_INTERVAL_MS = 30_000;
 
-redisClient.on("error", (err) => {
-  const now = Date.now();
-  if (now - lastRedisErrorLog >= REDIS_ERROR_LOG_INTERVAL_MS) {
-    lastRedisErrorLog = now;
-    console.error("[REDIS] Connection error:", err?.message || err);
-  }
-});
+if (redisClient) {
+  redisClient.on("error", (err) => {
+    const now = Date.now();
+    if (now - lastRedisErrorLog >= REDIS_ERROR_LOG_INTERVAL_MS) {
+      lastRedisErrorLog = now;
+      console.error("[REDIS] Connection error:", err?.message || err);
+    }
+  });
 
-redisClient.on("ready", () => {
-  console.log("[REDIS] Ready (commands accepted)");
-});
+  redisClient.on("ready", () => {
+    console.log("[REDIS] Ready (commands accepted)");
+  });
 
-redisClient.on("end", () => {
-  console.log("[REDIS] Connection ended");
-});
+  redisClient.on("end", () => {
+    console.log("[REDIS] Connection ended");
+  });
+}
 
 async function connectRedis() {
+  if (!redisClient) return;
   try {
     await redisClient.connect();
   } catch (error) {

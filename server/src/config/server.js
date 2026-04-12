@@ -160,9 +160,11 @@ const sessionConfig = {
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
 };
-if (process.env.REDIS_URL && redisClient) {
+if (redisClient) {
   sessionConfig.store = new RedisStore({ client: redisClient, prefix: "bux-poker:sess:" });
   console.log("[SESSION] Using Redis store");
+} else {
+  console.warn("[SESSION] Using default in-memory store (no Redis client)");
 }
 
 /** Single session middleware instance — required for Socket.IO to share cookies with Express. */
