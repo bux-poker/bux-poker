@@ -12,10 +12,9 @@ export function getClientApiBaseUrl(): string {
   if (typeof window === 'undefined') {
     return fromEnv;
   }
-  if (import.meta.env.DEV) {
-    return fromEnv;
-  }
 
+  // Hostname only (never gate on import.meta.env.DEV/PROD — a mis-set Vercel env can strip that
+  // branch at build time and drop this entire same-origin fix from the bundle).
   const h = window.location.hostname.toLowerCase();
   if (h === 'bux-poker.pro' || h === 'www.bux-poker.pro') {
     return '';
@@ -30,7 +29,7 @@ export function getClientApiBaseUrl(): string {
  */
 export function enforceBuxPokerSameOriginApiBase(client: AxiosInstance): void {
   client.interceptors.request.use((config) => {
-    if (typeof window !== 'undefined' && import.meta.env.PROD) {
+    if (typeof window !== 'undefined') {
       const h = window.location.hostname.toLowerCase();
       if (h === 'bux-poker.pro' || h === 'www.bux-poker.pro') {
         config.baseURL = '';

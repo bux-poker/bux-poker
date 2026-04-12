@@ -2,6 +2,12 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
+/**
+ * Vercel: Project → Settings → General → Root Directory must be `client` (this folder).
+ * If the repo root is used as the Vercel root, the deployed JS will not match this config and
+ * will omit shared/ code paths — e.g. same-origin `/api` fixes for bux-poker.pro.
+ */
+
 /** Dev-only: serve OG shell for founder bot page (matches Vercel rewrites). */
 function botInvitePathPlugin() {
   return {
