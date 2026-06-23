@@ -16,7 +16,11 @@ export function getClientApiBaseUrl(): string {
   // Hostname only (never gate on import.meta.env.DEV/PROD — a mis-set Vercel env can strip that
   // branch at build time and drop this entire same-origin fix from the bundle).
   const h = window.location.hostname.toLowerCase();
-  if (h === 'bux-poker.pro' || h === 'www.bux-poker.pro') {
+  if (
+    h === 'bux-poker.pro' ||
+    h === 'www.bux-poker.pro' ||
+    h.endsWith('.vercel.app')
+  ) {
     return '';
   }
 

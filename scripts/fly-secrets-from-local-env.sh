@@ -40,7 +40,7 @@ export REDIS_URL="${REDIS_URL_FROM_EXPORT}"
 FLY_API="${FLY_APP_HOST:-https://bux-poker.fly.dev}"
 FLY_API="${FLY_API%/}"
 
-export CLIENT_URL="${PRODUCTION_CLIENT_URL:-https://bux-poker.pro}"
+export CLIENT_URL="${PRODUCTION_CLIENT_URL:-https://bux-poker-puce.vercel.app}"
 export API_BASE_URL="${FLY_API}"
 export DISCORD_CALLBACK_URL="${FLY_API}/api/auth/discord/callback"
 

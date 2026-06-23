@@ -60,7 +60,7 @@ export function getClientUrl(req?: VercelRequest): string {
     return `https://${process.env.VERCEL_URL}`.replace(/\/+$/, "");
   }
 
-  return fromEnv || "https://www.bux-poker.pro";
+  return fromEnv || "https://bux-poker-puce.vercel.app";
 }
 
 let pool: Pool | null = null;

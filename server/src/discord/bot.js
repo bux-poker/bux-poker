@@ -1,6 +1,7 @@
 import { Client, Events, GatewayIntentBits, REST, Routes, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import dotenv from 'dotenv';
 import { prisma } from '../config/database.js';
+import { resolveClientUrl, siteHostnameFromClientUrl } from '../config/clientUrl.js';
 
 dotenv.config();
 
@@ -348,7 +349,7 @@ async function handleRegisterButton(interaction, tournamentId) {
 
     if (!user) {
       await interaction.reply({
-        content: '❌ You must be logged in on the website first. Please visit https://bux-poker.pro and log in with Discord.',
+        content: `❌ You must be logged in on the website first. Please visit ${resolveClientUrl()} and log in with Discord.`,
         ephemeral: true,
       });
       return;
@@ -499,7 +500,7 @@ async function handleUnregisterButton(interaction, tournamentId) {
 
     if (!user) {
       await interaction.reply({
-        content: '❌ You must be logged in on the website first. Please visit https://bux-poker.pro and log in with Discord.',
+        content: `❌ You must be logged in on the website first. Please visit ${resolveClientUrl()} and log in with Discord.`,
         ephemeral: true,
       });
       return;
@@ -582,18 +583,9 @@ async function handleUnregisterButton(interaction, tournamentId) {
 }
 
 // Helper function to build tournament embed with buttons
-/** Hostname for copy (e.g. bux-poker.pro) from CLIENT_URL */
-function siteHostnameFromClientUrl(clientUrl) {
-  try {
-    return new URL(clientUrl).hostname.replace(/^www\./i, '');
-  } catch {
-    return 'bux-poker.pro';
-  }
-}
-
 async function buildTournamentEmbed(tournament, discordUserId = null) {
   const startTime = new Date(tournament.startTime);
-  const clientUrl = process.env.CLIENT_URL || 'https://bux-poker.pro';
+  const clientUrl = resolveClientUrl();
   const siteHost = siteHostnameFromClientUrl(clientUrl);
   const logoUrl = `${clientUrl}/images/bux-poker.png`;
   const tournamentUrl = `${clientUrl}/tournaments/${tournament.id}`;
@@ -942,7 +934,7 @@ export async function postLeagueLegCancelledEmbed(tournamentId, registeredCount)
     ? `Game ${leagueGame.gameNumber}/${leagueGame.league.totalGames}`
     : "";
 
-  const clientUrl = process.env.CLIENT_URL || "https://bux-poker.pro";
+  const clientUrl = resolveClientUrl();
   const logoUrl = `${clientUrl}/images/bux-poker.png`;
 
   const embed = new EmbedBuilder()
@@ -1056,7 +1048,7 @@ export async function postTournamentWinnersEmbed(tournament) {
     const topPlacesToShow = Math.max(1, Math.ceil(registeredCount * 0.2)); // Top 20%
     const topStandings = standings.slice(0, topPlacesToShow);
 
-    const clientUrl = process.env.CLIENT_URL || 'https://bux-poker.pro';
+    const clientUrl = resolveClientUrl();
     const logoUrl = `${clientUrl}/images/bux-poker.png`;
     const tournamentUrl = `${clientUrl}/tournaments/${tournament.id}`;
 
@@ -1187,7 +1179,7 @@ export async function postTournamentStartingEmbed(tournament) {
       return [];
     }
 
-    const clientUrl = process.env.CLIENT_URL || 'https://bux-poker.pro';
+    const clientUrl = resolveClientUrl();
     const logoUrl = `${clientUrl}/images/bux-poker.png`;
     const tournamentUrl = `${clientUrl}/tournaments/${tournament.id}`;
 

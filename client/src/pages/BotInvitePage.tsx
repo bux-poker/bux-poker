@@ -1,6 +1,6 @@
 /**
  * Unlisted page for founders — not linked in nav.
- * In Discord DMs, share https://www.bux-poker.pro/discord-founders.html (static file = correct embed).
+ * In Discord DMs, share https://bux-poker-puce.vercel.app/discord-founders.html (static file = correct embed).
  * In the browser, open the discord-bot route for the full React page; bot-invite redirects there.
  */
 const DISCORD_BOT_INVITE_URL =
@@ -99,7 +99,7 @@ export function BotInvitePage() {
         <br />
         <span className="text-slate-500">
           <strong className="text-slate-400">For Discord embeds</strong>, paste only:{" "}
-          <strong className="text-emerald-400/90">https://www.bux-poker.pro/discord-founders.html</strong>
+          <strong className="text-emerald-400/90">https://bux-poker-puce.vercel.app/discord-founders.html</strong>
           <br />
           (static page — not <code className="text-slate-500">/discord-bot</code>, which can still preview as
           the main site in DMs). Then open the green link on that page to get back here.
