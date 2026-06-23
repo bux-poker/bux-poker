@@ -2,15 +2,15 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "headers": [
     {
-      "source": "/discord-bot",
+      "source": "/invite",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
     },
     {
-      "source": "/discord-bot/",
+      "source": "/invite/",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
     },
     {
-      "source": "/bot-invite.html",
+      "source": "/invite.html",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
     },
     {
@@ -19,12 +19,14 @@
     }
   ],
   "redirects": [
-    { "source": "/bot-invite", "destination": "/discord-bot", "permanent": true },
-    { "source": "/bot-invite/", "destination": "/discord-bot", "permanent": true }
+    { "source": "/bot-invite", "destination": "/invite", "permanent": true },
+    { "source": "/bot-invite/", "destination": "/invite", "permanent": true },
+    { "source": "/discord-bot", "destination": "/invite", "permanent": true },
+    { "source": "/discord-bot/", "destination": "/invite", "permanent": true }
   ],
   "rewrites": [
-    { "source": "/discord-bot", "destination": "/bot-invite.html" },
-    { "source": "/discord-bot/", "destination": "/bot-invite.html" },
+    { "source": "/invite", "destination": "/invite.html" },
+    { "source": "/invite/", "destination": "/invite.html" },
     {
       "source": "/oauth/discord",
       "destination": "/api/discord-oauth/start"

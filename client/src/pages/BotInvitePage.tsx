@@ -1,36 +1,48 @@
-/**
- * Unlisted page for founders — not linked in nav.
- * In Discord DMs, share https://bux-poker-puce.vercel.app/discord-founders.html (static file = correct embed).
- * In the browser, open the discord-bot route for the full React page; bot-invite redirects there.
- */
 const DISCORD_BOT_INVITE_URL =
   import.meta.env.VITE_DISCORD_BOT_INVITE_URL ??
   "https://discord.com/oauth2/authorize?client_id=1461311075428601959&permissions=84992&integration_type=0&scope=bot+applications.commands";
 
+const DEFAULT_SHARE_URL = "https://bux-poker-puce.vercel.app/invite";
+
+function shareUrl() {
+  if (typeof window !== "undefined" && window.location.origin) {
+    return `${window.location.origin}/invite`;
+  }
+  return DEFAULT_SHARE_URL;
+}
+
 export function BotInvitePage() {
+  const pageUrl = shareUrl();
+
   return (
     <div className="mx-auto max-w-3xl py-10 sm:py-14">
       <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-        BUX Poker — Discord bot
+        Add BUX Poker to your Discord server
       </h1>
       <p className="mt-3 text-slate-400">
-        Add the bot to your server, fix channel permissions, then run{" "}
-        <code className="rounded bg-slate-800 px-1.5 py-0.5 text-emerald-300">/setup</code> once.
+        For project founders testing BUX Poker with their community. Invite the bot, grant channel
+        permissions, then run{" "}
+        <code className="rounded bg-slate-800 px-1.5 py-0.5 text-emerald-300">/setup</code> once per
+        server.
       </p>
 
       <div className="mt-8 rounded-xl border border-slate-700 bg-slate-900/60 p-6 shadow-xl">
         <h2 className="text-lg font-semibold text-white">1. Invite the bot</h2>
         <p className="mt-2 text-sm text-slate-400">
-          You need <strong className="text-slate-300">Manage Server</strong> (or Administrator) on the
-          Discord server. The invite includes scopes <code className="text-slate-300">bot</code> and{" "}
+          You need <strong className="text-slate-300">Manage Server</strong> (or Administrator) on
+          the Discord server. The invite includes scopes{" "}
+          <code className="text-slate-300">bot</code> and{" "}
           <code className="text-slate-300">applications.commands</code> so slash commands work.
         </p>
         <a
           href={DISCORD_BOT_INVITE_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-4 inline-flex items-center justify-center rounded-lg bg-[#5865F2] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#4752C4]"
+          className="mt-4 inline-flex items-center justify-center gap-2 rounded-lg bg-[#5865F2] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#4752C4]"
         >
+          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <path d="M20.317 4.369A19.791 19.791 0 0 0 16.885 3a14.5 14.5 0 0 0-.673 1.477 18.27 18.27 0 0 0-5.487 0A14.5 14.5 0 0 0 9.042 3 19.736 19.736 0 0 0 5.61 4.369 20.015 20.015 0 0 0 2.163 16.9a19.9 19.9 0 0 0 6.086 3.073 14.3 14.3 0 0 0 1.226-1.994 12.9 12.9 0 0 1-1.872-.907 8.4 8.4 0 0 0 .362-.293c3.593 1.677 7.482 1.677 11.035 0 .12.1.237.2.362.293a12.9 12.9 0 0 1-1.873.907 14.3 14.3 0 0 0 1.225 1.994 19.9 19.9 0 0 0 6.088-3.073A19.78 19.78 0 0 0 21.837 16.9a19.96 19.96 0 0 0-1.52-12.531ZM8.02 14.331c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.419 0 1.334-.956 2.419-2.157 2.419Zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.419 0 1.334-.946 2.419-2.157 2.419Z" />
+          </svg>
           Invite BUX Poker bot
         </a>
       </div>
@@ -89,21 +101,28 @@ export function BotInvitePage() {
         </ol>
         <p className="mt-4 text-sm text-amber-200/80">
           If <code className="text-amber-100/90">/setup</code> doesn’t appear, wait up to an hour for
-          global slash commands to sync, or ask the BUX Poker team to confirm the bot is using global
-          command registration.
+          global slash commands to sync, or ask the BUX Poker team to confirm the bot is online.
+        </p>
+      </div>
+
+      <div className="mt-6 rounded-xl border border-emerald-900/40 bg-emerald-950/20 p-6">
+        <h2 className="text-lg font-semibold text-white">4. Start testing</h2>
+        <p className="mt-2 text-sm text-slate-400">
+          After setup, log in at{" "}
+          <a href="/" className="text-emerald-400 hover:text-emerald-300">
+            bux-poker-puce.vercel.app
+          </a>{" "}
+          with Discord (use an account that has the admin role you configured). Create a tournament
+          from the Admin page — the bot will post a registration embed in your announcement channel.
+          Players register via the embed buttons and play in the browser.
         </p>
       </div>
 
       <p className="mt-8 text-center text-xs text-slate-600">
-        This page is not linked on the public site — keep it private to your team.
-        <br />
-        <span className="text-slate-500">
-          <strong className="text-slate-400">For Discord embeds</strong>, paste only:{" "}
-          <strong className="text-emerald-400/90">https://bux-poker-puce.vercel.app/discord-founders.html</strong>
-          <br />
-          (static page — not <code className="text-slate-500">/discord-bot</code>, which can still preview as
-          the main site in DMs). Then open the green link on that page to get back here.
-        </span>
+        Share this page with other founders:{" "}
+        <a href={pageUrl} className="text-emerald-400/90 hover:text-emerald-300">
+          {pageUrl}
+        </a>
       </p>
     </div>
   );

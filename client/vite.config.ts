@@ -8,22 +8,24 @@ import path from "path";
  * will omit shared/ code paths — e.g. same-origin `/api` fixes for bux-poker.pro.
  */
 
-/** Dev-only: serve OG shell for founder bot page (matches Vercel rewrites). */
-function botInvitePathPlugin() {
+/** Dev-only: serve OG shell for /invite (matches Vercel rewrites). */
+function invitePathPlugin() {
   return {
-    name: "bot-invite-path",
+    name: "invite-path",
     configureServer(server) {
       server.middlewares.use((req, _res, next) => {
         const raw = req.url ?? "";
         const pathname = raw.split("?")[0];
         const qs = raw.includes("?") ? "?" + raw.slice(raw.indexOf("?") + 1) : "";
         if (
+          pathname === "/invite" ||
+          pathname === "/invite/" ||
           pathname === "/discord-bot" ||
           pathname === "/discord-bot/" ||
           pathname === "/bot-invite" ||
           pathname === "/bot-invite/"
         ) {
-          req.url = "/bot-invite.html" + qs;
+          req.url = "/invite.html" + qs;
         }
         next();
       });
@@ -32,12 +34,12 @@ function botInvitePathPlugin() {
 }
 
 export default defineConfig({
-  plugins: [react(), botInvitePathPlugin()],
+  plugins: [react(), invitePathPlugin()],
   build: {
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, "index.html"),
-        botInvite: path.resolve(__dirname, "bot-invite.html"),
+        invite: path.resolve(__dirname, "invite.html"),
       },
     },
   },
