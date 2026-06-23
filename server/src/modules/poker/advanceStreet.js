@@ -10,6 +10,7 @@ import { cleanupHandAndStartNext } from "./handCleanup.js";
 import { startTurnTimer } from "./turnTimers.js";
 import { persistAllPlayerStacksFromHandState } from "./persistHandStacks.js";
 import { resetPlayerRowIfNotEliminated } from "./safeHandCleanupDb.js";
+import { awardPotToSingleWinner, settleUncalledBetsOnState } from "./sidePotMath.js";
 
 export async function advanceToNextStreet(gameId, io) {
   console.log(`[POKER] advanceToNextStreet called for gameId: ${gameId}`);
@@ -93,6 +94,18 @@ export async function advanceToNextStreet(gameId, io) {
   state.lastRaiseWasShortAllIn = false;
   state.actedPlayersInRound = new Set();
 
+  const uncalledEvents = settleUncalledBetsOnState(state);
+  if (io && uncalledEvents.length > 0) {
+    for (const ev of uncalledEvents) {
+      postDealerMessage(
+        gameId,
+        io,
+        `${ev.name} receives ${ev.amount.toLocaleString()} back (uncalled bet)`
+      );
+    }
+    tableState.set(gameId, state);
+  }
+
   const activePlayerIds = activePlayers.map((p) => p.id);
   const allPlayersAllIn = state.bettingRound.areAllPlayersAllIn(
     activePlayerIds,
@@ -109,14 +122,15 @@ export async function advanceToNextStreet(gameId, io) {
       shouldBlockFoldWinPotAward,
     } = await import("./foldWinGuard.js");
     const winner = activePlayers[0];
-    const totalPot = state.pot;
     if (await shouldBlockFoldWinPotAward(gameId)) {
       await persistBlockedFoldWinPotToDatabase(gameId, state);
       tableState.delete(gameId);
       return;
     }
-    winner.chips += totalPot;
-    state.pot = 0;
+    const { potToAward: totalPot, uncalledEvents } = awardPotToSingleWinner(
+      state,
+      winner
+    );
     state.handEnded = true;
     state.currentTurnUserId = null;
     state.currentTurnStartedAt = null;
@@ -129,6 +143,13 @@ export async function advanceToNextStreet(gameId, io) {
     );
 
     if (io) {
+      for (const ev of uncalledEvents) {
+        postDealerMessage(
+          gameId,
+          io,
+          `${ev.name} receives ${ev.amount.toLocaleString()} back (uncalled bet)`
+        );
+      }
       postDealerMessage(
         gameId,
         io,
@@ -281,9 +302,10 @@ export async function advanceToNextStreet(gameId, io) {
       });
 
       if (bbPlayer) {
-        const totalPot = state.pot;
-        bbPlayer.chips += totalPot;
-        state.pot = 0;
+        const { potToAward: totalPot, uncalledEvents } = awardPotToSingleWinner(
+          state,
+          bbPlayer
+        );
         state.handEnded = true;
         tableState.set(gameId, state);
 
@@ -296,6 +318,13 @@ export async function advanceToNextStreet(gameId, io) {
         );
 
         if (io) {
+          for (const ev of uncalledEvents) {
+            postDealerMessage(
+              gameId,
+              io,
+              `${ev.name} receives ${ev.amount.toLocaleString()} back (uncalled bet)`
+            );
+          }
           postDealerMessage(
             gameId,
             io,

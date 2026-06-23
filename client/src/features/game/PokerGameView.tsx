@@ -1522,6 +1522,8 @@ export function PokerGameView() {
               }))}
               communityCards={communityCards}
               pot={gameState.pot}
+              sidePots={gameState.sidePots || []}
+              uncalledReturns={gameState.uncalledReturns || []}
               currentBet={gameState.currentBet || 0}
               currentPlayer={gameState.currentTurnUserId}
               smallBlind={smallBlind}

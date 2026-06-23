@@ -12,6 +12,7 @@ import {
   persistBlockedFoldWinPotToDatabase,
   shouldBlockFoldWinPotAward,
 } from "./foldWinGuard.js";
+import { awardPotToSingleWinner } from "./sidePotMath.js";
 
 /** Prisma/JSON sometimes yields string seats; strict === skipped real players (zombie no-turn hands). */
 function seatNum(s) {
@@ -144,15 +145,15 @@ export async function moveToNextPlayer(gameId, io) {
       turnTimers.delete(gameId);
     }
     const winner = playersInHand[0];
-    const collectedPot = state.bettingRound?.getTotalPot() || 0;
-    const totalPot = (state.pot || 0) + collectedPot;
     if (await shouldBlockFoldWinPotAward(gameId)) {
       await persistBlockedFoldWinPotToDatabase(gameId, state);
       tableState.delete(gameId);
       return;
     }
-    winner.chips += totalPot;
-    state.pot = 0;
+    const { potToAward: totalPot, uncalledEvents } = awardPotToSingleWinner(
+      state,
+      winner
+    );
     state.handEnded = true;
     tableState.set(gameId, state);
     state.currentTurnUserId = null;
@@ -164,6 +165,13 @@ export async function moveToNextPlayer(gameId, io) {
     );
 
     if (io) {
+      for (const ev of uncalledEvents) {
+        postDealerMessage(
+          gameId,
+          io,
+          `${ev.name} receives ${ev.amount.toLocaleString()} back (uncalled bet)`
+        );
+      }
       postDealerMessage(
         gameId,
         io,

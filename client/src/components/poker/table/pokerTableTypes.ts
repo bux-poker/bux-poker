@@ -23,6 +23,16 @@ export interface PokerTableProps {
   }>;
   communityCards: Card[];
   pot: number;
+  sidePots?: Array<{
+    amount: number;
+    label?: string;
+    eligiblePlayerIds: string[];
+  }>;
+  uncalledReturns?: Array<{
+    playerId: string;
+    name: string;
+    amount: number;
+  }>;
   tournamentCountdown?: { startTime: string; seconds: number } | null;
   currentBet: number;
   currentPlayer?: string;

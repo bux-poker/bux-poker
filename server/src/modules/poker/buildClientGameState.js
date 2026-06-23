@@ -7,6 +7,7 @@ import {
 } from "../../services/tournament/consolidateTables.js";
 import { normalizeUserId } from "./normalizeUserId.js";
 import { hasActiveHand } from "./tableState.js";
+import { computePotLayerPreview } from "./sidePotMath.js";
 
 /** In-memory state can rarely have a plain-object bettingRound (no class methods) — never throw on join. */
 function safeBettingRoundTotalPot(round) {
@@ -84,10 +85,14 @@ function shouldHideHoleCardsFromViewer(p, viewerUserId, optionalRevealPhase) {
 }
 
 export function buildClientGameState(game, state, viewerUserId) {
-  // Calculate total pot: state.pot (accumulated from previous streets) + current betting round
-  const totalPot = state
-    ? (state.pot || 0) + safeBettingRoundTotalPot(state.bettingRound)
-    : game.pot || 0;
+  const potPreview = state
+    ? computePotLayerPreview(state)
+    : {
+        totalPot: game.pot || 0,
+        sidePots: [],
+        uncalledReturns: [],
+      };
+  const totalPot = potPreview.totalPot;
 
   // Start of new hand: never send stale card data from previous hand
   const street = state?.street || "PREFLOP";
@@ -179,6 +184,8 @@ export function buildClientGameState(game, state, viewerUserId) {
     tableNumber: game.tableNumber,
     currentBlindLevel: game.currentBlindLevel ?? 0,
     pot: totalPot,
+    sidePots: potPreview.sidePots || [],
+    uncalledReturns: potPreview.uncalledReturns || [],
     consolidationWaitingMessage,
     communityCards: communityCardsEncoded,
     street,

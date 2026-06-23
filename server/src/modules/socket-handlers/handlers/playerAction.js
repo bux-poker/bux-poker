@@ -13,6 +13,7 @@ import {
   clearHoleCardsIfEliminated,
   resetPlayerRowIfNotEliminated,
 } from "../../poker/safeHandCleanupDb.js";
+import { awardPotToSingleWinner } from "../../poker/sidePotMath.js";
 
 /**
  * Register the player-action socket handler.
@@ -83,9 +84,6 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
             shouldBlockFoldWinPotAward,
           } = await import("../../poker/foldWinGuard.js");
           const winner = activePlayersAfterAction[0];
-          const collectedPot = state.bettingRound.getTotalPot();
-          const totalPot = state.pot + collectedPot;
-
           const winnerName = winner.name || winner.user?.username || `Player ${winner.seatNumber}`;
           const isUncalledBet = lastRaiserUserId && lastRaiserUserId === winner.userId && currentBet > 0;
 
@@ -94,8 +92,10 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
             tableState.delete(gameId);
             return;
           }
-          winner.chips += totalPot;
-          state.pot = 0;
+          const { potToAward: totalPot, uncalledEvents } = awardPotToSingleWinner(
+            state,
+            winner
+          );
           state.handEnded = true;
           tableState.set(gameId, state);
 
@@ -105,6 +105,13 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
           }
 
           if (io) {
+            for (const ev of uncalledEvents) {
+              postDealerMessage(
+                gameId,
+                io,
+                `${ev.name} receives ${ev.amount.toLocaleString()} back (uncalled bet)`
+              );
+            }
             if (isUncalledBet) {
               postDealerMessage(gameId, io, `${winnerName} wins ${totalPot.toLocaleString()} (uncalled bet)`);
             } else {

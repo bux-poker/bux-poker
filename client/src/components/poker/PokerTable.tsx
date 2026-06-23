@@ -16,6 +16,8 @@ export function PokerTable({
   players,
   communityCards,
   pot,
+  sidePots = [],
+  uncalledReturns = [],
   currentBet,
   currentPlayer,
   smallBlind = 10,
@@ -244,14 +246,34 @@ export function PokerTable({
             </div>
           ) : (
             /* Total pot above community cards when not showing winner */
-            <div className="flex items-center gap-2">
-              <span 
-                className="font-semibold uppercase tracking-wide text-slate-300"
-                style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}
-              >
-                TOTAL POT :
-              </span>
-              <BetChip value={pot} />
+            <div className="flex flex-col items-center gap-1">
+              <div className="flex items-center gap-2">
+                <span 
+                  className="font-semibold uppercase tracking-wide text-slate-300"
+                  style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}
+                >
+                  TOTAL POT :
+                </span>
+                <BetChip value={pot} />
+              </div>
+              {(sidePots.length > 1 || uncalledReturns.length > 0) && (
+                <div
+                  className="flex flex-col items-center gap-0.5 rounded-md border border-slate-600/50 bg-slate-900/80 px-2 py-1 text-center"
+                  style={{ fontSize: 'calc(var(--bet-chip-text-size, 13px) * 0.85)' }}
+                >
+                  {sidePots.map((sp, idx) => (
+                    <span key={`${sp.label || "pot"}-${idx}`} className="text-slate-300">
+                      {(sp.label || (idx === 0 ? "Main" : `Side ${idx}`)).toUpperCase()}:{" "}
+                      <span className="font-semibold text-amber-200">{sp.amount.toLocaleString()}</span>
+                    </span>
+                  ))}
+                  {uncalledReturns.map((ur) => (
+                    <span key={ur.playerId} className="text-slate-400 italic">
+                      {ur.name} return: {ur.amount.toLocaleString()}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {communityCards.length > 0 && (

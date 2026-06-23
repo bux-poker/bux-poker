@@ -6,6 +6,7 @@ import { postDealerMessage } from "./dealerMessages.js";
 import { emitGameState } from "./emitGameState.js";
 import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/pokerHandler.js";
 import { resetPlayerRowIfNotEliminated } from "./safeHandCleanupDb.js";
+import { finalizePotLayersForShowdown } from "./sidePotMath.js";
 
 const SHOWDOWN_PHASE_DELAY_MS = 1000;
 const SHOWDOWN_OPTIONAL_REVEAL_MAX_WAIT_MS = 5000;
@@ -82,27 +83,16 @@ function reconcilePotAwardToExact(
   totalWon,
   gameId
 ) {
-  const tableNuts = () => {
-    const maxS = Math.max(...handResults.map((r) => r.strength));
-    return handResults.filter((r) => r.strength === maxS);
-  };
-
   for (let iter = 0; iter < 16; iter++) {
     const distributed = sumTotalWonMap(totalWon);
     const delta = potToAward - distributed;
     if (delta === 0) return;
 
     if (delta > 0) {
-      const winners = tableNuts();
-      if (winners.length === 0) break;
-      distributePotAcrossTiedWinners(
-        delta,
-        winners,
-        state,
-        totalWon,
-        `[SHOWDOWN] exactness top-up`
+      console.error(
+        `[SHOWDOWN] under-distributed pot by ${delta} (game ${gameId}) — not creating chips`
       );
-      continue;
+      break;
     }
 
     let need = -delta;
@@ -126,21 +116,9 @@ function reconcilePotAwardToExact(
   }
 
   let residual = potToAward - sumTotalWonMap(totalWon);
-  if (residual !== 0 && handResults.length > 0) {
-    const w =
-      orderTiedHandResultsForOddChip(tableNuts(), state)[0] || handResults[0];
-    w.player.chips += residual;
-    totalWon.set(w.player.id, (totalWon.get(w.player.id) || 0) + residual);
+  if (residual !== 0) {
     console.error(
-      `[SHOWDOWN] exactness final adjust ${residual} to ${w.player.name || w.player.userId} (game ${gameId})`
-    );
-    residual = potToAward - sumTotalWonMap(totalWon);
-  }
-
-  const finalSum = sumTotalWonMap(totalWon);
-  if (finalSum !== potToAward) {
-    console.error(
-      `[SHOWDOWN] FATAL pot invariant: game=${gameId} potToAward=${potToAward} totalWonSum=${finalSum}`
+      `[SHOWDOWN] pot invariant after reconcile: game=${gameId} residual=${residual} potToAward=${potToAward}`
     );
   }
 }
@@ -245,9 +223,6 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
 
   const evaluator = new HandEvaluator();
 
-  const collectedPot = state.bettingRound.getTotalPot();
-  const oldPot = state.pot || 0;
-  state.pot = oldPot + collectedPot;
   if (state.handEnded) {
     console.log(
       "[SHOWDOWN] Hand already ended - skipping showdown distribution"
@@ -255,6 +230,18 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
     return;
   }
   state.handEnded = true;
+
+  const { uncalledEvents, awardablePots: prebuiltPots } =
+    finalizePotLayersForShowdown(state);
+  if (io && uncalledEvents.length > 0) {
+    for (const ev of uncalledEvents) {
+      postDealerMessage(
+        gameId,
+        io,
+        `${ev.name} receives ${ev.amount.toLocaleString()} back (uncalled bet)`
+      );
+    }
+  }
   tableState.set(gameId, state);
 
   const activePlayers = state.players.filter(
@@ -275,7 +262,7 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
   );
   console.log("[SHOWDOWN] Community cards:", state.communityCards);
   console.log(
-    `[SHOWDOWN] Total pot: ${state.pot} (old: ${oldPot}, collected: ${collectedPot}), chips before dist: ${chipsBeforeDist}`
+    `[SHOWDOWN] Total pot to award: ${state.pot}, layers: ${prebuiltPots.map((p) => `${p.label || "pot"}=${p.amount}`).join(", ")}`
   );
 
   if (io) {
@@ -349,206 +336,69 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
     });
 
   let totalWon;
-  let sidePots = [];
-
-  const totalContributions = new Map();
-  const allPlayersInHand = state.players.filter(
-    (p) => p.status !== "ELIMINATED"
-  );
-  allPlayersInHand.forEach((player) => {
-    const handContribution = player.contributions || 0;
-    const currentContribution =
-      state.bettingRound.getPlayerContribution(player.id) || 0;
-    totalContributions.set(player.id, handContribution + currentContribution);
-  });
+  const sidePots = prebuiltPots;
 
   if (activePlayers.length === 0 || handResults.length === 0) {
     console.error(`[SHOWDOWN] Cannot distribute: no active players (game ${gameId})`);
     return;
   }
 
-  let potToAward = 0;
-
-  {
-    const maxStrength = Math.max(...handResults.map((r) => r.strength));
-    const winners = handResults.filter((r) => r.strength === maxStrength);
-
-    console.log(
-      `[SHOWDOWN] ${winners.length} winner(s) with strength ${maxStrength}:`
+  const potToAward = state.pot || 0;
+  const layerSum = sidePots.reduce((s, p) => s + p.amount, 0);
+  if (layerSum !== potToAward) {
+    console.error(
+      `[SHOWDOWN] side-pot layer sum ${layerSum} !== awardable pot ${potToAward} (game ${gameId})`
     );
-    winners.forEach((w) => {
-      console.log(
-        `[SHOWDOWN]   Winner: ${
-          w.player.name || w.player.userId
-        } (seat ${w.player.seatNumber}) - ${w.hand.category}`
-      );
-    });
+  }
 
-    const contributionAmounts = Array.from(
-      new Set(totalContributions.values())
-    )
-      .filter((x) => x > 0)
-      .sort((a, b) => a - b);
+  totalWon = new Map();
+  for (const p of state.players) {
+    if (p.status !== "ELIMINATED") totalWon.set(p.id, 0);
+  }
 
-    console.log(
-      "[SHOWDOWN] Total contributions:",
-      Array.from(totalContributions.entries()).map(([id, amount]) => {
-        const player = activePlayers.find((p) => p.id === id);
-        return `${player?.name || player?.userId || id}: ${amount}`;
-      })
+  for (const pot of sidePots) {
+    if (pot.amount <= 0) continue;
+    let eligibleHandResults = handResults.filter((r) =>
+      pot.eligiblePlayerIds.includes(r.player.id)
     );
-    console.log(
-      "[SHOWDOWN] Unique contribution levels:",
-      contributionAmounts
-    );
-
-    sidePots = [];
-    let previousLevel = 0;
-
-    const nonFoldedIds = new Set(activePlayers.map((p) => p.id));
-    for (let i = 0; i < contributionAmounts.length; i++) {
-      const currentLevel = contributionAmounts[i];
-
-      const contributorCount = Array.from(totalContributions.entries()).filter(
-        ([, c]) => c >= currentLevel
-      ).length;
-      let eligiblePlayerIds = Array.from(totalContributions.entries())
-        .filter(
-          ([id, contribution]) =>
-            contribution >= currentLevel && nonFoldedIds.has(id)
-        )
-        .map(([id]) => id);
-
-      if (contributorCount === 0) continue;
-
-      const potAmount = (currentLevel - previousLevel) * contributorCount;
-
-      if (potAmount > 0) {
-        if (eligiblePlayerIds.length === 0 && activePlayers.length > 0) {
-          eligiblePlayerIds = activePlayers.map((p) => p.id);
-        }
-        sidePots.push({
-          level: currentLevel,
-          amount: potAmount,
-          eligiblePlayerIds: eligiblePlayerIds,
-        });
-        console.log(
-          `[SHOWDOWN] Side pot ${i + 1}: ${potAmount} chips (level ${currentLevel}), ${eligiblePlayerIds.length} eligible players`
-        );
-      }
-
-      previousLevel = currentLevel;
-    }
-
-    const calculatedPotTotal = sidePots.reduce(
-      (sum, pot) => sum + pot.amount,
-      0
-    );
-
-    const actualPot = state.pot;
-    if (calculatedPotTotal !== actualPot && sidePots.length > 0) {
-      console.log(
-        `[SHOWDOWN] Pot mismatch: calculated=${calculatedPotTotal}, actual=${actualPot}, adjusting...`
-      );
-      if (calculatedPotTotal > 0 && calculatedPotTotal >= actualPot) {
-        let running = 0;
-        for (let i = 0; i < sidePots.length - 1; i++) {
-          const scaled = Math.floor(
-            (sidePots[i].amount * actualPot) / calculatedPotTotal
-          );
-          sidePots[i].amount = scaled;
-          running += scaled;
-        }
-        sidePots[sidePots.length - 1].amount = actualPot - running;
-      } else if (calculatedPotTotal < actualPot) {
-        sidePots[sidePots.length - 1].amount = Math.max(
-          0,
-          sidePots[sidePots.length - 1].amount +
-            (actualPot - calculatedPotTotal)
-        );
-      }
-    } else if (sidePots.length === 0 && actualPot > 0) {
-      const maxContrib = Math.max(
-        0,
-        ...Array.from(totalContributions.values())
-      );
-      sidePots.push({
-        level: maxContrib,
-        amount: actualPot,
-        eligiblePlayerIds: activePlayers.map((p) => p.id),
-      });
-    }
-
-    potToAward = state.pot;
-    const contribSum = Array.from(totalContributions.values()).reduce(
-      (a, b) => a + b,
-      0
-    );
-    if (contribSum !== potToAward) {
+    if (eligibleHandResults.length === 0 && pot.eligiblePlayerIds.length > 0) {
       console.error(
-        `[SHOWDOWN] contribution sum ${contribSum} !== pot ${potToAward} (game ${gameId}) — awarding by pot size; fix betting/pot merge`
+        `[SHOWDOWN] BUG: side pot ${pot.label || pot.level} missing hand rows for eligible IDs — recovering seats from table state`
       );
-    }
-
-    let layerSum = sidePots.reduce((s, p) => s + p.amount, 0);
-    if (sidePots.length > 0 && layerSum !== potToAward) {
-      const fix = potToAward - layerSum;
-      sidePots[sidePots.length - 1].amount += fix;
-      layerSum = potToAward;
-      console.warn(
-        `[SHOWDOWN] adjusted last side-pot layer by ${fix} so Σlayers === pot (${potToAward})`
-      );
-    }
-
-    totalWon = new Map();
-    for (const p of state.players) {
-      if (p.status !== "ELIMINATED") totalWon.set(p.id, 0);
-    }
-
-    for (const pot of sidePots) {
-      if (pot.amount <= 0) continue;
-      let eligibleHandResults = handResults.filter((r) =>
-        pot.eligiblePlayerIds.includes(r.player.id)
-      );
-      if (eligibleHandResults.length === 0 && pot.eligiblePlayerIds.length > 0) {
-        console.error(
-          `[SHOWDOWN] BUG: side pot level ${pot.level} missing hand rows for eligible IDs — recovering seats from table state (worst rank until fixed)`
-        );
-        eligibleHandResults = pot.eligiblePlayerIds
-          .map((id) =>
-            state.players.find(
-              (p) =>
-                p.id === id &&
-                p.status !== "FOLDED" &&
-                p.status !== "ELIMINATED"
-            )
+      eligibleHandResults = pot.eligiblePlayerIds
+        .map((id) =>
+          state.players.find(
+            (p) =>
+              p.id === id &&
+              p.status !== "FOLDED" &&
+              p.status !== "ELIMINATED"
           )
-          .filter(Boolean)
-          .map((player) => ({
-            player,
-            hand: { ...INVALID_SHOWDOWN_HAND },
-            strength: INVALID_SHOWDOWN_HAND.strength,
-          }));
-      }
-      if (eligibleHandResults.length === 0) {
-        console.error(
-          `[SHOWDOWN] BUG: side pot level ${pot.level} still has no seat rows — using full showdown field (game ${gameId})`
-        );
-        eligibleHandResults = [...handResults];
-      }
-      const maxS = Math.max(...eligibleHandResults.map((r) => r.strength));
-      const potWinners = eligibleHandResults.filter((r) => r.strength === maxS);
-      console.log(
-        `[SHOWDOWN] Side pot ${pot.level}: ${potWinners.length} winner(s) tie at strength ${maxS} for ${pot.amount} chips`
-      );
-      distributePotAcrossTiedWinners(
-        pot.amount,
-        potWinners,
-        state,
-        totalWon,
-        `[SHOWDOWN] Side pot ${pot.level}`
-      );
+        )
+        .filter(Boolean)
+        .map((player) => ({
+          player,
+          hand: { ...INVALID_SHOWDOWN_HAND },
+          strength: INVALID_SHOWDOWN_HAND.strength,
+        }));
     }
+    if (eligibleHandResults.length === 0) {
+      console.error(
+        `[SHOWDOWN] BUG: side pot ${pot.label || pot.level} has no eligible showdown rows (game ${gameId})`
+      );
+      continue;
+    }
+    const maxS = Math.max(...eligibleHandResults.map((r) => r.strength));
+    const potWinners = eligibleHandResults.filter((r) => r.strength === maxS);
+    console.log(
+      `[SHOWDOWN] ${pot.label || "pot"}: ${potWinners.length} winner(s) at strength ${maxS} for ${pot.amount} chips`
+    );
+    distributePotAcrossTiedWinners(
+      pot.amount,
+      potWinners,
+      state,
+      totalWon,
+      `[SHOWDOWN] ${pot.label || "pot"}`
+    );
   }
 
   reconcilePotAwardToExact(potToAward, handResults, state, totalWon, gameId);

@@ -90,7 +90,14 @@ export interface PokerGameState {
   pot: number;
   sidePots: {
     amount: number;
+    label?: string;
     eligiblePlayerIds: string[];
+  }[];
+  uncalledReturns?: {
+    playerId: string;
+    userId?: string;
+    name: string;
+    amount: number;
   }[];
 
   communityCards: Card[];
