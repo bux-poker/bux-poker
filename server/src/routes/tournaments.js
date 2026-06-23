@@ -149,12 +149,14 @@ router.get("/:id/my-table", authenticateToken, async (req, res, next) => {
     const { id } = req.params;
     const userId = req.userId;
 
-    // Find player in tournament games
+    // Find player on an ACTIVE table (ignore stale rows on COMPLETED closing tables).
     const player = await prisma.player.findFirst({
       where: {
         userId: userId,
+        status: { not: "ELIMINATED" },
         game: {
           tournamentId: id,
+          status: "ACTIVE",
         },
       },
       include: {
@@ -169,6 +171,7 @@ router.get("/:id/my-table", authenticateToken, async (req, res, next) => {
           },
         },
       },
+      orderBy: { chips: "desc" },
     });
 
     if (!player) {

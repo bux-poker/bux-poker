@@ -67,6 +67,17 @@ export function hasActiveHand(gameId) {
   return false;
 }
 
+/**
+ * Stricter than hasActiveHand for tournament consolidation: once chips are awarded
+ * (handEnded + pot cleared) we can merge tables even if showdown reveal UI is still up.
+ */
+export function hasConsolidationBlockingHand(gameId) {
+  const state = tableState.get(gameId);
+  if (!state) return false;
+  if (state.handEnded && (state.pot ?? 0) === 0) return false;
+  return hasActiveHand(gameId);
+}
+
 /** When the current turn started (ms since epoch). 0 if no turn or no state. */
 export function getTurnStartedAt(gameId) {
   const state = tableState.get(gameId);

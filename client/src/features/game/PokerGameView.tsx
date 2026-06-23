@@ -238,9 +238,11 @@ export function PokerGameView() {
   useEffect(() => {
     const tid = effectiveTournamentId;
     if (!tid || !user?.id || !id) return;
+    const serverWaitMsg = gameState?.consolidationWaitingMessage?.trim();
     const needPoll =
       !!pendingConsolidationWaiting ||
       !!consolidationWaiting ||
+      !!serverWaitMsg ||
       wrongTableByTournamentPayload;
     if (!needPoll) return;
 
@@ -253,10 +255,12 @@ export function PokerGameView() {
           headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
         });
         const gid = res.data?.gameId;
-        if (cancelled || !gid || String(gid) === String(id)) return;
-        setConsolidationWaiting(null);
-        setPendingConsolidationWaiting(null);
-        navigate(`/game/${gid}`, { replace: true });
+        if (cancelled || !gid) return;
+        if (String(gid) !== String(id)) {
+          setConsolidationWaiting(null);
+          setPendingConsolidationWaiting(null);
+          navigate(`/game/${gid}`, { replace: true });
+        }
       } catch {
         /* 404 / network — retry on next tick */
       }
@@ -274,6 +278,7 @@ export function PokerGameView() {
     navigate,
     pendingConsolidationWaiting,
     consolidationWaiting,
+    gameState?.consolidationWaitingMessage,
     wrongTableByTournamentPayload,
   ]);
 
@@ -1282,9 +1287,13 @@ export function PokerGameView() {
     String(gameState.consolidationWaitingMessage).trim().length > 0
       ? gameState.consolidationWaitingMessage
       : consolidationWaiting;
+  const handResolvedForReseat =
+    (gameState.showdownResults?.winners?.length ?? 0) > 0 &&
+    !gameState.showdownActive;
   const showConsolidationOverlay =
     !!effectiveConsolidationMessage &&
-    !handBlocksConsolidationWaitOverlay(gameState, handActionPendingRef);
+    !handBlocksConsolidationWaitOverlay(gameState, handActionPendingRef) &&
+    !handResolvedForReseat;
 
   const showBlindWaitOverlay =
     !!blindWaitMessage &&
@@ -1407,6 +1416,17 @@ export function PokerGameView() {
                 </div>
               </div>
             )}
+            {!showConsolidationOverlay &&
+              handResolvedForReseat &&
+              !!effectiveConsolidationMessage && (
+                <div
+                  className="absolute left-1/2 top-3 z-[90] -translate-x-1/2 rounded-lg border border-amber-500/40 bg-slate-900/95 px-4 py-2 text-center shadow-lg"
+                >
+                  <p className="text-sm font-medium text-amber-100">
+                    {effectiveConsolidationMessage}
+                  </p>
+                </div>
+              )}
             {showBlindWaitOverlay && (
               <div
                 className="absolute inset-0 flex items-center justify-center bg-black/55 backdrop-blur-sm"

@@ -6,6 +6,7 @@ import {
   isGameConsolidationWaiting,
 } from "../../services/tournament/consolidateTables.js";
 import { normalizeUserId } from "./normalizeUserId.js";
+import { hasActiveHand } from "./tableState.js";
 
 /** In-memory state can rarely have a plain-object bettingRound (no class methods) — never throw on join. */
 function safeBettingRoundTotalPot(round) {
@@ -102,7 +103,9 @@ export function buildClientGameState(game, state, viewerUserId) {
     game.tournamentId &&
     game.status === "ACTIVE" &&
     isGameConsolidationWaiting(game.id)
-      ? consolidationWaitMessageForGame(game.id)
+      ? hasActiveHand(game.id)
+        ? consolidationWaitMessageForGame(game.id)
+        : "Tournament reseating in progress — you will move to your new table shortly."
       : null;
 
   let currentTurnUserId = state?.currentTurnUserId;

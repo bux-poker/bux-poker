@@ -260,6 +260,21 @@ export class TournamentEngine {
     }
   }
 
+  async hasConsolidationBlockingHand(gameId) {
+    try {
+      const { hasConsolidationBlockingHand } = await import(
+        "../modules/socket-handlers/pokerHandler.js"
+      );
+      return hasConsolidationBlockingHand(gameId);
+    } catch (e) {
+      console.error(
+        `[TOURNAMENT] Error checking consolidation-blocking hand for game ${gameId}:`,
+        e
+      );
+      return false;
+    }
+  }
+
   /**
    * Rebalance tables: reduce table count as players eliminated, then balance.
    * Delegates to tournament/consolidateTables.js (lock + wait for hands + doConsolidateTables).
@@ -268,6 +283,8 @@ export class TournamentEngine {
     const { getIO, forceStuckPlayerToAct, clearAllStateForGames, startHandForGame } = await import("../modules/socket-handlers/pokerHandler.js");
     return runConsolidateTables(tournamentId, {
       hasActiveHand: (gameId) => this.hasActiveHand(gameId),
+      hasConsolidationBlockingHand: (gameId) =>
+        this.hasConsolidationBlockingHand(gameId),
       getIO,
       forceStuckPlayerToAct,
       clearAllStateForGames,

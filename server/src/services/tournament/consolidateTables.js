@@ -383,6 +383,9 @@ export async function doConsolidateTables(tournamentId, deps) {
   });
   const seatsPerTable = tournament?.seatsPerTable ?? 9;
 
+  const handBlocksConsolidation =
+    deps.hasConsolidationBlockingHand ?? deps.hasActiveHand;
+
   let games = await prisma.game.findMany({
     where: { tournamentId, status: "ACTIVE" },
     include: {
@@ -404,7 +407,7 @@ export async function doConsolidateTables(tournamentId, deps) {
   }
 
   const waitDeps = {
-    hasActiveHand: deps.hasActiveHand,
+    hasActiveHand: handBlocksConsolidation,
     forceStuckPlayerToAct: deps.forceStuckPlayerToAct,
     getIO: deps.getIO,
     clearAllStateForGames: deps.clearAllStateForGames,
@@ -484,7 +487,7 @@ export async function doConsolidateTables(tournamentId, deps) {
       registerConsolidationWait(tournamentId, waitCloseIds);
       try {
         const io = deps.getIO();
-        if (await deps.hasActiveHand(closeG.id)) {
+        if (await handBlocksConsolidation(closeG.id)) {
           console.log(
             `[TOURNAMENT] Merge: wait only closing table ${closeG.tableNumber} — destination tables keep playing`
           );
@@ -493,7 +496,7 @@ export async function doConsolidateTables(tournamentId, deps) {
         }
         await new Promise((r) => setTimeout(r, 2000));
 
-        if (await deps.hasActiveHand(closeG.id)) {
+        if (await handBlocksConsolidation(closeG.id)) {
           console.log(
             `[TOURNAMENT] Consolidation aborted: closing table still in hand; will retry next poll`
           );
@@ -845,8 +848,8 @@ export async function doConsolidateTables(tournamentId, deps) {
         let progressed = false;
         try {
           const io = deps.getIO();
-          const srcHand = await deps.hasActiveHand(srcGame.id);
-          const dstHand = await deps.hasActiveHand(dstGame.id);
+          const srcHand = await handBlocksConsolidation(srcGame.id);
+          const dstHand = await handBlocksConsolidation(dstGame.id);
           if (srcHand || dstHand) {
             console.log(
               `[TOURNAMENT] Balance: waiting for hands to finish on tables ${srcGame.tableNumber} (largest) and ${dstGame.tableNumber} (smallest) before moving one seated player`
@@ -858,8 +861,8 @@ export async function doConsolidateTables(tournamentId, deps) {
           await new Promise((r) => setTimeout(r, 1500));
 
           if (
-            (await deps.hasActiveHand(srcGame.id)) ||
-            (await deps.hasActiveHand(dstGame.id))
+            (await handBlocksConsolidation(srcGame.id)) ||
+            (await handBlocksConsolidation(dstGame.id))
           ) {
             console.log(
               `[TOURNAMENT] Balance: a source/destination table still in hand — stop for this run`
@@ -885,8 +888,8 @@ export async function doConsolidateTables(tournamentId, deps) {
           const dstGameTx = pairPostWait.dstGame;
 
           if (
-            (await deps.hasActiveHand(srcGameTx.id)) ||
-            (await deps.hasActiveHand(dstGameTx.id))
+            (await handBlocksConsolidation(srcGameTx.id)) ||
+            (await handBlocksConsolidation(dstGameTx.id))
           ) {
             console.log(
               `[TOURNAMENT] Balance: source or destination still in hand (post-refresh) — stop for this run`
