@@ -24,7 +24,18 @@ Still needed for full polish:
 - Backend: Node.js, Express, Socket.IO, Prisma
 - Data: PostgreSQL (persistent), Redis (session store)
 - Auth: Discord OAuth (Vercel serverless token exchange in prod; Passport on API server for local/dev fallback)
-- Hosting: Vercel (frontend), Fly.io (`bux-poker` — see `fly.toml`), Supabase (Postgres)
+- Hosting: Vercel (frontend), Fly.io (`bux-poker` — see `fly.toml`), Neon (Postgres)
+
+## Service logins
+
+Login emails for hosted services (for handoff / recovery):
+
+| Service | Login email |
+|---------|-------------|
+| GitHub | `bitbotnfts@gmail.com` |
+| Vercel | `bitbotnfts@gmail.com` |
+| Fly.io | `bitbotnfts@gmail.com` |
+| Neon (Postgres) | `tombowe76@gmail.com` |
 
 ## Repository Layout
 
