@@ -449,10 +449,10 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
   for (const p of state.players) {
     if (p.status === "ELIMINATED") continue;
     if (!hasTwoHoleCards(p)) continue;
-    if (forcedReveal) {
+    if (showdownParticipantIds.has(p.id)) {
       p.showdownRevealStatus = "SHOW";
-    } else if (showdownParticipantIds.has(p.id)) {
-      p.showdownRevealStatus = "SHOW";
+    } else if (p.status === "FOLDED") {
+      p.showdownRevealStatus = "MUCK";
     } else {
       p.showdownRevealStatus = "PENDING";
     }

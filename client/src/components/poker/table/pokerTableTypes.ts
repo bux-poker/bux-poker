@@ -20,6 +20,7 @@ export interface PokerTableProps {
     lastAction?: string;
     lastActionSeq?: number;
     showdownRevealStatus?: string | null;
+    isAway?: boolean;
   }>;
   communityCards: Card[];
   pot: number;
@@ -27,11 +28,6 @@ export interface PokerTableProps {
     amount: number;
     label?: string;
     eligiblePlayerIds: string[];
-  }>;
-  uncalledReturns?: Array<{
-    playerId: string;
-    name: string;
-    amount: number;
   }>;
   tournamentCountdown?: { startTime: string; seconds: number } | null;
   currentBet: number;

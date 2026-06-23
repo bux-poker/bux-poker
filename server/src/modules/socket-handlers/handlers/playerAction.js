@@ -41,6 +41,12 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
         io
       });
 
+      const actingPlayer = state.players.find((p) => p.userId === userId);
+      if (actingPlayer?.isAway) {
+        actingPlayer.isAway = false;
+        tableState.set(gameId, state);
+      }
+
       await emitGameState(gameId, io, state);
 
       const activePlayerIds = state.players

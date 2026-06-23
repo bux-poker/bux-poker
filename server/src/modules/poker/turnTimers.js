@@ -52,6 +52,15 @@ async function startTurnTimerAsync(gameId, userId, io) {
     return;
   }
 
+  if (player.isAway) {
+    const nm = player.name || player.user?.username || "";
+    console.log(
+      `[POKER] startTurnTimer: ${nm || userId} is AWAY — auto-acting immediately`
+    );
+    void executeTimerAutoAction(gameId, userId, io, null, { markAway: false });
+    return;
+  }
+
   const playerName = player.name || player.user?.username || "";
   const isTestPlayer =
     (player.user?.email || "").toLowerCase().endsWith("@test.buxpoker.local") ||
@@ -184,7 +193,7 @@ async function startTurnTimerAsync(gameId, userId, io) {
     // Single deadline timer (no nested follow-up). A nested timeout was not cleared on player-action
     // and could race the timerId guard so auto CHECK/FOLD never ran.
     const timeoutTimerId = setTimeout(() => {
-      autoFoldPlayer(gameId, userId, io, timeoutTimerId);
+      executeTimerAutoAction(gameId, userId, io, timeoutTimerId, { markAway: true });
     }, totalActionMs);
 
     io.to(`game:${gameId}`).emit("turn-timer-start", {
@@ -203,17 +212,24 @@ async function startTurnTimerAsync(gameId, userId, io) {
   }
 }
 
-async function autoFoldPlayer(gameId, userId, io, timerId) {
+async function executeTimerAutoAction(
+  gameId,
+  userId,
+  io,
+  timerId,
+  { markAway = true } = {}
+) {
   try {
     const uidNorm = normalizeUserId(userId);
-    const timerState = turnTimers.get(gameId);
-    // Guard against stale timer callbacks from previous turns.
-    if (
-      !timerState ||
-      timerState.timerId !== timerId ||
-      normalizeUserId(timerState.userId) !== uidNorm
-    ) {
-      return;
+    if (timerId != null) {
+      const timerState = turnTimers.get(gameId);
+      if (
+        !timerState ||
+        timerState.timerId !== timerId ||
+        normalizeUserId(timerState.userId) !== uidNorm
+      ) {
+        return;
+      }
     }
 
     if (await isTournamentGameTerminal(gameId)) {
@@ -221,16 +237,12 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
       return;
     }
 
-    // Release this turn's slot before actions / moveToNextPlayer (which starts a new timer).
     turnTimers.delete(gameId);
 
     const state = tableState.get(gameId);
-    if (
-      !state ||
-      normalizeUserId(state.currentTurnUserId) !== uidNorm
-    ) {
+    if (!state || normalizeUserId(state.currentTurnUserId) !== uidNorm) {
       console.log(
-        `[POKER] autoFoldPlayer: skipping – not ${uidNorm}'s turn (currentTurn=${state?.currentTurnUserId})`
+        `[POKER] executeTimerAutoAction: skipping – not ${uidNorm}'s turn (currentTurn=${state?.currentTurnUserId})`
       );
       if (state?.currentTurnUserId) {
         startTurnTimer(gameId, state.currentTurnUserId, io);
@@ -243,19 +255,16 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
     );
     if (!player) {
       console.log(
-        `[POKER] autoFoldPlayer: player not found for ${uidNorm}, moving turn`
+        `[POKER] executeTimerAutoAction: player not found for ${uidNorm}, moving turn`
       );
       await moveToNextPlayer(gameId, io);
       return;
     }
     const playerName = player?.name || player?.user?.username || "";
 
-    if (
-      player.status === "ALL_IN" ||
-      (player.chips ?? 0) <= 0
-    ) {
+    if (player.status === "ALL_IN" || (player.chips ?? 0) <= 0) {
       console.log(
-        `[POKER] autoFoldPlayer: ${playerName || uidNorm} is all-in / no chips — moving turn`
+        `[POKER] executeTimerAutoAction: ${playerName || uidNorm} is all-in / no chips — moving turn`
       );
       await moveToNextPlayer(gameId, io);
       return;
@@ -266,7 +275,6 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
       state.bettingRound?.getPlayerContribution(player.id) || 0;
     const canCheck = myContribution >= currentBet;
 
-    // Human timer expiry policy: CHECK if no bet to call, otherwise FOLD.
     let stateAfter;
     try {
       stateAfter = await applyPlayerAction({
@@ -287,8 +295,18 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
       throw err;
     }
 
+    if (markAway) {
+      const p = stateAfter.players.find(
+        (pl) => normalizeUserId(pl.userId) === uidNorm
+      );
+      if (p) {
+        p.isAway = true;
+        tableState.set(gameId, stateAfter);
+      }
+    }
+
     console.log(
-      `[POKER] turn-timer expiry auto-action: ${canCheck ? "CHECK" : "FOLD"} for ${playerName || userId} (currentBet=${currentBet}, contribution=${myContribution})`
+      `[POKER] turn-timer expiry auto-action: ${canCheck ? "CHECK" : "FOLD"} for ${playerName || userId} (currentBet=${currentBet}, contribution=${myContribution})${markAway ? " — marked AWAY" : ""}`
     );
 
     const activePlayerIds = stateAfter.players
@@ -324,7 +342,7 @@ async function autoFoldPlayer(gameId, userId, io, timerId) {
     const stateNow = tableState.get(gameId);
     await emitGameStateWithGame(gameId, io, game, stateNow || stateAfter);
   } catch (err) {
-    console.error("[POKER] Error auto-folding player:", err);
+    console.error("[POKER] Error in executeTimerAutoAction:", err);
   }
 }
 

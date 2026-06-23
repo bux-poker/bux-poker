@@ -131,7 +131,7 @@ export function mergeCurrentStreetIntoPot(state) {
  * Preview pot layers for UI (no stack mutation). Optionally includes pending uncalled returns.
  */
 export function computePotLayerPreview(state) {
-  if (!state) return { totalPot: 0, sidePots: [], uncalledReturns: [] };
+  if (!state) return { totalPot: 0, sidePots: [], uncalledReturns: [], showPotBreakdown: false };
 
   const roundPot = state.bettingRound?.getTotalPot?.() || 0;
   const mergedPot = (state.pot || 0) + roundPot;
@@ -175,6 +175,8 @@ export function computePotLayerPreview(state) {
     displayPot: mergedPot,
     sidePots,
     uncalledReturns: uncalledReturnsList,
+    /** True when multiple awardable layers exist (real side-pot situation). */
+    showPotBreakdown: sidePots.length > 1,
   };
 }
 

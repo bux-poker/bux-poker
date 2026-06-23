@@ -91,6 +91,7 @@ export function buildClientGameState(game, state, viewerUserId) {
         totalPot: game.pot || 0,
         sidePots: [],
         uncalledReturns: [],
+        showPotBreakdown: false,
       };
   const totalPot = potPreview.totalPot;
 
@@ -184,8 +185,7 @@ export function buildClientGameState(game, state, viewerUserId) {
     tableNumber: game.tableNumber,
     currentBlindLevel: game.currentBlindLevel ?? 0,
     pot: totalPot,
-    sidePots: potPreview.sidePots || [],
-    uncalledReturns: potPreview.uncalledReturns || [],
+    sidePots: potPreview.showPotBreakdown ? potPreview.sidePots || [] : [],
     consolidationWaitingMessage,
     communityCards: communityCardsEncoded,
     street,
@@ -211,8 +211,11 @@ export function buildClientGameState(game, state, viewerUserId) {
           inHandPlayerIds == null || inHandPlayerIds.has(p.id);
         const parsed = inCurrentHand ? parsePlayerHoleCards(p) : null;
         const hide =
-          parsed &&
-          shouldHideHoleCardsFromViewer(p, viewerUserId, optionalRevealPhase);
+          (parsed &&
+            shouldHideHoleCardsFromViewer(p, viewerUserId, optionalRevealPhase)) ||
+          (parsed &&
+            p.status === "FOLDED" &&
+            p.showdownRevealStatus !== "SHOW");
         // Seats merged from DB mid-hand are not in this hand — strip stale lastAction/ALL_IN.
         // Never coerce real ELIMINATED (or other truth from DB) into ACTIVE; that looked like "resurrections".
         const statusForWaiter =
@@ -238,6 +241,7 @@ export function buildClientGameState(game, state, viewerUserId) {
           showdownRevealStatus: inCurrentHand
             ? p.showdownRevealStatus || null
             : null,
+          isAway: inCurrentHand ? !!p.isAway : false,
         };
       }),
   };

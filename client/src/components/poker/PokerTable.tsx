@@ -17,7 +17,6 @@ export function PokerTable({
   communityCards,
   pot,
   sidePots = [],
-  uncalledReturns = [],
   currentBet,
   currentPlayer,
   smallBlind = 10,
@@ -256,7 +255,7 @@ export function PokerTable({
                 </span>
                 <BetChip value={pot} />
               </div>
-              {(sidePots.length > 1 || uncalledReturns.length > 0) && (
+              {sidePots.length > 1 && (
                 <div
                   className="flex flex-col items-center gap-0.5 rounded-md border border-slate-600/50 bg-slate-900/80 px-2 py-1 text-center"
                   style={{ fontSize: 'calc(var(--bet-chip-text-size, 13px) * 0.85)' }}
@@ -265,11 +264,6 @@ export function PokerTable({
                     <span key={`${sp.label || "pot"}-${idx}`} className="text-slate-300">
                       {(sp.label || (idx === 0 ? "Main" : `Side ${idx}`)).toUpperCase()}:{" "}
                       <span className="font-semibold text-amber-200">{sp.amount.toLocaleString()}</span>
-                    </span>
-                  ))}
-                  {uncalledReturns.map((ur) => (
-                    <span key={ur.playerId} className="text-slate-400 italic">
-                      {ur.name} return: {ur.amount.toLocaleString()}
                     </span>
                   ))}
                 </div>
@@ -350,6 +344,7 @@ export function PokerTable({
           const hasActiveTimer =
             timerMatchesServerTurn &&
             player &&
+            !player.isAway &&
             (String(player.userId ?? "") === String(turnTimer.userId ?? "") ||
               String(player.id ?? "") === String(turnTimer.userId ?? ""));
           const rawTimerRemaining = hasActiveTimer
@@ -447,6 +442,15 @@ export function PokerTable({
                             );
                           })()}
                           
+                          {/* AWAY overlay */}
+                          {player.isAway && player.status !== "FOLDED" && player.status !== "ELIMINATED" && (
+                            <div className="absolute inset-0 flex items-center justify-center rounded-full bg-slate-950/75">
+                              <span className="font-extrabold uppercase tracking-wide text-amber-300 select-none" style={{ fontSize: '11px' }}>
+                                Away
+                              </span>
+                            </div>
+                          )}
+
                           {/* Elimination overlay: after showdown, show red X over eliminated players before they disappear next hand */}
                           {showdownActive && player.status === 'ELIMINATED' && (
                             <div className="absolute inset-0 flex items-center justify-center bg-red-900/60">
@@ -593,14 +597,13 @@ export function PokerTable({
           const showFoldedReveal =
             isFolded &&
             optionalRevealPhase &&
-            (revealStatus === 'SHOW' ||
-              (isMyPlayer && (revealStatus === 'PENDING' || revealStatus === 'SHOW')));
+            revealStatus === "SHOW";
           if (player && player.holeCards && player.holeCards.length > 0 && (!isFolded || showFoldedReveal)) {
             const isShowdownActive = showdownActive || false;
-            // During showdown, turn active players' cards face up; folded only when show/muck allows
             const showFaceUp =
               !forceSeatCardsFaceDown &&
-              (isMyPlayer || (isShowdownActive && !isFolded) || showFoldedReveal);
+              !isFolded &&
+              (isMyPlayer || isShowdownActive || showFoldedReveal);
             
             // Get winner information for highlighting and pot won display
             const winnerInfo = showdownResults?.winners?.find((w: any) => w.playerId === player.id || w.userId === player.userId);

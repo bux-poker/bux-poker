@@ -3,3 +3,4 @@ export { registerPlayerAction } from "./playerAction.js";
 export { registerGameMessage } from "./gameMessage.js";
 export { registerShowdownChoice } from "./showdownChoice.js";
 export { registerDisconnect } from "./disconnect.js";
+export { registerPlayerImBack } from "./playerImBack.js";

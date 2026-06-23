@@ -14,6 +14,7 @@ export interface PlayerViewModel {
   lastAction?: string | null;
   lastActionSeq?: number;
   showdownRevealStatus?: string | null;
+  isAway?: boolean;
 }
 
 /** Server `showdownResults` on `game-state` (winner list, etc.). */

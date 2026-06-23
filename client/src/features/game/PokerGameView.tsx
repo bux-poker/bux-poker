@@ -101,6 +101,8 @@ export function PokerGameView() {
   const [connecting, setConnecting] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [turnTimer, setTurnTimer] = useState<{ userId: string; expiresAt: number; duration: number } | null>(null);
+  const [timerTick, setTimerTick] = useState(0);
+  const timerExpiryKeyRef = useRef<string | null>(null);
   const [nextBlindTime, setNextBlindTime] = useState<string>('--:--');
   const [isPortrait, setIsPortrait] = useState(false);
   const [showdownResults, setShowdownResults] = useState<any>(null);
@@ -702,9 +704,72 @@ export function PokerGameView() {
     };
   }, [id, user?.id, refetchTournament, navigate]);
 
-  // Do NOT clear turnTimer when expiresAt passes — that hid the countdown before the server ran
-  // auto-fold/check (client clock can be ahead of server event loop). Keep showing 0 until game-state
-  // or turn-timer-start updates (see socket handler that clears when currentTurnUserId changes).
+  // Do NOT clear turnTimer when expiresAt passes — keep showing 0 until game-state updates.
+  useEffect(() => {
+    if (!turnTimer) return;
+    const id = setInterval(() => setTimerTick((t) => t + 1), 150);
+    return () => clearInterval(id);
+  }, [turnTimer?.userId, turnTimer?.expiresAt]);
+
+  // When the visible countdown hits 0, apply CHECK/FOLD immediately in the UI (don't wait on server lag).
+  useEffect(() => {
+    if (!turnTimer || !gameState) return;
+    if (Date.now() < turnTimer.expiresAt) return;
+
+    const key = `${turnTimer.userId}:${turnTimer.expiresAt}`;
+    if (timerExpiryKeyRef.current === key) return;
+    timerExpiryKeyRef.current = key;
+
+    const actor = gameState.players.find(
+      (p) =>
+        String(p.userId) === String(turnTimer.userId) ||
+        String(p.id) === String(turnTimer.userId)
+    );
+    if (
+      !actor ||
+      actor.status === "FOLDED" ||
+      actor.status === "ALL_IN" ||
+      actor.isAway
+    ) {
+      return;
+    }
+    if (actor.name?.toLowerCase().startsWith("test player")) return;
+
+    const currentBet = gameState.currentBet || 0;
+    const contrib = actor.contribution || 0;
+    const action = contrib >= currentBet ? "CHECK" : "FOLD";
+    const isMe = String(user?.id) === String(turnTimer.userId);
+
+    if (isMe) {
+      handleActionRef.current?.(action, 0);
+      return;
+    }
+
+    handActionPendingRef.current = true;
+    setGameState((prev) => {
+      if (!prev) return prev;
+      const uid = turnTimer.userId;
+      return {
+        ...prev,
+        players: prev.players.map((p) => {
+          if (String(p.userId) !== String(uid) && String(p.id) !== String(uid)) {
+            return p;
+          }
+          if (action === "FOLD") {
+            return { ...p, status: "FOLDED", isAway: true };
+          }
+          return { ...p, isAway: true };
+        }),
+        currentTurnUserId: undefined,
+      };
+    });
+  }, [turnTimer, gameState, timerTick, user?.id]);
+
+  useEffect(() => {
+    if (turnTimer && Date.now() < turnTimer.expiresAt) {
+      timerExpiryKeyRef.current = null;
+    }
+  }, [turnTimer?.userId, turnTimer?.expiresAt]);
 
   // Update countdown timer every second (separate from socket setup).
   // IMPORTANT: Countdown is driven only by server \"tournament-starting\" /
@@ -1123,6 +1188,23 @@ export function PokerGameView() {
     });
   };
 
+  const handleImBack = () => {
+    if (!id || !user?.id) return;
+    getSocket().emit("player-im-back", { gameId: id, userId: user.id });
+    setGameState((prev) =>
+      prev
+        ? {
+            ...prev,
+            players: prev.players.map((p) =>
+              p.userId === user.id || p.id === user.id
+                ? { ...p, isAway: false }
+                : p
+            ),
+          }
+        : prev
+    );
+  };
+
   handleActionRef.current = handleAction;
 
   useEffect(() => {
@@ -1269,12 +1351,14 @@ export function PokerGameView() {
         : null;
   const myContribution = myPlayer?.contribution || 0;
   const isMyTurn =
-    String(gameState.currentTurnUserId ?? "") === String(user?.id ?? "");
+    String(gameState.currentTurnUserId ?? "") === String(user?.id ?? "") &&
+    !myPlayer?.isAway;
   const canPreAction =
     !!user &&
     !isMyTurn &&
     !gameState.showdownActive &&
     !!myPlayer &&
+    !myPlayer.isAway &&
     myPlayer.status !== "FOLDED" &&
     myPlayer.status !== "ALL_IN" &&
     (myPlayer.chips ?? 0) > 0 &&
@@ -1519,11 +1603,11 @@ export function PokerGameView() {
                 lastAction: p.lastAction || null,
                 lastActionSeq: p.lastActionSeq || 0,
                 showdownRevealStatus: p.showdownRevealStatus || null,
+                isAway: !!p.isAway,
               }))}
               communityCards={communityCards}
               pot={gameState.pot}
               sidePots={gameState.sidePots || []}
-              uncalledReturns={gameState.uncalledReturns || []}
               currentBet={gameState.currentBet || 0}
               currentPlayer={gameState.currentTurnUserId}
               smallBlind={smallBlind}
@@ -1632,7 +1716,25 @@ export function PokerGameView() {
                     </div>
                   </div>
                 )}
-                {isMyTurn && !gameState.showdownActive && (
+                {myPlayer?.isAway && !gameState.showdownActive && (
+                  <div className="flex flex-1 items-center justify-center">
+                    <button
+                      type="button"
+                      onClick={handleImBack}
+                      className="rounded-lg bg-emerald-600 font-bold text-white shadow-lg hover:bg-emerald-500 transition-colors whitespace-nowrap"
+                      style={{
+                        minWidth: `var(--action-button-width, 140px)`,
+                        height: `var(--action-button-height, 48px)`,
+                        paddingLeft: `var(--action-button-padding-x, 24px)`,
+                        paddingRight: `var(--action-button-padding-x, 24px)`,
+                        fontSize: `var(--action-button-text, 16px)`,
+                      }}
+                    >
+                      I&apos;m back
+                    </button>
+                  </div>
+                )}
+                {isMyTurn && !gameState.showdownActive && !myPlayer?.isAway && (
                   <BettingControls
                     onAction={handleAction}
                     currentBet={gameState.currentBet || 0}
