@@ -301,7 +301,6 @@ export async function advanceToNextStreet(gameId, io) {
             io,
             `${winnerName} wins ${totalPot.toLocaleString()} (all other players folded)`
           );
-          state.showdownActive = true;
           state.showdownResults = {
             winners: [
               {

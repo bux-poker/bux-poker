@@ -13,6 +13,7 @@ export interface PlayerViewModel {
   contribution?: number;
   lastAction?: string | null;
   lastActionSeq?: number;
+  showdownRevealStatus?: string | null;
 }
 
 /** Server `showdownResults` on `game-state` (winner list, etc.). */

@@ -127,7 +127,12 @@ async function startTurnTimerAsync(gameId, userId, io) {
           );
 
           if (bettingComplete && currentState.street) {
-            if (currentState.street === "RIVER") {
+            const activeCount = currentState.players.filter(
+              (p) => p.status !== "FOLDED" && p.status !== "ELIMINATED"
+            ).length;
+            if (activeCount <= 1) {
+              await advanceToNextStreet(gameId, io);
+            } else if (currentState.street === "RIVER") {
               await handleShowdown(gameId, io);
             } else {
               await advanceToNextStreet(gameId, io);

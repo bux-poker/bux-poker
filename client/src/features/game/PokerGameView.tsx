@@ -148,6 +148,7 @@ export function PokerGameView() {
   /** Only clear pre-action when transitioning into FOLDED (not every socket tick). */
   const wasFoldedRef = useRef(false);
   const handleActionRef = useRef<(action: string, amount: number) => void>(() => {});
+  const lastActionSoundSeqRef = useRef<Map<string, number>>(new Map());
   const [preActionSelected, setPreActionSelected] = useState<PreActionKind | null>(null);
   const { user } = useAuth();
   /** Keeps GET /api/tournaments/:id loading when game-state drops tournamentId but consolidation sockets still name the MTT. */
@@ -575,9 +576,13 @@ export function PokerGameView() {
     socket.on("showdown", (payload: { gameId: string; results: any }) => {
       if (payload.gameId === id) {
         setShowdownResults(payload.results);
-        // Play showdown sound
-        soundManager.play('showdown');
-        // Clear after 8 seconds
+        const winners = getShowdownWinnersList(payload.results);
+        const realShowdown = winners.some(
+          (w) => typeof w.handCategory === "string" && w.handCategory.length > 0
+        );
+        if (realShowdown) {
+          soundManager.playQueued("showdown");
+        }
         setTimeout(() => setShowdownResults(null), 8000);
       }
     });
@@ -919,26 +924,33 @@ export function PokerGameView() {
     const currentStreet = gameState.street || 'PREFLOP';
     if (prevStreet !== currentStreet) {
       if (currentStreet === 'FLOP') {
-        soundManager.play('deal-flop');
+        soundManager.playQueued('deal-flop');
       } else if (currentStreet === 'TURN') {
-        soundManager.play('deal-turn');
+        soundManager.playQueued('deal-turn');
       } else if (currentStreet === 'RIVER') {
-        soundManager.play('deal-river');
+        soundManager.playQueued('deal-river');
       }
     }
 
-    // 3. Showdown
+    // 3. Showdown — only real multi-way showdowns (fold wins have no handCategory)
     const prevShowdown = prevGameState.showdownActive || false;
     const currentShowdown = gameState.showdownActive || false;
     if (!prevShowdown && currentShowdown) {
-      soundManager.play('showdown');
+      const winners = getShowdownWinnersList(gameState.showdownResults);
+      const realShowdown =
+        gameState.showdownForcedReveal ||
+        winners.some((w) => typeof w.handCategory === "string" && w.handCategory.length > 0);
+      if (realShowdown) {
+        soundManager.playQueued("showdown");
+      }
     }
 
     // 4. New hand start (detected by street resetting to PREFLOP and pot resetting)
     const prevPot = prevGameState.pot || 0;
     const currentPot = gameState.pot || 0;
     if (prevPot > 0 && currentPot === 0 && currentStreet === 'PREFLOP' && prevStreet !== 'PREFLOP') {
-      soundManager.play('hand-start');
+      soundManager.playQueued('hand-start');
+      lastActionSoundSeqRef.current.clear();
     }
 
     // 5. Detect player actions using authoritative lastAction changes first.
@@ -962,11 +974,21 @@ export function PokerGameView() {
 
       // Skip if this is me (don't play sounds for my own actions; string compare for id consistency)
       const isMyPlayer = String(currentPlayer.userId ?? "") === String(user.id ?? "") || String(currentPlayer.id ?? "") === String(user.id ?? "");
+      const seq = currentPlayer.lastActionSeq ?? 0;
+      const prevSeq = prevPlayer.lastActionSeq ?? 0;
+      const actionSeqChanged = seq > 0 && seq !== prevSeq;
       const lastActionChanged = currentPlayer.lastAction && currentPlayer.lastAction !== prevPlayer.lastAction;
-      if (lastActionChanged && !isMyPlayer) {
+      const actionChanged = actionSeqChanged || lastActionChanged;
+
+      if (actionChanged && !isMyPlayer) {
+        if (actionSeqChanged) {
+          const lastPlayed = lastActionSoundSeqRef.current.get(currentPlayer.id) ?? 0;
+          if (seq <= lastPlayed) return;
+          lastActionSoundSeqRef.current.set(currentPlayer.id, seq);
+        }
         const actionSound = mapActionToSound(currentPlayer.lastAction);
         if (actionSound) {
-          soundManager.play(actionSound);
+          soundManager.playQueued(actionSound);
           return;
         }
       }
@@ -974,7 +996,7 @@ export function PokerGameView() {
       // Fold sound: Player status changed to FOLDED
       if (prevPlayer.status !== 'FOLDED' && currentPlayer.status === 'FOLDED') {
         if (!isMyPlayer) {
-          soundManager.play('fold');
+          soundManager.playQueued('fold');
         }
         return;
       }
@@ -991,31 +1013,31 @@ export function PokerGameView() {
 
       // All-in sound (highest priority)
       if (wentAllIn && !isMyPlayer) {
-        soundManager.play('allin');
+        soundManager.playQueued('allin');
         return;
       }
 
-      // Bet/Call/Raise detection
-      if (contributionIncreased && currentPlayer.status === 'ACTIVE' && !isMyPlayer) {
+      // Bet/Call/Raise detection — only when lastActionSeq did not already play the sound
+      if (contributionIncreased && currentPlayer.status === 'ACTIVE' && !isMyPlayer && !actionSeqChanged) {
         const prevBet = prevGameState.currentBet || 0;
         const currentBet = gameState.currentBet || 0;
         const wasCurrentTurn = String(prevGameState.currentTurnUserId ?? "") === String(currentPlayer.userId ?? "") || String(prevGameState.currentTurnUserId ?? "") === String(currentPlayer.id ?? "");
         
         // Raise: Bet increased and this player was the one who raised
         if (currentBet > prevBet && wasCurrentTurn) {
-          soundManager.play('raise');
+          soundManager.playQueued('raise');
         }
         // Call: Bet exists and player matched it
         else if (currentBet > 0 && currentContribution === currentBet) {
-          soundManager.play('call');
+          soundManager.playQueued('call');
         }
         // Bet: New bet placed (no previous bet)
         else if (prevBet === 0 && currentBet > 0) {
-          soundManager.play('bet');
+          soundManager.playQueued('bet');
         }
         // Default to call if we can't determine
         else {
-          soundManager.play('call');
+          soundManager.playQueued('call');
         }
         return;
       }
@@ -1026,8 +1048,8 @@ export function PokerGameView() {
       const contributionUnchanged = currentContribution === prevContribution;
       const noCurrentBet = (gameState.currentBet || 0) === 0;
       
-      if (wasCurrentTurn && isNotCurrentTurn && contributionUnchanged && noCurrentBet && currentPlayer.status === 'ACTIVE' && !isMyPlayer) {
-        soundManager.play('check');
+      if (wasCurrentTurn && isNotCurrentTurn && contributionUnchanged && noCurrentBet && currentPlayer.status === 'ACTIVE' && !isMyPlayer && !actionSeqChanged) {
+        soundManager.playQueued('check');
       }
     });
 
@@ -1144,6 +1166,24 @@ export function PokerGameView() {
 
   const handleShowdownChoice = (choice: "SHOW" | "MUCK") => {
     if (!id || !user?.id) return;
+    setGameState((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        showdownNeedsChoice: false,
+        players: prev.players.map((p) => {
+          const mine =
+            String(p.userId ?? "") === String(user.id) ||
+            String(p.id ?? "") === String(user.id);
+          if (!mine) return p;
+          return {
+            ...p,
+            showdownRevealStatus: choice,
+            holeCards: choice === "MUCK" ? undefined : p.holeCards,
+          };
+        }),
+      };
+    });
     getSocket().emit("showdown-choice", { gameId: id, choice, userId: user.id });
   };
 
@@ -1458,6 +1498,7 @@ export function PokerGameView() {
                 status: p.status,
                 lastAction: p.lastAction || null,
                 lastActionSeq: p.lastActionSeq || 0,
+                showdownRevealStatus: p.showdownRevealStatus || null,
               }))}
               communityCards={communityCards}
               pot={gameState.pot}

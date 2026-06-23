@@ -19,6 +19,7 @@ export interface PokerTableProps {
     status?: string;
     lastAction?: string;
     lastActionSeq?: number;
+    showdownRevealStatus?: string | null;
   }>;
   communityCards: Card[];
   pot: number;

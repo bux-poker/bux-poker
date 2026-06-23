@@ -225,6 +225,9 @@ export function buildClientGameState(game, state, viewerUserId) {
           lastActionSeq: inCurrentHand ? p.lastActionSeq || 0 : 0,
           holeCards: hide ? null : parsed,
           contribution: safePlayerContribution(state?.bettingRound, p.id),
+          showdownRevealStatus: inCurrentHand
+            ? p.showdownRevealStatus || null
+            : null,
         };
       }),
   };

@@ -564,12 +564,21 @@ export function PokerTable({
           ];
 
           // Add cards as separate element if player has cards (including own player)
-          // Hide table cards for folded players (they can still see their own cards in action panel)
+          // Hide table cards for folded players unless optional showdown reveal (show/muck)
           const isFolded = player?.status === 'FOLDED';
-          if (player && player.holeCards && player.holeCards.length > 0 && !isFolded) {
+          const revealStatus = player?.showdownRevealStatus;
+          const optionalRevealPhase = !!(showdownActive && showdownResults);
+          const showFoldedReveal =
+            isFolded &&
+            optionalRevealPhase &&
+            (revealStatus === 'SHOW' ||
+              (isMyPlayer && (revealStatus === 'PENDING' || revealStatus === 'SHOW')));
+          if (player && player.holeCards && player.holeCards.length > 0 && (!isFolded || showFoldedReveal)) {
             const isShowdownActive = showdownActive || false;
-            // During showdown, turn all active players' cards face up (unless forced face down for test layout)
-            const showFaceUp = !forceSeatCardsFaceDown && (isMyPlayer || isShowdownActive);
+            // During showdown, turn active players' cards face up; folded only when show/muck allows
+            const showFaceUp =
+              !forceSeatCardsFaceDown &&
+              (isMyPlayer || (isShowdownActive && !isFolded) || showFoldedReveal);
             
             // Get winner information for highlighting and pot won display
             const winnerInfo = showdownResults?.winners?.find((w: any) => w.playerId === player.id || w.userId === player.userId);

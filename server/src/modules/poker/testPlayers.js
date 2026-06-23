@@ -371,7 +371,12 @@ export async function handleTestPlayerAction(gameId, userId, io) {
       );
 
       try {
-        if (newState.street === "RIVER") {
+        if (activePlayersAfterAction.length === 1) {
+          console.log(
+            "[TEST PLAYER] Single player remaining — fold win via advanceToNextStreet"
+          );
+          await advanceToNextStreet(gameId, io);
+        } else if (newState.street === "RIVER") {
           console.log(
             "[TEST PLAYER] On RIVER - going to showdown"
           );
