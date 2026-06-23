@@ -70,6 +70,38 @@ export async function startHandForGameBody(gameId, io) {
       gameId
     );
     if (!tableBal.allowed) {
+      const consolidateReasons = new Set([
+        "players_off_active_tables",
+        "final_table_merge",
+        "merging_tables",
+        "awaiting_table_balance",
+      ]);
+      if (consolidateReasons.has(tableBal.reason ?? "")) {
+        try {
+          const { consolidateTables } = await import(
+            "../../services/tournament/consolidateTables.js"
+          );
+          const ph = await import("../socket-handlers/pokerHandler.js");
+          void consolidateTables(game.tournamentId, {
+            hasActiveHand: ph.hasActiveHand,
+            hasConsolidationBlockingHand: ph.hasConsolidationBlockingHand,
+            getIO: ph.getIO,
+            forceStuckPlayerToAct: ph.forceStuckPlayerToAct,
+            clearAllStateForGames: ph.clearAllStateForGames,
+            startHandForGame: ph.startHandForGame,
+          }).catch((e) => {
+            console.warn(
+              `[POKER] consolidation after blocked start failed for ${game.tournamentId}:`,
+              e?.message
+            );
+          });
+        } catch (e) {
+          console.warn(
+            `[POKER] could not schedule consolidation for ${game.tournamentId}:`,
+            e?.message
+          );
+        }
+      }
       if (io) {
         const st = tableState.get(gameId);
         const g = await prisma.game.findUnique({

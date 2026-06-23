@@ -5,6 +5,7 @@ import { tryAdvanceBlindsIfDue } from "./blindLevels.js";
 import { isGameConsolidationWaiting } from "./consolidateTables.js";
 import {
   analyzeTableBalance,
+  countTournamentLivePlayers,
   tournamentNeedsConsolidation,
 } from "./tableBalanceTargets.js";
 
@@ -49,8 +50,8 @@ export function startIdleTablesPoll(engine) {
         if (!socketIO) continue;
 
         const seatsPerTable = t.seatsPerTable ?? 9;
-        // Count every non-eliminated player (incl. 0-chip all-in); chips>0 undercounted tables & blocked consolidation.
-        const games = await prisma.game.findMany({
+        const tournamentLiveTotal = await countTournamentLivePlayers(t.id);
+        let activeGames = await prisma.game.findMany({
           where: { tournamentId: t.id, status: "ACTIVE" },
           include: {
             players: {
@@ -59,13 +60,47 @@ export function startIdleTablesPoll(engine) {
             }
           }
         });
-        const totalCount = games.reduce((sum, g) => sum + (g.players?.length ?? 0), 0);
-        const balanceInfo = analyzeTableBalance(games, seatsPerTable);
-        const needsConsolidation = tournamentNeedsConsolidation(
-          games,
-          seatsPerTable
+        const totalCount = activeGames.reduce((sum, g) => sum + (g.players?.length ?? 0), 0);
+        const balanceInfo = analyzeTableBalance(activeGames, seatsPerTable);
+        let needsConsolidation = tournamentNeedsConsolidation(
+          activeGames,
+          seatsPerTable,
+          tournamentLiveTotal
         );
-        for (const game of games) {
+
+        if (needsConsolidation && tournamentLiveTotal >= 2) {
+          console.log(
+            `[TOURNAMENT] Idle poll: consolidating tournament ${t.id} before hand starts — ${activeGames.length} ACTIVE game(s), ${totalCount} on ACTIVE / ${tournamentLiveTotal} live, seatsPerTable=${seatsPerTable}, canonical [${balanceInfo.targets.join(",")}], T=${balanceInfo.T}, distributionOk=${balanceInfo.distributionOk}, needCloseShells=${balanceInfo.needCloseEmptyShells}`
+          );
+          try {
+            await engine.consolidateTables(t.id);
+          } catch (err) {
+            const code = err?.code ?? "";
+            const meta = err?.meta != null ? JSON.stringify(err.meta) : "";
+            console.error(
+              "[TOURNAMENT] Idle-poll consolidation failed:",
+              err?.message || code || String(err),
+              meta
+            );
+          }
+          const liveAfter = await countTournamentLivePlayers(t.id);
+          activeGames = await prisma.game.findMany({
+            where: { tournamentId: t.id, status: "ACTIVE" },
+            include: {
+              players: {
+                where: { status: { not: "ELIMINATED" } },
+                select: { id: true },
+              },
+            },
+          });
+          needsConsolidation = tournamentNeedsConsolidation(
+            activeGames,
+            seatsPerTable,
+            liveAfter
+          );
+        }
+
+        for (const game of activeGames) {
           if (game.players.length === 0) {
             if (hasActiveHand(game.id)) continue;
             if ((game.pot ?? 0) > 0) {
@@ -147,6 +182,9 @@ export function startIdleTablesPoll(engine) {
             if (blockedBySchedule) {
               continue;
             }
+            if (needsConsolidation) {
+              continue;
+            }
             await startHandForGame(game.id, socketIO);
             if (hasActiveHand(game.id)) {
               console.log(`[TOURNAMENT] Idle-table recovery: started hand for game ${game.id} (table ${game.tableNumber}) with pot=0`);
@@ -156,20 +194,6 @@ export function startIdleTablesPoll(engine) {
           } catch (err) {
             console.error(`[TOURNAMENT] Idle-table start failed for game ${game.id}:`, err);
           }
-        }
-        if (needsConsolidation && totalCount >= 2) {
-          console.log(
-            `[TOURNAMENT] Idle poll: scheduling consolidate tournament ${t.id} — ${games.length} ACTIVE game(s), ${totalCount} players, seatsPerTable=${seatsPerTable}, canonical [${balanceInfo.targets.join(",")}], T=${balanceInfo.T}, distributionOk=${balanceInfo.distributionOk}, needCloseShells=${balanceInfo.needCloseEmptyShells}`
-          );
-          void engine.consolidateTables(t.id).catch((err) => {
-            const code = err?.code ?? "";
-            const meta = err?.meta != null ? JSON.stringify(err.meta) : "";
-            console.error(
-              "[TOURNAMENT] Idle-poll consolidation failed:",
-              err?.message || code || String(err),
-              meta
-            );
-          });
         }
       }
     } catch (err) {

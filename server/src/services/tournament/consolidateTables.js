@@ -4,6 +4,7 @@ import { resyncGamesToMaxBlindLevel } from "./blindLevels.js";
 import { reconcileOrphanDbPotsForTournament } from "./stalePotRecovery.js";
 import {
   analyzeTableBalance,
+  countTournamentLivePlayers,
   minBalanceMovesSortedMatch,
   pickBalanceEndpoints,
   tournamentNeedsConsolidation,
@@ -61,6 +62,79 @@ async function assignPlayerToFirstAvailableGame(tx, playerId, gameIds, seatsPerT
     return true;
   }
   return false;
+}
+
+/** Live players still seated on COMPLETED (or other non-ACTIVE) games — pull them back before rebalance. */
+async function relocateStrandedLivePlayers(tournamentId, seatsPerTable) {
+  const stranded = await prisma.player.findMany({
+    where: {
+      game: { tournamentId, status: { not: "ACTIVE" } },
+      status: { not: "ELIMINATED" },
+    },
+    select: { id: true, gameId: true },
+  });
+  if (stranded.length === 0) return 0;
+
+  let activeGames = await prisma.game.findMany({
+    where: { tournamentId, status: "ACTIVE" },
+    include: {
+      players: { where: NOT_ELIMINATED, select: { id: true } },
+    },
+    orderBy: { tableNumber: "asc" },
+  });
+
+  if (activeGames.length === 0) {
+    const reviveId = stranded[0].gameId;
+    await prisma.game.update({
+      where: { id: reviveId },
+      data: { status: "ACTIVE", pot: 0 },
+    });
+    console.log(
+      `[TOURNAMENT] Reactivated game ${reviveId} — no ACTIVE tables but ${stranded.length} stranded live player(s)`
+    );
+    activeGames = await prisma.game.findMany({
+      where: { tournamentId, status: "ACTIVE" },
+      include: {
+        players: { where: NOT_ELIMINATED, select: { id: true } },
+      },
+      orderBy: { tableNumber: "asc" },
+    });
+  }
+
+  const gameIdsBySpace = [...activeGames]
+    .sort(
+      (a, b) =>
+        seatsPerTable -
+        (a.players?.length ?? 0) -
+        (seatsPerTable - (b.players?.length ?? 0))
+    )
+    .map((g) => g.id);
+
+  let moved = 0;
+  await prisma.$transaction(async (tx) => {
+    for (const p of stranded) {
+      if (p.gameId && activeGames.some((g) => g.id === p.gameId)) continue;
+      const placed = await assignPlayerToFirstAvailableGame(
+        tx,
+        p.id,
+        gameIdsBySpace,
+        seatsPerTable
+      );
+      if (placed) moved++;
+      else {
+        console.warn(
+          `[TOURNAMENT] Could not relocate stranded player ${p.id} — no seat on ACTIVE tables`
+        );
+      }
+    }
+  });
+
+  if (moved > 0) {
+    console.log(
+      `[TOURNAMENT] Relocated ${moved} stranded live player(s) onto ACTIVE tables`
+    );
+  }
+  return moved;
 }
 
 async function createConsolidationGraveyardGame(tx, tournamentId) {
@@ -386,6 +460,8 @@ export async function doConsolidateTables(tournamentId, deps) {
   const handBlocksConsolidation =
     deps.hasConsolidationBlockingHand ?? deps.hasActiveHand;
 
+  await relocateStrandedLivePlayers(tournamentId, seatsPerTable);
+
   let games = await prisma.game.findMany({
     where: { tournamentId, status: "ACTIVE" },
     include: {
@@ -398,8 +474,9 @@ export async function doConsolidateTables(tournamentId, deps) {
   });
 
   const totalCount = games.reduce((sum, g) => sum + (g.players?.length ?? 0), 0);
+  const tournamentLiveTotal = await countTournamentLivePlayers(tournamentId);
   const balPreview = analyzeTableBalance(games, seatsPerTable);
-  if (!tournamentNeedsConsolidation(games, seatsPerTable)) {
+  if (!tournamentNeedsConsolidation(games, seatsPerTable, tournamentLiveTotal)) {
     console.log(
       `[TOURNAMENT] Skipping consolidation: canonical table balance OK (${totalCount} players, ${games.length} ACTIVE game(s), seatsPerTable=${seatsPerTable}, target [${balPreview.targets.join(",")}])`
     );

@@ -5,8 +5,6 @@
  * Examples (S=9): 11→[5,6], 25→[8,8,9], 63→7×9, 66→6×8+2×9.
  */
 
-import { prisma } from "../../config/database.js";
-
 const NOT_ELIMINATED = { status: { not: "ELIMINATED" } };
 
 /**
@@ -83,12 +81,34 @@ export function analyzeTableBalance(activeGames, seatsPerTable) {
   };
 }
 
+/** Everyone left in the tournament fits on one table — must merge before dealing. */
+export function isFinalTablePhase(totalPlayers, seatsPerTable) {
+  const S = Math.max(1, Math.floor(seatsPerTable) || 9);
+  return totalPlayers > 1 && totalPlayers <= S;
+}
+
 /**
  * @param {{ id: string, players?: { length: number }[], tableNumber?: number }[]} activeGames
  * @param {number} seatsPerTable
+ * @param {number|null} tournamentLiveTotal all non-eliminated in event (incl. off ACTIVE tables)
  */
-export function tournamentNeedsConsolidation(activeGames, seatsPerTable) {
+export function tournamentNeedsConsolidation(
+  activeGames,
+  seatsPerTable,
+  tournamentLiveTotal = null
+) {
   const a = analyzeTableBalance(activeGames, seatsPerTable);
+  const liveTotal = tournamentLiveTotal ?? a.total;
+
+  if (tournamentLiveTotal != null && tournamentLiveTotal !== a.total) {
+    return true;
+  }
+
+  if (isFinalTablePhase(liveTotal, seatsPerTable)) {
+    if (a.nonempty.length !== 1) return true;
+    if (a.nonempty[0].players.length !== liveTotal) return true;
+  }
+
   return a.needCloseEmptyShells || !a.distributionOk;
 }
 
@@ -119,19 +139,37 @@ export function pickBalanceEndpoints(games, seatsPerTable) {
   return { srcGame: largest.g, dstGame: smallest.g };
 }
 
+export async function countTournamentLivePlayers(tournamentId) {
+  const { prisma } = await import("../../config/database.js");
+  return prisma.player.count({
+    where: { game: { tournamentId }, status: { not: "ELIMINATED" } },
+  });
+}
+
 /**
  * Tournament tables must match the canonical multiset before a new hand is dealt.
- * Exception: extra empty ACTIVE shells while nonempty tables are already canonical — close shells in parallel.
- * @param {string} tournamentId
- * @param {string} gameId
- * @returns {Promise<{ allowed: boolean, reason?: string }>}
+ * Uses full tournament headcount (not only ACTIVE tables) so stranded rows cannot
+ * trigger short-handed deals while others sit on COMPLETED games.
  */
 export async function canStartHandOnTournamentTable(tournamentId, gameId) {
+  const { prisma } = await import("../../config/database.js");
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
     select: { seatsPerTable: true },
   });
   const seatsPerTable = tournament?.seatsPerTable ?? 9;
+
+  const tournamentLiveTotal = await countTournamentLivePlayers(tournamentId);
+
+  const strandedLive = await prisma.player.count({
+    where: {
+      game: { tournamentId, status: { not: "ACTIVE" } },
+      status: { not: "ELIMINATED" },
+    },
+  });
+  if (strandedLive > 0) {
+    return { allowed: false, reason: "players_off_active_tables" };
+  }
 
   const games = await prisma.game.findMany({
     where: { tournamentId, status: "ACTIVE" },
@@ -149,20 +187,38 @@ export async function canStartHandOnTournamentTable(tournamentId, gameId) {
     return { allowed: false, reason: "no_seated_players" };
   }
 
-  const { total, needCloseEmptyShells, distributionOk } = analyzeTableBalance(
-    games,
-    seatsPerTable
-  );
+  const { total, needCloseEmptyShells, distributionOk, nonempty } =
+    analyzeTableBalance(games, seatsPerTable);
 
-  if (total < 2) {
+  if (tournamentLiveTotal < 2) {
     return { allowed: false, reason: "tournament_not_ready" };
+  }
+
+  if (total !== tournamentLiveTotal) {
+    return { allowed: false, reason: "players_off_active_tables" };
+  }
+
+  if (isFinalTablePhase(tournamentLiveTotal, seatsPerTable)) {
+    if (nonempty.length !== 1) {
+      return { allowed: false, reason: "final_table_merge" };
+    }
+    if (nonempty[0].players.length !== tournamentLiveTotal) {
+      return { allowed: false, reason: "final_table_merge" };
+    }
+    if (nonempty[0].id !== gameId) {
+      return { allowed: false, reason: "final_table_merge" };
+    }
+    return { allowed: true };
   }
 
   if (needCloseEmptyShells && !distributionOk) {
     return { allowed: false, reason: "merging_tables" };
   }
   if (needCloseEmptyShells && distributionOk) {
-    return { allowed: true };
+    const onNonempty = nonempty.some((g) => g.id === gameId);
+    return onNonempty
+      ? { allowed: true }
+      : { allowed: false, reason: "awaiting_table_balance" };
   }
   if (!distributionOk) {
     return { allowed: false, reason: "awaiting_table_balance" };
