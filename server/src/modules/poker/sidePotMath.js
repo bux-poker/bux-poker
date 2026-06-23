@@ -6,6 +6,22 @@
  * contributed at that level are uncalled excess and returned before awards.
  */
 
+function isAllInForPotDisplay(player) {
+  if (!player) return false;
+  if (player.status === "ALL_IN") return true;
+  return (player.chips ?? 0) === 0;
+}
+
+/** At least one non-folded player cannot put more chips in (true side-pot territory). */
+export function hasAllInPlayerInHand(state) {
+  return (state?.players || []).some(
+    (p) =>
+      p.status !== "FOLDED" &&
+      p.status !== "ELIMINATED" &&
+      isAllInForPotDisplay(p)
+  );
+}
+
 /**
  * @param {Map<string, number>} totalContributions playerId -> chips put in this hand
  * @param {Set<string>} nonFoldedPlayerIds players still contesting the pot
@@ -175,8 +191,9 @@ export function computePotLayerPreview(state) {
     displayPot: mergedPot,
     sidePots,
     uncalledReturns: uncalledReturnsList,
-    /** True when multiple awardable layers exist (real side-pot situation). */
-    showPotBreakdown: sidePots.length > 1,
+    /** Only surface MAIN/SIDE labels when someone is all-in and layers exist. */
+    showPotBreakdown:
+      sidePots.length > 1 && hasAllInPlayerInHand(state),
   };
 }
 

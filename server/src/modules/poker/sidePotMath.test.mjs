@@ -66,6 +66,48 @@ function mapContribs(entries) {
   assert.equal(preview.totalPot, 1400);
   assert.equal(preview.sidePots[0].amount, 1400);
   assert.equal(preview.uncalledReturns[0].amount, 300);
+  assert.equal(preview.showPotBreakdown, false);
+}
+
+// Raise in progress (50 vs 100) with no all-in — no side-pot UI
+{
+  const contribs = { p1: 100, p2: 100, p3: 100, p4: 50, p5: 50, p6: 50 };
+  const state = {
+    pot: 0,
+    bettingRound: {
+      getTotalPot: () => 450,
+      getPlayerContribution: (id) => contribs[id] || 0,
+    },
+    players: Object.entries(contribs).map(([id, c]) => ({
+      id,
+      status: "ACTIVE",
+      contributions: 0,
+      chips: 1000 - c,
+    })),
+  };
+  const preview = computePotLayerPreview(state);
+  assert.equal(preview.showPotBreakdown, false);
+  assert.equal(preview.totalPot, 450);
+}
+
+// All-in with side pot — show breakdown
+{
+  const state = {
+    pot: 0,
+    bettingRound: {
+      getTotalPot: () => 2200,
+      getPlayerContribution: (id) =>
+        ({ p1: 1000, p2: 700, p3: 500 })[id] || 0,
+    },
+    players: [
+      { id: "p1", status: "ALL_IN", contributions: 0, chips: 0 },
+      { id: "p2", status: "ALL_IN", contributions: 0, chips: 0 },
+      { id: "p3", status: "ALL_IN", contributions: 0, chips: 0 },
+    ],
+  };
+  const preview = computePotLayerPreview(state);
+  assert.equal(preview.showPotBreakdown, true);
+  assert.equal(preview.sidePots.length, 2);
 }
 
 console.log("sidePotMath tests passed");
