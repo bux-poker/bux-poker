@@ -543,7 +543,7 @@ export function PokerTable({
                         className="flex flex-col items-center min-w-0"
                         style={{ 
                           maxWidth: 'var(--player-name-max-width, 120px)',
-                          zIndex: 50
+                          zIndex: isMyPlayer && isMobile ? 80 : 50,
                         }}
                       >
                         <div className="w-full px-2 py-1 rounded bg-slate-900/80 border border-slate-700/50">
@@ -598,12 +598,21 @@ export function PokerTable({
             isFolded &&
             optionalRevealPhase &&
             revealStatus === "SHOW";
-          if (player && player.holeCards && player.holeCards.length > 0 && (!isFolded || showFoldedReveal)) {
+          // Mobile: own cards live in the bottom action panel — skip seat cards during play so they don't cover chip count.
+          const hideOwnSeatCardsOnMobile =
+            isMyPlayer && isMobile && !showdownActive && !showFoldedReveal;
+          if (
+            player &&
+            player.holeCards &&
+            player.holeCards.length > 0 &&
+            (!isFolded || showFoldedReveal) &&
+            !hideOwnSeatCardsOnMobile
+          ) {
             const isShowdownActive = showdownActive || false;
             const showFaceUp =
               !forceSeatCardsFaceDown &&
               !isFolded &&
-              (isMyPlayer || isShowdownActive || showFoldedReveal);
+              (isShowdownActive || showFoldedReveal || (isMyPlayer && !isMobile));
             
             // Get winner information for highlighting and pot won display
             const winnerInfo = showdownResults?.winners?.find((w: any) => w.playerId === player.id || w.userId === player.userId);
@@ -632,9 +641,10 @@ export function PokerTable({
               ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hole-card-height')) || 39
               : 39;
             
-            // Double the size when cards are face up (showdown)
-            const holeWidth = showFaceUp ? baseHoleWidth * 2 : baseHoleWidth;
-            const holeHeight = showFaceUp ? baseHoleHeight * 2 : baseHoleHeight;
+            // Double size at showdown on desktop; keep compact on mobile to avoid covering name/chips.
+            const enlargeFaceUp = showFaceUp && !(isMyPlayer && isMobile);
+            const holeWidth = enlargeFaceUp ? baseHoleWidth * 2 : baseHoleWidth;
+            const holeHeight = enlargeFaceUp ? baseHoleHeight * 2 : baseHoleHeight;
             
             elements.push(
               <div
