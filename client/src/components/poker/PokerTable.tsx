@@ -353,39 +353,50 @@ export function PokerTable({
             : null;
           // Match server: humans get a full 20s action window (backend turnTimers.js); show entire countdown so 0s aligns with auto CHECK/FOLD.
           const timerRemaining = rawTimerRemaining;
+
+          const isFolded = player?.status === "FOLDED";
+          const revealStatus = player?.showdownRevealStatus;
+          const optionalRevealPhase = !!(showdownActive && showdownResults);
+          const showFoldedReveal =
+            isFolded && optionalRevealPhase && revealStatus === "SHOW";
+          const seatCardsFaceUp =
+            !!player &&
+            !!player.holeCards?.length &&
+            !forceSeatCardsFaceDown &&
+            !isFolded &&
+            (debugAllSeatCardsFaceUp ||
+              showdownActive ||
+              showFoldedReveal ||
+              (isMyPlayer && !isMobile));
           
           // Determine card positioning relative to avatar
           // Seats 1, 2, 3, 9, 10: cards to the RIGHT of avatar (positive offset)
           // Seats 4, 5, 6, 7, 8: cards to the LEFT of avatar (negative offset)
           const cardsOnRight = [1, 2, 3, 9, 10].includes(seatIdx + 1);
-          // Reduce horizontal offset on smaller screens so cards sit closer to the name/chips block
           const baseCardOffset = 80;
-          const offsetScale = windowSize.width < 1000 ? 0.5 : 1; // 50% closer for all screens < 1000px
+          // Face-up cards need more horizontal separation on small screens (was 50% — pulled cards onto chip labels).
+          const offsetScale =
+            windowSize.width < 1000 ? (seatCardsFaceUp ? 0.9 : 0.5) : 1;
           const cardOffset = cardsOnRight ? baseCardOffset * offsetScale : -baseCardOffset * offsetScale;
-
+          const seatNumber = seatIdx + 1;
+          const cardVerticalNudge =
+            isMobile && seatCardsFaceUp ? (seatNumber <= 5 ? -16 : 16) : 0;
           // Adjust vertical position for smaller screens: seats 1-5 down, 6-10 up
           let verticalOffset = 0;
           if (windowSize.width <= 900) {
-            verticalOffset = (seatIdx + 1) <= 5 ? 6 : -22;
+            verticalOffset = seatNumber <= 5 ? 6 : -22;
           } else if (windowSize.width >= 901 && windowSize.width <= 1000) {
-            const seatNumber = seatIdx + 1;
             if (seatNumber === 1 || seatNumber === 5) {
-              // Seats 1 and 5: down 5px + 8px = 13px
               verticalOffset = 13;
             } else if (seatNumber === 6 || seatNumber === 10) {
-              // Seats 6 and 10: up 20px + 8px = 28px
               verticalOffset = -28;
             } else if (seatNumber <= 5) {
-              // Other seats 2-4: down 5px
               verticalOffset = 5;
             } else {
-              // Other seats 7-9: up 20px
               verticalOffset = -20;
             }
           }
-          
-          // Seats 1, 2, 3, 9, 10: move left 20px; seats 4, 5, 6, 7, 8: move right 20px
-          const seatNumber = seatIdx + 1;
+
           const baseHorizontalOffset = [1, 2, 3, 9, 10].includes(seatNumber) ? -20 : 20;
           // Additional horizontal tweak for smaller screens
           const smallScreenOffset = windowSize.width <= 900
@@ -544,7 +555,8 @@ export function PokerTable({
                         className="flex flex-col items-center min-w-0"
                         style={{ 
                           maxWidth: 'var(--player-name-max-width, 120px)',
-                          zIndex: isMyPlayer && isMobile ? 80 : 50,
+                          zIndex:
+                            isMobile && seatCardsFaceUp ? 85 : isMyPlayer && isMobile ? 80 : 50,
                         }}
                       >
                         <div className="w-full px-2 py-1 rounded bg-slate-900/80 border border-slate-700/50">
@@ -592,14 +604,6 @@ export function PokerTable({
 
           // Add cards as separate element if player has cards (including own player)
           // Hide table cards for folded players unless optional showdown reveal (show/muck)
-          const isFolded = player?.status === 'FOLDED';
-          const revealStatus = player?.showdownRevealStatus;
-          const optionalRevealPhase = !!(showdownActive && showdownResults);
-          const showFoldedReveal =
-            isFolded &&
-            optionalRevealPhase &&
-            revealStatus === "SHOW";
-          // Mobile: own cards live in the bottom action panel — skip seat cards during play so they don't cover chip count.
           const hideOwnSeatCardsOnMobile =
             !debugAllSeatCardsFaceUp &&
             isMyPlayer &&
@@ -613,14 +617,7 @@ export function PokerTable({
             (!isFolded || showFoldedReveal) &&
             !hideOwnSeatCardsOnMobile
           ) {
-            const isShowdownActive = showdownActive || false;
-            const showFaceUp =
-              !forceSeatCardsFaceDown &&
-              !isFolded &&
-              (debugAllSeatCardsFaceUp ||
-                isShowdownActive ||
-                showFoldedReveal ||
-                (isMyPlayer && !isMobile));
+            const showFaceUp = seatCardsFaceUp;
             
             // Get winner information for highlighting and pot won display
             const winnerInfo = showdownResults?.winners?.find((w: any) => w.playerId === player.id || w.userId === player.userId);
@@ -649,11 +646,15 @@ export function PokerTable({
               ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hole-card-height')) || 39
               : 39;
             
-            // Double size at showdown on desktop; keep compact on mobile to avoid covering name/chips.
-            const enlargeFaceUp =
-              showFaceUp && !(isMyPlayer && isMobile && !debugAllSeatCardsFaceUp);
-            const holeWidth = enlargeFaceUp ? baseHoleWidth * 2 : baseHoleWidth;
-            const holeHeight = enlargeFaceUp ? baseHoleHeight * 2 : baseHoleHeight;
+            // Never 2× on mobile; slightly smaller face-up cards so chip counts stay visible.
+            const enlargeFaceUp = showFaceUp && !isMobile;
+            const mobileFaceUpScale = isMobile && showFaceUp ? 0.82 : 1;
+            const holeWidth = Math.round(
+              (enlargeFaceUp ? baseHoleWidth * 2 : baseHoleWidth) * mobileFaceUpScale
+            );
+            const holeHeight = Math.round(
+              (enlargeFaceUp ? baseHoleHeight * 2 : baseHoleHeight) * mobileFaceUpScale
+            );
             
             elements.push(
               <div
@@ -661,10 +662,10 @@ export function PokerTable({
                 className={`absolute flex flex-col items-center gap-1 ${isFolded ? 'opacity-50' : ''}`}
                 style={{
                   left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset + horizontalOffset}px)`,
-                  top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}%)`,
+                  top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}% + ${verticalOffset + cardVerticalNudge}px)`,
                   transform: 'translate(-50%, -50%)',
                   transition: 'transform 0.5s ease-in-out',
-                  zIndex: 70, // Higher than names/chips (50) but below dealer button (60)
+                  zIndex: isMobile && showFaceUp ? 40 : 70,
                 }}
               >
                 {/* Bet chip and winner +pot above cards for seats 1-5 */}
