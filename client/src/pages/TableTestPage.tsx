@@ -81,8 +81,9 @@ export function TableTestPage() {
               currentBet={CURRENT_BET}
               smallBlind={SMALL_BLIND}
               bigBlind={BIG_BLIND}
-              debugAllSeatCardsFaceUp
+              forceSeatCardsFaceDown
               myUserId={user?.id}
+              {/* Toggle debugAllSeatCardsFaceUp to preview face-up seat card layout */}
               topLeftBlinds="50/100"
               topLeftTimer="2:15 mins"
               onTournamentLobbyClick={() => alert("Tournament lobby (test – check button position)")}
