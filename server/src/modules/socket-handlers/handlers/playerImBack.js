@@ -1,4 +1,9 @@
-import { tableState, turnTimers } from "../../poker/tableState.js";
+import {
+  tableState,
+  turnTimers,
+  clearPlayerAway,
+  isPlayerAway,
+} from "../../poker/tableState.js";
 import { emitGameState } from "../../poker/emitGameState.js";
 import { startTurnTimer } from "../../poker/turnTimers.js";
 import { normalizeUserId } from "../../poker/normalizeUserId.js";
@@ -20,19 +25,17 @@ export function registerPlayerImBack(socket, io) {
       const userId = payloadUid ?? socketUid;
       if (!userId || !gameId) return;
 
+      if (!isPlayerAway(gameId, userId)) return;
+
+      clearPlayerAway(gameId, userId);
+
       const state = tableState.get(gameId);
-      if (!state) return;
+      await emitGameState(gameId, io, state ?? null);
 
-      const player = state.players.find(
-        (p) => normalizeUserId(p.userId) === userId
-      );
-      if (!player || !player.isAway) return;
-
-      player.isAway = false;
-      tableState.set(gameId, state);
-      await emitGameState(gameId, io, state);
-
-      if (normalizeUserId(state.currentTurnUserId) === userId) {
+      if (
+        state &&
+        normalizeUserId(state.currentTurnUserId) === userId
+      ) {
         startTurnTimer(gameId, userId, io);
       }
     } catch (err) {

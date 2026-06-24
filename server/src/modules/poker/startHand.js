@@ -6,7 +6,7 @@
 import { prisma } from "../../config/database.js";
 import { TexasHoldem } from "./TexasHoldem.js";
 import { BettingRound } from "./BettingRound.js";
-import { tableState } from "./tableState.js";
+import { tableState, isPlayerAway } from "./tableState.js";
 import { postDealerMessage } from "./dealerMessages.js";
 import { emitGameState, emitGameStateWithGame } from "./emitGameState.js";
 import { startTurnTimer } from "./turnTimers.js";
@@ -569,7 +569,8 @@ export async function startHandForGameBody(gameId, io) {
           chips: updated?.chips || p.chips,
           holeCards,
           contributions: 0,
-          name: p.user?.username || "Player"
+          name: p.user?.username || "Player",
+          isAway: isPlayerAway(gameId, p.userId),
         });
       }
       return result;

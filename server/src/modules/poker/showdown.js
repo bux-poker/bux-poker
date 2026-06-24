@@ -1,7 +1,7 @@
 import { prisma } from "../../config/database.js";
 import { HandEvaluator } from "./HandEvaluator.js";
 import { persistAllPlayerStacksFromHandState } from "./persistHandStacks.js";
-import { tableState } from "./tableState.js";
+import { tableState, clearPlayerAway } from "./tableState.js";
 import { postDealerMessage } from "./dealerMessages.js";
 import { emitGameState } from "./emitGameState.js";
 import { emitIfTournamentCompleted, startHandForGame } from "../socket-handlers/pokerHandler.js";
@@ -522,6 +522,7 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
         const tournamentEngine = new TournamentEngine();
         for (const p of busted) {
           p.status = "ELIMINATED";
+          clearPlayerAway(gameId, p.userId);
         }
         console.log(
           `[SHOWDOWN] game ${gameId}: scheduling async onPlayersBust (${busted.length} player(s)) + consolidation — not blocking showdown completion`

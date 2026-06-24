@@ -6,7 +6,7 @@ import {
   isGameConsolidationWaiting,
 } from "../../services/tournament/consolidateTables.js";
 import { normalizeUserId } from "./normalizeUserId.js";
-import { hasActiveHand } from "./tableState.js";
+import { hasActiveHand, isPlayerAway } from "./tableState.js";
 import { computePotLayerPreview } from "./sidePotMath.js";
 
 /** In-memory state can rarely have a plain-object bettingRound (no class methods) — never throw on join. */
@@ -244,7 +244,7 @@ export function buildClientGameState(game, state, viewerUserId) {
           showdownRevealStatus: inCurrentHand
             ? p.showdownRevealStatus || null
             : null,
-          isAway: inCurrentHand ? !!p.isAway : false,
+          isAway: isPlayerAway(game.id, p.userId),
         };
       }),
   };

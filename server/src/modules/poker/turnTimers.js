@@ -1,4 +1,9 @@
-import { tableState, turnTimers } from "./tableState.js";
+import {
+  tableState,
+  turnTimers,
+  isPlayerAway,
+  markPlayerAway,
+} from "./tableState.js";
 import { emitGameStateWithGame } from "./emitGameState.js";
 import { applyPlayerAction } from "./actions.js";
 import { advanceToNextStreet } from "./advanceStreet.js";
@@ -52,7 +57,7 @@ async function startTurnTimerAsync(gameId, userId, io) {
     return;
   }
 
-  if (player.isAway) {
+  if (player.isAway || isPlayerAway(gameId, userId)) {
     const nm = player.name || player.user?.username || "";
     console.log(
       `[POKER] startTurnTimer: ${nm || userId} is AWAY — auto-acting immediately`
@@ -296,13 +301,7 @@ async function executeTimerAutoAction(
     }
 
     if (markAway) {
-      const p = stateAfter.players.find(
-        (pl) => normalizeUserId(pl.userId) === uidNorm
-      );
-      if (p) {
-        p.isAway = true;
-        tableState.set(gameId, stateAfter);
-      }
+      markPlayerAway(gameId, userId);
     }
 
     console.log(

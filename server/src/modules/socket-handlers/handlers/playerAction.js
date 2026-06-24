@@ -1,5 +1,5 @@
 import { prisma } from "../../../config/database.js";
-import { tableState, turnTimers } from "../../poker/tableState.js";
+import { tableState, turnTimers, markPlayerAway } from "../../poker/tableState.js";
 import { applyPlayerAction } from "../../poker/actions.js";
 import { emitGameState } from "../../poker/emitGameState.js";
 import { postDealerMessage } from "../../poker/dealerMessages.js";
@@ -22,7 +22,7 @@ import { awardPotToSingleWinner } from "../../poker/sidePotMath.js";
  * @param {{ startHandForGame: (gameId: string, io: object) => Promise<void> }} deps - startHandForGame from router
  */
 export function registerPlayerAction(socket, io, { startHandForGame }) {
-  socket.on("player-action", async ({ gameId, userId, action, amount }) => {
+  socket.on("player-action", async ({ gameId, userId, action, amount, timedOut }) => {
     try {
       const existingTimer = turnTimers.get(gameId);
       if (existingTimer) {
@@ -41,10 +41,8 @@ export function registerPlayerAction(socket, io, { startHandForGame }) {
         io
       });
 
-      const actingPlayer = state.players.find((p) => p.userId === userId);
-      if (actingPlayer?.isAway) {
-        actingPlayer.isAway = false;
-        tableState.set(gameId, state);
+      if (timedOut && (action === "CHECK" || action === "FOLD")) {
+        markPlayerAway(gameId, userId);
       }
 
       await emitGameState(gameId, io, state);

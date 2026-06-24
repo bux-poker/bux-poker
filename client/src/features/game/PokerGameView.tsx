@@ -741,7 +741,7 @@ export function PokerGameView() {
     const isMe = String(user?.id) === String(turnTimer.userId);
 
     if (isMe) {
-      handleActionRef.current?.(action, 0);
+      handleActionRef.current?.(action, 0, { timedOut: true });
       return;
     }
 
@@ -1168,7 +1168,11 @@ export function PokerGameView() {
     };
   };
 
-  const handleAction = (action: string, amount: number) => {
+  const handleAction = (
+    action: string,
+    amount: number,
+    options?: { timedOut?: boolean }
+  ) => {
     if (!id || !gameState || !user) return;
     handActionPendingRef.current = true;
     if (action === "FOLD") soundManager.play("fold");
@@ -1177,14 +1181,33 @@ export function PokerGameView() {
     else if (action === "RAISE" || action === "BET" || amount > 0) soundManager.play("raise");
 
     const betAmount = action === "FOLD" || action === "CHECK" ? 0 : amount;
-    setGameState((prev) => (prev ? applyOptimisticState(prev, user.id, action, betAmount) : prev));
+    setGameState((prev) => {
+      if (!prev) return prev;
+      let next = applyOptimisticState(prev, user.id, action, betAmount);
+      if (options?.timedOut) {
+        next = {
+          ...next,
+          players: next.players.map((p) =>
+            p.userId === user.id || p.id === user.id
+              ? {
+                  ...p,
+                  isAway: true,
+                  ...(action === "FOLD" ? { status: "FOLDED" as const } : {}),
+                }
+              : p
+          ),
+        };
+      }
+      return next;
+    });
 
     const socket = getSocket();
     socket.emit("player-action", {
       gameId: id,
       userId: user.id,
       action,
-      amount
+      amount,
+      timedOut: options?.timedOut ?? false,
     });
   };
 

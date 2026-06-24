@@ -1,4 +1,5 @@
 import { prisma } from "../../config/database.js";
+import { normalizeUserId } from "./normalizeUserId.js";
 
 // Central in-memory state for poker tables and timers.
 // This module exists so other parts of the system (tournament engine, idle poll)
@@ -6,6 +7,52 @@ import { prisma } from "../../config/database.js";
 
 // Per-game hand state (current hand, betting street, players, etc.)
 export const tableState = new Map();
+
+/** AWAY status survives hand cleanup until the player clicks "I'm back". gameId -> Set<userId> */
+const awayPlayersByGame = new Map();
+
+function awaySetForGame(gameId) {
+  if (!awayPlayersByGame.has(gameId)) {
+    awayPlayersByGame.set(gameId, new Set());
+  }
+  return awayPlayersByGame.get(gameId);
+}
+
+export function isPlayerAway(gameId, userId) {
+  const uid = normalizeUserId(userId);
+  if (!uid) return false;
+  return awaySetForGame(gameId).has(uid);
+}
+
+export function markPlayerAway(gameId, userId) {
+  const uid = normalizeUserId(userId);
+  if (!uid) return;
+  awaySetForGame(gameId).add(uid);
+  const state = tableState.get(gameId);
+  if (!state?.players) return;
+  const player = state.players.find((p) => normalizeUserId(p.userId) === uid);
+  if (player) {
+    player.isAway = true;
+    tableState.set(gameId, state);
+  }
+}
+
+export function clearPlayerAway(gameId, userId) {
+  const uid = normalizeUserId(userId);
+  if (!uid) return;
+  awaySetForGame(gameId).delete(uid);
+  const state = tableState.get(gameId);
+  if (!state?.players) return;
+  const player = state.players.find((p) => normalizeUserId(p.userId) === uid);
+  if (player) {
+    player.isAway = false;
+    tableState.set(gameId, state);
+  }
+}
+
+export function clearAllAwayPlayersForGame(gameId) {
+  awayPlayersByGame.delete(gameId);
+}
 
 // Turn timers: map of gameId -> { playerId, timeout, expiresAt, ... }
 export const turnTimers = new Map();
@@ -108,6 +155,7 @@ export function clearAllStateForGames(gameIds) {
   if (!gameIds || gameIds.length === 0) return;
   for (const gameId of gameIds) {
     tableState.delete(gameId);
+    clearAllAwayPlayersForGame(gameId);
     const timer = turnTimers.get(gameId);
     if (timer) {
       if (timer.timerId) clearTimeout(timer.timerId);
