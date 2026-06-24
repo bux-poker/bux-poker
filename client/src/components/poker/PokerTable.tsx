@@ -23,6 +23,7 @@ export function PokerTable({
   bigBlind = 20,
   myUserId,
   forceSeatCardsFaceDown = false,
+  debugAllSeatCardsFaceUp = false,
   topLeftBlinds,
   topLeftTimer,
   topRightPosition,
@@ -600,7 +601,11 @@ export function PokerTable({
             revealStatus === "SHOW";
           // Mobile: own cards live in the bottom action panel — skip seat cards during play so they don't cover chip count.
           const hideOwnSeatCardsOnMobile =
-            isMyPlayer && isMobile && !showdownActive && !showFoldedReveal;
+            !debugAllSeatCardsFaceUp &&
+            isMyPlayer &&
+            isMobile &&
+            !showdownActive &&
+            !showFoldedReveal;
           if (
             player &&
             player.holeCards &&
@@ -612,7 +617,10 @@ export function PokerTable({
             const showFaceUp =
               !forceSeatCardsFaceDown &&
               !isFolded &&
-              (isShowdownActive || showFoldedReveal || (isMyPlayer && !isMobile));
+              (debugAllSeatCardsFaceUp ||
+                isShowdownActive ||
+                showFoldedReveal ||
+                (isMyPlayer && !isMobile));
             
             // Get winner information for highlighting and pot won display
             const winnerInfo = showdownResults?.winners?.find((w: any) => w.playerId === player.id || w.userId === player.userId);
@@ -642,7 +650,8 @@ export function PokerTable({
               : 39;
             
             // Double size at showdown on desktop; keep compact on mobile to avoid covering name/chips.
-            const enlargeFaceUp = showFaceUp && !(isMyPlayer && isMobile);
+            const enlargeFaceUp =
+              showFaceUp && !(isMyPlayer && isMobile && !debugAllSeatCardsFaceUp);
             const holeWidth = enlargeFaceUp ? baseHoleWidth * 2 : baseHoleWidth;
             const holeHeight = enlargeFaceUp ? baseHoleHeight * 2 : baseHoleHeight;
             

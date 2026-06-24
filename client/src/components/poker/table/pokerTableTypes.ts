@@ -36,6 +36,8 @@ export interface PokerTableProps {
   bigBlind?: number;
   myUserId?: string;
   forceSeatCardsFaceDown?: boolean;
+  /** Table-test only: show every seat's hole cards face up for layout tuning. */
+  debugAllSeatCardsFaceUp?: boolean;
   topLeftBlinds?: string;
   topLeftTimer?: string;
   topRightPosition?: string;

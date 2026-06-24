@@ -13,7 +13,6 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { getHandDescription } from "@shared/utils/handEvaluator";
 import type { Card } from "@shared/types/poker";
 
-const PLACEHOLDER_CARD: Card = { suit: "HEARTS", rank: "A" };
 const COMMUNITY_CARDS: Card[] = [
   { suit: "SPADES", rank: "K" },
   { suit: "HEARTS", rank: "Q" },
@@ -27,6 +26,9 @@ const BIG_BLIND = 20;
 const POT = 500;
 const CURRENT_BET = 20;
 
+const RANKS = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5"] as const;
+const SUITS: Card["suit"][] = ["HEARTS", "DIAMONDS", "CLUBS", "SPADES"];
+
 function buildTestPlayers() {
   return Array.from({ length: 10 }, (_, i) => ({
     id: `test-player-${i + 1}`,
@@ -34,7 +36,10 @@ function buildTestPlayers() {
     chips: 100,
     seatNumber: i + 1,
     status: "ACTIVE",
-    holeCards: [PLACEHOLDER_CARD, { ...PLACEHOLDER_CARD, rank: "K" }] as Card[],
+    holeCards: [
+      { suit: SUITS[i % SUITS.length], rank: RANKS[i] },
+      { suit: SUITS[(i + 1) % SUITS.length], rank: RANKS[(i + 2) % RANKS.length] },
+    ] as Card[],
     contribution: 100,
   }));
 }
@@ -76,7 +81,8 @@ export function TableTestPage() {
               currentBet={CURRENT_BET}
               smallBlind={SMALL_BLIND}
               bigBlind={BIG_BLIND}
-              forceSeatCardsFaceDown
+              debugAllSeatCardsFaceUp
+              myUserId={user?.id}
               topLeftBlinds="50/100"
               topLeftTimer="2:15 mins"
               onTournamentLobbyClick={() => alert("Tournament lobby (test – check button position)")}
