@@ -648,7 +648,7 @@ export function PokerTable({
             
             // Never 2× on mobile; slightly smaller face-up cards so chip counts stay visible.
             const enlargeFaceUp = showFaceUp && !isMobile;
-            const mobileFaceUpScale = isMobile && showFaceUp ? 0.82 : 1;
+            const mobileFaceUpScale = isMobile && showFaceUp ? 0.95 : 1;
             const holeWidth = Math.round(
               (enlargeFaceUp ? baseHoleWidth * 2 : baseHoleWidth) * mobileFaceUpScale
             );

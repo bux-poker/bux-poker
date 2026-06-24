@@ -31,10 +31,11 @@ export function PokerCardImage({
   useTextCard?: boolean;
 }) {
   if (faceDown) {
+    const cornerRadius = Math.max(2, Math.round(width * 0.1));
     return (
       <div
-        className={`${className} bg-blue-800 border-2 border-white rounded-lg relative overflow-hidden`}
-        style={{ width, height }}
+        className={`${className} bg-blue-800 border-2 border-white relative overflow-hidden`}
+        style={{ width, height, borderRadius: cornerRadius }}
       >
         <div className="absolute inset-0 opacity-20">
           <div
@@ -54,10 +55,11 @@ export function PokerCardImage({
     const isRed = RED_SUITS.has(card.suit);
     const rankSize = Math.max(10, Math.floor(height * 0.42));
     const suitSize = Math.max(10, Math.floor(height * 0.38));
+    const cornerRadius = Math.max(2, Math.round(width * 0.1));
     return (
       <div
-        className={`${className} flex flex-col items-center justify-center rounded-lg border-2 border-slate-300 bg-white shadow-md`}
-        style={{ width, height, minWidth: width, minHeight: height }}
+        className={`${className} flex flex-col items-center justify-center border border-slate-300 bg-white shadow-md`}
+        style={{ width, height, minWidth: width, minHeight: height, borderRadius: cornerRadius }}
       >
         <span className="font-bold leading-none" style={{ fontSize: rankSize, color: "#1a1a1a" }}>
           {card.rank}
