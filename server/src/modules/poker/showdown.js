@@ -157,6 +157,12 @@ function hasTwoHoleCards(player) {
   return Array.isArray(hc) && hc.length === 2;
 }
 
+function isTestPlayerRecord(player) {
+  const name = (player?.name || player?.user?.username || "").toLowerCase();
+  const email = (player?.user?.email || "").toLowerCase();
+  return name.startsWith("test player") || email.endsWith("@test.buxpoker.local");
+}
+
 /** After chips are awarded: clear table state, reset DB rows, maybe start next hand. */
 async function runShowdownTableCleanup(gameId, io) {
   const st = tableState.get(gameId);
@@ -440,19 +446,23 @@ async function handleShowdownCoreImpl(gameId, io, options = {}) {
     });
   const forcedReveal = options.forcedReveal === true;
   state.showdownForcedReveal = forcedReveal;
-  // Everyone who reached showdown already had hole cards revealed — no show/muck for them.
+  const winnerIds = new Set(showdownWinners.map((w) => w.playerId));
   const showdownParticipantIds = new Set(handResults.map((r) => r.player.id));
-  // Optional reveal: folded players (dealt in, not in handResults) may still show or muck.
   for (const p of state.players) {
     delete p.showdownRevealStatus;
   }
   for (const p of state.players) {
     if (p.status === "ELIMINATED") continue;
     if (!hasTwoHoleCards(p)) continue;
-    if (showdownParticipantIds.has(p.id)) {
+    if (forcedReveal) {
+      p.showdownRevealStatus =
+        p.status === "FOLDED" ? "MUCK" : "SHOW";
+      continue;
+    }
+    if (winnerIds.has(p.id)) {
       p.showdownRevealStatus = "SHOW";
-    } else if (p.status === "FOLDED") {
-      p.showdownRevealStatus = "MUCK";
+    } else if (showdownParticipantIds.has(p.id) || p.status === "FOLDED") {
+      p.showdownRevealStatus = isTestPlayerRecord(p) ? "MUCK" : "PENDING";
     } else {
       p.showdownRevealStatus = "PENDING";
     }

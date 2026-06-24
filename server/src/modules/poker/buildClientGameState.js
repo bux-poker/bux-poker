@@ -210,12 +210,15 @@ export function buildClientGameState(game, state, viewerUserId) {
         const inCurrentHand =
           inHandPlayerIds == null || inHandPlayerIds.has(p.id);
         const parsed = inCurrentHand ? parsePlayerHoleCards(p) : null;
+        const isViewerSeat =
+          vuNorm != null && normalizeUserId(p.userId) === vuNorm;
         const hide =
           (parsed &&
             shouldHideHoleCardsFromViewer(p, viewerUserId, optionalRevealPhase)) ||
           (parsed &&
             p.status === "FOLDED" &&
-            p.showdownRevealStatus !== "SHOW");
+            p.showdownRevealStatus !== "SHOW" &&
+            !isViewerSeat);
         // Seats merged from DB mid-hand are not in this hand — strip stale lastAction/ALL_IN.
         // Never coerce real ELIMINATED (or other truth from DB) into ACTIVE; that looked like "resurrections".
         const statusForWaiter =

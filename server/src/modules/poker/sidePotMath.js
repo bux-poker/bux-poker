@@ -152,6 +152,17 @@ export function computePotLayerPreview(state) {
   const roundPot = state.bettingRound?.getTotalPot?.() || 0;
   const mergedPot = (state.pot || 0) + roundPot;
 
+  // Side-pot layers only matter once someone is all-in; normal raises stay a single total pot in UI.
+  if (!hasAllInPlayerInHand(state)) {
+    return {
+      totalPot: mergedPot,
+      displayPot: mergedPot,
+      sidePots: [],
+      uncalledReturns: [],
+      showPotBreakdown: false,
+    };
+  }
+
   const totalContributions = getTotalContributionsFromState(state);
   const nonFolded = new Set(
     state.players
