@@ -73,6 +73,7 @@ export function TableTestPage() {
       <div className="relative z-20 flex min-h-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <div className="relative min-h-0 flex-1 overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900">
+            {/* Toggle debugAllSeatCardsFaceUp on PokerTable to preview face-up seat card layout */}
             <PokerTable
               gameId="table-test"
               players={players}
@@ -83,7 +84,6 @@ export function TableTestPage() {
               bigBlind={BIG_BLIND}
               forceSeatCardsFaceDown
               myUserId={user?.id}
-              {/* Toggle debugAllSeatCardsFaceUp to preview face-up seat card layout */}
               topLeftBlinds="50/100"
               topLeftTimer="2:15 mins"
               onTournamentLobbyClick={() => alert("Tournament lobby (test – check button position)")}
