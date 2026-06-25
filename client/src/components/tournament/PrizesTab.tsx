@@ -1,3 +1,5 @@
+import { WalletClaimPanel } from './WalletClaimPanel';
+
 type PrizeAsset =
   | { kind: 'SOL'; lamports: string }
   | { kind: 'SPL'; mint: string; amount: string; decimals?: number }
@@ -22,9 +24,12 @@ export interface MyPrizeClaim {
   claimedAt?: string | null;
   recipientAddress?: string | null;
   txSignaturesJson?: string;
+  txSignatures?: string[];
+  solscanUrls?: string[];
 }
 
 interface Props {
+  tournamentId?: string;
   tournament: {
     prizePlaces?: number;
     prizeMode?: 'MANUAL' | 'WALLET' | null;
@@ -37,6 +42,7 @@ interface Props {
     myPrizeClaim?: MyPrizeClaim | null;
     hasPrizes?: boolean;
   };
+  onUpdated?: () => void;
 }
 
 function placeLabel(place: number) {
@@ -71,7 +77,7 @@ function claimStatusLabel(status: string) {
   }
 }
 
-export function PrizesTab({ tournament }: Props) {
+export function PrizesTab({ tournamentId, tournament, onUpdated }: Props) {
   if (tournament.hasPrizes === false || !tournament.prizePlaces) {
     return (
       <p className="py-8 text-center text-slate-400">
@@ -154,11 +160,15 @@ export function PrizesTab({ tournament }: Props) {
               )}
             </div>
           )}
-          {myClaim.status === 'ELIGIBLE' && tournament.prizeMode === 'WALLET' && (
-            <p className="mt-3 text-sm text-slate-400">
-              On-site wallet claim UI coming soon — your prize is reserved for this finish.
-            </p>
-          )}
+          {tournament.prizeMode === 'WALLET' &&
+            tournamentId &&
+            (myClaim.status === 'ELIGIBLE' || myClaim.status === 'CLAIMED') && (
+              <WalletClaimPanel
+                tournamentId={tournamentId}
+                myClaim={myClaim}
+                onUpdated={onUpdated}
+              />
+            )}
         </div>
       )}
     </div>

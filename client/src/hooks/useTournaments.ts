@@ -52,6 +52,8 @@ export interface Tournament {
     eligibleUntil?: string | null;
     claimedAt?: string | null;
     recipientAddress?: string | null;
+    txSignatures?: string[];
+    solscanUrls?: string[];
   } | null;
   registeredCount?: number;
   remainingPlayers?: number;

@@ -1,6 +1,6 @@
 import { Keypair, PublicKey } from "@solana/web3.js";
 import bs58 from "bs58";
-import { encryptPrizeWalletSecret } from "./prizeWalletCrypto.js";
+import { encryptPrizeWalletSecret, decryptPrizeWalletSecret } from "./prizeWalletCrypto.js";
 
 function invalid(message) {
   const err = new Error(message);
@@ -80,4 +80,20 @@ export function buildPrizeWalletRecordFromSupplied({ prizeWalletAddress, private
 
 export function isPrizeWalletConfigured(record) {
   return !!(record?.prizeWalletAddress && record?.prizeWalletSecretEnc);
+}
+
+export function loadPrizeWalletKeypair(record) {
+  if (!isPrizeWalletConfigured(record)) {
+    const err = new Error("Prize wallet is not configured");
+    err.status = 400;
+    throw err;
+  }
+  const secretB64 = decryptPrizeWalletSecret(record.prizeWalletSecretEnc);
+  if (!secretB64) {
+    const err = new Error("Could not decrypt prize wallet key");
+    err.status = 500;
+    throw err;
+  }
+  const secretKey = Uint8Array.from(Buffer.from(secretB64, "base64"));
+  return Keypair.fromSecretKey(secretKey);
 }

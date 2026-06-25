@@ -434,7 +434,13 @@ export function TournamentLobbyModal({
             </div>
           )}
 
-          {activeTab === 'prizes' && tournament && <PrizesTab tournament={tournament} />}
+          {activeTab === 'prizes' && tournament && (
+            <PrizesTab
+              tournamentId={tournamentId}
+              tournament={tournament}
+              onUpdated={() => refetch({ silent: true })}
+            />
+          )}
 
           {activeTab === 'tables' && (
             <div className="space-y-3">

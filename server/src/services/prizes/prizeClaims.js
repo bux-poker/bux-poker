@@ -77,9 +77,33 @@ export async function ensureTournamentPrizeClaimForPlayerId(
 
 export async function getViewerPrizeClaim(tournamentId, userId) {
   if (!userId) return null;
-  return prisma.prizeClaim.findUnique({
+  const claim = await prisma.prizeClaim.findUnique({
     where: { tournamentId_userId: { tournamentId, userId } },
   });
+  if (!claim) return null;
+  return serializePrizeClaim(claim);
+}
+
+export function serializePrizeClaim(claim) {
+  let txSignatures = [];
+  try {
+    txSignatures = JSON.parse(claim.txSignaturesJson || "[]");
+  } catch {
+    txSignatures = [];
+  }
+  return {
+    id: claim.id,
+    finishingPlace: claim.finishingPlace,
+    status: claim.status,
+    eligibleFrom: claim.eligibleFrom,
+    eligibleUntil: claim.eligibleUntil,
+    claimedAt: claim.claimedAt,
+    recipientAddress: claim.recipientAddress,
+    txSignatures,
+    solscanUrls: txSignatures.map(
+      (sig) => `https://solscan.io/tx/${sig}`
+    ),
+  };
 }
 
 export async function listTournamentPrizeClaims(tournamentId) {

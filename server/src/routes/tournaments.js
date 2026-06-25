@@ -3,6 +3,7 @@ import { TournamentService } from "../services/TournamentService.js";
 import { authenticateToken, optionalAuthenticateToken } from "../middleware/auth.js";
 import { getDiscordClient } from "../discord/bot.js";
 import { prisma } from "../config/database.js";
+import { claimTournamentPrize } from "../services/prizes/prizeClaimExecute.js";
 
 const router = Router();
 const service = new TournamentService();
@@ -199,6 +200,22 @@ router.get("/:id/my-table", authenticateToken, async (req, res, next) => {
       game: player.game,
     });
   } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/:id/claim-prize", authenticateToken, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { recipientAddress } = req.body ?? {};
+    const result = await claimTournamentPrize({
+      tournamentId: id,
+      userId: req.userId,
+      recipientAddress,
+    });
+    res.json(result);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
     next(err);
   }
 });
