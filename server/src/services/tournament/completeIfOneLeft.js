@@ -1,5 +1,6 @@
 import { prisma } from "../../config/database.js";
 import { auditChipConservation } from "./chipAudit.js";
+import { ensureTournamentPrizeClaim } from "../prizes/prizeClaims.js";
 import {
   clearAllStateForGames,
   hasActiveHand,
@@ -81,6 +82,10 @@ export async function completeTournamentIfOneLeft(tournamentId) {
     select: { id: true },
   });
   clearAllStateForGames(gameRows.map((r) => r.id));
+
+  await ensureTournamentPrizeClaim(tournamentId, winner.userId, 1).catch((err) =>
+    console.error("[PRIZES] ensure claim for winner:", err?.message || err)
+  );
 
   await auditChipConservation(tournamentId);
 

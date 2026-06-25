@@ -33,6 +33,26 @@ export interface Tournament {
   awaitingHandsForBlindClock?: boolean;
   tournamentBreakUntilAt?: string | null;
   prizePlaces: number;
+  prizeMode?: 'MANUAL' | 'WALLET' | null;
+  prizeStructure?: Array<
+    | { place: number; description: string }
+    | { place: number; items: Array<{ kind: string; lamports?: string; mint?: string; amount?: string }> }
+  >;
+  prizeFundingStatus?: string | null;
+  prizeWalletAddress?: string | null;
+  walletConfigured?: boolean;
+  requiredFeeSol?: string | null;
+  hasPrizes?: boolean;
+  prizeClaimServer?: { serverName: string; inviteLink: string | null } | null;
+  myPrizeClaim?: {
+    id: string;
+    finishingPlace: number;
+    status: string;
+    eligibleFrom?: string | null;
+    eligibleUntil?: string | null;
+    claimedAt?: string | null;
+    recipientAddress?: string | null;
+  } | null;
   registeredCount?: number;
   remainingPlayers?: number;
   createdBy: string | any;

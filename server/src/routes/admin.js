@@ -19,6 +19,10 @@ import {
   buildPrizeFieldsFromRequest,
 } from "../services/prizes/prizeCreateHelpers.js";
 import { buildPrizeWalletRecordFromSupplied } from "../services/prizes/prizeWallet.js";
+import {
+  refreshLeaguePrizeFunding,
+  refreshTournamentPrizeFunding,
+} from "../services/prizes/prizeFundingRefresh.js";
 
 const router = Router();
 const engine = new TournamentEngine();
@@ -786,6 +790,34 @@ router.post("/leagues/:id/prize-wallet", requireLeagueAdmin(), async (req, res, 
     next(err);
   }
 });
+
+router.post(
+  "/tournaments/:id/prize-funding/refresh",
+  requireTournamentAdmin(),
+  async (req, res, next) => {
+    try {
+      const result = await refreshTournamentPrizeFunding(req.params.id);
+      res.json(result);
+    } catch (err) {
+      if (err.status) return res.status(err.status).json({ error: err.message });
+      next(err);
+    }
+  }
+);
+
+router.post(
+  "/leagues/:id/prize-funding/refresh",
+  requireLeagueAdmin(),
+  async (req, res, next) => {
+    try {
+      const result = await refreshLeaguePrizeFunding(req.params.id);
+      res.json(result);
+    } catch (err) {
+      if (err.status) return res.status(err.status).json({ error: err.message });
+      next(err);
+    }
+  }
+);
 
 // Close registration: seat players but don't start
 router.post("/tournaments/:id/close-registration", requireTournamentAdmin(), async (req, res, next) => {

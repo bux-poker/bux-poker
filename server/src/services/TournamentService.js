@@ -1,6 +1,8 @@
 import { prisma } from "../config/database.js";
 import { attachCanManageToTournaments, canManageTournament } from "../utils/tournamentAdminAccess.js";
-import { parsePrizeStructureJson } from "./prizes/prizeStructure.js";
+import { parsePrizeStructureJson, lamportsToSolString } from "./prizes/prizeStructure.js";
+import { getViewerPrizeClaim } from "./prizes/prizeClaims.js";
+import { isPrizeWalletConfigured } from "./prizes/prizeWallet.js";
 
 /** All registered players appear; first eliminated (worst finishing place) near bottom. */
 function mergeRegistrationsIntoStandings(livePlayers, registrations) {
@@ -203,6 +205,13 @@ export class TournamentService {
           avatarUrl: true,
         },
       },
+      prizeClaimServer: {
+        select: {
+          id: true,
+          serverName: true,
+          inviteLink: true,
+        },
+      },
     };
 
     try {
@@ -269,7 +278,6 @@ export class TournamentService {
           blindLevels = [];
         }
 
-        // Calculate prize places dynamically: 1 place per 4 registered players
         const registeredCount = tournament.registrations?.filter(
           (r) => r.status === "CONFIRMED" || r.status === "PENDING"
         ).length || 0;
@@ -358,6 +366,16 @@ export class TournamentService {
               ? tournament.prizeFeeSolLamports.toString()
               : null,
           hasPrizes: tournament.hasPrizes !== false,
+          prizeClaimServer: tournament.prizeClaimServer
+            ? {
+                serverName: tournament.prizeClaimServer.serverName,
+                inviteLink: tournament.prizeClaimServer.inviteLink,
+              }
+            : null,
+          walletConfigured: isPrizeWalletConfigured(tournament),
+          requiredFeeSol: tournament.prizeFeeSolLamports
+            ? lamportsToSolString(tournament.prizeFeeSolLamports)
+            : null,
           servers: (tournament.posts || []).map((post) => {
             if (!post || !post.server) {
               return null;
@@ -378,8 +396,10 @@ export class TournamentService {
             discordId: viewer.discordId,
             tournamentId: id,
           });
+          result.myPrizeClaim = await getViewerPrizeClaim(id, viewer.id);
         } else {
           result.canManage = false;
+          result.myPrizeClaim = null;
         }
 
         return result;

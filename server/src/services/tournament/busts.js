@@ -1,5 +1,6 @@
 import { prisma } from "../../config/database.js";
 import { auditChipConservation } from "./chipAudit.js";
+import { ensureTournamentPrizeClaimForPlayerId, ensureTournamentPrizeClaim } from "../prizes/prizeClaims.js";
 
 const _onPlayersBustLocks = new Map();
 const _lastConsolidateAt = new Map(); // tournamentId -> ms
@@ -54,6 +55,13 @@ export async function markPlayerBust(tournamentId, playerId, finishingPlace = nu
             err
           );
         });
+      await ensureTournamentPrizeClaimForPlayerId(
+        tournamentId,
+        playerId,
+        finishingPlace
+      ).catch((err) =>
+        console.error("[PRIZES] ensure claim on backfill bust:", err?.message || err)
+      );
     }
     return;
   }
@@ -84,6 +92,13 @@ export async function markPlayerBust(tournamentId, playerId, finishingPlace = nu
     if (err?.code === "P2025") return;
     console.error(`[TOURNAMENT] Error setting finishingPlace for player ${playerId}:`, err);
   });
+  await ensureTournamentPrizeClaimForPlayerId(
+    tournamentId,
+    playerId,
+    place
+  ).catch((err) =>
+    console.error("[PRIZES] ensure claim on bust:", err?.message || err)
+  );
   _recentBustMarks.set(dedupeKey, now);
 }
 
@@ -139,6 +154,9 @@ export async function doOnPlayersBust(tournamentId, playerIds, deps) {
         where: { id: winner.id },
         data: { finishingPlace: 1 }
       });
+      await ensureTournamentPrizeClaim(tournamentId, winner.userId, 1).catch((err) =>
+        console.error("[PRIZES] ensure claim for winner (bust path):", err?.message || err)
+      );
       await prisma.tournament.update({
         where: { id: tournamentId },
         data: { status: "COMPLETED" }

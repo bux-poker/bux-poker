@@ -7,6 +7,7 @@ import { useTournament } from '../../hooks/useTournaments';
 import { useAuth } from '@shared/features/auth/AuthContext';
 import { getSocket } from '../../services/socket';
 import api from '../../services/api';
+import { PrizesTab } from './PrizesTab';
 
 type Tab = 'players' | 'blinds' | 'prizes' | 'tables';
 
@@ -433,11 +434,7 @@ export function TournamentLobbyModal({
             </div>
           )}
 
-          {activeTab === 'prizes' && (
-            <div className="py-8 text-center text-slate-400">
-              Prize structure coming soon
-            </div>
-          )}
+          {activeTab === 'prizes' && tournament && <PrizesTab tournament={tournament} />}
 
           {activeTab === 'tables' && (
             <div className="space-y-3">

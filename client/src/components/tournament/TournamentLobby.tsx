@@ -6,6 +6,8 @@ import { getSocket } from '../../services/socket';
 import { TournamentTimestamp } from './TournamentTimestamp';
 import { formatLocalDateTime } from '../../utils/formatLocalDateTime';
 import { AddToHomeScreen } from '../AddToHomeScreen';
+import { PrizesTab } from './PrizesTab';
+import { TournamentAdminPrizes } from './TournamentAdminPrizes';
 import api from '../../services/api';
 import {
   getBlindScheduleForTournament,
@@ -586,6 +588,14 @@ export function TournamentLobby() {
         )}
 
         {/* Admin Actions */}
+        {canManage && !isCompleted && tournament?.prizeMode === 'WALLET' && (
+          <TournamentAdminPrizes
+            tournamentId={id!}
+            tournament={tournament}
+            onUpdated={() => refetch({ silent: true })}
+          />
+        )}
+
         {canManage && !isCompleted && (
           <div className="mt-4 flex flex-col gap-2 border-t border-slate-800 pt-4">
             <div className="flex flex-wrap gap-3">
@@ -893,11 +903,7 @@ export function TournamentLobby() {
             </div>
           )}
 
-          {activeTab === 'prizes' && (
-            <div className="text-center py-8">
-              <p className="text-slate-400">Prize structure coming soon</p>
-            </div>
-          )}
+          {activeTab === 'prizes' && tournament && <PrizesTab tournament={tournament} />}
 
           {activeTab === 'tables' && (
             <div className="space-y-4">
