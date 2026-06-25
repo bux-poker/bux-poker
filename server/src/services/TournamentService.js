@@ -1,5 +1,6 @@
 import { prisma } from "../config/database.js";
 import { attachCanManageToTournaments, canManageTournament } from "../utils/tournamentAdminAccess.js";
+import { parsePrizeStructureJson } from "./prizes/prizeStructure.js";
 
 /** All registered players appear; first eliminated (worst finishing place) near bottom. */
 function mergeRegistrationsIntoStandings(livePlayers, registrations) {
@@ -272,7 +273,6 @@ export class TournamentService {
         const registeredCount = tournament.registrations?.filter(
           (r) => r.status === "CONFIRMED" || r.status === "PENDING"
         ).length || 0;
-        const calculatedPrizePlaces = Math.floor(registeredCount / 4);
 
         // Flatten live players across all games so the lobby (and other
         // clients) can easily show current chip stacks / statuses without
@@ -348,7 +348,16 @@ export class TournamentService {
           canonicalBlindLevelIndex,
           registeredCount: registeredCount,
           remainingPlayers: remainingPlayers, // Players still in tournament (not eliminated; includes all-in)
-          prizePlaces: calculatedPrizePlaces, // Calculate dynamically based on registrations
+          prizePlaces: tournament.prizePlaces ?? 0,
+          prizeMode: tournament.prizeMode ?? null,
+          prizeStructure: parsePrizeStructureJson(tournament.prizeStructureJson),
+          prizeFundingStatus: tournament.prizeFundingStatus ?? null,
+          prizeWalletAddress: tournament.prizeWalletAddress ?? null,
+          prizeFeeSolLamports:
+            tournament.prizeFeeSolLamports != null
+              ? tournament.prizeFeeSolLamports.toString()
+              : null,
+          hasPrizes: tournament.hasPrizes !== false,
           servers: (tournament.posts || []).map((post) => {
             if (!post || !post.server) {
               return null;

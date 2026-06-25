@@ -14,6 +14,10 @@ import {
 import { TournamentEngine } from "../services/TournamentEngine.js";
 import { prisma } from "../config/database.js";
 import { postTournamentEmbed, getDiscordClient } from "../discord/bot.js";
+import {
+  attachPrizeFundingSummary,
+  buildPrizeFieldsFromRequest,
+} from "../services/prizes/prizeCreateHelpers.js";
 
 const router = Router();
 const engine = new TournamentEngine();
@@ -228,12 +232,12 @@ router.post("/tournaments", async (req, res, next) => {
       startingChips = 10000,
       blindLevelsJson,
       serverIds = [], // Array of Discord server IDs to post to
+      prizePlaces,
+      prizeMode,
+      prizeStructure,
+      refundWalletAddress,
+      prizeClaimServerId,
     } = req.body;
-
-    // Calculate prize places: 1 place per 4 registered players
-    // Initially set to 0 since no one is registered yet
-    // Will be calculated dynamically when registration closes based on actual registrations
-    const prizePlaces = 0;
 
     if (!name || !startTime) {
       return res.status(400).json({ error: "Name and startTime are required" });
@@ -255,6 +259,20 @@ router.post("/tournaments", async (req, res, next) => {
       }
       throw accessErr;
     }
+
+    let prizeFields;
+    try {
+      prizeFields = await buildPrizeFieldsFromRequest(req.body, {
+        maxPlayers,
+        requirePrizes: true,
+      });
+    } catch (prizeErr) {
+      if (prizeErr.status) {
+        return res.status(prizeErr.status).json({ error: prizeErr.message });
+      }
+      throw prizeErr;
+    }
+    const { prizeFundingSummary, ...prizeDbFields } = prizeFields;
 
     // Default blind levels if not provided
     const defaultBlindLevels = [
@@ -294,7 +312,7 @@ router.post("/tournaments", async (req, res, next) => {
         seatsPerTable,
         startingChips,
         blindLevelsJson: JSON.stringify(blindLevels),
-        prizePlaces,
+        ...prizeDbFields,
         createdById: req.userId, // From JWT auth middleware
       },
       include: {
@@ -376,7 +394,12 @@ router.post("/tournaments", async (req, res, next) => {
       },
     });
 
-    res.status(201).json(tournamentWithPosts);
+    res.status(201).json(
+      attachPrizeFundingSummary({
+        ...tournamentWithPosts,
+        prizeFundingSummary,
+      })
+    );
   } catch (err) {
     next(err);
   }
@@ -507,6 +530,20 @@ router.post("/leagues", async (req, res, next) => {
     const totalGames = starts.length;
     const d0 = starts[0];
 
+    let leaguePrizeFields;
+    try {
+      leaguePrizeFields = await buildPrizeFieldsFromRequest(req.body, {
+        maxPlayers,
+        requirePrizes: true,
+      });
+    } catch (prizeErr) {
+      if (prizeErr.status) {
+        return res.status(prizeErr.status).json({ error: prizeErr.message });
+      }
+      throw prizeErr;
+    }
+    const { prizeFundingSummary, hasPrizes: _hp, ...leaguePrizeDb } = leaguePrizeFields;
+
     const league = await prisma.league.create({
       data: {
         name,
@@ -517,6 +554,7 @@ router.post("/leagues", async (req, res, next) => {
         totalGames,
         status: "ACTIVE",
         createdById: req.userId,
+        ...leaguePrizeDb,
       },
     });
 
@@ -549,6 +587,7 @@ router.post("/leagues", async (req, res, next) => {
           startingChips,
           blindLevelsJson: JSON.stringify(blindLevels),
           prizePlaces: 0,
+          hasPrizes: false,
           registrationOpensAt,
           createdById: req.userId,
         },
@@ -601,7 +640,12 @@ router.post("/leagues", async (req, res, next) => {
       },
     });
 
-    res.status(201).json(full);
+    res.status(201).json(
+      attachPrizeFundingSummary({
+        ...full,
+        prizeFundingSummary,
+      })
+    );
   } catch (err) {
     next(err);
   }

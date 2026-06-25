@@ -59,20 +59,15 @@ export class TournamentEngine {
       data: { registrationCountAtClose: registeredCount },
     });
 
-    // Calculate prize places: 1 place per 4 registered players
-    const prizePlaces = Math.floor(registeredCount / 4);
-    console.log(`[TOURNAMENT] Calculated prize places: ${prizePlaces} (from ${registeredCount} registered players)`);
-
     // Seat players
     const games = await runSeatPlayers(tournamentId);
 
-    // Update status to SEATED and prize places
+    // Update status to SEATED (prizePlaces set at create time)
     const updatedTournament = await prisma.tournament.update({
       where: { id: tournamentId },
       data: {
         status: "SEATED",
-        prizePlaces: prizePlaces
-      }
+      },
     });
 
     // Update Discord embeds to show registration closed message
@@ -129,6 +124,16 @@ export class TournamentEngine {
     // Ensure games exist
     if (!tournament.games || tournament.games.length === 0) {
       throw new Error("No games found - players must be seated first");
+    }
+
+    if (
+      tournament.hasPrizes &&
+      tournament.prizeMode === "WALLET" &&
+      tournament.prizeFundingStatus !== "FUNDED"
+    ) {
+      throw new Error(
+        "Prize wallet must be fully funded before starting this tournament"
+      );
     }
 
     // Get Socket.IO instance

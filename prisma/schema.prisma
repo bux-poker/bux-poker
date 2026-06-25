@@ -33,6 +33,7 @@ model User {
   leagueStanding LeagueStanding[]
   leaguesCreated League[]       @relation("LeagueCreatedBy")
   tournaments    Tournament[]
+  prizeClaims    PrizeClaim[]
 }
 
 model Tournament {
@@ -48,7 +49,21 @@ model Tournament {
   startingChips Int
 
   blindLevelsJson String // JSON config for blinds structure
-  prizePlaces     Int
+  prizePlaces     Int      @default(0)
+
+  /// Standalone tournaments: MANUAL or WALLET. League leg tournaments: null (no per-leg prizes).
+  prizeMode              PrizeMode?
+  prizeStructureJson     String              @default("[]")
+  prizeWalletAddress     String?
+  prizeWalletSecretEnc   String?             @db.Text
+  prizeFundingStatus     PrizeFundingStatus?
+  prizeFeeSolLamports    BigInt?
+  refundWalletAddress    String?
+  /// Manual mode: Discord server where winners open a ticket (DiscordServer.id).
+  prizeClaimServerId     String?
+  prizeClaimServer       DiscordServer?      @relation("TournamentPrizeClaimServer", fields: [prizeClaimServerId], references: [id])
+  /// False for league leg tournaments (prizes live on League).
+  hasPrizes              Boolean             @default(true)
 
   /// Start of the current blind-level playing period (synchronized across tables).
   blindPeriodAnchorAt DateTime?
@@ -71,6 +86,7 @@ model Tournament {
   games         Game[]
   leagueGames   LeagueGame[]
   posts         TournamentPost[]
+  prizeClaims   PrizeClaim[]
 }
 
 model TournamentRegistration {
@@ -200,10 +216,22 @@ model League {
   createdById String?
   createdBy   User?   @relation("LeagueCreatedBy", fields: [createdById], references: [id])
 
+  prizePlaces            Int                 @default(0)
+  prizeMode              PrizeMode?
+  prizeStructureJson     String              @default("[]")
+  prizeWalletAddress     String?
+  prizeWalletSecretEnc   String?             @db.Text
+  prizeFundingStatus     PrizeFundingStatus?
+  prizeFeeSolLamports    BigInt?
+  refundWalletAddress    String?
+  prizeClaimServerId     String?
+  prizeClaimServer       DiscordServer?      @relation("LeaguePrizeClaimServer", fields: [prizeClaimServerId], references: [id])
+
   createdAt DateTime @default(now())
 
-  games     LeagueGame[]
-  standings LeagueStanding[]
+  games       LeagueGame[]
+  standings   LeagueStanding[]
+  prizeClaims PrizeClaim[]
 }
 
 model LeagueGame {
@@ -240,6 +268,30 @@ model LeagueStanding {
   @@unique([leagueId, userId])
 }
 
+model PrizeClaim {
+  id             String           @id @default(cuid())
+  tournamentId   String?
+  leagueId       String?
+  userId         String
+  finishingPlace Int
+  status         PrizeClaimStatus @default(MANUAL_PENDING)
+  eligibleFrom   DateTime?
+  eligibleUntil  DateTime?
+  recipientAddress String?
+  txSignaturesJson String         @default("[]")
+  claimedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tournament Tournament? @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  league     League?     @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id])
+
+  @@unique([tournamentId, userId])
+  @@unique([leagueId, userId])
+}
+
 model DiscordServer {
   id                    String  @id @default(cuid())
   serverId              String  @unique
@@ -253,7 +305,9 @@ model DiscordServer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tournamentPosts TournamentPost[]
+  tournamentPosts       TournamentPost[]
+  tournamentPrizeClaims Tournament[] @relation("TournamentPrizeClaimServer")
+  leaguePrizeClaims     League[]     @relation("LeaguePrizeClaimServer")
 }
 
 model TournamentPost {
@@ -318,4 +372,23 @@ enum LeagueStatus {
   ACTIVE
   COMPLETED
   CANCELLED
+}
+
+enum PrizeMode {
+  MANUAL
+  WALLET
+}
+
+enum PrizeFundingStatus {
+  PENDING
+  PARTIAL
+  FUNDED
+}
+
+enum PrizeClaimStatus {
+  ELIGIBLE
+  CLAIMED
+  MANUAL_PENDING
+  EXPIRED
+  SWEPT
 }
