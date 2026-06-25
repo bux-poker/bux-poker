@@ -71,7 +71,9 @@ function claimStatusLabel(status: string) {
     case 'CLAIMED':
       return 'Claimed';
     case 'EXPIRED':
-      return 'Claim period ended';
+      return 'Claim period ended — prize will be refunded to the creator';
+    case 'SWEPT':
+      return 'Unclaimed prize refunded to tournament creator';
     default:
       return status;
   }
@@ -168,6 +170,24 @@ export function PrizesTab({ tournamentId, tournament, onUpdated }: Props) {
                 myClaim={myClaim}
                 onUpdated={onUpdated}
               />
+            )}
+          {myClaim.status === 'SWEPT' &&
+            myClaim.solscanUrls &&
+            myClaim.solscanUrls.length > 0 && (
+              <ul className="mt-3 space-y-1">
+                {myClaim.solscanUrls.map((url, i) => (
+                  <li key={url}>
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-slate-400 hover:underline"
+                    >
+                      Refund transaction {myClaim.solscanUrls!.length > 1 ? i + 1 : ''} on Solscan →
+                    </a>
+                  </li>
+                ))}
+              </ul>
             )}
         </div>
       )}

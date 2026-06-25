@@ -1,5 +1,5 @@
 import { prisma } from "../../config/database.js";
-import { parsePrizeStructureJson } from "./prizeStructure.js";
+import { getWalletPlaceItems } from "./prizeStructure.js";
 import { isPrizeWalletConfigured, loadPrizeWalletKeypair } from "./prizeWallet.js";
 import {
   executePlacePayout,
@@ -17,9 +17,7 @@ function httpError(message, status) {
 }
 
 function getPlaceItems(prizeStructureJson, finishingPlace) {
-  const structure = parsePrizeStructureJson(prizeStructureJson);
-  const row = structure.find((p) => Number(p.place) === Number(finishingPlace));
-  return row?.items || [];
+  return getWalletPlaceItems(prizeStructureJson, finishingPlace);
 }
 
 async function claimTournamentPrizeInner({

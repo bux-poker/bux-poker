@@ -42,11 +42,13 @@ async function startBackgroundPolls() {
     { startLeagueDiscordPoll },
     { resumeBlindLevelTimersForRunningTournaments },
     { getIO },
+    { startPrizeExpiryPoll },
   ] = await Promise.all([
     import("./services/TournamentEngine.js"),
     import("./services/league/leagueDiscordPoll.js"),
     import("./services/tournament/blindTimer.js"),
     import("./modules/poker/tableState.js"),
+    import("./services/prizes/prizeExpiryPoll.js"),
   ]);
 
   resumeBlindLevelTimersForRunningTournaments({ getIO }).catch((err) =>
@@ -61,6 +63,7 @@ async function startBackgroundPolls() {
   );
   startTournamentAutomationPoll(tournamentPollEngine);
   startLeagueDiscordPoll();
+  startPrizeExpiryPoll();
 }
 
 async function bootstrap() {
