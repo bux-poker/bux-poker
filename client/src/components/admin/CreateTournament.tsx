@@ -110,10 +110,6 @@ export function CreateTournament() {
   );
   const [leagueGameTimes, setLeagueGameTimes] = useState<string[]>(['', '', '']);
   const [prizeForm, setPrizeForm] = useState(defaultPrizeFormState());
-  const [walletCreateInfo, setWalletCreateInfo] = useState<{
-    prizeWalletAddress?: string;
-    requiredFeeSol?: string;
-  } | null>(null);
 
   const startingChipsOptions = [1000, 2000, 5000, 10000, 20000, 50000, 100000];
 
@@ -205,15 +201,6 @@ export function CreateTournament() {
 
       if (response.data) {
         setSuccess(true);
-        const summary = response.data.prizeFundingSummary;
-        if (summary?.prizeWalletAddress) {
-          setWalletCreateInfo({
-            prizeWalletAddress: summary.prizeWalletAddress,
-            requiredFeeSol: summary.requiredFeeSol,
-          });
-        } else {
-          setWalletCreateInfo(null);
-        }
         // Clear URL params
         setSearchParams({});
         // Reset form
@@ -272,15 +259,6 @@ export function CreateTournament() {
       );
 
       setSuccess(true);
-      const summary = response.data?.prizeFundingSummary;
-      if (summary?.prizeWalletAddress) {
-        setWalletCreateInfo({
-          prizeWalletAddress: summary.prizeWalletAddress,
-          requiredFeeSol: summary.requiredFeeSol,
-        });
-      } else {
-        setWalletCreateInfo(null);
-      }
       setLeagueName('');
       setLeagueDescription('');
       setLeagueGameTimes(Array(numLeagueGames).fill(''));
@@ -755,19 +733,11 @@ export function CreateTournament() {
             {createMode === 'league'
               ? 'League created successfully. Discord posts go out 1 hour before each game.'
               : 'Tournament created successfully!'}
-            {walletCreateInfo?.prizeWalletAddress && (
-              <div className="mt-3 rounded border border-emerald-500/30 bg-slate-900/60 p-3 text-sm text-slate-200">
-                <p className="font-medium text-emerald-300">Fund prize wallet before start</p>
-                <p className="mt-1 break-all font-mono text-xs">
-                  {walletCreateInfo.prizeWalletAddress}
-                </p>
-                {walletCreateInfo.requiredFeeSol && (
-                  <p className="mt-2 text-xs text-slate-400">
-                    Include at least {walletCreateInfo.requiredFeeSol} SOL for claim transaction
-                    fees (in addition to prize assets).
-                  </p>
-                )}
-              </div>
+            {prizeForm.prizeMode === 'WALLET' && (
+              <span className="block mt-2 text-sm text-slate-300">
+                Wallet mode: add your prize wallet address and private key before start (API or
+                admin UI coming next), then fund the wallet with all prize assets and fee SOL.
+              </span>
             )}
             {createMode === 'tournament' && selectedServerIds.length > 0 && (
               <span className="block mt-2 text-sm">

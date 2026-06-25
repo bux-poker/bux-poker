@@ -126,15 +126,10 @@ export class TournamentEngine {
       throw new Error("No games found - players must be seated first");
     }
 
-    if (
-      tournament.hasPrizes &&
-      tournament.prizeMode === "WALLET" &&
-      tournament.prizeFundingStatus !== "FUNDED"
-    ) {
-      throw new Error(
-        "Prize wallet must be fully funded before starting this tournament"
-      );
-    }
+    const { assertPrizeWalletReadyForStart } = await import(
+      "./prizes/prizeWalletReady.js"
+    );
+    await assertPrizeWalletReadyForStart(tournament);
 
     // Get Socket.IO instance
     const { getIO } = await import("../modules/socket-handlers/pokerHandler.js");

@@ -1,5 +1,4 @@
 import { prisma } from "../../config/database.js";
-import { createPrizeWalletRecord } from "./prizeWallet.js";
 import {
   lamportsToSolString,
   validateAndNormalizePrizeConfig,
@@ -77,14 +76,13 @@ export async function buildPrizeFieldsFromRequest(body, { maxPlayers, requirePri
   };
 
   if (normalized.prizeMode === "WALLET") {
-    const wallet = createPrizeWalletRecord();
     return {
       ...base,
-      ...wallet,
       prizeFundingSummary: {
-        prizeWalletAddress: wallet.prizeWalletAddress,
+        prizeWalletAddress: null,
         requiredFeeSol: lamportsToSolString(normalized.prizeFeeSolLamports),
         fundingStatus: "PENDING",
+        walletConfigured: false,
       },
     };
   }
@@ -94,6 +92,9 @@ export async function buildPrizeFieldsFromRequest(body, { maxPlayers, requirePri
 
 export function attachPrizeFundingSummary(record) {
   if (!record) return record;
+  const walletConfigured = !!(
+    record.prizeWalletAddress && record.prizeWalletSecretEnc
+  );
   const { prizeWalletSecretEnc: _secret, ...safe } = record;
   if (safe.prizeMode !== "WALLET") return safe;
   return {
@@ -108,6 +109,7 @@ export function attachPrizeFundingSummary(record) {
         ? lamportsToSolString(safe.prizeFeeSolLamports)
         : null,
       fundingStatus: safe.prizeFundingStatus,
+      walletConfigured,
     },
   };
 }

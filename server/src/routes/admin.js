@@ -18,6 +18,7 @@ import {
   attachPrizeFundingSummary,
   buildPrizeFieldsFromRequest,
 } from "../services/prizes/prizeCreateHelpers.js";
+import { buildPrizeWalletRecordFromSupplied } from "../services/prizes/prizeWallet.js";
 
 const router = Router();
 const engine = new TournamentEngine();
@@ -730,6 +731,58 @@ router.delete("/leagues/:id", requireLeagueAdmin(), async (req, res, next) => {
 
     res.json({ leagueId: id, deleted: true });
   } catch (err) {
+    next(err);
+  }
+});
+
+async function applySuppliedPrizeWallet(prismaModel, id, body) {
+  const { prizeWalletAddress, prizeWalletPrivateKey } = body ?? {};
+  const row = await prisma[prismaModel].findUnique({ where: { id } });
+  if (!row) {
+    const err = new Error(
+      prismaModel === "league" ? "League not found" : "Tournament not found"
+    );
+    err.status = 404;
+    throw err;
+  }
+  if (row.prizeMode !== "WALLET") {
+    const err = new Error("This event does not use wallet prize mode");
+    err.status = 400;
+    throw err;
+  }
+  const wallet = buildPrizeWalletRecordFromSupplied({
+    prizeWalletAddress,
+    privateKey: prizeWalletPrivateKey,
+  });
+  return prisma[prismaModel].update({
+    where: { id },
+    data: {
+      prizeWalletAddress: wallet.prizeWalletAddress,
+      prizeWalletSecretEnc: wallet.prizeWalletSecretEnc,
+      prizeFundingStatus:
+        row.prizeFundingStatus === "FUNDED" ? "FUNDED" : "PENDING",
+    },
+  });
+}
+
+router.post("/tournaments/:id/prize-wallet", requireTournamentAdmin(), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const updated = await applySuppliedPrizeWallet("tournament", id, req.body);
+    res.json(attachPrizeFundingSummary(updated));
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
+});
+
+router.post("/leagues/:id/prize-wallet", requireLeagueAdmin(), async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const updated = await applySuppliedPrizeWallet("league", id, req.body);
+    res.json(attachPrizeFundingSummary(updated));
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
     next(err);
   }
 });

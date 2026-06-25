@@ -207,8 +207,8 @@ export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: P
             className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 font-mono text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
           />
           <p className="mt-1 text-xs text-slate-500">
-            After create you will receive a prize wallet address to fund with all assets plus fee
-            SOL before the event can start.
+            After create, configure your prize wallet address and private key before funding
+            and start. Include all prize assets plus fee SOL in that wallet.
           </p>
         </div>
       )}
