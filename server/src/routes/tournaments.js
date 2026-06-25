@@ -1,15 +1,22 @@
 import { Router } from "express";
 import { TournamentService } from "../services/TournamentService.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, optionalAuthenticateToken } from "../middleware/auth.js";
 import { getDiscordClient } from "../discord/bot.js";
 import { prisma } from "../config/database.js";
 
 const router = Router();
 const service = new TournamentService();
 
-router.get("/", async (req, res, next) => {
+router.get("/", optionalAuthenticateToken, async (req, res, next) => {
   try {
-    const tournaments = await service.listTournaments();
+    let viewer = null;
+    if (req.userId) {
+      viewer = await prisma.user.findUnique({
+        where: { id: req.userId },
+        select: { id: true, discordId: true },
+      });
+    }
+    const tournaments = await service.listTournaments(viewer);
     res.json(tournaments);
   } catch (err) {
     console.error("[TOURNAMENTS ROUTE] Error listing tournaments:", err);
@@ -21,9 +28,16 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-router.get("/:id", async (req, res, next) => {
+router.get("/:id", optionalAuthenticateToken, async (req, res, next) => {
   try {
-    const tournament = await service.getTournamentById(req.params.id);
+    let viewer = null;
+    if (req.userId) {
+      viewer = await prisma.user.findUnique({
+        where: { id: req.userId },
+        select: { id: true, discordId: true },
+      });
+    }
+    const tournament = await service.getTournamentById(req.params.id, viewer);
     if (!tournament) {
       return res.status(404).json({ error: "Tournament not found" });
     }

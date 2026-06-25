@@ -5,7 +5,6 @@
 import { useState, useEffect } from 'react';
 import { useTournament } from '../../hooks/useTournaments';
 import { useAuth } from '@shared/features/auth/AuthContext';
-import { useAdmin } from '../../hooks/useAdmin';
 import { getSocket } from '../../services/socket';
 import api from '../../services/api';
 
@@ -46,7 +45,6 @@ export function TournamentLobbyModal({
   gameState?: GameStateForLobby | null;
 }) {
   const { user } = useAuth();
-  const { isAdmin } = useAdmin();
   const { tournament, loading, error, refetch } = useTournament(tournamentId);
   const [activeTab, setActiveTab] = useState<Tab>('players');
   const [players, setPlayers] = useState<PlayerRow[]>([]);
@@ -152,7 +150,7 @@ export function TournamentLobbyModal({
     fromTableBlinds >= 0 ? fromTableBlinds : apiCanonical >= 0 ? apiCanonical : -1;
 
   const canAddTestPlayers =
-    isAdmin &&
+    tournament?.canManage === true &&
     !!tournament &&
     !isCompleted &&
     !isRunning &&

@@ -1,7 +1,16 @@
 import { Router } from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import { requireAdminRole } from "../middleware/admin.js";
+import {
+  requireLeagueAdmin,
+  requireTournamentAdmin,
+} from "../middleware/tournamentAdmin.js";
 import { computeWebIsAdmin } from "../utils/webAdminStatus.js";
+import {
+  assertUserMayUseServerIds,
+  canManageLeague,
+  getUserManagedDiscordServers,
+} from "../utils/tournamentAdminAccess.js";
 import { TournamentEngine } from "../services/TournamentEngine.js";
 import { prisma } from "../config/database.js";
 import { postTournamentEmbed, getDiscordClient } from "../discord/bot.js";
@@ -167,9 +176,27 @@ router.get("/servers", async (req, res, next) => {
       orderBy: { serverName: "asc" },
     });
 
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { id: true, discordId: true },
+    });
+    const managed = user
+      ? await getUserManagedDiscordServers({
+          userId: user.id,
+          discordId: user.discordId,
+        })
+      : { servers: [] };
+
+    const visibleServers =
+      managed.allowlist || managed.bootstrap
+        ? servers
+        : servers.filter((s) =>
+            managed.servers.some((m) => m.serverId === s.serverId)
+          );
+
     // Enrich with bot membership: cache hit, else REST; unknown guild => false, transient errors => null
     const enrichedServers = await Promise.all(
-      servers.map(async (server) => {
+      visibleServers.map(async (server) => {
         // HARD UNBLOCK:
         // At this point, Discord login is flaky and all REST/gateway checks can
         // still return null/false even when the bot is correctly invited.
@@ -210,6 +237,23 @@ router.post("/tournaments", async (req, res, next) => {
 
     if (!name || !startTime) {
       return res.status(400).json({ error: "Name and startTime are required" });
+    }
+
+    const creator = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { id: true, discordId: true },
+    });
+    try {
+      await assertUserMayUseServerIds({
+        userId: creator?.id,
+        discordId: creator?.discordId,
+        serverIds,
+      });
+    } catch (accessErr) {
+      if (accessErr.status) {
+        return res.status(accessErr.status).json({ error: accessErr.message });
+      }
+      throw accessErr;
     }
 
     // Default blind levels if not provided
@@ -352,20 +396,35 @@ router.get("/leagues", async (req, res, next) => {
         },
       },
     });
-    const result = leagues.map((L) => {
-      const flags = computeLeagueAdminFlags(L);
-      return {
-        id: L.id,
-        name: L.name,
-        description: L.description,
-        totalGames: L.totalGames,
-        status: L.status,
-        month: L.month,
-        year: L.year,
-        canCancel: flags.canCancel,
-        canDelete: flags.canDelete,
-      };
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { id: true, discordId: true },
     });
+
+    const result = await Promise.all(
+      leagues.map(async (L) => {
+        const flags = computeLeagueAdminFlags(L);
+        const canManage = user
+          ? await canManageLeague({
+              userId: user.id,
+              discordId: user.discordId,
+              leagueId: L.id,
+            })
+          : false;
+        return {
+          id: L.id,
+          name: L.name,
+          description: L.description,
+          totalGames: L.totalGames,
+          status: L.status,
+          month: L.month,
+          year: L.year,
+          canCancel: flags.canCancel && canManage,
+          canDelete: flags.canDelete && canManage,
+          canManage,
+        };
+      })
+    );
     res.json(result);
   } catch (err) {
     next(err);
@@ -391,6 +450,23 @@ router.post("/leagues", async (req, res, next) => {
       return res
         .status(400)
         .json({ error: "name and gameStartTimes (non-empty array) are required" });
+    }
+
+    const creator = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { id: true, discordId: true },
+    });
+    try {
+      await assertUserMayUseServerIds({
+        userId: creator?.id,
+        discordId: creator?.discordId,
+        serverIds,
+      });
+    } catch (accessErr) {
+      if (accessErr.status) {
+        return res.status(accessErr.status).json({ error: accessErr.message });
+      }
+      throw accessErr;
     }
 
     const defaultBlindLevels = [
@@ -532,7 +608,7 @@ router.post("/leagues", async (req, res, next) => {
 });
 
 // Cancel league (only before any leg has started: no seated/running/completed legs)
-router.patch("/leagues/:id/cancel", async (req, res, next) => {
+router.patch("/leagues/:id/cancel", requireLeagueAdmin(), async (req, res, next) => {
   try {
     const { id } = req.params;
     const league = await prisma.league.findUnique({
@@ -578,7 +654,7 @@ router.patch("/leagues/:id/cancel", async (req, res, next) => {
 });
 
 // Permanently delete league and all leg tournaments (blocked while any leg is SEATED or RUNNING)
-router.delete("/leagues/:id", async (req, res, next) => {
+router.delete("/leagues/:id", requireLeagueAdmin(), async (req, res, next) => {
   try {
     const { id } = req.params;
     const league = await prisma.league.findUnique({
@@ -615,7 +691,7 @@ router.delete("/leagues/:id", async (req, res, next) => {
 });
 
 // Close registration: seat players but don't start
-router.post("/tournaments/:id/close-registration", async (req, res, next) => {
+router.post("/tournaments/:id/close-registration", requireTournamentAdmin(), async (req, res, next) => {
   try {
     const { id } = req.params;
     const result = await engine.closeRegistration(id);
@@ -625,7 +701,7 @@ router.post("/tournaments/:id/close-registration", async (req, res, next) => {
   }
 });
 
-router.post("/tournaments/:id/start", async (req, res, next) => {
+router.post("/tournaments/:id/start", requireTournamentAdmin(), async (req, res, next) => {
   try {
     const { id } = req.params;
     const result = await engine.startTournament(id);
@@ -635,7 +711,7 @@ router.post("/tournaments/:id/start", async (req, res, next) => {
   }
 });
 
-router.post("/tournaments/:id/advance-blinds", async (req, res, next) => {
+router.post("/tournaments/:id/advance-blinds", requireTournamentAdmin(), async (req, res, next) => {
   try {
     const { id } = req.params;
     const games = await engine.advanceBlindLevel(id);
@@ -645,7 +721,7 @@ router.post("/tournaments/:id/advance-blinds", async (req, res, next) => {
   }
 });
 
-router.post("/tournaments/:id/end", async (req, res, next) => {
+router.post("/tournaments/:id/end", requireTournamentAdmin(), async (req, res, next) => {
   try {
     const { id } = req.params;
     await engine.advanceBlindLevel(id); // optional last blind bump
@@ -660,7 +736,7 @@ router.post("/tournaments/:id/end", async (req, res, next) => {
 });
 
 // Cancel tournament
-router.patch("/tournaments/:id/cancel", async (req, res, next) => {
+router.patch("/tournaments/:id/cancel", requireTournamentAdmin(), async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -689,7 +765,7 @@ router.patch("/tournaments/:id/cancel", async (req, res, next) => {
 });
 
 // Delete tournament (permanently removes from database)
-router.delete("/tournaments/:id", async (req, res, next) => {
+router.delete("/tournaments/:id", requireTournamentAdmin(), async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -710,7 +786,7 @@ router.delete("/tournaments/:id", async (req, res, next) => {
 });
 
 // Get tournament data for duplication (returns data to pre-fill create form)
-router.get("/tournaments/:id/duplicate", async (req, res, next) => {
+router.get("/tournaments/:id/duplicate", requireTournamentAdmin(), async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -747,7 +823,7 @@ router.get("/tournaments/:id/duplicate", async (req, res, next) => {
 });
 
 // Add test/dummy players to a tournament for testing
-router.post("/tournaments/:id/add-test-players", async (req, res, next) => {
+router.post("/tournaments/:id/add-test-players", requireTournamentAdmin(), async (req, res, next) => {
   try {
     const { id } = req.params;
     const { count = 9 } = req.body; // Default to 9 players (one full table)

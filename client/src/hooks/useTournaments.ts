@@ -2,6 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../services/api';
 import axios from 'axios';
 
+function authHeaders() {
+  const token =
+    typeof localStorage !== 'undefined' ? localStorage.getItem('sessionToken') : null;
+  return token ? { Authorization: `Bearer ${token}` } : undefined;
+}
+
 export interface TournamentServer {
   id: string;
   serverId: string;
@@ -32,6 +38,8 @@ export interface Tournament {
   createdBy: string | any;
   createdAt: Date | string;
   servers?: TournamentServer[];
+  /** True when the logged-in user is admin for this tournament's Discord server(s). */
+  canManage?: boolean;
   games?: Array<{
     id: string;
     tableNumber: number;
@@ -58,7 +66,9 @@ export function useTournaments() {
     const fetchTournaments = async () => {
       try {
         setLoading(true);
-        const response = await api.get('/api/tournaments');
+        const response = await api.get('/api/tournaments', {
+          headers: authHeaders(),
+        });
         setTournaments(response.data);
         setError(null);
       } catch (err: any) {
@@ -76,7 +86,9 @@ export function useTournaments() {
     const fetchTournaments = async () => {
       try {
         setLoading(true);
-        const response = await api.get('/api/tournaments');
+        const response = await api.get('/api/tournaments', {
+          headers: authHeaders(),
+        });
         setTournaments(response.data);
         setError(null);
       } catch (err: any) {
@@ -116,6 +128,7 @@ export function useTournament(id: string | undefined) {
       if (!silent) setLoading(true);
       const response = await api.get(`/api/tournaments/${id}`, {
         signal: abortController.signal,
+        headers: authHeaders(),
       });
       
       // Only update state if request wasn't aborted

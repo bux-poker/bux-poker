@@ -41,3 +41,26 @@ export const authenticateToken = (req, res, next) => {
     next();
   });
 };
+
+/** Sets req.userId when a valid Bearer token is present; continues without auth otherwise. */
+export const optionalAuthenticateToken = (req, res, next) => {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  if (!token) {
+    return next();
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET || "fallback-secret", (err, decoded) => {
+    if (err) {
+      return next();
+    }
+    req.user = decoded;
+    const rawId = decoded.userId ?? decoded.id ?? decoded.sub;
+    const userId =
+      rawId === undefined || rawId === null ? "" : String(rawId).trim();
+    if (userId) {
+      req.userId = userId;
+    }
+    next();
+  });
+};

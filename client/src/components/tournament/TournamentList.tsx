@@ -1,6 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useTournaments, Tournament } from '../../hooks/useTournaments';
-import { useAdmin } from '../../hooks/useAdmin';
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
 import { TournamentTimestamp } from './TournamentTimestamp';
@@ -16,7 +15,6 @@ interface ServerWithMembership {
 }
 
 function TournamentCard({ tournament, onCancel, onDuplicate, onAddTestPlayers, onDelete, isDeleting }: { tournament: Tournament; onCancel?: (id: string) => void; onDuplicate?: (id: string) => void; onAddTestPlayers?: (id: string) => void; onDelete?: (id: string) => void; isDeleting?: boolean }) {
-  const { isAdmin } = useAdmin();
   const { user } = useAuth();
   const startTime = new Date(tournament.startTime);
   const registeredCount = tournament.registeredCount || 0;
@@ -166,7 +164,7 @@ function TournamentCard({ tournament, onCancel, onDuplicate, onAddTestPlayers, o
       )}
 
       {/* Admin Actions */}
-      {isAdmin && (
+      {tournament.canManage && (
         <div className="admin-actions mt-4 border-t border-slate-800 pt-4 flex flex-wrap gap-2">
           {(tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING' || tournament.status === 'REGISTRATION') && (
             <>

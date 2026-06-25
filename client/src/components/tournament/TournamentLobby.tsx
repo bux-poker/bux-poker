@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTournament } from '../../hooks/useTournaments';
 import { useAuth } from '@shared/features/auth/AuthContext';
-import { useAdmin } from '../../hooks/useAdmin';
 import { getSocket } from '../../services/socket';
 import { TournamentTimestamp } from './TournamentTimestamp';
 import { formatLocalDateTime } from '../../utils/formatLocalDateTime';
@@ -40,8 +39,8 @@ export function TournamentLobby() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { isAdmin } = useAdmin();
   const { tournament, loading, error, refetch } = useTournament(id);
+  const canManage = tournament?.canManage === true;
 
   // Live update: refetch when tournament_updated or tournament_completed fires
   useEffect(() => {
@@ -587,7 +586,7 @@ export function TournamentLobby() {
         )}
 
         {/* Admin Actions */}
-        {isAdmin && !isCompleted && (
+        {canManage && !isCompleted && (
           <div className="mt-4 flex flex-col gap-2 border-t border-slate-800 pt-4">
             <div className="flex flex-wrap gap-3">
             {isRegistering && (

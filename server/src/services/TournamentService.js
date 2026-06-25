@@ -1,4 +1,5 @@
 import { prisma } from "../config/database.js";
+import { attachCanManageToTournaments, canManageTournament } from "../utils/tournamentAdminAccess.js";
 
 /** All registered players appear; first eliminated (worst finishing place) near bottom. */
 function mergeRegistrationsIntoStandings(livePlayers, registrations) {
@@ -40,7 +41,7 @@ function sortTournamentStandings(rows) {
 }
 
 export class TournamentService {
-  async listTournaments() {
+  async listTournaments(viewer = null) {
     try {
       // First, try to get tournaments with all relations
       let tournaments;
@@ -109,7 +110,7 @@ export class TournamentService {
       }
 
       // Transform to include registeredCount and server info
-      return tournaments.map((tournament) => {
+      const mapped = tournaments.map((tournament) => {
         try {
           const registrations = tournament.registrations || [];
           const posts = tournament.posts || [];
@@ -140,6 +141,11 @@ export class TournamentService {
           };
         }
       });
+
+      if (viewer?.id) {
+        return attachCanManageToTournaments(mapped, viewer.id, viewer.discordId);
+      }
+      return mapped.map((t) => ({ ...t, canManage: false }));
     } catch (error) {
       console.error("[TOURNAMENT SERVICE] Error listing tournaments:", error);
       console.error("[TOURNAMENT SERVICE] Error name:", error.name);
@@ -246,7 +252,7 @@ export class TournamentService {
     }
   }
 
-  async getTournamentById(id) {
+  async getTournamentById(id, viewer = null) {
     try {
       const tournament = await this._fetchTournamentWithRelations(id);
 
@@ -335,7 +341,7 @@ export class TournamentService {
           canonicalBlindLevelIndex = Math.max(canonicalBlindLevelIndex, idx);
         }
 
-        return {
+        const result = {
           ...tournament,
           startedAt: tournament.startedAt, // Include startedAt for blind timer
           blindLevels: blindLevels, // Add parsed blind levels
@@ -356,6 +362,18 @@ export class TournamentService {
           }).filter(server => server !== null),
           players: livePlayers,
         };
+
+        if (viewer?.id) {
+          result.canManage = await canManageTournament({
+            userId: viewer.id,
+            discordId: viewer.discordId,
+            tournamentId: id,
+          });
+        } else {
+          result.canManage = false;
+        }
+
+        return result;
       } catch (transformError) {
         console.error(`[TOURNAMENT SERVICE] Error transforming tournament ${id}:`, transformError);
         // Return tournament with safe defaults
@@ -364,6 +382,7 @@ export class TournamentService {
           registeredCount: 0,
           servers: [],
           players: [],
+          canManage: false,
         };
       }
     } catch (error) {
