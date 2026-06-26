@@ -115,3 +115,95 @@ export async function listTournamentPrizeClaims(tournamentId) {
     orderBy: { finishingPlace: "asc" },
   });
 }
+
+export function sortLeagueStandings(rows) {
+  return [...rows].sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points;
+    const af = a.bestFinish ?? 999;
+    const bf = b.bestFinish ?? 999;
+    return af - bf;
+  });
+}
+
+async function ensureLeaguePrizeClaimForUser(leagueId, userId, finishingPlace, prizeMode) {
+  const existing = await prisma.prizeClaim.findUnique({
+    where: { leagueId_userId: { leagueId, userId } },
+  });
+  if (existing && (existing.status === "CLAIMED" || existing.status === "SWEPT")) {
+    return;
+  }
+
+  const eligibleFrom = new Date();
+  const eligibleUntil =
+    prizeMode === "WALLET"
+      ? new Date(
+          eligibleFrom.getTime() + WALLET_CLAIM_EXPIRY_DAYS * 24 * 60 * 60 * 1000
+        )
+      : null;
+  const status = prizeMode === "WALLET" ? "ELIGIBLE" : "MANUAL_PENDING";
+
+  if (existing) {
+    await prisma.prizeClaim.update({
+      where: { id: existing.id },
+      data: { finishingPlace, status, eligibleFrom, eligibleUntil },
+    });
+    return;
+  }
+
+  await prisma.prizeClaim.create({
+    data: {
+      leagueId,
+      userId,
+      finishingPlace,
+      status,
+      eligibleFrom,
+      eligibleUntil,
+    },
+  });
+}
+
+/**
+ * Create prize claims for paid league standings when the league completes.
+ */
+export async function ensureLeaguePrizeClaims(leagueId) {
+  const league = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: {
+      status: true,
+      prizePlaces: true,
+      prizeMode: true,
+    },
+  });
+  if (!league || league.status !== "COMPLETED") return;
+  if (!league.prizePlaces || league.prizePlaces < 1 || !league.prizeMode) return;
+
+  const standings = await prisma.leagueStanding.findMany({
+    where: { leagueId },
+  });
+  const sorted = sortLeagueStandings(standings);
+  const paid = sorted.slice(0, league.prizePlaces);
+
+  for (let i = 0; i < paid.length; i++) {
+    await ensureLeaguePrizeClaimForUser(
+      leagueId,
+      paid[i].userId,
+      i + 1,
+      league.prizeMode
+    );
+  }
+
+  if (paid.length > 0) {
+    console.log(
+      `[PRIZES] Created/updated ${paid.length} league prize claim(s) for ${leagueId}`
+    );
+  }
+}
+
+export async function getViewerLeaguePrizeClaim(leagueId, userId) {
+  if (!userId) return null;
+  const claim = await prisma.prizeClaim.findUnique({
+    where: { leagueId_userId: { leagueId, userId } },
+  });
+  if (!claim) return null;
+  return serializePrizeClaim(claim);
+}

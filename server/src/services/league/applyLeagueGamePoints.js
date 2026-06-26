@@ -1,5 +1,6 @@
 import { prisma } from "../../config/database.js";
 import { getLeaguePointsDistribution } from "./leaguePoints.js";
+import { ensureLeaguePrizeClaims } from "../prizes/prizeClaims.js";
 
 /**
  * After a league leg tournament completes: award points from finishing places + registration ladder.
@@ -110,6 +111,9 @@ async function maybeMarkLeagueCompleted(leagueId) {
       where: { id: leagueId },
       data: { status: "COMPLETED" },
     });
+    await ensureLeaguePrizeClaims(leagueId).catch((err) =>
+      console.error("[PRIZES] ensureLeaguePrizeClaims:", err?.message || err)
+    );
   }
 }
 

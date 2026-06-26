@@ -439,6 +439,7 @@ export function TournamentLobbyModal({
               tournamentId={tournamentId}
               tournament={tournament}
               onUpdated={() => refetch({ silent: true })}
+              claimEndpoint={`/api/tournaments/${tournamentId}/claim-prize`}
             />
           )}
 

@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import api from '../services/api';
+import { PrizesTab } from '../components/tournament/PrizesTab';
+import { LeagueAdminPrizes } from '../components/league/LeagueAdminPrizes';
+import type { MyPrizeClaim } from '../components/tournament/PrizesTab';
 
-type Tab = 'table' | 'next' | 'schedule' | 'completed';
+type Tab = 'table' | 'prizes' | 'next' | 'schedule' | 'completed';
 
 interface StandingRow {
   id: string;
@@ -32,6 +35,23 @@ interface LeagueDetail {
   status: string;
   standings: StandingRow[];
   games: GameRow[];
+  prizePlaces?: number;
+  prizeMode?: 'MANUAL' | 'WALLET' | null;
+  prizeStructure?: unknown[];
+  prizeFundingStatus?: string | null;
+  prizeWalletAddress?: string | null;
+  walletConfigured?: boolean;
+  requiredFeeSol?: string | null;
+  prizeClaimServer?: { serverName: string; inviteLink: string | null } | null;
+  myPrizeClaim?: MyPrizeClaim | null;
+  hasPrizes?: boolean;
+  canManage?: boolean;
+}
+
+function authHeaders() {
+  const token =
+    typeof localStorage !== 'undefined' ? localStorage.getItem('sessionToken') : null;
+  return token ? { Authorization: `Bearer ${token}` } : undefined;
 }
 
 export function LeagueDetailPage() {
@@ -41,23 +61,24 @@ export function LeagueDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('table');
 
-  useEffect(() => {
+  const fetchLeague = useCallback(async () => {
     if (!id) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data } = await api.get<LeagueDetail>(`/api/leagues/${id}`);
-        if (!cancelled) setLeague(data);
-      } catch {
-        if (!cancelled) setError('League not found');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const { data } = await api.get<LeagueDetail>(`/api/leagues/${id}`, {
+        headers: authHeaders(),
+      });
+      setLeague(data);
+      setError(null);
+    } catch {
+      setError('League not found');
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
+
+  useEffect(() => {
+    void fetchLeague();
+  }, [fetchLeague]);
 
   const { nextGame, completedGames, scheduleGames } = useMemo(() => {
     if (!league?.games) {
@@ -86,8 +107,10 @@ export function LeagueDetailPage() {
   if (loading) return <p className="py-8 text-slate-400">Loading…</p>;
   if (error || !league) return <p className="py-8 text-red-400">{error || 'Not found'}</p>;
 
+  const showPrizesTab = league.hasPrizes !== false && (league.prizePlaces ?? 0) > 0;
   const tabs: { key: Tab; label: string }[] = [
     { key: 'table', label: 'League table' },
+    ...(showPrizesTab ? [{ key: 'prizes' as Tab, label: 'Prizes' }] : []),
     { key: 'next', label: 'Next game' },
     { key: 'schedule', label: 'Schedule' },
     { key: 'completed', label: 'Completed games' },
@@ -115,6 +138,14 @@ export function LeagueDetailPage() {
           <p className="mt-1 text-xs text-slate-500">Creator timezone: {league.timezone}</p>
         )}
       </div>
+
+      {league.canManage && league.prizeMode === 'WALLET' && league.status !== 'CANCELLED' && (
+        <LeagueAdminPrizes
+          leagueId={league.id}
+          league={league}
+          onUpdated={() => void fetchLeague()}
+        />
+      )}
 
       <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-2">
         {tabs.map((t) => (
@@ -168,6 +199,26 @@ export function LeagueDetailPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {tab === 'prizes' && showPrizesTab && (
+        <PrizesTab
+          tournament={{
+            prizePlaces: league.prizePlaces,
+            prizeMode: league.prizeMode,
+            prizeStructure: league.prizeStructure as any,
+            prizeFundingStatus: league.prizeFundingStatus,
+            prizeWalletAddress: league.prizeWalletAddress,
+            walletConfigured: league.walletConfigured,
+            requiredFeeSol: league.requiredFeeSol,
+            prizeClaimServer: league.prizeClaimServer,
+            myPrizeClaim: league.myPrizeClaim,
+            hasPrizes: league.hasPrizes,
+          }}
+          prizesAvailable={league.status === 'COMPLETED'}
+          claimEndpoint={`/api/leagues/${league.id}/claim-prize`}
+          onUpdated={() => void fetchLeague()}
+        />
       )}
 
       {tab === 'next' && (

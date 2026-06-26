@@ -1,4 +1,11 @@
 import { prisma } from "../config/database.js";
+import { canManageLeague } from "../utils/tournamentAdminAccess.js";
+import {
+  parsePrizeStructureJson,
+  lamportsToSolString,
+} from "./prizes/prizeStructure.js";
+import { getViewerLeaguePrizeClaim, ensureLeaguePrizeClaims } from "./prizes/prizeClaims.js";
+import { isPrizeWalletConfigured } from "./prizes/prizeWallet.js";
 
 /** League domain service */
 export class LeagueService {
@@ -8,7 +15,7 @@ export class LeagueService {
     });
   }
 
-  async getLeagueById(id) {
+  async getLeagueById(id, viewer = null) {
     const league = await prisma.league.findUnique({
       where: { id },
       include: {
@@ -30,9 +37,29 @@ export class LeagueService {
             },
           },
         },
+        prizeClaimServer: {
+          select: {
+            id: true,
+            serverName: true,
+            inviteLink: true,
+          },
+        },
       },
     });
     if (!league) return null;
+
+    if (
+      league.status === "COMPLETED" &&
+      (league.prizePlaces ?? 0) > 0 &&
+      league.prizeMode
+    ) {
+      const claimCount = await prisma.prizeClaim.count({ where: { leagueId: id } });
+      if (claimCount === 0) {
+        await ensureLeaguePrizeClaims(id).catch((err) =>
+          console.error("[PRIZES] backfill ensureLeaguePrizeClaims:", err?.message || err)
+        );
+      }
+    }
 
     const standings = [...league.standings].sort((a, b) => {
       if (b.points !== a.points) return b.points - a.points;
@@ -41,7 +68,40 @@ export class LeagueService {
       return af - bf;
     });
 
-    return { ...league, standings };
+    const result = {
+      ...league,
+      standings,
+      prizePlaces: league.prizePlaces ?? 0,
+      prizeMode: league.prizeMode ?? null,
+      prizeStructure: parsePrizeStructureJson(league.prizeStructureJson),
+      prizeFundingStatus: league.prizeFundingStatus ?? null,
+      prizeWalletAddress: league.prizeWalletAddress ?? null,
+      walletConfigured: isPrizeWalletConfigured(league),
+      requiredFeeSol: league.prizeFeeSolLamports
+        ? lamportsToSolString(league.prizeFeeSolLamports)
+        : null,
+      prizeClaimServer: league.prizeClaimServer
+        ? {
+            serverName: league.prizeClaimServer.serverName,
+            inviteLink: league.prizeClaimServer.inviteLink,
+          }
+        : null,
+      hasPrizes: (league.prizePlaces ?? 0) > 0 && !!league.prizeMode,
+    };
+
+    if (viewer?.id) {
+      result.canManage = await canManageLeague({
+        userId: viewer.id,
+        discordId: viewer.discordId,
+        leagueId: id,
+      });
+      result.myPrizeClaim = await getViewerLeaguePrizeClaim(id, viewer.id);
+    } else {
+      result.canManage = false;
+      result.myPrizeClaim = null;
+    }
+
+    return result;
   }
 
   /**
@@ -80,4 +140,3 @@ export class LeagueService {
     return [...inProgressFiltered, ...completed];
   }
 }
-

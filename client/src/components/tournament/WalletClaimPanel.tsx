@@ -3,12 +3,12 @@ import api from '../../services/api';
 import type { MyPrizeClaim } from './PrizesTab';
 
 interface Props {
-  tournamentId: string;
+  claimEndpoint: string;
   myClaim: MyPrizeClaim;
   onUpdated?: () => void;
 }
 
-export function WalletClaimPanel({ tournamentId, myClaim, onUpdated }: Props) {
+export function WalletClaimPanel({ claimEndpoint, myClaim, onUpdated }: Props) {
   const [address, setAddress] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export function WalletClaimPanel({ tournamentId, myClaim, onUpdated }: Props) {
     try {
       const token = localStorage.getItem('sessionToken');
       const res = await api.post(
-        `/api/tournaments/${tournamentId}/claim-prize`,
+        claimEndpoint,
         { recipientAddress: address.trim() },
         { headers: { Authorization: `Bearer ${token}` } }
       );

@@ -908,6 +908,7 @@ export function TournamentLobby() {
               tournamentId={id!}
               tournament={tournament}
               onUpdated={() => refetch({ silent: true })}
+              claimEndpoint={`/api/tournaments/${id!}/claim-prize`}
             />
           )}
 

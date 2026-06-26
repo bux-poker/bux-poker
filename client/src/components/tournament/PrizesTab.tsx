@@ -43,6 +43,9 @@ interface Props {
     hasPrizes?: boolean;
   };
   onUpdated?: () => void;
+  /** When false, show structure only (e.g. league still in progress). */
+  prizesAvailable?: boolean;
+  claimEndpoint?: string;
 }
 
 function placeLabel(place: number) {
@@ -79,7 +82,13 @@ function claimStatusLabel(status: string) {
   }
 }
 
-export function PrizesTab({ tournamentId, tournament, onUpdated }: Props) {
+export function PrizesTab({
+  tournamentId,
+  tournament,
+  onUpdated,
+  prizesAvailable = true,
+  claimEndpoint,
+}: Props) {
   if (tournament.hasPrizes === false || !tournament.prizePlaces) {
     return (
       <p className="py-8 text-center text-slate-400">
@@ -132,6 +141,12 @@ export function PrizesTab({ tournamentId, tournament, onUpdated }: Props) {
         ))}
       </div>
 
+      {!prizesAvailable && (
+        <p className="rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-3 text-sm text-slate-400">
+          Prize claims open when the league completes and final standings are locked in.
+        </p>
+      )}
+
       {myClaim && (
         <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-4">
           <p className="font-medium text-emerald-300">
@@ -163,10 +178,10 @@ export function PrizesTab({ tournamentId, tournament, onUpdated }: Props) {
             </div>
           )}
           {tournament.prizeMode === 'WALLET' &&
-            tournamentId &&
+            claimEndpoint &&
             (myClaim.status === 'ELIGIBLE' || myClaim.status === 'CLAIMED') && (
               <WalletClaimPanel
-                tournamentId={tournamentId}
+                claimEndpoint={claimEndpoint}
                 myClaim={myClaim}
                 onUpdated={onUpdated}
               />

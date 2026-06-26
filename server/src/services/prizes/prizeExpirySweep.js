@@ -18,7 +18,6 @@ export async function markExpiredEligibleClaims() {
     where: {
       status: "ELIGIBLE",
       eligibleUntil: { lte: now },
-      tournamentId: { not: null },
     },
     data: { status: "EXPIRED" },
   });
@@ -26,7 +25,7 @@ export async function markExpiredEligibleClaims() {
 }
 
 /**
- * Sweep one expired claim's place assets to the tournament refund wallet.
+ * Sweep one expired claim's place assets to the refund wallet.
  */
 export async function sweepExpiredPrizeClaim(claimId) {
   const existing = sweepLocks.get(claimId);
@@ -54,10 +53,28 @@ async function sweepExpiredPrizeClaimInner(claimId) {
           refundWalletAddress: true,
         },
       },
+      league: {
+        select: {
+          id: true,
+          name: true,
+          prizeMode: true,
+          prizeStructureJson: true,
+          prizeWalletAddress: true,
+          prizeWalletSecretEnc: true,
+          refundWalletAddress: true,
+        },
+      },
     },
   });
 
-  if (!claim?.tournamentId || !claim.tournament) return { skipped: true };
+  const prizeSource = claim?.tournament || claim?.league;
+  const sourceLabel = claim?.tournament
+    ? `tournament ${claim.tournament.name}`
+    : claim?.league
+      ? `league ${claim.league.name}`
+      : "unknown";
+
+  if (!prizeSource) return { skipped: true };
   if (claim.status === "SWEPT" || claim.status === "CLAIMED") {
     return { skipped: true, reason: claim.status };
   }
@@ -65,8 +82,7 @@ async function sweepExpiredPrizeClaimInner(claimId) {
     return { skipped: true, reason: claim.status };
   }
 
-  const tournament = claim.tournament;
-  if (tournament.prizeMode !== "WALLET") return { skipped: true };
+  if (prizeSource.prizeMode !== "WALLET") return { skipped: true };
 
   const now = new Date();
   if (claim.eligibleUntil && claim.eligibleUntil > now && claim.status === "ELIGIBLE") {
@@ -80,22 +96,22 @@ async function sweepExpiredPrizeClaimInner(claimId) {
     });
   }
 
-  if (!tournament.refundWalletAddress) {
+  if (!prizeSource.refundWalletAddress) {
     console.error(
-      `[PRIZES] Cannot sweep claim ${claimId}: tournament ${tournament.id} missing refundWalletAddress`
+      `[PRIZES] Cannot sweep claim ${claimId}: ${sourceLabel} missing refundWalletAddress`
     );
     return { failed: true, reason: "no_refund_address" };
   }
 
-  if (!isPrizeWalletConfigured(tournament)) {
+  if (!isPrizeWalletConfigured(prizeSource)) {
     console.error(
-      `[PRIZES] Cannot sweep claim ${claimId}: prize wallet not configured for ${tournament.id}`
+      `[PRIZES] Cannot sweep claim ${claimId}: prize wallet not configured for ${sourceLabel}`
     );
     return { failed: true, reason: "wallet_not_configured" };
   }
 
   const placeItems = getWalletPlaceItems(
-    tournament.prizeStructureJson,
+    prizeSource.prizeStructureJson,
     claim.finishingPlace
   );
   if (placeItems.length === 0) {
@@ -106,8 +122,8 @@ async function sweepExpiredPrizeClaimInner(claimId) {
     return { swept: true, txSignatures: [] };
   }
 
-  const refundPubkey = validateRecipientAddress(tournament.refundWalletAddress);
-  const keypair = loadPrizeWalletKeypair(tournament);
+  const refundPubkey = validateRecipientAddress(prizeSource.refundWalletAddress);
+  const keypair = loadPrizeWalletKeypair(prizeSource);
 
   let txSignatures;
   try {
@@ -118,7 +134,7 @@ async function sweepExpiredPrizeClaimInner(claimId) {
     });
   } catch (err) {
     console.error(
-      `[PRIZES] Sweep failed for claim ${claimId} (${tournament.name}, place ${claim.finishingPlace}):`,
+      `[PRIZES] Sweep failed for claim ${claimId} (${sourceLabel}, place ${claim.finishingPlace}):`,
       err?.message || err
     );
     return { failed: true, error: err?.message || String(err) };
@@ -157,8 +173,10 @@ export async function runExpiredPrizeClaimsTick() {
   const due = await prisma.prizeClaim.findMany({
     where: {
       status: "EXPIRED",
-      tournamentId: { not: null },
-      tournament: { prizeMode: "WALLET" },
+      OR: [
+        { tournament: { prizeMode: "WALLET" } },
+        { league: { prizeMode: "WALLET" } },
+      ],
     },
     select: { id: true },
     take: 20,
