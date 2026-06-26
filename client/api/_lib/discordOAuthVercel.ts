@@ -11,6 +11,12 @@ const DEFAULT_UA = "BUX-Poker-Vercel/1.0 (+https://bux-poker.xyz; OAuth2)";
 export function getDiscordCallbackUrl(req: VercelRequest): string {
   const explicit = process.env.DISCORD_VERCEL_CALLBACK_URL?.trim().replace(/\/+$/, "");
   if (explicit) return explicit;
+
+  const clientUrl = (process.env.CLIENT_URL || "").trim().replace(/\/+$/, "");
+  if (clientUrl && !isLocalOriginUrl(clientUrl)) {
+    return `${clientUrl}/oauth/discord/callback`;
+  }
+
   const host =
     (req.headers["x-forwarded-host"] as string) || req.headers.host || "";
   const proto = (req.headers["x-forwarded-proto"] as string) || "https";
