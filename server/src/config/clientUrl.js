@@ -1,5 +1,5 @@
 /** Public web app (Vercel). Used when CLIENT_URL is unset or still points at localhost. */
-export const DEFAULT_PROD_CLIENT_URL = "https://bux-poker-puce.vercel.app";
+export const DEFAULT_PROD_CLIENT_URL = "https://bux-poker.xyz";
 
 function isLocalClientUrl(url) {
   if (!url) return true;

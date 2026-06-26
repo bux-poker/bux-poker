@@ -1,5 +1,15 @@
 import type { AxiosInstance } from 'axios';
 
+function isBuxPokerProductionHost(h: string): boolean {
+  return (
+    h === 'bux-poker.xyz' ||
+    h === 'www.bux-poker.xyz' ||
+    h === 'bux-poker.pro' ||
+    h === 'www.bux-poker.pro' ||
+    h.endsWith('.vercel.app')
+  );
+}
+
 /**
  * On production bux-poker hosts, `/api` is proxied to Fly (Vercel rewrite). Use same-origin there
  * even when `VITE_API_BASE_URL` is still set to `https://bux-poker.fly.dev` from older deploy config.
@@ -16,11 +26,7 @@ export function getClientApiBaseUrl(): string {
   // Hostname only (never gate on import.meta.env.DEV/PROD — a mis-set Vercel env can strip that
   // branch at build time and drop this entire same-origin fix from the bundle).
   const h = window.location.hostname.toLowerCase();
-  if (
-    h === 'bux-poker.pro' ||
-    h === 'www.bux-poker.pro' ||
-    h.endsWith('.vercel.app')
-  ) {
+  if (isBuxPokerProductionHost(h)) {
     return '';
   }
 
@@ -35,7 +41,7 @@ export function enforceBuxPokerSameOriginApiBase(client: AxiosInstance): void {
   client.interceptors.request.use((config) => {
     if (typeof window !== 'undefined') {
       const h = window.location.hostname.toLowerCase();
-      if (h === 'bux-poker.pro' || h === 'www.bux-poker.pro') {
+      if (isBuxPokerProductionHost(h)) {
         config.baseURL = '';
       }
     }

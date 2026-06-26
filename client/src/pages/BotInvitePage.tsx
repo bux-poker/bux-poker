@@ -2,7 +2,7 @@ const DISCORD_BOT_INVITE_URL =
   import.meta.env.VITE_DISCORD_BOT_INVITE_URL ??
   "https://discord.com/oauth2/authorize?client_id=1461311075428601959&permissions=84992&integration_type=0&scope=bot+applications.commands";
 
-const DEFAULT_SHARE_URL = "https://bux-poker-puce.vercel.app/invite";
+const DEFAULT_SHARE_URL = "https://bux-poker.xyz/invite";
 
 function shareUrl() {
   if (typeof window !== "undefined" && window.location.origin) {
@@ -110,7 +110,7 @@ export function BotInvitePage() {
         <p className="mt-2 text-sm text-slate-400">
           After setup, log in at{" "}
           <a href="/" className="text-emerald-400 hover:text-emerald-300">
-            bux-poker-puce.vercel.app
+            bux-poker.xyz
           </a>{" "}
           with Discord (use an account that has the admin role you configured). Create a tournament
           from the Admin page — the bot will post a registration embed in your announcement channel.

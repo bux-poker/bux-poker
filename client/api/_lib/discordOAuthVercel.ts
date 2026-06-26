@@ -6,7 +6,7 @@ import { createId } from "@paralleldrive/cuid2";
 import jwt from "jsonwebtoken";
 import { Pool } from "pg";
 
-const DEFAULT_UA = "BUX-Poker-Vercel/1.0 (+https://www.bux-poker.pro; OAuth2)";
+const DEFAULT_UA = "BUX-Poker-Vercel/1.0 (+https://bux-poker.xyz; OAuth2)";
 
 export function getDiscordCallbackUrl(req: VercelRequest): string {
   const explicit = process.env.DISCORD_VERCEL_CALLBACK_URL?.trim().replace(/\/+$/, "");
@@ -60,7 +60,7 @@ export function getClientUrl(req?: VercelRequest): string {
     return `https://${process.env.VERCEL_URL}`.replace(/\/+$/, "");
   }
 
-  return fromEnv || "https://bux-poker-puce.vercel.app";
+  return fromEnv || "https://bux-poker.xyz";
 }
 
 let pool: Pool | null = null;
