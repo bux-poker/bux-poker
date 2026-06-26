@@ -183,9 +183,3 @@ export function getWalletPlaceItems(prizeStructureJson, finishingPlace) {
   const row = structure.find((p) => Number(p.place) === Number(finishingPlace));
   return row?.items || [];
 }
-
-export function getWalletPlaceItems(prizeStructureJson, finishingPlace) {
-  const structure = parsePrizeStructureJson(prizeStructureJson);
-  const row = structure.find((p) => Number(p.place) === Number(finishingPlace));
-  return row?.items || [];
-}
