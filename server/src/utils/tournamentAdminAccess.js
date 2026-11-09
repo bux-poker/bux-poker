@@ -176,35 +176,28 @@ export async function canManageLeague({ userId, discordId, leagueId }) {
 }
 
 /**
- * Ensure every Discord guild id in `serverIds` is one the user may post tournaments to.
+ * Ensure every Discord guild id in `serverIds` is an enabled configured server.
+ * Callers must already gate on requireAdminRole — any web admin may post to any
+ * partner community that completed /setup (not only guilds they personally admin).
  * @param {string[]} serverIds Discord guild snowflakes from the create form
  */
-export async function assertUserMayUseServerIds({ userId, discordId, serverIds }) {
+export async function assertUserMayUseServerIds({ serverIds }) {
   const ids = Array.isArray(serverIds)
     ? serverIds.map((s) => String(s).trim()).filter(Boolean)
     : [];
   if (ids.length === 0) return;
 
-  const managed = await getUserManagedDiscordServers({ userId, discordId });
-  if (managed.allowlist || managed.bootstrap) return;
-
-  if (managed.rateLimited) {
-    const err = new Error(
-      "Discord admin check is temporarily unavailable. Try again in a moment."
-    );
-    err.status = 503;
-    throw err;
-  }
-
-  const allowedGuildIds = new Set(
-    managed.servers.map((s) => normalizeSnowflake(s.serverId))
-  );
-  const denied = ids.filter((id) => !allowedGuildIds.has(normalizeSnowflake(id)));
+  const configured = await prisma.discordServer.findMany({
+    where: { enabled: true, serverId: { in: ids } },
+    select: { serverId: true },
+  });
+  const allowed = new Set(configured.map((s) => normalizeSnowflake(s.serverId)));
+  const denied = ids.filter((id) => !allowed.has(normalizeSnowflake(id)));
   if (denied.length > 0) {
     const err = new Error(
-      "You can only create tournaments for Discord servers where you have the admin role."
+      "One or more selected Discord servers are not configured. Run /setup in those servers first."
     );
-    err.status = 403;
+    err.status = 400;
     throw err;
   }
 }

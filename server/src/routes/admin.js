@@ -9,11 +9,10 @@ import { computeWebIsAdmin } from "../utils/webAdminStatus.js";
 import {
   assertUserMayUseServerIds,
   canManageLeague,
-  getUserManagedDiscordServers,
 } from "../utils/tournamentAdminAccess.js";
 import { TournamentEngine } from "../services/TournamentEngine.js";
 import { prisma } from "../config/database.js";
-import { postTournamentEmbed, getDiscordClient } from "../discord/bot.js";
+import { postTournamentEmbed } from "../discord/bot.js";
 import {
   attachPrizeFundingSummary,
   buildPrizeFieldsFromRequest,
@@ -173,51 +172,32 @@ router.get("/check", authenticateToken, async (req, res, next) => {
 router.use(authenticateToken);
 router.use(requireAdminRole);
 
-// Get all configured Discord servers
+// Get all configured Discord servers (for tournament invite/post selection).
+// Any admin who passed requireAdminRole sees every enabled server — not only
+// guilds where they personally hold that server's adminRoleId — so partner
+// communities that ran /setup show up for multi-server MTT posting.
 router.get("/servers", async (req, res, next) => {
   try {
     res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
-    const discordClient = getDiscordClient();
     const servers = await prisma.discordServer.findMany({
       where: { enabled: true },
       orderBy: { serverName: "asc" },
     });
 
-    const user = await prisma.user.findUnique({
-      where: { id: req.userId },
-      select: { id: true, discordId: true },
-    });
-    const managed = user
-      ? await getUserManagedDiscordServers({
-          userId: user.id,
-          discordId: user.discordId,
-        })
-      : { servers: [] };
-
-    const visibleServers =
-      managed.allowlist || managed.bootstrap
-        ? servers
-        : servers.filter((s) =>
-            managed.servers.some((m) => m.serverId === s.serverId)
-          );
-
     // Enrich with bot membership: cache hit, else REST; unknown guild => false, transient errors => null
-    const enrichedServers = await Promise.all(
-      visibleServers.map(async (server) => {
-        // HARD UNBLOCK:
-        // At this point, Discord login is flaky and all REST/gateway checks can
-        // still return null/false even when the bot is correctly invited.
-        // For any configured server (enabled + setupCompleted + channel set),
-        // always report isBotMember=true so the admin UI is never blocked.
-        let isBotMember = true;
-        return {
-          ...server,
-          isBotMember,
-        };
-      })
-    );
+    const enrichedServers = servers.map((server) => {
+      // HARD UNBLOCK:
+      // At this point, Discord login is flaky and all REST/gateway checks can
+      // still return null/false even when the bot is correctly invited.
+      // For any configured server (enabled + setupCompleted + channel set),
+      // always report isBotMember=true so the admin UI is never blocked.
+      return {
+        ...server,
+        isBotMember: true,
+      };
+    });
 
     res.json(enrichedServers);
   } catch (err) {
@@ -248,16 +228,8 @@ router.post("/tournaments", async (req, res, next) => {
       return res.status(400).json({ error: "Name and startTime are required" });
     }
 
-    const creator = await prisma.user.findUnique({
-      where: { id: req.userId },
-      select: { id: true, discordId: true },
-    });
     try {
-      await assertUserMayUseServerIds({
-        userId: creator?.id,
-        discordId: creator?.discordId,
-        serverIds,
-      });
+      await assertUserMayUseServerIds({ serverIds });
     } catch (accessErr) {
       if (accessErr.status) {
         return res.status(accessErr.status).json({ error: accessErr.message });
@@ -480,16 +452,8 @@ router.post("/leagues", async (req, res, next) => {
         .json({ error: "name and gameStartTimes (non-empty array) are required" });
     }
 
-    const creator = await prisma.user.findUnique({
-      where: { id: req.userId },
-      select: { id: true, discordId: true },
-    });
     try {
-      await assertUserMayUseServerIds({
-        userId: creator?.id,
-        discordId: creator?.discordId,
-        serverIds,
-      });
+      await assertUserMayUseServerIds({ serverIds });
     } catch (accessErr) {
       if (accessErr.status) {
         return res.status(accessErr.status).json({ error: accessErr.message });
