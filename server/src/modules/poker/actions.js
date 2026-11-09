@@ -353,11 +353,21 @@ export async function applyPlayerAction({ gameId, userId, action, amount, io = n
       }
     });
 
+  // Persist merged pot + current street bets (preflop blinds live only in bettingRound).
+  let livePot = state.pot || 0;
+  try {
+    const round = state.bettingRound;
+    if (round && typeof round.getTotalPot === "function") {
+      livePot += round.getTotalPot() || 0;
+    }
+  } catch {
+    /* ignore */
+  }
   await prisma.game
     .update({
       where: { id: gameId },
       data: {
-        pot: state.pot,
+        pot: livePot,
       },
     })
     .catch((err) => console.error("[ACTION] Error updating game in DB:", err));

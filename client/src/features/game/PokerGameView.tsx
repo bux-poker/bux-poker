@@ -236,17 +236,17 @@ export function PokerGameView() {
     return !!(gid && String(gid) !== String(id));
   }, [tournamentPlayersSeatSig, user?.id, id, tournament?.players]);
 
-  /** Authoritative seat game from DB while consolidation UI is up or standings already disagree with the route. */
+  /** Always resolve active seat from DB while seated in a live tournament table (reseats, etc.). */
   useEffect(() => {
     const tid = effectiveTournamentId;
     if (!tid || !user?.id || !id) return;
-    const serverWaitMsg = gameState?.consolidationWaitingMessage?.trim();
-    const needPoll =
-      !!pendingConsolidationWaiting ||
-      !!consolidationWaiting ||
-      !!serverWaitMsg ||
-      wrongTableByTournamentPayload;
-    if (!needPoll) return;
+    // Don't yank eliminated players around.
+    if (wrongTableByTournamentPayload === false) {
+      const me = tournament?.players?.find(
+        (p: { userId?: string; status?: string }) => String(p.userId) === String(user.id)
+      );
+      if (me?.status === "ELIMINATED") return;
+    }
 
     let cancelled = false;
     const tick = async () => {
@@ -268,21 +268,12 @@ export function PokerGameView() {
       }
     };
     void tick();
-    const interval = setInterval(() => void tick(), 2000);
+    const interval = setInterval(() => void tick(), 2500);
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [
-    effectiveTournamentId,
-    user?.id,
-    id,
-    navigate,
-    pendingConsolidationWaiting,
-    consolidationWaiting,
-    gameState?.consolidationWaitingMessage,
-    wrongTableByTournamentPayload,
-  ]);
+  }, [effectiveTournamentId, user?.id, id, navigate, tournament?.players, wrongTableByTournamentPayload]);
 
   /** If DB says we're seated on another game (reseated), leave stale /game/:id + wait overlay. */
   useEffect(() => {
@@ -466,6 +457,8 @@ export function PokerGameView() {
         });
       } else if (payload.type === "LEVEL_UP") {
         soundManager.play("blind-level-up");
+        setBlindWaitMessage(null);
+        socket.emit("join-table", { gameId: id, userId: user?.id });
         setScheduleModal({
           kind: "LEVEL_UP",
           tournamentId: payload.tournamentId,
@@ -485,6 +478,9 @@ export function PokerGameView() {
       ) {
         return;
       }
+      setBlindWaitMessage(null);
+      // Re-join room so we don't miss the next game-state after a level transition.
+      socket.emit("join-table", { gameId: id, userId: user?.id });
       void refetchTournament({ silent: true });
     };
     socket.on("tournament-blind-clock-started", onBlindClockStarted);
@@ -622,26 +618,27 @@ export function PokerGameView() {
       const tid = payload?.tournamentId;
       if (!tid || !user?.id || !id) return;
       setSocketTournamentIdHint(tid);
-      let t: any = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        try {
-          const res = await api.get(`/api/tournaments/${tid}`);
-          t = res?.data;
-          break;
-        } catch {
-          if (attempt === 2) return;
-          await new Promise((r) => setTimeout(r, 350 * (attempt + 1)));
-        }
-      }
-      const myEntry = (t?.players || []).find(
-        (p: any) => String(p.userId) === String(user.id)
-      );
-      if (!myEntry) return;
       setConsolidationWaiting(null);
       setPendingConsolidationWaiting(null);
       setTimeout(() => void refetchTournament({ silent: true }), 0);
-      if (myEntry.gameId && String(myEntry.gameId) !== String(id)) {
-        navigate(`/game/${myEntry.gameId}`, { replace: true });
+      // Prefer authoritative my-table over tournament.players payload (can lag after reseat).
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          const sessionToken =
+            typeof localStorage !== "undefined" ? localStorage.getItem("sessionToken") : null;
+          const res = await api.get<{ gameId?: string }>(`/api/tournaments/${tid}/my-table`, {
+            headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
+          });
+          const gid = res.data?.gameId;
+          if (gid && String(gid) !== String(id)) {
+            navigate(`/game/${gid}`, { replace: true });
+            return;
+          }
+          if (gid && String(gid) === String(id)) return;
+        } catch {
+          /* retry */
+        }
+        await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
       }
     });
 

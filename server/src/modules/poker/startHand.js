@@ -513,6 +513,12 @@ export async function startHandForGameBody(gameId, io) {
     console.log(`[POKER] UTG calculation: dealer=${dealerSeat}, sb=${sbSeat}, bb=${bbSeat}, utg=${utgSeat} (${utgPlayer.user?.username || utgPlayer.userId})`);
   }
 
+  // Preflop chips live in bettingRound until the street merges into state.pot (do NOT put
+  // blinds into state.pot here — advanceStreet would double-count). Persist the live street
+  // total to DB so reseat/crash never sees "stacks already reduced, game.pot still 0".
+  const liveStreetPot =
+    typeof bettingRound.getTotalPot === "function" ? bettingRound.getTotalPot() : 0;
+
   const state = {
     handEnded: false,
     showdownActive: false,
@@ -563,12 +569,16 @@ export async function startHandForGameBody(gameId, io) {
           const activeIndex = activeDealtPlayers.findIndex(ap => ap.id === p.id);
           holeCards = activeIndex >= 0 ? dealtHands[activeIndex] : null;
         }
+        const contribution =
+          typeof bettingRound.getPlayerContribution === "function"
+            ? bettingRound.getPlayerContribution(p.id)
+            : 0;
         result.push({
           ...p,
           user: p.user,
           chips: updated?.chips || p.chips,
           holeCards,
-          contributions: 0,
+          contributions: contribution,
           name: p.user?.username || "Player",
           isAway: isPlayerAway(gameId, p.userId),
         });
@@ -581,7 +591,7 @@ export async function startHandForGameBody(gameId, io) {
 
   await prisma.game.update({
     where: { id: gameId },
-    data: { pot: state.pot }
+    data: { pot: liveStreetPot }
   });
 
   if (io) {

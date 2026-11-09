@@ -304,10 +304,13 @@ function clearWaiting(io, tournamentId, games) {
 }
 
 /**
- * Anchor-based blind / break progression:
+ * Soft blind sync (PokerStars / GG style):
  * - Level timer runs from blindPeriodAnchorAt + duration(canonicalLevel).
- * - At 0:00 wait until no active hand on any table, then break or level-up + barrier before next anchor.
- * - Break: no new hands until break ends; then level-up + same barrier rules.
+ * - At 0:00: raise blinds immediately for the *next* hand on every table. Hands already
+ *   in progress finish at the blinds they started; we do NOT wait for all tables (hard
+ *   sync / hand-for-hand only belongs at bubble/final table, not every level).
+ * - Break: when the clock hits, start break after active hands finish (so chips aren't wiped).
+ * - After break: level-up immediately and restart the clock (no all-table hand barrier).
  */
 async function tryAdvanceBlindsIfDueImpl(tournamentId, io, options = { emitDealerMessage: true }) {
   let tournament = await prisma.tournament.findUnique({
@@ -346,21 +349,8 @@ async function tryAdvanceBlindsIfDueImpl(tournamentId, io, options = { emitDeale
     return { advanced: false, waiting: false, inBreak: true, breakEndsAt: tournament.tournamentBreakUntilAt };
   }
 
-  // --- Break just ended: advance level and require all tables to start a hand before clock ---
+  // --- Break just ended: soft level-up + restart clock immediately ---
   if (breakUntil != null && nowMs >= breakUntil) {
-    await recoverStuckHandsWhileBlindWaiting(tournamentId, games, io);
-    for (const g of games) {
-      if (hasActiveHand(g.id)) {
-        emitWaitingForHands(
-          io,
-          tournamentId,
-          games,
-          "Waiting for all tables to finish the current hand before play resumes after the break.",
-          canonical
-        );
-        return { advanced: false, waiting: true, inBreak: false };
-      }
-    }
     clearWaiting(io, tournamentId, games);
     const nextIdx = canonical + 1;
     if (nextIdx >= blindLevels.length) {
@@ -373,13 +363,13 @@ async function tryAdvanceBlindsIfDueImpl(tournamentId, io, options = { emitDeale
     await syncGamesToLevelIndex(tournamentId, nextIdx, io, options);
     const newLevel = blindLevels[nextIdx];
     const { sb, bb } = levelSbBb(newLevel);
+    const now = new Date();
     await prisma.tournament.update({
       where: { id: tournamentId },
       data: {
         tournamentBreakUntilAt: null,
-        blindPeriodAnchorAt: null,
-        awaitingHandsForBlindClock: true,
-        blindScheduleBarrier: { increment: 1 },
+        blindPeriodAnchorAt: now,
+        awaitingHandsForBlindClock: false,
       },
     });
     if (io) {
@@ -393,9 +383,12 @@ async function tryAdvanceBlindsIfDueImpl(tournamentId, io, options = { emitDeale
           message: `Blinds are now ${sb?.toLocaleString?.() ?? sb} / ${bb?.toLocaleString?.() ?? bb}`,
         });
       }
+      io.emit("tournament-blind-clock-started", {
+        tournamentId,
+        blindPeriodAnchorAt: now.toISOString(),
+      });
       io.emit("tournament_updated", { tournamentId });
     }
-    await maybeFinalizeBlindPeriodAnchor(tournamentId, io);
     return { advanced: true, waiting: false };
   }
 
@@ -440,24 +433,25 @@ async function tryAdvanceBlindsIfDueImpl(tournamentId, io, options = { emitDeale
     return { advanced: false, waiting: false };
   }
 
-  await recoverStuckHandsWhileBlindWaiting(tournamentId, games, io);
-  for (const g of games) {
-    if (hasActiveHand(g.id)) {
-      emitWaitingForHands(
-        io,
-        tournamentId,
-        games,
-        "Waiting for all tables to finish the current hand before blinds increase.",
-        canonical
-      );
-      return { advanced: false, waiting: true };
-    }
-  }
-
   clearWaiting(io, tournamentId, games);
 
   const breakMins = level.breakAfter != null ? Number(level.breakAfter) : 0;
   if (Number.isFinite(breakMins) && breakMins > 0) {
+    // Wait only for in-progress hands before locking the break (chips stay on table).
+    await recoverStuckHandsWhileBlindWaiting(tournamentId, games, io);
+    for (const g of games) {
+      if (hasActiveHand(g.id)) {
+        emitWaitingForHands(
+          io,
+          tournamentId,
+          games,
+          "Waiting for tables to finish the current hand before the break starts.",
+          canonical
+        );
+        return { advanced: false, waiting: true };
+      }
+    }
+    clearWaiting(io, tournamentId, games);
     const breakEnds = new Date(nowMs + breakMins * 60 * 1000);
     await prisma.tournament.update({
       where: { id: tournamentId },
@@ -484,15 +478,16 @@ async function tryAdvanceBlindsIfDueImpl(tournamentId, io, options = { emitDeale
     return { advanced: false, waiting: false, atLastLevel: true };
   }
 
+  // Soft level-up: new blinds apply to the next hand; current hands keep playing.
   await syncGamesToLevelIndex(tournamentId, nextIdx, io, options);
   const newLevel = blindLevels[nextIdx];
   const { sb, bb } = levelSbBb(newLevel);
+  const now = new Date();
   await prisma.tournament.update({
     where: { id: tournamentId },
     data: {
-      blindPeriodAnchorAt: null,
-      awaitingHandsForBlindClock: true,
-      blindScheduleBarrier: { increment: 1 },
+      blindPeriodAnchorAt: now,
+      awaitingHandsForBlindClock: false,
     },
   });
 
@@ -506,10 +501,22 @@ async function tryAdvanceBlindsIfDueImpl(tournamentId, io, options = { emitDeale
         bigBlind: bb,
         message: `Blinds are now ${sb?.toLocaleString?.() ?? sb} / ${bb?.toLocaleString?.() ?? bb}`,
       });
+      // Clear any stale hard-sync wait overlay left from older builds.
+      io.to(`game:${gg.id}`).emit("blind-level-waiting", {
+        tournamentId,
+        message: null,
+        clear: true,
+      });
     }
+    io.emit("tournament-blind-clock-started", {
+      tournamentId,
+      blindPeriodAnchorAt: now.toISOString(),
+    });
     io.emit("tournament_updated", { tournamentId });
   }
-  await maybeFinalizeBlindPeriodAnchor(tournamentId, io);
+  console.log(
+    `[TOURNAMENT] Soft blind level-up to ${nextIdx} (${sb}/${bb}) for ${tournamentId} — no all-table wait`
+  );
   return { advanced: true, waiting: false };
 }
 

@@ -88,7 +88,15 @@ export function hasActiveHand(gameId) {
   // first, hasActiveHand is false while state.pot > 0 and DB stacks are still pre-award —
   // consolidation can move players and clearAllStateForGames, destroying chip conservation
   // (multi-table only; single table rarely hits balance/merge during the same ms window).
-  if ((state.pot ?? 0) > 0) return true;
+  let streetBets = 0;
+  try {
+    if (state.bettingRound && typeof state.bettingRound.getTotalPot === "function") {
+      streetBets = state.bettingRound.getTotalPot() || 0;
+    }
+  } catch {
+    streetBets = 0;
+  }
+  if ((state.pot ?? 0) > 0 || streetBets > 0) return true;
 
   if (state.showdownActive) return true;
 
@@ -153,7 +161,18 @@ export async function forceStuckPlayerToAct(gameId, io) {
  */
 export function clearAllStateForGames(gameIds) {
   if (!gameIds || gameIds.length === 0) return;
+  let cleared = 0;
+  let skipped = 0;
   for (const gameId of gameIds) {
+    // Never wipe a live hand — preflop blinds live in bettingRound while state.pot may
+    // still be 0; clearing here destroys chips that were already deducted from stacks.
+    if (hasActiveHand(gameId) || hasConsolidationBlockingHand(gameId)) {
+      skipped += 1;
+      console.warn(
+        `[POKER] Skip clearAllState for game ${gameId} — active/blocking hand (chip conservation)`
+      );
+      continue;
+    }
     tableState.delete(gameId);
     clearAllAwayPlayersForGame(gameId);
     const timer = turnTimers.get(gameId);
@@ -167,9 +186,11 @@ export function clearAllStateForGames(gameIds) {
       if (testTimer.timerId) clearTimeout(testTimer.timerId);
       testPlayerTimers.delete(gameId);
     }
+    cleared += 1;
   }
   console.log(
-    `[POKER] Cleared state for ${gameIds.length} game(s) before consolidation`
+    `[POKER] Cleared state for ${cleared} game(s) before consolidation` +
+      (skipped ? ` (skipped ${skipped} live hand(s))` : "")
   );
 }
 

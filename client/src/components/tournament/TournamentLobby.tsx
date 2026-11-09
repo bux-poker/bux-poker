@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTournament } from '../../hooks/useTournaments';
 import { useAuth } from '@shared/features/auth/AuthContext';
@@ -13,6 +13,39 @@ import {
   getBlindScheduleForTournament,
   getBlindCountdownFromTournamentSchedule,
 } from '@shared/utils/tournamentBlindSchedule';
+
+function openTournamentGameWindow(url: string, navigate: (path: string) => void) {
+  const isMobile =
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    ) || window.innerWidth <= 768;
+  if (isMobile) {
+    navigate(url);
+    return;
+  }
+  const winName = 'buxpoker-game-window';
+  let w = window.open('', winName);
+  if (w && !w.closed) {
+    w.location.href = url;
+    w.focus();
+  } else {
+    w = window.open(
+      url,
+      winName,
+      'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no'
+    );
+    if (w) {
+      w.focus();
+      w.addEventListener('load', () => {
+        setTimeout(() => {
+          if (w?.document?.documentElement?.requestFullscreen) {
+            w.document.documentElement.requestFullscreen().catch(() => {});
+          }
+        }, 500);
+      });
+    }
+  }
+}
 
 type Tab = 'players' | 'blinds' | 'prizes' | 'tables';
 
@@ -135,34 +168,78 @@ export function TournamentLobby() {
     fetchTables();
   }, [tournament, id]);
 
+  const autoOpenedRef = useRef<string | null>(null);
+
+  const fetchMyTable = useCallback(async (): Promise<string | null> => {
+    if (!user || !id) return null;
+    try {
+      const token = localStorage.getItem('sessionToken');
+      if (!token) return null;
+      const response = await api.get(`/api/tournaments/${id}/my-table`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const gid = response.data.gameId as string | undefined;
+      setMyGameId(gid ?? null);
+      return gid ?? null;
+    } catch (err: any) {
+      if (err.response?.status !== 404) {
+        console.error('Error fetching my table:', err);
+      }
+      setMyGameId(null);
+      return null;
+    }
+  }, [user, id]);
+
   // Fetch user's table/game
   useEffect(() => {
     if (!tournament || !user || !id) return;
+    void fetchMyTable();
+  }, [tournament, user, id, fetchMyTable]);
 
-    const fetchMyTable = async () => {
-      try {
-        const token = localStorage.getItem('sessionToken');
-        if (!token) return;
+  const tryAutoOpenTable = useCallback(
+    async (reason: string) => {
+      if (!id || !user) return;
+      const status = tournament?.status;
+      if (status !== 'SEATED' && status !== 'RUNNING' && status !== 'ACTIVE') return;
+      const key = `${id}:${user.id}`;
+      if (autoOpenedRef.current === key) return;
+      // Prefer named game window so we don't spawn duplicates on desktop.
+      const gid = (await fetchMyTable()) || myGameId;
+      if (!gid) return;
+      autoOpenedRef.current = key;
+      console.log(`[TOURNAMENT LOBBY] Auto-opening table (${reason}):`, gid);
+      openTournamentGameWindow(`/game/${gid}`, navigate);
+    },
+    [id, user, tournament?.status, fetchMyTable, myGameId, navigate]
+  );
 
-        const response = await api.get(`/api/tournaments/${id}/my-table`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setMyGameId(response.data.gameId);
-      } catch (err: any) {
-        // User might not be playing, that's ok
-        if (err.response?.status !== 404) {
-          console.error('Error fetching my table:', err);
-        }
-        setMyGameId(null);
-      }
+  // Auto-open when seated / running (resume for logged-in players).
+  useEffect(() => {
+    void tryAutoOpenTable('status');
+  }, [tryAutoOpenTable]);
+
+  // Auto-open when the tournament actually starts.
+  useEffect(() => {
+    if (!id) return;
+    const socket = getSocket();
+    const onStarted = (payload: { tournamentId: string }) => {
+      if (payload.tournamentId !== id) return;
+      autoOpenedRef.current = null; // allow open even if we opened during SEATED countdown
+      void tryAutoOpenTable('tournament-started');
     };
-
-    fetchMyTable();
-  }, [tournament, user, id]);
-
-  // Do NOT auto-open the game from the lobby - it causes duplicate tabs when the user
-  // already has the game open. Open game only via explicit "Join table" / "Your table" click.
-  // On reseat, the existing game tab receives consolidation-complete and navigates in-place.
+    const onComplete = (payload: { tournamentId: string }) => {
+      if (payload.tournamentId !== id) return;
+      void fetchMyTable().then((gid) => {
+        if (gid) openTournamentGameWindow(`/game/${gid}`, navigate);
+      });
+    };
+    socket.on('tournament-started', onStarted);
+    socket.on('consolidation-complete', onComplete);
+    return () => {
+      socket.off('tournament-started', onStarted);
+      socket.off('consolidation-complete', onComplete);
+    };
+  }, [id, tryAutoOpenTable, fetchMyTable, navigate]);
 
   // Calculate running tournament stats + sync blinds / remaining players with game state
   useEffect(() => {
@@ -545,32 +622,7 @@ export function TournamentLobby() {
         {user && (isRunning || isSeated) && myGameId && !isCompleted && (
           <div className="mt-4 flex gap-3 border-t border-slate-800 pt-4">
             <button
-              onClick={() => {
-                const url = `/game/${myGameId}`;
-                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
-                if (isMobile) {
-                  navigate(url);
-                } else {
-                  const winName = 'buxpoker-game-window';
-                  let w = window.open('', winName);
-                  if (w && !w.closed) {
-                    w.location.href = url;
-                    w.focus();
-                  } else {
-                    w = window.open(url, winName, 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no');
-                    if (w) {
-                      w.focus();
-                      w.addEventListener('load', () => {
-                        setTimeout(() => {
-                          if (w?.document?.documentElement?.requestFullscreen) {
-                            w.document.documentElement.requestFullscreen().catch(() => {});
-                          }
-                        }, 500);
-                      });
-                    }
-                  }
-                }
-              }}
+              onClick={() => openTournamentGameWindow(`/game/${myGameId}`, navigate)}
               className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
             >
               Join my table
