@@ -413,8 +413,9 @@ export function TournamentList() {
     );
   }
 
-  // Filter tournaments based on selected filter
+  // Filter tournaments based on selected filter (cancelled events are hidden)
   const filteredTournaments = tournaments.filter((t) => {
+    if (t.status === 'CANCELLED') return false;
     switch (filter) {
       case 'registering':
         return (
@@ -423,7 +424,7 @@ export function TournamentList() {
           t.status === 'SCHEDULED'
         );
       case 'in-progress':
-        return t.status === 'ACTIVE' || t.status === 'RUNNING';
+        return t.status === 'ACTIVE' || t.status === 'RUNNING' || t.status === 'SEATED';
       case 'completed':
         return t.status === 'COMPLETED';
       default:
