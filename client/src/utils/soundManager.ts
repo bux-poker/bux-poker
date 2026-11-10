@@ -239,6 +239,88 @@ class SoundManager {
   getLoadingProgress(): number {
     return this.totalSounds > 0 ? this.loadedCount / this.totalSounds : 1;
   }
+
+  private audioCtx: AudioContext | null = null;
+
+  private getAudioContext(): AudioContext | null {
+    if (typeof window === "undefined") return null;
+    const AC =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AC) return null;
+    if (!this.audioCtx) this.audioCtx = new AC();
+    if (this.audioCtx.state === "suspended") {
+      void this.audioCtx.resume().catch(() => {});
+    }
+    return this.audioCtx;
+  }
+
+  /** Soft pop for self-reactions over avatar. */
+  playEmojiPop(): void {
+    if (!this.isEnabled) return;
+    this.unlock();
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+    const t0 = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(520, t0);
+    osc.frequency.exponentialRampToValueAtTime(240, t0 + 0.12);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.18 * this.masterVolume, t0 + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.18);
+  }
+
+  /** Whoosh for emoji throws across the table. */
+  playEmojiThrow(): void {
+    if (!this.isEnabled) return;
+    this.unlock();
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+    const t0 = ctx.currentTime;
+    const bufferSize = Math.floor(ctx.sampleRate * 0.22);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(900, t0);
+    filter.frequency.exponentialRampToValueAtTime(1800, t0 + 0.18);
+    filter.Q.value = 0.7;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.22 * this.masterVolume, t0 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    noise.start(t0);
+    noise.stop(t0 + 0.24);
+
+    // Soft landing chime
+    const osc = ctx.createOscillator();
+    const og = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(660, t0 + 0.16);
+    osc.frequency.exponentialRampToValueAtTime(420, t0 + 0.32);
+    og.gain.setValueAtTime(0.0001, t0 + 0.16);
+    og.gain.exponentialRampToValueAtTime(0.12 * this.masterVolume, t0 + 0.18);
+    og.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.34);
+    osc.connect(og);
+    og.connect(ctx.destination);
+    osc.start(t0 + 0.16);
+    osc.stop(t0 + 0.36);
+  }
 }
 
 // Export singleton instance

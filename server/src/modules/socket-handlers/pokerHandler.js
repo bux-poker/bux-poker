@@ -15,6 +15,7 @@ import {
   registerShowdownChoice,
   registerDisconnect,
   registerPlayerImBack,
+  registerTableReaction,
 } from "./handlers/index.js";
 
 /** Prevents two concurrent startHandForGame(gameId) from both running (e.g. idle poll + join-table). */
@@ -139,6 +140,7 @@ export function registerPokerHandlers(io) {
     registerGameMessage(socket, io);
     registerShowdownChoice(socket, io);
     registerPlayerImBack(socket, io);
+    registerTableReaction(socket, io);
     registerDisconnect(socket);
   });
 }

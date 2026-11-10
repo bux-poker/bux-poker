@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import type { Card } from "@shared/types/poker";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { BetChip } from "./table/BetChip";
@@ -7,6 +7,13 @@ import { PokerCardImage } from "./table/PokerCardImage";
 import { PLAYER_POSITIONS } from "./table/pokerTableConstants";
 import type { PokerTableProps } from "./table/pokerTableTypes";
 import { usePokerTableActionOverlays } from "./table/usePokerTableActionOverlays";
+import { EmojiReactionLayer } from "./table/EmojiReactionLayer";
+import {
+  playerKey,
+  playerMatchesUser,
+  type TableReactionEmojiId,
+} from "./table/tableReactions";
+import { soundManager } from "../../utils/soundManager";
 
 export type { PokerTableProps } from "./table/pokerTableTypes";
 
@@ -32,6 +39,8 @@ export function PokerTable({
   showdownResults,
   tournamentCountdown,
   onTournamentLobbyClick,
+  reactions = [],
+  onSendReaction,
 }: PokerTableProps) {
   // Create array with 10 seats (empty seats if needed)
   const allSeats = Array.from({ length: 10 }, (_, idx) => {
@@ -45,10 +54,40 @@ export function PokerTable({
   
   // Timer state for countdown
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const [pickerTargetUserId, setPickerTargetUserId] = useState<string | null>(null);
+  const tableRootRef = useRef<HTMLDivElement | null>(null);
+  const seatRefs = useRef<Map<string, HTMLElement | null>>(new Map());
   
   // Window size state to trigger re-renders when CSS variables change
   const [windowSize, setWindowSize] = useState({ width: typeof window !== 'undefined' ? window.innerWidth : 1400 });
   const isMobile = useIsMobile();
+
+  const handleSeatAvatarClick = useCallback(
+    (targetKey: string) => {
+      if (!onSendReaction || !myUserId) return;
+      soundManager.unlock();
+      setPickerTargetUserId((prev) => (prev === targetKey ? null : targetKey));
+    },
+    [onSendReaction, myUserId]
+  );
+
+  const handlePickEmoji = useCallback(
+    (emojiId: TableReactionEmojiId) => {
+      if (!onSendReaction || !myUserId || !pickerTargetUserId) return;
+      const myKey = myPlayer ? playerKey(myPlayer) : myUserId;
+      const isSelf =
+        pickerTargetUserId === myKey ||
+        pickerTargetUserId === myUserId ||
+        playerMatchesUser({ id: pickerTargetUserId, userId: pickerTargetUserId }, myUserId);
+      onSendReaction({
+        emojiId,
+        toUserId: isSelf ? myKey : pickerTargetUserId,
+        kind: isSelf ? "self" : "throw",
+      });
+      setPickerTargetUserId(null);
+    },
+    [onSendReaction, myUserId, pickerTargetUserId, myPlayer]
+  );
 
   const { actionOverlays, ACTION_FADE_MS, isPermanentAction, getActionInfo } = usePokerTableActionOverlays(
     players,
@@ -78,6 +117,7 @@ export function PokerTable({
 
   return (
     <div 
+      ref={tableRootRef}
       className="relative flex h-full w-full items-center justify-center overflow-hidden"
       style={{
         background:
@@ -425,13 +465,45 @@ export function PokerTable({
                   {/* Player Avatar or Empty Seat */}
                   {player ? (
                     <>
-                      <div className={`relative rounded-full ${hasActiveTimer || isCurrentTurn ? 'bux-turn-ring' : ''}`}>
-                        <div 
-                          className="overflow-hidden rounded-full border-2 border-slate-700 bg-slate-800 relative"
+                      <div
+                        className={`relative rounded-full ${hasActiveTimer || isCurrentTurn ? 'bux-turn-ring' : ''}`}
+                        ref={(el) => {
+                          const key = playerKey(player);
+                          if (key) seatRefs.current.set(key, el);
+                          // Also index by both ids so throws resolve either key
+                          if (player.userId) seatRefs.current.set(String(player.userId), el);
+                          if (player.id) seatRefs.current.set(String(player.id), el);
+                        }}
+                      >
+                        <button
+                          type="button"
+                          data-seat-avatar
+                          disabled={!onSendReaction || !myUserId}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSeatAvatarClick(playerKey(player));
+                          }}
+                          className={`overflow-hidden rounded-full border-2 border-slate-700 bg-slate-800 relative ${
+                            onSendReaction && myUserId
+                              ? "cursor-pointer transition-transform hover:scale-105 active:scale-95"
+                              : "cursor-default"
+                          }`}
                           style={{ 
                             width: 'var(--player-avatar-size, 64px)',
                             height: 'var(--player-avatar-size, 64px)'
                           }}
+                          title={
+                            onSendReaction && myUserId
+                              ? playerMatchesUser(player, myUserId)
+                                ? "React"
+                                : `React at ${player.name}`
+                              : player.name
+                          }
+                          aria-label={
+                            playerMatchesUser(player, myUserId)
+                              ? "Open your emoji reactions"
+                              : `Throw emoji at ${player.name}`
+                          }
                         >
                           {(() => {
                             // Use Discord avatar for real players (not test players)
@@ -441,7 +513,7 @@ export function PokerTable({
                                 <img 
                                   src={player.avatarUrl} 
                                   alt={player.name}
-                                  className="h-full w-full object-cover"
+                                  className="h-full w-full object-cover pointer-events-none"
                                   onError={(e) => {
                                     (e.target as HTMLImageElement).src = '/guest-avatar.png';
                                   }}
@@ -450,7 +522,7 @@ export function PokerTable({
                             }
                             // Fallback to initial for test players or no avatar
                             return (
-                              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-600 to-purple-600 text-2xl font-bold text-white">
+                              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-700 to-teal-900 text-2xl font-bold text-white pointer-events-none">
                                 {player.name.charAt(0).toUpperCase()}
                               </div>
                             );
@@ -530,7 +602,7 @@ export function PokerTable({
                             }
                             return null;
                           })()}
-                        </div>
+                        </button>
                       
                         {/* Dealer Button */}
                         {player.isDealer && (
@@ -747,6 +819,18 @@ export function PokerTable({
         })}
       </div>
 
+      {onSendReaction && (
+        <EmojiReactionLayer
+          reactions={reactions}
+          players={players}
+          myUserId={myUserId}
+          pickerTargetUserId={pickerTargetUserId}
+          onPick={handlePickEmoji}
+          onClosePicker={() => setPickerTargetUserId(null)}
+          seatRefs={seatRefs}
+          tableRef={tableRootRef}
+        />
+      )}
     </div>
   );
 }

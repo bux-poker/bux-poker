@@ -2,14 +2,16 @@
  * Test page for table position adjustments.
  * Mirrors the real game screen: header (top bar), table, action buttons, chat.
  * Open /table-test to tweak PLAYER_POSITIONS in components/poker/table/pokerTableConstants.ts while viewing.
+ * Also used to try emoji reactions (self + throw) with socket sync in the table-test room.
  */
-import { useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { PokerTable } from "../components/poker/PokerTable";
 import { BettingControls } from "../components/poker/BettingControls";
 import Chat from "@shared/components/chat/Chat";
 import { useAuth } from "@shared/features/auth/AuthContext";
 import PlayerStatsModal from "../components/modals/PlayerStatsModal";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useTableReactions } from "../hooks/useTableReactions";
 import { getHandDescription } from "@shared/utils/handEvaluator";
 import type { Card } from "@shared/types/poker";
 
@@ -29,24 +31,30 @@ const CURRENT_BET = 20;
 const RANKS = ["A", "K", "Q", "J", "10", "9", "8", "7", "6", "5"] as const;
 const SUITS: Card["suit"][] = ["HEARTS", "DIAMONDS", "CLUBS", "SPADES"];
 
-function buildTestPlayers() {
-  return Array.from({ length: 10 }, (_, i) => ({
-    id: `test-player-${i + 1}`,
-    name: `Player ${i + 1}`,
-    chips: 100,
-    seatNumber: i + 1,
-    status: "ACTIVE",
-    holeCards: [
-      { suit: SUITS[i % SUITS.length], rank: RANKS[i] },
-      { suit: SUITS[(i + 1) % SUITS.length], rank: RANKS[(i + 2) % RANKS.length] },
-    ] as Card[],
-    contribution: 100,
-  }));
+function buildTestPlayers(myUserId?: string) {
+  return Array.from({ length: 10 }, (_, i) => {
+    const isMe = i === 0 && !!myUserId;
+    return {
+      id: isMe ? myUserId! : `test-player-${i + 1}`,
+      userId: isMe ? myUserId! : `test-player-${i + 1}`,
+      name: isMe ? "You" : `Player ${i + 1}`,
+      chips: 100,
+      seatNumber: i + 1,
+      status: "ACTIVE",
+      holeCards: [
+        { suit: SUITS[i % SUITS.length], rank: RANKS[i] },
+        { suit: SUITS[(i + 1) % SUITS.length], rank: RANKS[(i + 2) % RANKS.length] },
+      ] as Card[],
+      contribution: 100,
+      avatarUrl: isMe ? undefined : undefined,
+    };
+  });
 }
 
 export function TableTestPage() {
-  const players = buildTestPlayers();
   const { user } = useAuth();
+  const players = useMemo(() => buildTestPlayers(user?.id), [user?.id]);
+  const { reactions, sendReaction } = useTableReactions("table-test", user?.id);
   const isMobile = useIsMobile();
   const [chatCollapsed, setChatCollapsed] = useState(() => typeof window !== "undefined" && (window.innerWidth <= 1024 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || "ontouchstart" in window));
   const [showDealerMessages, setShowDealerMessages] = useState(true);
@@ -89,6 +97,8 @@ export function TableTestPage() {
               onTournamentLobbyClick={() => alert("Tournament lobby (test – check button position)")}
               topRightPosition="13th"
               topRightPlayers="28/45"
+              reactions={reactions}
+              onSendReaction={user?.id ? sendReaction : undefined}
             />
           </div>
 

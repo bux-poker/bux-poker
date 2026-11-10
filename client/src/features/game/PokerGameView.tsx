@@ -31,6 +31,7 @@ import {
   getMyTournamentStanding,
   ordinalSuffix,
 } from "../../utils/tournamentStanding";
+import { useTableReactions } from "../../hooks/useTableReactions";
 
 /** Do not render 0-chip seats on the felt (all-in is the exception; viewer kept for bust UX). */
 function includePlayerOnTableUI(
@@ -156,9 +157,9 @@ export function PokerGameView() {
   const lastActionSoundSeqRef = useRef<Map<string, number>>(new Map());
   const [preActionSelected, setPreActionSelected] = useState<PreActionKind | null>(null);
   const { user } = useAuth();
+  const { reactions, sendReaction } = useTableReactions(id, user?.id);
   /** Keeps GET /api/tournaments/:id loading when game-state drops tournamentId but consolidation sockets still name the MTT. */
-  const [socketTournamentIdHint, setSocketTournamentIdHint] = useState<string | null>(null);
-  const effectiveTournamentId = gameState?.tournamentId ?? socketTournamentIdHint ?? undefined;
+  const [socketTournamentIdHint, setSocketTournamentIdHint] = useState<string | null>(null);  const effectiveTournamentId = gameState?.tournamentId ?? socketTournamentIdHint ?? undefined;
   const { tournament, refetch: refetchTournament } = useTournament(effectiveTournamentId);
 
   /** Stable across refetches when seat rows are unchanged (avoids effect churn on new `players` array refs). */
@@ -1668,6 +1669,8 @@ export function PokerGameView() {
               onTournamentLobbyClick={gameState.tournamentId ? () => setTournamentLobbyOpen(true) : undefined}
               topRightPlayers={tournament ? `${tournamentRemainingPlayers}/${tournamentTotalPlayers}` : `${activePlayers.length}/${gameState.players.length}`}
               topRightPosition={myPositionStr ?? undefined}
+              reactions={reactions}
+              onSendReaction={user?.id ? sendReaction : undefined}
             />
           </div>
 

@@ -1,4 +1,9 @@
 import type { Card } from "@shared/types/poker";
+import type {
+  TableReactionEmojiId,
+  TableReactionEvent,
+  TableReactionKind,
+} from "./tableReactions";
 
 export interface PokerTableProps {
   gameId: string;
@@ -45,4 +50,12 @@ export interface PokerTableProps {
   showdownActive?: boolean;
   showdownResults?: unknown;
   onTournamentLobbyClick?: () => void;
+  /** Live emoji reactions to render over seats */
+  reactions?: TableReactionEvent[];
+  /** Send a self-react or throw at another player */
+  onSendReaction?: (opts: {
+    emojiId: TableReactionEmojiId;
+    toUserId: string;
+    kind: TableReactionKind;
+  }) => void;
 }
