@@ -13,39 +13,7 @@ import {
   getBlindScheduleForTournament,
   getBlindCountdownFromTournamentSchedule,
 } from '@shared/utils/tournamentBlindSchedule';
-
-function openTournamentGameWindow(url: string, navigate: (path: string) => void) {
-  const isMobile =
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent
-    ) || window.innerWidth <= 768;
-  if (isMobile) {
-    navigate(url);
-    return;
-  }
-  const winName = 'buxpoker-game-window';
-  let w = window.open('', winName);
-  if (w && !w.closed) {
-    w.location.href = url;
-    w.focus();
-  } else {
-    w = window.open(
-      url,
-      winName,
-      'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=no'
-    );
-    if (w) {
-      w.focus();
-      w.addEventListener('load', () => {
-        setTimeout(() => {
-          if (w?.document?.documentElement?.requestFullscreen) {
-            w.document.documentElement.requestFullscreen().catch(() => {});
-          }
-        }, 500);
-      });
-    }
-  }
-}
+import { openTournamentGameWindow } from '../../utils/openTournamentGameWindow';
 
 type Tab = 'players' | 'blinds' | 'prizes' | 'tables';
 

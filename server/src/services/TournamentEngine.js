@@ -70,6 +70,21 @@ export class TournamentEngine {
       },
     });
 
+    // Notify all connected clients so home/list screens can auto-open the table.
+    try {
+      const { getIO } = await import("../modules/poker/tableState.js");
+      const io = getIO();
+      if (io) {
+        io.emit("tournament_updated", { tournamentId, status: "SEATED" });
+        io.emit("tournament-seated", { tournamentId });
+      }
+    } catch (emitErr) {
+      console.warn(
+        "[TOURNAMENT ENGINE] Failed to emit seating events:",
+        emitErr?.message || emitErr
+      );
+    }
+
     // Update Discord embeds to show registration closed message
     try {
       const { updateTournamentEmbeds } = await import("../discord/bot.js");

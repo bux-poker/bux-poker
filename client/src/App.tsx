@@ -10,6 +10,7 @@ import { AuthCallback } from "./pages/AuthCallback";
 import { BotInvitePage } from "./pages/BotInvitePage";
 import { TableTestPage } from "./pages/TableTestPage";
 import { useAdmin } from "./hooks/useAdmin";
+import { useAutoJoinActiveTable } from "./hooks/useAutoJoinActiveTable";
 import { AddToHomeScreen } from "./components/AddToHomeScreen";
 import { LeagueListPage } from "./pages/LeagueListPage";
 import { LeagueDetailPage } from "./pages/LeagueDetailPage";
@@ -20,6 +21,7 @@ function App() {
   const { isAdmin, loading: adminLoading } = useAdmin();
   const location = useLocation();
   const isGameRoute = location.pathname.startsWith('/game/') || location.pathname === '/table-test';
+  useAutoJoinActiveTable();
 
   return (
     <div className={`min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50 ${isGameRoute ? 'min-h-[100dvh] flex flex-col' : ''}`}>

@@ -29,6 +29,53 @@ router.get("/", optionalAuthenticateToken, async (req, res, next) => {
   }
 });
 
+// Active table for the logged-in user across SEATED/RUNNING tournaments (app-wide auto-join).
+// Must be registered before /:id so "my-active-table" is not treated as a tournament id.
+router.get("/my-active-table", authenticateToken, async (req, res, next) => {
+  try {
+    const userId = req.userId;
+    const player = await prisma.player.findFirst({
+      where: {
+        userId,
+        status: { not: "ELIMINATED" },
+        chips: { gt: 0 },
+        game: {
+          status: "ACTIVE",
+          tournament: {
+            status: { in: ["SEATED", "RUNNING", "ACTIVE"] },
+          },
+        },
+      },
+      include: {
+        game: {
+          select: {
+            id: true,
+            tableNumber: true,
+            tournamentId: true,
+            tournament: { select: { id: true, name: true, status: true } },
+          },
+        },
+      },
+      orderBy: { chips: "desc" },
+    });
+
+    if (!player) {
+      return res.status(404).json({ error: "No active table" });
+    }
+
+    res.json({
+      gameId: player.gameId,
+      tableNumber: player.game.tableNumber,
+      seatNumber: player.seatNumber,
+      tournamentId: player.game.tournamentId,
+      tournamentStatus: player.game.tournament?.status ?? null,
+      tournamentName: player.game.tournament?.name ?? null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get("/:id", optionalAuthenticateToken, async (req, res, next) => {
   try {
     let viewer = null;

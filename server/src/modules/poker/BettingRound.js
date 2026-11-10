@@ -85,7 +85,9 @@ export class BettingRound {
     const bbAmount = bigBlindAmount !== null ? bigBlindAmount : this.bigBlind;
     this.playerBets.set(smallBlindPlayerId, sbAmount);
     this.playerBets.set(bigBlindPlayerId, bbAmount);
-    this.currentBet = bbAmount; // Big blind is the current bet to call (may be adjusted if insufficient chips)
+    // Short BB still posts only what they have, but the call amount stays the full big blind.
+    // Live players must put in this.bigBlind to enter; side pots handle the short stack.
+    this.currentBet = this.bigBlind;
   }
 
   /**
@@ -129,23 +131,26 @@ export class BettingRound {
       };
     });
     const maxContribution = Math.max(...contributions.map(c => c.contribution));
+    // Include currentBet so a short BB (posted < full blind) still requires live players
+    // to put in the full big-blind amount before the round can complete.
+    const targetContribution = Math.max(maxContribution, this.currentBet || 0);
     
     // All active players must have contributed the max amount they CAN contribute
     // This means either:
-    // 1. They match the max contribution (contribution === maxContribution), OR
+    // 1. They match the target contribution, OR
     // 2. They're all-in and have contributed their maximum possible amount
     const allContributed = contributions.every(c => {
       // If player is all-in, they've contributed all they can - they're done
       if (c.isAllIn) {
         return true; // All-in players have contributed their maximum
       }
-      // If player is not all-in, they must match the max contribution
-      return c.contribution === maxContribution;
+      // If player is not all-in, they must match the target (raise line / full BB)
+      return c.contribution === targetContribution;
     });
     
     if (!allContributed) {
       const contribStrings = contributions.map(c => `${c.isAllIn ? 'ALL-IN' : c.contribution}`);
-      console.log(`[BETTING] Not complete: contributions not equal. Max: ${maxContribution}, contributions: [${contribStrings.join(', ')}]`);
+      console.log(`[BETTING] Not complete: contributions not equal. Target: ${targetContribution}, contributions: [${contribStrings.join(', ')}]`);
       return false; // Can't be complete if contributions aren't equal
     }
     
@@ -153,20 +158,21 @@ export class BettingRound {
     // 1. All have equal contributions (checked above)
     // 2. AND all active players have either acted OR are all-in (can't act)
     if (!lastRaiseUserId) {
-      // Heads-up short-stack (same street): if one player is all-in and the other has already put in >= that amount,
-      // the other player has nothing to act on - go straight to next street/showdown.
+      // Heads-up short-stack (same street): if one player is all-in and the other has already
+      // matched the full currentBet line, no further action is needed.
       // Only apply when all-in contribution > 0 (otherwise we're on a new street and the other player should get to check/bet).
       if (contributions.length === 2) {
         const [a, b] = contributions;
         const allInPlayer = a.isAllIn ? a : (b.isAllIn ? b : null);
         const otherPlayer = a.isAllIn ? b : (b.isAllIn ? a : null);
+        const coveredLine = Math.max(allInPlayer?.contribution || 0, this.currentBet || 0);
         if (
           allInPlayer &&
           otherPlayer &&
           allInPlayer.contribution > 0 &&
-          otherPlayer.contribution >= allInPlayer.contribution
+          otherPlayer.contribution >= coveredLine
         ) {
-          console.log(`[BETTING] Complete: heads-up, one all-in (${allInPlayer.contribution}), other already has ${otherPlayer.contribution} - no action needed`);
+          console.log(`[BETTING] Complete: heads-up, one all-in (${allInPlayer.contribution}), other already has ${otherPlayer.contribution} (line ${coveredLine}) - no action needed`);
           return true;
         }
       }

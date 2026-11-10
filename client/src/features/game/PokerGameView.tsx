@@ -109,7 +109,9 @@ export function PokerGameView() {
   const [showDealerMessages, setShowDealerMessages] = useState(true);
   const [tournamentCountdown, setTournamentCountdown] = useState<{ startTime: string; seconds: number } | null>(null);
   const [eliminationInfo, setEliminationInfo] = useState<{ place: number | null } | null>(null);
+  const [eliminationModalDismissed, setEliminationModalDismissed] = useState(false);
   const [winnerModalOpen, setWinnerModalOpen] = useState(false);
+  const [winnerModalDismissed, setWinnerModalDismissed] = useState(false);
   const [consolidationWaiting, setConsolidationWaiting] = useState<string | null>(null);
   /** Server asks all tables to wait until hands finish before blinds go up */
   const [blindWaitMessage, setBlindWaitMessage] = useState<string | null>(null);
@@ -622,6 +624,7 @@ export function PokerGameView() {
       setPendingConsolidationWaiting(null);
       setTimeout(() => void refetchTournament({ silent: true }), 0);
       // Prefer authoritative my-table over tournament.players payload (can lag after reseat).
+      let sawNotPlaying = false;
       for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const sessionToken =
@@ -635,10 +638,17 @@ export function PokerGameView() {
             return;
           }
           if (gid && String(gid) === String(id)) return;
-        } catch {
-          /* retry */
+        } catch (err: any) {
+          if (err?.response?.status === 404) sawNotPlaying = true;
         }
         await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
+      }
+      // Eliminated players get 404 from my-table — stop reseat wait and show exit UI.
+      if (sawNotPlaying) {
+        setConsolidationWaiting(null);
+        setPendingConsolidationWaiting(null);
+        setEliminationInfo((prev) => prev ?? { place: null });
+        setEliminationModalDismissed(false);
       }
     });
 
@@ -951,12 +961,15 @@ export function PokerGameView() {
     lastPlayerStatusRef.current = currentStatus;
     lastTournamentStatusRef.current = tournament.status;
 
-    // Show elimination modal once when the player transitions to ELIMINATED
-    if (currentStatus === 'ELIMINATED' && prevStatus && prevStatus !== 'ELIMINATED') {
+    // Show elimination modal when the player becomes (or is discovered) ELIMINATED.
+    if (currentStatus === 'ELIMINATED' && prevStatus !== 'ELIMINATED') {
       const place: number | null = typeof me?.finishingPlace === 'number'
         ? me.finishingPlace
         : (typeof me?.position === 'number' ? me.position : null);
       setEliminationInfo({ place });
+      setEliminationModalDismissed(false);
+      setConsolidationWaiting(null);
+      setPendingConsolidationWaiting(null);
     }
 
     // Show winner modal when tournament is completed and this player finished 1st
@@ -965,10 +978,12 @@ export function PokerGameView() {
       me &&
       (me.finishingPlace === 1 || me.position === 1);
 
-    if (finishedFirst && !winnerModalOpen) {
+    if (finishedFirst && !winnerModalOpen && !winnerModalDismissed) {
       setWinnerModalOpen(true);
+      setConsolidationWaiting(null);
+      setPendingConsolidationWaiting(null);
     }
-  }, [myTournamentPlayerSig, tournament?.status, tournament?.id, user, winnerModalOpen]);
+  }, [myTournamentPlayerSig, tournament?.status, tournament?.id, user, winnerModalOpen, winnerModalDismissed]);
 
   // Sound effects: Play sounds when game state changes
   useEffect(() => {
@@ -1386,6 +1401,21 @@ export function PokerGameView() {
     myPlayer.holeCards.length >= 2 &&
     !!gameState.currentTurnUserId;
 
+  const tournamentMe = tournament?.players?.find(
+    (p: { userId?: string }) => String(p.userId) === String(user?.id)
+  ) as { status?: string; finishingPlace?: number; position?: number } | undefined;
+  const isEliminatedViewer =
+    tournamentMe?.status === "ELIMINATED" ||
+    myPlayer?.status === "ELIMINATED" ||
+    !!eliminationInfo;
+  const isTournamentWinner =
+    tournament?.status === "COMPLETED" &&
+    !!tournamentMe &&
+    (tournamentMe.finishingPlace === 1 || tournamentMe.position === 1);
+  const showPersistentExitControls =
+    (isEliminatedViewer && (eliminationModalDismissed || !eliminationInfo)) ||
+    (isTournamentWinner && (winnerModalDismissed || !winnerModalOpen));
+
   const effectiveConsolidationMessage =
     gameState.consolidationWaitingMessage != null &&
     String(gameState.consolidationWaitingMessage).trim().length > 0
@@ -1394,8 +1424,12 @@ export function PokerGameView() {
   const handResolvedForReseat =
     (gameState.showdownResults?.winners?.length ?? 0) > 0 &&
     !gameState.showdownActive;
+  // Eliminated / finished players are not being reseated — never trap them under the wait overlay.
   const showConsolidationOverlay =
     !!effectiveConsolidationMessage &&
+    !isEliminatedViewer &&
+    !isTournamentWinner &&
+    tournament?.status !== "COMPLETED" &&
     !handBlocksConsolidationWaitOverlay(gameState, handActionPendingRef) &&
     !handResolvedForReseat;
 
@@ -1454,8 +1488,8 @@ export function PokerGameView() {
         </div>
       )}
       {/* Elimination modal */}
-      {eliminationInfo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+      {eliminationInfo && !eliminationModalDismissed && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70">
           <div className="rounded-lg bg-slate-900 border border-slate-700 shadow-2xl max-w-sm w-full p-6 text-center">
             <h2 className="text-xl font-bold text-red-300 mb-2">You have been eliminated</h2>
             <p className="text-slate-200 mb-4">
@@ -1465,7 +1499,7 @@ export function PokerGameView() {
             </p>
             <div className="flex justify-center gap-3">
               <button
-                onClick={() => setEliminationInfo(null)}
+                onClick={() => setEliminationModalDismissed(true)}
                 className="rounded bg-slate-700 px-4 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600"
               >
                 Stay and Spectate
@@ -1482,8 +1516,8 @@ export function PokerGameView() {
       )}
 
       {/* Winner modal */}
-      {winnerModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+      {winnerModalOpen && !winnerModalDismissed && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70">
           <div className="rounded-lg bg-slate-900 border border-emerald-500 shadow-2xl max-w-sm w-full p-6 text-center">
             <h2 className="text-2xl font-bold text-emerald-300 mb-2">🏆 Tournament Winner!</h2>
             <p className="text-slate-200 mb-4">
@@ -1491,7 +1525,10 @@ export function PokerGameView() {
             </p>
             <div className="flex justify-center gap-3">
               <button
-                onClick={() => setWinnerModalOpen(false)}
+                onClick={() => {
+                  setWinnerModalDismissed(true);
+                  setWinnerModalOpen(false);
+                }}
                 className="rounded bg-slate-700 px-4 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600"
               >
                 Stay at Table
@@ -1504,6 +1541,18 @@ export function PokerGameView() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {showPersistentExitControls && (
+        <div className="fixed bottom-4 left-1/2 z-[110] -translate-x-1/2">
+          <button
+            type="button"
+            onClick={handleCloseTable}
+            className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-black/40 hover:bg-emerald-500"
+          >
+            Close Table
+          </button>
         </div>
       )}
       {/* Main game area - table + controls | chat (no header; info in table corners) */}

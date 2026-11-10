@@ -429,20 +429,17 @@ export async function startHandForGameBody(gameId, io) {
       console.log(`[POKER] BB is all-in (0 chips) after posting blind`);
     }
 
-    bettingRound.currentBet = Math.max(sbAmount, bbAmount);
+    // Always the full level BB — short BB stacks do not lower the call amount.
+    bettingRound.currentBet = bigBlind;
     bettingRound.minimumRaise = bigBlind;
   }
 
   const canAct = (p) => p.chips > 0 && p.status !== "ALL_IN";
-  const bbShortAllInCoveredBySb =
-    activePlayers.length === 2 &&
-    (bbPlayer.status === "ALL_IN" || (bbPlayer.chips ?? 0) === 0) &&
-    sbAmount >= bbAmount;
   let utgPlayer;
   let utgSeat;
 
   if (activePlayers.length === 2) {
-    if (canAct(sbPlayer) && !bbShortAllInCoveredBySb) {
+    if (canAct(sbPlayer)) {
       utgPlayer = sbPlayer;
       utgSeat = sbSeat;
       console.log(`[POKER] Heads-up game: UTG is SB (seat ${utgSeat})`);
@@ -454,13 +451,6 @@ export async function startHandForGameBody(gameId, io) {
       utgPlayer = null;
       utgSeat = null;
       console.log(`[POKER] Heads-up: both players all-in, no turn to set`);
-    }
-    if (bbShortAllInCoveredBySb) {
-      utgPlayer = null;
-      utgSeat = null;
-      console.log(
-        `[POKER] Heads-up: BB short all-in (${bbAmount}) covered by SB blind (${sbAmount}) — skipping preflop action`
-      );
     }
   } else if (activePlayers.length === 3) {
     utgPlayer = activePlayers.find(p => p.seatNumber === dealerSeat && p.id !== bbPlayer.id && canAct(p));
@@ -569,16 +559,15 @@ export async function startHandForGameBody(gameId, io) {
           const activeIndex = activeDealtPlayers.findIndex(ap => ap.id === p.id);
           holeCards = activeIndex >= 0 ? dealtHands[activeIndex] : null;
         }
-        const contribution =
-          typeof bettingRound.getPlayerContribution === "function"
-            ? bettingRound.getPlayerContribution(p.id)
-            : 0;
+        // Blinds live only in bettingRound.playerBets until street merge.
+        // Seeding contributions here double-counted blinds and caused fake
+        // uncalled returns (leftover chips after a covered all-in).
         result.push({
           ...p,
           user: p.user,
           chips: updated?.chips || p.chips,
           holeCards,
-          contributions: contribution,
+          contributions: 0,
           name: p.user?.username || "Player",
           isAway: isPlayerAway(gameId, p.userId),
         });
