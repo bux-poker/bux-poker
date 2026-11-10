@@ -137,7 +137,8 @@ export function PokerGameView() {
   const [socketConnected, setSocketConnected] = useState(false);
   const [tournamentLobbyOpen, setTournamentLobbyOpen] = useState(false);
   const isMobile = useIsMobile();
-  const [chatCollapsed, setChatCollapsed] = useState(() => typeof window !== 'undefined' && (window.innerWidth <= 1024 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 'ontouchstart' in window));
+  // Chat is a drawer on all viewports so the felt keeps full width.
+  const [chatCollapsed, setChatCollapsed] = useState(true);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const chatCollapsedRef = useRef(chatCollapsed);
   const isMobileRef = useRef(isMobile);
@@ -565,9 +566,9 @@ export function PokerGameView() {
       const messageData = data.message || data;
       // Dispatch a custom event to be caught by ChatHooks
       window.dispatchEvent(new CustomEvent('gameMessage', { detail: { gameId: id, message: messageData } }));
-      // If chat is collapsed on mobile and message is from another user (not dealer), increment unread
+      // If chat drawer is closed and message is from another user (not dealer), increment unread
       const isUserChat = messageData && !messageData.isDealerMessage && messageData.userId !== 'DEALER' && messageData.userId !== user?.id;
-      if (isUserChat && chatCollapsedRef.current && isMobileRef.current) {
+      if (isUserChat && chatCollapsedRef.current) {
         setUnreadChatCount((c) => c + 1);
       }
     });
@@ -1438,21 +1439,6 @@ export function PokerGameView() {
     !showConsolidationOverlay &&
     !handBlocksConsolidationWaitOverlay(gameState, handActionPendingRef);
 
-  // Show landscape prompt if in portrait mode
-  if (isPortrait) {
-    return (
-      <div className="flex h-screen w-screen flex-col items-center justify-center bg-gradient-to-br from-slate-950 to-slate-900 p-6">
-        <div className="max-w-md text-center space-y-6">
-          <div className="text-6xl mb-4">📱</div>
-          <h2 className="text-2xl font-bold text-white">Please Rotate Your Device</h2>
-          <p className="text-slate-400">
-            The poker game is optimized for landscape mode. Please rotate your device to continue playing.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   const handleCloseTable = () => {
     try {
       if (window.opener) {
@@ -1467,11 +1453,17 @@ export function PokerGameView() {
 
   return (
     <div
-      className="flex h-[100dvh] min-h-screen w-screen flex-col bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden"
+      className="flex h-[100dvh] min-h-screen w-screen flex-col overflow-hidden"
+      style={{ background: "var(--bux-ink, #0b0f14)" }}
       onPointerDown={handleSoundUnlock}
     >
+      {isPortrait && (
+        <div className="bux-banner z-[80] shrink-0 border-b border-bux-brass/30 bg-bux-panel/95 px-4 py-2 text-center text-sm text-bux-brass">
+          Landscape works best — rotate for a fuller table view.
+        </div>
+      )}
       {showFullscreenButton && isMobile && (
-        <div className="flex shrink-0 justify-end border-b border-slate-700/50 bg-slate-900/80 px-3 py-1.5">
+        <div className="flex shrink-0 justify-end border-b border-bux-brass/20 bg-bux-panel/80 px-3 py-1.5">
           <button
             type="button"
             onClick={requestFullscreenFromClick}
@@ -1482,7 +1474,7 @@ export function PokerGameView() {
         </div>
       )}
       {!socketConnected && gameState && (
-        <div className="flex items-center justify-between gap-4 bg-amber-500/20 border-b border-amber-500/40 px-4 py-2 text-amber-200 text-sm shrink-0">
+        <div className="flex items-center justify-between gap-4 border-b border-amber-500/40 bg-amber-500/20 px-4 py-2 text-sm text-amber-200 shrink-0">
           <span>Connection lost. Game may be out of date.</span>
           <button type="button" onClick={() => getSocket().connect()} className="rounded bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-500">Reconnect</button>
         </div>
@@ -1560,49 +1552,35 @@ export function PokerGameView() {
         {/* Left side - Table and controls */}
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">
           {/* Table area - takes most of the space */}
-          <div className="relative flex-1 overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900 min-h-0">
-            {showConsolidationOverlay && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm" style={{ zIndex: 100 }}>
-                <div className="rounded-xl bg-slate-800/95 border border-slate-600 px-8 py-6 text-center max-w-md shadow-2xl">
-                  <p className="text-lg font-medium text-slate-200">{effectiveConsolidationMessage}</p>
-                  <p className="mt-2 text-sm text-slate-400">Please wait...</p>
-                </div>
+          <div className="relative flex-1 overflow-hidden min-h-0" style={{ background: "var(--bux-ink, #0b0f14)" }}>
+            {(showConsolidationOverlay ||
+              (!showConsolidationOverlay &&
+                handResolvedForReseat &&
+                !!effectiveConsolidationMessage)) && (
+              <div className="bux-banner absolute left-1/2 top-3 z-[100] max-w-lg -translate-x-1/2 rounded-xl px-5 py-3 text-center">
+                <p className="text-sm font-medium text-slate-100">
+                  {effectiveConsolidationMessage}
+                </p>
+                <p className="mt-1 text-xs text-slate-400">Please wait…</p>
               </div>
             )}
-            {!showConsolidationOverlay &&
-              handResolvedForReseat &&
-              !!effectiveConsolidationMessage && (
-                <div
-                  className="absolute left-1/2 top-3 z-[90] -translate-x-1/2 rounded-lg border border-amber-500/40 bg-slate-900/95 px-4 py-2 text-center shadow-lg"
-                >
-                  <p className="text-sm font-medium text-amber-100">
-                    {effectiveConsolidationMessage}
-                  </p>
-                </div>
-              )}
             {showBlindWaitOverlay && (
-              <div
-                className="absolute inset-0 flex items-center justify-center bg-black/55 backdrop-blur-sm"
-                style={{ zIndex: 95 }}
-              >
-                <div className="max-w-md rounded-xl border border-amber-500/50 bg-slate-800/95 px-8 py-6 text-center shadow-2xl">
-                  <p className="text-lg font-medium text-amber-100">{blindWaitMessage}</p>
-                  <p className="mt-2 text-sm text-slate-400">
-                    Blinds will go up together when every table finishes the current hand.
-                  </p>
-                </div>
+              <div className="bux-banner absolute left-1/2 top-3 z-[95] max-w-lg -translate-x-1/2 rounded-xl px-5 py-3 text-center">
+                <p className="text-sm font-medium text-amber-100">{blindWaitMessage}</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Blinds rise together when every table finishes the current hand.
+                </p>
               </div>
             )}
-            {/* Blind level / break: same placement + chrome as consolidation (table-centered, not full viewport) */}
             {scheduleModal && (
               <div
-                className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+                className="absolute inset-0 flex items-center justify-center bg-black/50 px-4 backdrop-blur-[2px]"
                 style={{ zIndex: 101 }}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="schedule-modal-title"
               >
-                <div className="w-full max-w-md rounded-xl border border-slate-600 bg-slate-800/95 px-8 py-6 text-center shadow-2xl">
+                <div className="bux-panel w-full max-w-md rounded-xl px-8 py-6 text-center shadow-2xl">
                   {scheduleModal.kind === "BREAK" ? (
                     <>
                       <p id="schedule-modal-title" className="text-lg font-medium text-slate-200">
@@ -1693,42 +1671,23 @@ export function PokerGameView() {
             />
           </div>
 
-          {/* Betting controls - fixed height so layout does not jump when controls are hidden.
-              Use tall panel only when viewport is wide AND tall enough; landscape phones are often
-              sm+ width but ~400px tall — sm:h-[208px] alone ate ~half the screen. */}
-          <div className="relative flex h-[104px] min-h-[96px] w-full shrink-0 items-stretch overflow-hidden border-t border-slate-800 bg-slate-900/95 px-2 py-1.5 backdrop-blur-sm [@media(min-width:640px)_and_(min-height:520px)]:h-[208px] [@media(min-width:640px)_and_(min-height:520px)]:min-h-[108px] [@media(min-width:640px)_and_(min-height:520px)]:px-4 [@media(min-width:640px)_and_(min-height:520px)]:py-2">
-            {/* Player's own cards + hand text - fill left side of panel height */}
+          {/* Action dock — hero hand left, controls right */}
+          <div
+            className={`bux-action-dock relative flex h-[104px] min-h-[96px] w-full shrink-0 items-stretch overflow-hidden px-2 py-1.5 [@media(min-width:640px)_and_(min-height:520px)]:h-[180px] [@media(min-width:640px)_and_(min-height:520px)]:min-h-[108px] [@media(min-width:640px)_and_(min-height:520px)]:px-4 [@media(min-width:640px)_and_(min-height:520px)]:py-2 ${isMyTurn ? "ring-1 ring-inset ring-[color:var(--bux-brass)]/40" : ""}`}
+          >
             {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
               <div className={`absolute left-2 sm:left-4 top-0 bottom-0 z-50 flex flex-col justify-center gap-1 items-start ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ visibility: 'visible' }}>
-                <span className="text-slate-300 text-sm sm:text-base font-medium whitespace-nowrap leading-tight">
+                <span className="font-display text-xs sm:text-sm font-semibold uppercase tracking-wide whitespace-nowrap leading-tight" style={{ color: "var(--bux-brass)" }}>
                   {getHandDescription(myPlayer.holeCards, communityCards, gameState.street || "PREFLOP")}
                 </span>
                 <div className="flex gap-1.5 sm:gap-2 items-center flex-1 min-h-0">
                 {myPlayer.holeCards.map((card: Card, idx: number) => {
-                  const suitSymbols: Record<string, string> = { SPADES: "♠", HEARTS: "♥", DIAMONDS: "♦", CLUBS: "♣" };
-                  const isRed = card.suit === "HEARTS" || card.suit === "DIAMONDS";
-                  if (isMobile) {
-                    const cardH = 64;
-                    const cardW = Math.round(cardH * (80 / 112));
-                    const rankSize = Math.max(10, Math.floor(cardH * 0.42));
-                    const suitSize = Math.max(10, Math.floor(cardH * 0.38));
-                    return (
-                      <div
-                        key={idx}
-                        className="flex flex-col items-center justify-center rounded-lg border-2 border-slate-300 bg-white shadow py-1 px-0.5 flex-shrink-0"
-                        style={{ width: cardW, height: cardH, minWidth: cardW, minHeight: cardH }}
-                      >
-                        <span className="font-bold leading-none text-slate-900" style={{ fontSize: rankSize }}>{card.rank}</span>
-                        <span className="leading-none" style={{ fontSize: suitSize, color: isRed ? '#b91c1c' : '#1a1a1a' }}>{suitSymbols[card.suit] ?? card.suit[0]}</span>
-                      </div>
-                    );
-                  }
-                  const getCardImage = (card: Card): string => {
+                  const getCardImage = (c: Card): string => {
                     const suitMap: Record<string, string> = {
                       "SPADES": "S", "HEARTS": "H", "DIAMONDS": "D", "CLUBS": "C"
                     };
-                    const suit = suitMap[card.suit] || card.suit.charAt(0);
-                    const rank = card.rank === "10" ? "10" : card.rank;
+                    const suit = suitMap[c.suit] || c.suit.charAt(0);
+                    const rank = c.rank === "10" ? "10" : c.rank;
                     return `${rank}${suit}.png`;
                   };
                   return (
@@ -1736,10 +1695,9 @@ export function PokerGameView() {
                       key={idx}
                       src={`/cards/${getCardImage(card)}`}
                       alt={`${card.rank}${card.suit}`}
-                      className="h-[88px] sm:h-[100px] w-auto max-h-[90%] object-contain rounded-lg shadow border border-white/20 flex-shrink-0"
-                      style={{ display: 'block' }}
+                      className="h-[72px] sm:h-[92px] w-auto max-h-[90%] object-contain rounded-lg shadow-lg flex-shrink-0 border"
+                      style={{ display: 'block', borderColor: "rgba(196, 165, 116, 0.35)" }}
                       onError={(e) => {
-                        console.error('Card image failed to load:', getCardImage(card), 'Full path:', `/cards/${getCardImage(card)}`);
                         const target = e.target as HTMLImageElement;
                         target.style.display = 'none';
                       }}
@@ -1749,7 +1707,7 @@ export function PokerGameView() {
                 </div>
               </div>
             )}
-              <div className="relative z-[60] ml-auto flex h-full min-h-0 flex-col items-end justify-center gap-3">
+              <div className="relative z-[60] ml-auto flex h-full min-h-0 flex-col items-end justify-center gap-2">
                 {gameState.showdownNeedsChoice && (
                   <div className="flex flex-col items-end gap-1">
                     <p className="text-xs font-medium text-slate-400">Show your cards?</p>
@@ -1832,89 +1790,86 @@ export function PokerGameView() {
           </div>
         </div>
 
-        {/* Right side - Chat (collapsible on mobile) */}
+        {/* Chat drawer — overlays table; does not shrink felt */}
         {user && (
           <>
-            {/* Chat icon tab - mobile only, when collapsed */}
-            {isMobile && chatCollapsed && (
+            {chatCollapsed && (
               <button
                 onClick={() => {
                   setChatCollapsed(false);
                   setUnreadChatCount(0);
                 }}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-40 flex items-center justify-center w-10 h-14 rounded-l-lg bg-slate-800/95 border border-slate-600 border-r-0 shadow-lg"
+                className="absolute right-0 top-1/2 z-40 flex h-14 w-10 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 shadow-lg"
+                style={{
+                  background: "color-mix(in srgb, var(--bux-panel) 95%, transparent)",
+                  borderColor: "var(--bux-panel-border)",
+                }}
                 aria-label="Open chat"
               >
-                <svg className="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-5 w-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
                 {unreadChatCount > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-bold text-white">
-                    {unreadChatCount > 99 ? '99+' : unreadChatCount}
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-bold text-white">
+                    {unreadChatCount > 99 ? "99+" : unreadChatCount}
                   </span>
                 )}
               </button>
             )}
-            {/* Chat panel - hidden on mobile when collapsed */}
-            {(!isMobile || !chatCollapsed) && (
-              <div 
-                className={`relative flex min-h-0 shrink-0 flex-col self-stretch overflow-hidden border-l border-slate-800 ${isMobile ? "w-72 max-w-[45%]" : ""}`}
-                style={!isMobile ? { width: "var(--chat-width, 320px)" } : undefined}
+            {!chatCollapsed && (
+              <div
+                className="bux-chat-drawer absolute bottom-0 right-0 top-0 z-40 flex w-80 max-w-[85vw] flex-col overflow-hidden border-l shadow-2xl"
+                style={{
+                  background: "color-mix(in srgb, var(--bux-ink-elevated) 97%, transparent)",
+                  borderColor: "var(--bux-panel-border)",
+                }}
               >
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                  {/* Header: Dealer toggle + collapse button on mobile */}
-                  <div className="px-2 py-1 border-b border-slate-700 flex items-center justify-between bg-slate-800/50">
-                    <span className="text-xs text-slate-300">Dealer Messages</span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setShowDealerMessages(!showDealerMessages)}
-                        className={`relative inline-flex items-center rounded-full transition-colors ${
-                          showDealerMessages ? 'bg-blue-600' : 'bg-slate-600'
+                <div className="flex items-center justify-between border-b px-2 py-1.5" style={{ borderColor: "var(--bux-panel-border)" }}>
+                  <span className="font-display text-xs font-semibold uppercase tracking-wide text-slate-300">
+                    Table chat
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-500">Dealer</span>
+                    <button
+                      onClick={() => setShowDealerMessages(!showDealerMessages)}
+                      className={`relative inline-flex items-center rounded-full transition-colors ${
+                        showDealerMessages ? "bg-emerald-600" : "bg-slate-600"
+                      }`}
+                      style={{ height: "20px", width: "36px" }}
+                      aria-label="Toggle dealer messages"
+                    >
+                      <span
+                        className={`inline-block rounded-full bg-white transition-transform ${
+                          showDealerMessages ? "translate-x-4" : "translate-x-0"
                         }`}
-                        style={{
-                          height: '20px',
-                          width: '36px'
-                        }}
-                      >
-                        <span
-                          className={`inline-block rounded-full bg-white transition-transform ${
-                            showDealerMessages ? 'translate-x-4' : 'translate-x-0'
-                          }`}
-                          style={{
-                            height: '16px',
-                            width: '16px',
-                            marginLeft: '2px'
-                          }}
-                        />
-                      </button>
-                      {isMobile && (
-                        <button
-                          onClick={() => setChatCollapsed(true)}
-                          className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-600"
-                          aria-label="Collapse chat"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
+                        style={{ height: "16px", width: "16px", marginLeft: "2px" }}
+                      />
+                    </button>
+                    <button
+                      onClick={() => setChatCollapsed(true)}
+                      className="rounded p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white"
+                      aria-label="Close chat"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
-                  <div className="flex-1 min-h-0">
-                    <Chat
-                      gameId={gameState.id}
-                      userId={user.id}
-                      userName={user.username || 'Player'}
-                      players={chatPlayers}
-                      spectators={[]}
-                      userAvatar={user.avatarUrl}
-                      showPlayerListTab={false}
-                      chatType="game"
-                      isSpectator={false}
-                      PlayerStatsModal={PlayerStatsModal}
-                      showDealerMessages={showDealerMessages}
-                    />
-                  </div>
+                </div>
+                <div className="min-h-0 flex-1">
+                  <Chat
+                    gameId={gameState.id}
+                    userId={user.id}
+                    userName={user.username || "Player"}
+                    players={chatPlayers}
+                    spectators={[]}
+                    userAvatar={user.avatarUrl}
+                    showPlayerListTab={false}
+                    chatType="game"
+                    isSpectator={false}
+                    PlayerStatsModal={PlayerStatsModal}
+                    showDealerMessages={showDealerMessages}
+                  />
                 </div>
               </div>
             )}

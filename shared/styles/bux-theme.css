@@ -1,0 +1,132 @@
+/* BUX Poker brand tokens — dark casino night, emerald felt, warm brass/wood rail */
+
+@layer base {
+  :root {
+    --bux-ink: #0b0f14;
+    --bux-ink-elevated: #121820;
+    --bux-panel: #1a2332;
+    --bux-panel-border: rgba(196, 165, 116, 0.28);
+    --bux-felt: #0a3d2e;
+    --bux-felt-deep: #062a20;
+    --bux-felt-highlight: #0f5c44;
+    --bux-rail: #5c3d2e;
+    --bux-rail-dark: #3d281e;
+    --bux-brass: #c4a574;
+    --bux-brass-bright: #e0c998;
+    --bux-accent: #10b981;
+    --bux-accent-deep: #059669;
+    --bux-danger: #dc2626;
+    --bux-warn: #d97706;
+    --bux-text: #e8eef5;
+    --bux-text-muted: #94a3b8;
+    --font-display: "Syne", ui-sans-serif, system-ui, sans-serif;
+    --font-body: "Figtree", ui-sans-serif, system-ui, sans-serif;
+  }
+
+  body {
+    font-family: var(--font-body);
+    background-color: var(--bux-ink);
+    color: var(--bux-text);
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+  }
+}
+
+@layer components {
+  .bux-felt {
+    background:
+      radial-gradient(ellipse at 35% 30%, rgba(16, 185, 129, 0.12), transparent 55%),
+      radial-gradient(ellipse at 70% 75%, rgba(6, 42, 32, 0.9), transparent 50%),
+      repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.03) 2px,
+        rgba(0, 0, 0, 0.03) 3px
+      ),
+      linear-gradient(145deg, var(--bux-felt-highlight) 0%, var(--bux-felt) 42%, var(--bux-felt-deep) 100%);
+  }
+
+  .bux-rail {
+    border: 10px solid var(--bux-rail);
+    box-shadow:
+      inset 0 0 0 3px var(--bux-brass),
+      inset 0 0 40px rgba(0, 0, 0, 0.45),
+      0 18px 48px rgba(0, 0, 0, 0.55),
+      0 0 0 1px var(--bux-rail-dark);
+  }
+
+  .bux-panel {
+    background: color-mix(in srgb, var(--bux-panel) 92%, transparent);
+    border: 1px solid var(--bux-panel-border);
+    backdrop-filter: blur(10px);
+  }
+
+  .bux-action-dock {
+    background: linear-gradient(180deg, rgba(18, 24, 32, 0.92), rgba(11, 15, 20, 0.98));
+    border-top: 1px solid var(--bux-panel-border);
+  }
+
+  .bux-banner {
+    border: 1px solid var(--bux-panel-border);
+    background: color-mix(in srgb, var(--bux-panel) 94%, transparent);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  .bux-btn-accent {
+    background: var(--bux-accent-deep);
+    color: white;
+    font-weight: 700;
+    transition: background-color 0.15s ease, transform 0.15s ease;
+  }
+  .bux-btn-accent:hover:not(:disabled) {
+    background: var(--bux-accent);
+  }
+
+  .bux-btn-danger {
+    background: var(--bux-danger);
+    color: white;
+    font-weight: 700;
+  }
+
+  .bux-turn-ring {
+    box-shadow:
+      0 0 0 3px var(--bux-brass-bright),
+      0 0 16px rgba(196, 165, 116, 0.45);
+    animation: bux-turn-pulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes bux-turn-pulse {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 3px var(--bux-brass-bright),
+        0 0 12px rgba(196, 165, 116, 0.35);
+    }
+    50% {
+      box-shadow:
+        0 0 0 4px var(--bux-brass),
+        0 0 22px rgba(16, 185, 129, 0.35);
+    }
+  }
+
+  @keyframes bux-drawer-in {
+    from {
+      transform: translateX(100%);
+      opacity: 0.6;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  .bux-chat-drawer {
+    animation: bux-drawer-in 0.22s ease-out;
+  }
+}

@@ -2,6 +2,8 @@
 @import './mobile.css';
 /* Import game table responsive styles */
 @import './game-table-responsive.css';
+/* BUX brand tokens + table chrome */
+@import './bux-theme.css';
 
 @tailwind base;
 @tailwind components;

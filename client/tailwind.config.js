@@ -7,6 +7,10 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        display: ['Syne', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        body: ['Figtree', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      },
       screens: {
         'game-351': '351px',
         'game-401': '401px',
@@ -21,18 +25,28 @@ export default {
         'game-851': '851px',
       },
       colors: {
+        bux: {
+          ink: '#0b0f14',
+          panel: '#1a2332',
+          felt: '#0a3d2e',
+          rail: '#5c3d2e',
+          brass: '#c4a574',
+          accent: '#10b981',
+          danger: '#dc2626',
+          warn: '#d97706',
+        },
         primary: {
-          50: "#f0f9ff",
-          100: "#e0f2fe",
-          200: "#bae6fd",
-          300: "#7dd3fc",
-          400: "#38bdf8",
-          500: "#0ea5e9",
-          600: "#0284c7",
-          700: "#0369a1",
-          800: "#075985",
-          900: "#0c4a6e",
-          950: "#082f49"
+          50: "#ecfdf5",
+          100: "#d1fae5",
+          200: "#a7f3d0",
+          300: "#6ee7b7",
+          400: "#34d399",
+          500: "#10b981",
+          600: "#059669",
+          700: "#047857",
+          800: "#065f46",
+          900: "#064e3b",
+          950: "#022c22"
         }
       }
     }

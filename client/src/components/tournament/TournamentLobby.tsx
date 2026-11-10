@@ -550,24 +550,45 @@ export function TournamentLobby() {
         <AddToHomeScreen compact />
       </div>
 
-      {/* Tournament Info Card */}
-      <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold text-slate-100">{tournament.name}</h1>
-            {!isCompleted && (
-              <div className="mt-2">
-                <TournamentTimestamp 
-                  startTime={startTime} 
-                  showCountdown={!isRunning}
-                />
-              </div>
-            )}
-            {isCompleted && (
-              <p className="mt-2 text-slate-400">
-                Completed: {formatLocalDateTime(startTime)}
+      {/* Tournament hero */}
+      <div
+        className="bux-panel rounded-2xl p-6 sm:p-8"
+        style={{
+          background:
+            "linear-gradient(135deg, color-mix(in srgb, var(--bux-felt) 35%, var(--bux-panel)), var(--bux-panel))",
+        }}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-1 items-start gap-4">
+            <img
+              src="/images/bux-poker.png"
+              alt=""
+              className="hidden h-14 w-14 rounded-xl object-contain sm:block"
+            />
+            <div className="flex-1">
+              <p
+                className="font-display text-[11px] font-semibold uppercase tracking-[0.2em]"
+                style={{ color: "var(--bux-brass)" }}
+              >
+                Tournament
               </p>
-            )}
+              <h1 className="font-display mt-1 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
+                {tournament.name}
+              </h1>
+              {!isCompleted && (
+                <div className="mt-2">
+                  <TournamentTimestamp
+                    startTime={startTime}
+                    showCountdown={!isRunning}
+                  />
+                </div>
+              )}
+              {isCompleted && (
+                <p className="mt-2 text-slate-400">
+                  Completed: {formatLocalDateTime(startTime)}
+                </p>
+              )}
+            </div>
           </div>
           <span
             className={`rounded-full px-4 py-2 text-sm font-medium ${
@@ -576,7 +597,7 @@ export function TournamentLobby() {
                 : tournament.status === 'REGISTRATION' || tournament.status === 'REGISTERING'
                 ? 'bg-blue-500/20 text-blue-200'
                 : tournament.status === 'SEATED'
-                ? 'bg-purple-500/20 text-purple-200'
+                ? 'bg-amber-500/20 text-amber-200'
                 : isCompleted
                 ? 'bg-slate-500/20 text-slate-300'
                 : 'bg-yellow-500/20 text-yellow-200'
@@ -586,12 +607,11 @@ export function TournamentLobby() {
           </span>
         </div>
 
-        {/* Join my table - for registered players when tournament is running */}
         {user && (isRunning || isSeated) && myGameId && !isCompleted && (
-          <div className="mt-4 flex gap-3 border-t border-slate-800 pt-4">
+          <div className="mt-5 flex gap-3 border-t pt-4" style={{ borderColor: "var(--bux-panel-border)" }}>
             <button
               onClick={() => openTournamentGameWindow(`/game/${myGameId}`, navigate)}
-              className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
+              className="bux-btn-accent rounded-lg px-5 py-2.5 text-sm font-semibold"
             >
               Join my table
             </button>

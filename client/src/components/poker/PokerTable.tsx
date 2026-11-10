@@ -78,8 +78,10 @@ export function PokerTable({
 
   return (
     <div 
-      className="relative flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-950 to-slate-900 overflow-hidden"
+      className="relative flex h-full w-full items-center justify-center overflow-hidden"
       style={{
+        background:
+          "radial-gradient(ellipse at center, #121820 0%, var(--bux-ink, #0b0f14) 70%)",
         paddingTop: 'var(--table-padding-top, 56px)',
         paddingRight: 'var(--table-padding, 32px)',
         paddingBottom: 'var(--table-padding, 32px)',
@@ -181,9 +183,9 @@ export function PokerTable({
         );
       })()}
 
-      {/* Oval/Circular Table */}
+      {/* Oval table — textured felt + wood/brass rail */}
       <div 
-        className="relative h-full w-full max-h-[calc(85vh-4rem)] max-w-[calc(90vw-4rem)] rounded-[50%] border-8 border-amber-600/40 bg-gradient-to-br from-emerald-900/60 to-slate-900/80 shadow-2xl" 
+        className="bux-felt bux-rail relative h-full w-full max-h-[calc(85vh-4rem)] max-w-[calc(90vw-4rem)] rounded-[50%]" 
         style={{ 
           aspectRatio: '3/2'
         }}
@@ -423,7 +425,7 @@ export function PokerTable({
                   {/* Player Avatar or Empty Seat */}
                   {player ? (
                     <>
-                      <div className={`relative ${hasActiveTimer ? 'animate-pulse' : ''} ${hasActiveTimer ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-900 rounded-full' : (isCurrentTurn ? 'ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-900 rounded-full' : '')}`}>
+                      <div className={`relative rounded-full ${hasActiveTimer || isCurrentTurn ? 'bux-turn-ring' : ''}`}>
                         <div 
                           className="overflow-hidden rounded-full border-2 border-slate-700 bg-slate-800 relative"
                           style={{ 
