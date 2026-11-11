@@ -424,17 +424,35 @@ export function PokerTable({
           // Layout uses visual position index (after rotate), not server seat number
           const visualSeat = visualIdx + 1;
           const cardsOnRight = [1, 2, 3, 9, 10].includes(visualSeat);
-          const baseCardOffset = 80;
-          // Face-up seats need a bit more clearance (larger cards); face-down stay tight to the avatar.
-          const offsetScale =
-            windowSize.width < 1000
-              ? seatCardsFaceUp
-                ? 0.55
-                : 0.38
-              : seatCardsFaceUp
-                ? 1
-                : 0.85;
-          const cardOffset = cardsOnRight ? baseCardOffset * offsetScale : -baseCardOffset * offsetScale;
+
+          // Card sizes first — face-up bigger than face-down, always smaller than community.
+          const css = typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null;
+          const baseHoleWidth = css ? parseInt(css.getPropertyValue("--hole-card-width"), 10) || 28 : 28;
+          const baseHoleHeight = css ? parseInt(css.getPropertyValue("--hole-card-height"), 10) || 39 : 39;
+          const communityW = css ? parseInt(css.getPropertyValue("--community-card-width"), 10) || 64 : 64;
+          const communityH = css ? parseInt(css.getPropertyValue("--community-card-height"), 10) || 90 : 90;
+          const holeGap = css ? parseInt(css.getPropertyValue("--hole-card-gap"), 10) || 4 : 4;
+          const capsuleW = css ? parseInt(css.getPropertyValue("--player-name-max-width"), 10) || 72 : 72;
+          const avatarSize = css ? parseInt(css.getPropertyValue("--player-avatar-size"), 10) || 32 : 32;
+          let holeWidth = baseHoleWidth;
+          let holeHeight = baseHoleHeight;
+          if (seatCardsFaceUp) {
+            // ~60% of the way from face-down → community, then clamp strictly below community.
+            holeWidth = Math.round(baseHoleWidth + (communityW - baseHoleWidth) * 0.6);
+            holeHeight = Math.round(baseHoleHeight + (communityH - baseHoleHeight) * 0.6);
+            holeWidth = Math.min(holeWidth, communityW - 6);
+            holeHeight = Math.min(holeHeight, communityH - 6);
+            holeWidth = Math.max(holeWidth, baseHoleWidth + 4);
+            holeHeight = Math.max(holeHeight, baseHoleHeight + 4);
+          }
+
+          // Fixed edge-to-edge gap between seat chrome and card stack (same for face-up / face-down).
+          const CARD_SEAT_GAP = windowSize.width < 1000 ? 8 : 10;
+          const cardStackHalf = (holeWidth * 2 + holeGap) / 2;
+          const seatHalf = Math.max(capsuleW, avatarSize) / 2;
+          const centerSeparation = seatHalf + CARD_SEAT_GAP + cardStackHalf;
+          const cardOffset = cardsOnRight ? centerSeparation : -centerSeparation;
+
           // Adjust vertical position for smaller screens: seats 1-5 down, 6-10 up
           let verticalOffset = 0;
           if (windowSize.width <= 900) {
@@ -463,11 +481,9 @@ export function PokerTable({
           const smallScreenOffset = windowSize.width <= 900
             ? ((visualIdx === 0 || visualIdx === 9) ? -6 : ((visualIdx === 4 || visualIdx === 5) ? 6 : 0))
             : 0;
-          // Capsules share space with hole cards — nudge seat only (not cards) away.
-          const seatClearance = windowSize.width < 1000 ? (seatCardsFaceUp ? 8 : 4) : seatCardsFaceUp ? 18 : 14;
-          const seatFromCardsOffset = cardsOnRight ? -seatClearance : seatClearance;
           const layoutHorizontalOffset = baseHorizontalOffset + smallScreenOffset;
-          const seatHorizontalOffset = layoutHorizontalOffset + seatFromCardsOffset;
+          // Seat stays on the shared orbit; cards are offset by centerSeparation so gap is constant.
+          const seatHorizontalOffset = layoutHorizontalOffset;
 
           const elements = [
             <div
@@ -687,33 +703,6 @@ export function PokerTable({
             const isWinningCard = (card: Card) => {
               return allWinningCards.some(wc => wc.rank === card.rank && wc.suit === card.suit);
             };
-            
-            // Base card dimensions from CSS variables
-            const baseHoleWidth = typeof window !== 'undefined'
-              ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hole-card-width')) || 28
-              : 28;
-            const baseHoleHeight = typeof window !== 'undefined'
-              ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hole-card-height')) || 39
-              : 39;
-            const communityW = typeof window !== 'undefined'
-              ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--community-card-width')) || 64
-              : 64;
-            const communityH = typeof window !== 'undefined'
-              ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--community-card-height')) || 90
-              : 90;
-            
-            // Mobile face-up matches community size; face-down stays smaller. Desktop face-up still enlarges.
-            let holeWidth = baseHoleWidth;
-            let holeHeight = baseHoleHeight;
-            if (showFaceUp) {
-              if (isMobile) {
-                holeWidth = communityW;
-                holeHeight = communityH;
-              } else {
-                holeWidth = Math.round(baseHoleWidth * 2);
-                holeHeight = Math.round(baseHoleHeight * 2);
-              }
-            }
             
             elements.push(
               <div
