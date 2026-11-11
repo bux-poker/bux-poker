@@ -430,8 +430,6 @@ export function PokerTable({
           const baseHoleHeight = css ? parseInt(css.getPropertyValue("--hole-card-height"), 10) || 39 : 39;
           const communityW = css ? parseInt(css.getPropertyValue("--community-card-width"), 10) || 64 : 64;
           const communityH = css ? parseInt(css.getPropertyValue("--community-card-height"), 10) || 90 : 90;
-          const holeGap = css ? parseInt(css.getPropertyValue("--hole-card-gap"), 10) || 4 : 4;
-          const capsuleW = css ? parseInt(css.getPropertyValue("--player-name-max-width"), 10) || 72 : 72;
           const avatarSize = css ? parseInt(css.getPropertyValue("--player-avatar-size"), 10) || 32 : 32;
           let holeWidth = baseHoleWidth;
           let holeHeight = baseHoleHeight;
@@ -445,12 +443,8 @@ export function PokerTable({
             holeHeight = Math.max(holeHeight, baseHoleHeight + 4);
           }
 
-          // Fixed edge-to-edge gap between seat chrome and card stack (same for face-up / face-down).
-          const CARD_SEAT_GAP = windowSize.width < 1000 ? 8 : 10;
-          const cardStackHalf = (holeWidth * 2 + holeGap) / 2;
-          const seatHalf = Math.max(capsuleW, avatarSize) / 2;
-          const centerSeparation = seatHalf + CARD_SEAT_GAP + cardStackHalf;
-          const cardOffset = cardsOnRight ? centerSeparation : -centerSeparation;
+          // Gap between avatar edge and hole-card stack (cards sit inline with the PFP).
+          const CARD_SEAT_GAP = windowSize.width < 1000 ? 6 : 8;
 
           // Adjust vertical position for smaller screens: seats 1-5 down, 6-10 up
           let verticalOffset = 0;
@@ -472,21 +466,33 @@ export function PokerTable({
           if (rimY > 0.65) {
             verticalOffset -= Math.round((rimY - 0.65) * 28);
           }
-          // Pull hole cards slightly inward near top/bottom so they stay inside the table area.
-          let cardRimNudge = 0;
-          if (windowSize.width < 1100) {
-            if (rimY < -0.7) cardRimNudge = 12;
-            else if (rimY > 0.7) cardRimNudge = -6;
-          }
 
           const baseHorizontalOffset = [1, 2, 3, 9, 10].includes(visualSeat) ? -12 : 12;
           // Additional horizontal tweak for smaller screens — keep side seats inside the frame.
           const smallScreenOffset = windowSize.width <= 900
             ? ((visualIdx === 0 || visualIdx === 9) ? -6 : ((visualIdx === 4 || visualIdx === 5) ? 6 : 0))
             : 0;
-          const layoutHorizontalOffset = baseHorizontalOffset + smallScreenOffset;
-          // Seat stays on the shared orbit; cards are offset by centerSeparation so gap is constant.
-          const seatHorizontalOffset = layoutHorizontalOffset;
+          const seatHorizontalOffset = baseHorizontalOffset + smallScreenOffset;
+
+          const showSeatCards =
+            !!player &&
+            !!player.holeCards &&
+            player.holeCards.length > 0 &&
+            (!isFolded || showFoldedReveal);
+          const showFaceUp = seatCardsFaceUp;
+          const winnerInfo = showdownResults?.winners?.find(
+            (w: any) => w.playerId === player?.id || w.userId === player?.userId
+          );
+          const isWinner = !!winnerInfo;
+          const potWon = winnerInfo?.potWon ?? 0;
+          const allWinningCards: Card[] = [];
+          if (showdownResults?.winners) {
+            showdownResults.winners.forEach((w: any) => {
+              allWinningCards.push(...(w.hand?.cards || []));
+            });
+          }
+          const isWinningCard = (card: Card) =>
+            allWinningCards.some((wc) => wc.rank === card.rank && wc.suit === card.suit);
 
           const elements = [
             <div
@@ -507,158 +513,236 @@ export function PokerTable({
                   {/* Occupied seats only — empty seats stay quiet */}
                   {player ? (
                     <>
+                      {/* PFP + hole cards on one horizontal line; left/right from seat side */}
                       <div
-                        className={`relative rounded-full ${isCurrentTurn && !hasActiveTimer ? "bux-turn-ring" : ""}`}
-                        ref={(el) => {
-                          const key = playerKey(player);
-                          if (key) seatRefs.current.set(key, el);
-                          if (player.userId) seatRefs.current.set(String(player.userId), el);
-                          if (player.id) seatRefs.current.set(String(player.id), el);
+                        className="flex items-center"
+                        style={{
+                          flexDirection: cardsOnRight ? "row" : "row-reverse",
+                          gap: CARD_SEAT_GAP,
                         }}
                       >
-                        {hasActiveTimer && turnTimer && (
-                          <svg
-                            className={`bux-timer-ring ${
-                              timerRemaining != null && timerRemaining <= 5 ? "urgent" : ""
-                            }`}
-                            viewBox="0 0 40 40"
-                            aria-hidden
-                          >
-                            <circle className="track" cx="20" cy="20" r="18" />
-                            <circle
-                              className="progress"
-                              cx="20"
-                              cy="20"
-                              r="18"
-                              strokeDasharray={`${2 * Math.PI * 18}`}
-                              strokeDashoffset={`${
-                                2 *
-                                Math.PI *
-                                18 *
-                                (1 -
-                                  Math.min(
-                                    1,
-                                    Math.max(
-                                      0,
-                                      (turnTimer.expiresAt - currentTime) /
-                                        Math.max(1, turnTimer.duration || 20000)
-                                    )
-                                  ))
-                              }`}
-                            />
-                          </svg>
-                        )}
-                        <button
-                          type="button"
-                          data-seat-avatar
-                          disabled={!onSendReaction || !myUserId}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSeatAvatarClick(playerKey(player));
+                        <div
+                          className={`relative rounded-full ${isCurrentTurn && !hasActiveTimer ? "bux-turn-ring" : ""}`}
+                          ref={(el) => {
+                            const key = playerKey(player);
+                            if (key) seatRefs.current.set(key, el);
+                            if (player.userId) seatRefs.current.set(String(player.userId), el);
+                            if (player.id) seatRefs.current.set(String(player.id), el);
                           }}
-                          className={`relative overflow-hidden rounded-full border-2 bg-slate-800 ${
-                            isCurrentTurn
-                              ? "border-[color:var(--bux-brass)]"
-                              : "border-slate-700"
-                          } ${
-                            onSendReaction && myUserId
-                              ? "cursor-pointer transition-transform hover:scale-105 active:scale-95"
-                              : "cursor-default"
-                          }`}
-                          style={{
-                            width: "var(--player-avatar-size, 64px)",
-                            height: "var(--player-avatar-size, 64px)",
-                          }}
-                          title={
-                            onSendReaction && myUserId
-                              ? playerMatchesUser(player, myUserId)
-                                ? "React"
-                                : `React at ${player.name}`
-                              : player.name
-                          }
-                          aria-label={
-                            playerMatchesUser(player, myUserId)
-                              ? "Open your emoji reactions"
-                              : `Throw emoji at ${player.name}`
-                          }
                         >
-                          {(() => {
-                            const isTestPlayer = player.name.toLowerCase().startsWith("test player");
-                            if (!isTestPlayer && player.avatarUrl) {
-                              return (
-                                <img
-                                  src={player.avatarUrl}
-                                  alt={player.name}
-                                  className="pointer-events-none h-full w-full object-cover"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).src = "/guest-avatar.png";
-                                  }}
-                                />
-                              );
+                          {hasActiveTimer && turnTimer && (
+                            <svg
+                              className={`bux-timer-ring ${
+                                timerRemaining != null && timerRemaining <= 5 ? "urgent" : ""
+                              }`}
+                              viewBox="0 0 40 40"
+                              aria-hidden
+                            >
+                              <circle className="track" cx="20" cy="20" r="18" />
+                              <circle
+                                className="progress"
+                                cx="20"
+                                cy="20"
+                                r="18"
+                                strokeDasharray={`${2 * Math.PI * 18}`}
+                                strokeDashoffset={`${
+                                  2 *
+                                  Math.PI *
+                                  18 *
+                                  (1 -
+                                    Math.min(
+                                      1,
+                                      Math.max(
+                                        0,
+                                        (turnTimer.expiresAt - currentTime) /
+                                          Math.max(1, turnTimer.duration || 20000)
+                                      )
+                                    ))
+                                }`}
+                              />
+                            </svg>
+                          )}
+                          <button
+                            type="button"
+                            data-seat-avatar
+                            disabled={!onSendReaction || !myUserId}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSeatAvatarClick(playerKey(player));
+                            }}
+                            className={`relative overflow-hidden rounded-full border-2 bg-slate-800 ${
+                              isCurrentTurn
+                                ? "border-[color:var(--bux-brass)]"
+                                : "border-slate-700"
+                            } ${
+                              onSendReaction && myUserId
+                                ? "cursor-pointer transition-transform hover:scale-105 active:scale-95"
+                                : "cursor-default"
+                            }`}
+                            style={{
+                              width: "var(--player-avatar-size, 64px)",
+                              height: "var(--player-avatar-size, 64px)",
+                            }}
+                            title={
+                              onSendReaction && myUserId
+                                ? playerMatchesUser(player, myUserId)
+                                  ? "React"
+                                  : `React at ${player.name}`
+                                : player.name
                             }
+                            aria-label={
+                              playerMatchesUser(player, myUserId)
+                                ? "Open your emoji reactions"
+                                : `Throw emoji at ${player.name}`
+                            }
+                          >
+                            {(() => {
+                              const isTestPlayer = player.name.toLowerCase().startsWith("test player");
+                              if (!isTestPlayer && player.avatarUrl) {
+                                return (
+                                  <img
+                                    src={player.avatarUrl}
+                                    alt={player.name}
+                                    className="pointer-events-none h-full w-full object-cover"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).src = "/guest-avatar.png";
+                                    }}
+                                  />
+                                );
+                              }
+                              return (
+                                <div className="pointer-events-none flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-700 to-teal-900 text-2xl font-bold text-white">
+                                  {player.name.charAt(0).toUpperCase()}
+                                </div>
+                              );
+                            })()}
+
+                            {player.isAway &&
+                              player.status !== "FOLDED" &&
+                              player.status !== "ELIMINATED" && (
+                                <div className="absolute inset-0 flex items-center justify-center rounded-full bg-slate-950/75">
+                                  <span
+                                    className="select-none font-extrabold uppercase tracking-wide text-amber-300"
+                                    style={{ fontSize: "11px" }}
+                                  >
+                                    Away
+                                  </span>
+                                </div>
+                              )}
+
+                            {showdownActive && player.status === "ELIMINATED" && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-red-900/60">
+                                <span className="select-none text-3xl font-extrabold text-red-300">✕</span>
+                              </div>
+                            )}
+                          </button>
+
+                          {/* Action badge below face — never covers avatar */}
+                          {(() => {
+                            const playerId = player.id || player.userId || "";
+                            const overlay = actionOverlays[playerId];
+                            if (!overlay) return null;
+                            const age = Date.now() - overlay.timestamp;
+                            const permanent = isPermanentAction(overlay.action);
+                            const actionOpacity = permanent
+                              ? 1
+                              : Math.max(0, 1 - age / ACTION_FADE_MS);
+                            if (actionOpacity <= 0) return null;
+                            const actionInfo = getActionInfo(overlay.action);
                             return (
-                              <div className="pointer-events-none flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-700 to-teal-900 text-2xl font-bold text-white">
-                                {player.name.charAt(0).toUpperCase()}
+                              <div
+                                className="bux-seat-action-badge"
+                                style={{ color: actionInfo.color, opacity: actionOpacity }}
+                              >
+                                {actionInfo.text}
                               </div>
                             );
                           })()}
 
-                          {player.isAway &&
-                            player.status !== "FOLDED" &&
-                            player.status !== "ELIMINATED" && (
-                              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-slate-950/75">
-                                <span
-                                  className="select-none font-extrabold uppercase tracking-wide text-amber-300"
-                                  style={{ fontSize: "11px" }}
-                                >
-                                  Away
-                                </span>
-                              </div>
-                            )}
-
-                          {showdownActive && player.status === "ELIMINATED" && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-red-900/60">
-                              <span className="select-none text-3xl font-extrabold text-red-300">✕</span>
+                          {player.isDealer && (
+                            <div
+                              className="absolute -right-1 -top-1 z-[60] flex items-center justify-center rounded-full border-2 border-white bg-yellow-500 shadow-lg"
+                              style={{
+                                width: "var(--dealer-button-size, 28px)",
+                                height: "var(--dealer-button-size, 28px)",
+                              }}
+                            >
+                              <span
+                                className="font-bold text-yellow-900"
+                                style={{ fontSize: "calc(var(--dealer-button-size, 28px) * 0.4)" }}
+                              >
+                                D
+                              </span>
                             </div>
                           )}
-                        </button>
+                        </div>
 
-                        {/* Action badge below face — never covers avatar */}
-                        {(() => {
-                          const playerId = player.id || player.userId || "";
-                          const overlay = actionOverlays[playerId];
-                          if (!overlay) return null;
-                          const age = Date.now() - overlay.timestamp;
-                          const permanent = isPermanentAction(overlay.action);
-                          const actionOpacity = permanent
-                            ? 1
-                            : Math.max(0, 1 - age / ACTION_FADE_MS);
-                          if (actionOpacity <= 0) return null;
-                          const actionInfo = getActionInfo(overlay.action);
-                          return (
-                            <div
-                              className="bux-seat-action-badge"
-                              style={{ color: actionInfo.color, opacity: actionOpacity }}
-                            >
-                              {actionInfo.text}
-                            </div>
-                          );
-                        })()}
-
-                        {player.isDealer && (
+                        {showSeatCards && (
                           <div
-                            className="absolute -right-1 -top-1 z-[60] flex items-center justify-center rounded-full border-2 border-white bg-yellow-500 shadow-lg"
-                            style={{
-                              width: "var(--dealer-button-size, 28px)",
-                              height: "var(--dealer-button-size, 28px)",
-                            }}
+                            className={`flex flex-col items-center gap-1 ${isFolded ? "opacity-50" : ""}`}
+                            style={{ zIndex: isMobile && showFaceUp ? 40 : 70 }}
                           >
-                            <span
-                              className="font-bold text-yellow-900"
-                              style={{ fontSize: "calc(var(--dealer-button-size, 28px) * 0.4)" }}
-                            >
-                              D
-                            </span>
+                            {visualSeat <= 5 && (
+                              <div className="flex flex-wrap items-center justify-center gap-1">
+                                {(player.contribution ?? 0) > 0 && <BetChip value={player.contribution!} />}
+                                {isWinner && potWon > 0 && (
+                                  <div className="flex items-center gap-0.5 rounded-md border-2 border-amber-400/80 bg-amber-500/30 px-1.5 py-0.5 shadow-md">
+                                    <span
+                                      className="font-bold text-amber-200"
+                                      style={{ fontSize: "var(--bet-chip-text-size, 13px)" }}
+                                    >
+                                      +{potWon.toLocaleString()}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            <div className="flex" style={{ gap: "var(--hole-card-gap, 4px)" }}>
+                              {player.holeCards!.map((card, cardIdx) => {
+                                const hasWinnerHighlight =
+                                  showdownActive &&
+                                  showdownResults?.winners &&
+                                  showdownResults.winners.length > 0;
+                                const cardIsWinning =
+                                  hasWinnerHighlight && !isFolded && isWinningCard(card);
+                                const cardIsLosing =
+                                  hasWinnerHighlight && !isFolded && !isWinningCard(card);
+                                const cardScale = cardIsLosing ? 0.75 : 1;
+                                return (
+                                  <div
+                                    key={`${player.id}-${cardIdx}-${windowSize.width}x${windowSize.height}`}
+                                    className="relative transition-all duration-500"
+                                    style={{ transform: `scale(${cardScale})` }}
+                                  >
+                                    <PokerCardImage
+                                      card={card}
+                                      width={holeWidth}
+                                      height={holeHeight}
+                                      className={`shadow-md transition-all duration-500 ${
+                                        cardIsWinning ? "ring-2 ring-yellow-400" : ""
+                                      } ${cardIsLosing ? "opacity-40 grayscale" : ""}`}
+                                      faceDown={!showFaceUp}
+                                      useTextCard={isMobile}
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {visualSeat > 5 && (
+                              <div className="flex flex-wrap items-center justify-center gap-1">
+                                {(player.contribution ?? 0) > 0 && <BetChip value={player.contribution!} />}
+                                {isWinner && potWon > 0 && (
+                                  <div className="flex items-center gap-0.5 rounded-md border-2 border-amber-400/80 bg-amber-500/30 px-1.5 py-0.5 shadow-md">
+                                    <span
+                                      className="font-bold text-amber-200"
+                                      style={{ fontSize: "var(--bet-chip-text-size, 13px)" }}
+                                    >
+                                      +{potWon.toLocaleString()}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -679,112 +763,17 @@ export function PokerTable({
             </div>
           ];
 
-          // Seat hole cards (hero face-up; others backs until showdown). Folded hide unless reveal.
-          if (
-            player &&
-            player.holeCards &&
-            player.holeCards.length > 0 &&
-            (!isFolded || showFoldedReveal)
-          ) {
-            const showFaceUp = seatCardsFaceUp;
-            
-            // Get winner information for highlighting and pot won display
-            const winnerInfo = showdownResults?.winners?.find((w: any) => w.playerId === player.id || w.userId === player.userId);
-            const isWinner = !!winnerInfo;
-            const potWon = winnerInfo?.potWon ?? 0;
-            
-            // Collect all winning cards from all winners (for highlighting)
-            const allWinningCards: Card[] = [];
-            if (showdownResults?.winners) {
-              showdownResults.winners.forEach((w: any) => {
-                const winningCards = w.hand?.cards || [];
-                allWinningCards.push(...winningCards);
-              });
-            }
-            
-            // Check if a specific card is part of any winning hand
-            const isWinningCard = (card: Card) => {
-              return allWinningCards.some(wc => wc.rank === card.rank && wc.suit === card.suit);
-            };
-            
-            elements.push(
-              <div
-                key={`cards-${player.id}`}
-                className={`absolute flex flex-col items-center gap-1 ${isFolded ? 'opacity-50' : ''}`}
-                style={{
-                  left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset + layoutHorizontalOffset}px)`,
-                  top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}% + ${verticalOffset + cardRimNudge}px)`,
-                  transform: 'translate(-50%, -50%)',
-                  transition: 'transform 0.5s ease-in-out',
-                  zIndex: isMobile && showFaceUp ? 40 : 70,
-                }}
-              >
-                {/* Bet chip and winner +pot above cards for seats 1-5 */}
-                {(visualSeat <= 5) && (
-                  <div className="flex flex-wrap items-center justify-center gap-1">
-                    {(player.contribution ?? 0) > 0 && <BetChip value={player.contribution!} />}
-                    {isWinner && potWon > 0 && (
-                      <div className="flex items-center gap-0.5 rounded-md border-2 border-amber-400/80 bg-amber-500/30 px-1.5 py-0.5 shadow-md">
-                        <span className="font-bold text-amber-200" style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}>+{potWon.toLocaleString()}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-                <div className="flex" style={{ gap: 'var(--hole-card-gap, 4px)' }}>
-                  {player.holeCards.map((card, cardIdx) => {
-                    // Only shrink/gray losing cards when we have winner highlight (not during reveal phases)
-                    const hasWinnerHighlight = showdownActive && showdownResults?.winners && showdownResults.winners.length > 0;
-                    const cardIsWinning = hasWinnerHighlight && !isFolded && isWinningCard(card);
-                    const cardIsLosing = hasWinnerHighlight && !isFolded && !isWinningCard(card);
-                    const cardScale = cardIsLosing ? 0.75 : 1; // Losing cards at 75% size
-                    
-                    return (
-                      <div 
-                        key={`${player.id}-${cardIdx}-${windowSize.width}x${windowSize.height}`} 
-                        className="relative transition-all duration-500"
-                        style={{
-                          transform: `scale(${cardScale})`,
-                        }}
-                      >
-                        <PokerCardImage
-                          card={card}
-                          width={holeWidth}
-                          height={holeHeight}
-                          className={`shadow-md transition-all duration-500 ${
-                            cardIsWinning ? 'ring-2 ring-yellow-400' : ''
-                          } ${
-                            cardIsLosing ? 'opacity-40 grayscale' : ''
-                          }`}
-                          faceDown={!showFaceUp}
-                          useTextCard={isMobile}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-                {/* Bet chip and winner +pot below cards for seats 6-10 */}
-                {(visualSeat > 5) && (
-                  <div className="flex flex-wrap items-center justify-center gap-1">
-                    {(player.contribution ?? 0) > 0 && <BetChip value={player.contribution!} />}
-                    {isWinner && potWon > 0 && (
-                      <div className="flex items-center gap-0.5 rounded-md border-2 border-amber-400/80 bg-amber-500/30 px-1.5 py-0.5 shadow-md">
-                        <span className="font-bold text-amber-200" style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}>+{potWon.toLocaleString()}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          } else if (player && (player.contribution ?? 0) > 0) {
-            // Bet chip for players without cards but with bets (including own player)
+          // Bet chip for players without visible hole cards but with bets
+          if (!showSeatCards && player && (player.contribution ?? 0) > 0) {
+            const betSide = cardsOnRight ? avatarSize / 2 + 24 : -(avatarSize / 2 + 24);
             elements.push(
               <div
                 key={`bet-${player.id}`}
                 className="absolute z-20"
                 style={{
-                  left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset + layoutHorizontalOffset}px)`,
-                  top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}% + ${visualSeat <= 5 ? -60 : 60}px)`,
-                  transform: 'translate(-50%, -50%)',
+                  left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${seatHorizontalOffset + betSide}px)`,
+                  top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}% + ${verticalOffset + (visualSeat <= 5 ? -36 : 36)}px)`,
+                  transform: "translate(-50%, -50%)",
                 }}
               >
                 <BetChip value={player.contribution ?? 0} />
