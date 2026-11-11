@@ -117,7 +117,7 @@ export function TableTestPage() {
             onClear={() => setPreviewModal("none")}
           />
           <div className="relative min-h-0 flex-1 overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900">
-            {/* debugAllSeatCardsFaceUp: preview face-up seat cards at 60% community size */}
+            {/* Opponents face-down; hero seat cards face-up at 60% community size */}
             <PokerTable
               gameId="table-test"
               players={players}
@@ -126,7 +126,7 @@ export function TableTestPage() {
               currentBet={CURRENT_BET}
               smallBlind={SMALL_BLIND}
               bigBlind={BIG_BLIND}
-              debugAllSeatCardsFaceUp
+              forceSeatCardsFaceDown
               myUserId={user?.id}
               topLeftBlinds="50/100"
               topLeftTimer="2:15 mins"

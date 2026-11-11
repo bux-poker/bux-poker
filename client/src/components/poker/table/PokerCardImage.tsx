@@ -89,16 +89,22 @@ export function PokerCardImage({
   }
 
   // Shared PNG path for community + desktop hole cards — do not distort.
+  // maxWidth/minWidth override global img { max-width:100% } which collapses
+  // face-up seat cards to 0px inside shrinkable flex parents.
   const filename = getCardImageFilename(card);
   const src = "/cards/" + filename;
+  const imgWidth = Math.max(1, width - 2);
   return (
     <motion.img
       src={src}
       alt={card.rank + card.suit}
       className={className}
       style={{
-        width: width - 2,
+        width: imgWidth,
         height,
+        maxWidth: imgWidth,
+        minWidth: imgWidth,
+        flexShrink: 0,
         objectFit: "contain",
         padding: 0,
         margin: 0,

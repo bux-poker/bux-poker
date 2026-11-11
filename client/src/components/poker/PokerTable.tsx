@@ -697,8 +697,12 @@ export function PokerTable({
                                 return (
                                   <div
                                     key={`${player.id}-${cardIdx}-${windowSize.width}x${windowSize.height}`}
-                                    className="relative transition-all duration-500"
-                                    style={{ transform: `scale(${cardScale})` }}
+                                    className="relative shrink-0 transition-all duration-500"
+                                    style={{
+                                      transform: `scale(${cardScale})`,
+                                      width: holeWidth,
+                                      height: holeHeight,
+                                    }}
                                   >
                                     <PokerCardImage
                                       card={card}
