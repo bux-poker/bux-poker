@@ -15,7 +15,6 @@ import { LeagueListPage } from "./pages/LeagueListPage";
 import { LeagueDetailPage } from "./pages/LeagueDetailPage";
 import { LoginPage } from "./pages/LoginPage";
 import { HomePage } from "./pages/HomePage";
-import { SiteFooter } from "./components/SiteFooter";
 
 function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -186,7 +185,6 @@ function App() {
           <Route path="/leagues/:id" element={<LeagueDetailPage />} />
         </Routes>
       </main>
-      {!isGameRoute && !isHomeRoute && <SiteFooter />}
     </div>
   );
 }
