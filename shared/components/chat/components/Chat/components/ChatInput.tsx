@@ -1,5 +1,4 @@
 // Chat input component with emoji picker
-// Extracted from Chat.tsx
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
@@ -30,7 +29,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   isEmojiPickerOpen,
   setIsEmojiPickerOpen,
   isMobile,
-  scaleFactor,
   chatType,
   isConnected,
   isAuthenticated
@@ -38,14 +36,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
   const [retryCount, setRetryCount] = useState(0);
-  
-  // Scale down for different screen widths
-  const screenWidth = window.innerWidth;
-  const isSmallScreen = screenWidth >= 600 && screenWidth <= 649;
-  const isMediumScreen = screenWidth >= 700 && screenWidth <= 750;
-  const scale = isSmallScreen ? 0.8 : isMediumScreen ? 0.85 : 1;
 
-  // Close emoji picker when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
@@ -83,50 +74,41 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  const getInputStyles = () => {
-    const baseSize = isMobile ? 12 : 14;
-    return {
-      fontSize: `${Math.floor(baseSize * scaleFactor * scale)}px`,
-      padding: `${(isMobile ? 8 : 12) * scale}px`,
-      height: `${(isMobile ? 36 : 44) * scale}px`
-    };
-  };
+  const inputHeight = isMobile ? 34 : 40;
+  const sendSize = isMobile ? 34 : 40;
+  const canSend = !!newMessage.trim() && isConnected && isAuthenticated;
 
   return (
-    <div 
-      className="shrink-0 border-t border-gray-800 bg-gray-800"
-      style={{
-        padding: `${8 * scale}px`
-      }}
-    >
+    <div className="bux-chat-input-bar">
       <form onSubmit={handleSubmit} className="flex items-center gap-2">
-        <div className="flex-1 relative">
+        <div className="relative flex-1">
           <input
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder={`Type a ${chatType} message...`}
-            className="w-full bg-gray-700 text-white rounded-lg border-0 pr-10 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-            style={getInputStyles()}
+            className="bux-chat-input pr-9"
+            style={{
+              height: inputHeight,
+              fontSize: isMobile ? 12 : 13,
+              paddingLeft: 10,
+              paddingRight: 36,
+            }}
             disabled={!isConnected || !isAuthenticated}
           />
-          
-          {/* Emoji picker button */}
+
           <button
             ref={emojiButtonRef}
             type="button"
             onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)}
-            className="absolute top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-            style={{
-              right: `${8 * scale}px`
-            }}
+            className="absolute top-1/2 right-2 -translate-y-1/2 text-slate-400 transition-colors hover:text-[color:var(--bux-brass)]"
             disabled={!isConnected || !isAuthenticated}
+            aria-label="Emoji"
           >
             😀
           </button>
-          
-          {/* Emoji picker - rendered via portal */}
+
           {isEmojiPickerOpen && emojiButtonRef.current && createPortal(
             <div
               ref={emojiPickerRef}
@@ -151,44 +133,34 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             document.body
           )}
         </div>
-        
+
         <button
           type="submit"
-          disabled={!newMessage.trim() || !isConnected || !isAuthenticated}
-          className="flex items-center justify-center rounded-md transition flex-shrink-0"
-          style={{
-            width: `${40 * scale}px`,
-            height: `${40 * scale}px`,
-            backgroundColor: newMessage.trim() && isConnected && isAuthenticated ? '#4f46e5' : '#4b5563'
-          }}
+          disabled={!canSend}
+          className="bux-chat-send"
+          style={{ width: sendSize, height: sendSize }}
           aria-label="Send"
         >
-          {/* Right-pointing paper plane icon - same as lobby chat */}
-          <svg 
-            style={{
-              width: `${24 * scale}px`,
-              height: `${24 * scale}px`,
-              color: 'white'
-            }}
-            fill="none" 
-            stroke="currentColor" 
-            strokeWidth="2" 
+          <svg
+            style={{ width: isMobile ? 16 : 18, height: isMobile ? 16 : 18 }}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
             viewBox="0 0 24 24"
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 4l16 8-16 8 4-8z" />
           </svg>
         </button>
       </form>
-      
-      {/* Connection status */}
+
       {!isConnected && (
-        <div className="text-xs text-red-400 mt-1">
+        <div className="mt-1 text-[10px] text-red-300">
           Disconnected. Retrying... ({retryCount}/3)
         </div>
       )}
-      
+
       {!isAuthenticated && (
-        <div className="text-xs text-yellow-400 mt-1">
+        <div className="mt-1 text-[10px] text-amber-300">
           Not authenticated. Please refresh the page.
         </div>
       )}

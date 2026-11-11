@@ -102,7 +102,7 @@ export default function ChatModular({
 
   return (
     <>
-      <div className="flex flex-col h-full min-h-0 bg-gray-800 border-l border-gray-600">
+      <div className="bux-chat">
         {/* Chat Header */}
         <ChatHeader
           activeTab={activeTab}

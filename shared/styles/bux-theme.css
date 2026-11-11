@@ -95,8 +95,13 @@
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   }
 
-  /* Shared modal / dialog chrome */
+  /* Shared modal / dialog chrome — always fits viewport; body scrolls */
   .bux-modal {
+    display: flex;
+    flex-direction: column;
+    max-height: min(92dvh, 100%);
+    overflow: hidden;
+    box-sizing: border-box;
     border-radius: 14px;
     border: 1.5px solid color-mix(in srgb, var(--bux-brass) 55%, #f5e6c8);
     background: color-mix(in srgb, var(--bux-ink-elevated) 96%, transparent);
@@ -114,6 +119,7 @@
     gap: 0.65rem;
     margin-bottom: 0.75rem;
     min-height: 1.75rem;
+    flex-shrink: 0;
   }
 
   .bux-modal-icon {
@@ -157,6 +163,13 @@
     color: rgb(226 232 240);
     font-size: 0.95rem;
     line-height: 1.45;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-direction: column;
   }
 
   .bux-modal-footer {
@@ -165,6 +178,7 @@
     justify-content: center;
     gap: 0.65rem;
     margin-top: 1.25rem;
+    flex-shrink: 0;
   }
 
   .bux-modal-btn {
@@ -203,6 +217,44 @@
     border-radius: 12px;
     padding: 0.75rem 1rem;
     border: 1.5px solid color-mix(in srgb, var(--bux-brass) 45%, transparent);
+  }
+
+  /* Landscape / short viewports — keep dialogs inside the screen */
+  @media (max-height: 520px) {
+    .bux-modal {
+      padding: 0.7rem 0.85rem 0.85rem;
+      border-radius: 10px;
+      max-height: min(96dvh, 100%);
+    }
+    .bux-modal-header {
+      margin-bottom: 0.4rem;
+      min-height: 1.4rem;
+      gap: 0.45rem;
+    }
+    .bux-modal-title {
+      font-size: 0.95rem;
+    }
+    .bux-modal-icon {
+      width: 1.55rem;
+      height: 1.55rem;
+      border-radius: 0.4rem;
+    }
+    .bux-modal-icon svg {
+      width: 0.9rem;
+      height: 0.9rem;
+    }
+    .bux-modal-body {
+      font-size: 0.85rem;
+      line-height: 1.35;
+    }
+    .bux-modal-footer {
+      margin-top: 0.65rem;
+      gap: 0.4rem;
+    }
+    .bux-modal-btn {
+      padding: 0.35rem 0.7rem;
+      font-size: 0.78rem;
+    }
   }
 
   .bux-btn-accent {
@@ -261,6 +313,141 @@
     inset: 0;
     z-index: 109;
     background: transparent;
+  }
+
+  /* Chat panel — same ink/brass language as the table HUD */
+  .bux-chat {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--bux-ink-elevated) 97%, transparent);
+    border-left: 1px solid var(--bux-panel-border);
+  }
+
+  .bux-chat-header {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--bux-panel-border);
+    background: color-mix(in srgb, var(--bux-panel) 88%, transparent);
+    padding: 0.4rem 0.55rem;
+  }
+
+  .bux-chat-tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.45rem;
+    border: 1px solid transparent;
+    background: color-mix(in srgb, var(--bux-panel) 70%, transparent);
+    color: var(--bux-text-muted);
+    transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  }
+  .bux-chat-tab:hover {
+    color: var(--bux-text);
+    border-color: color-mix(in srgb, var(--bux-brass) 35%, transparent);
+  }
+  .bux-chat-tab.is-active {
+    background: color-mix(in srgb, var(--bux-accent-deep) 80%, var(--bux-panel));
+    border-color: color-mix(in srgb, var(--bux-brass) 45%, transparent);
+    color: white;
+  }
+
+  .bux-chat-messages {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    width: 100%;
+    flex-direction: column;
+    gap: 0.55rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.75rem;
+  }
+
+  .bux-chat-bubble {
+    max-width: 82%;
+    border-radius: 0.65rem;
+    border: 1px solid color-mix(in srgb, var(--bux-panel-border) 80%, transparent);
+    padding: 0.4rem 0.65rem;
+    color: var(--bux-text);
+  }
+  .bux-chat-bubble.is-self {
+    background: color-mix(in srgb, var(--bux-accent-deep) 55%, var(--bux-panel));
+    border-color: color-mix(in srgb, var(--bux-brass) 40%, transparent);
+  }
+  .bux-chat-bubble.is-other {
+    background: color-mix(in srgb, var(--bux-panel) 92%, transparent);
+  }
+
+  .bux-chat-system {
+    width: 100%;
+    text-align: center;
+    font-style: italic;
+    color: var(--bux-brass);
+    opacity: 0.9;
+  }
+
+  .bux-chat-input-bar {
+    flex-shrink: 0;
+    border-top: 1px solid var(--bux-panel-border);
+    background: color-mix(in srgb, var(--bux-panel) 90%, transparent);
+    padding: 0.5rem;
+  }
+
+  .bux-chat-input {
+    width: 100%;
+    border-radius: 0.55rem;
+    border: 1px solid var(--bux-panel-border);
+    background: color-mix(in srgb, var(--bux-ink) 88%, transparent);
+    color: var(--bux-text);
+    outline: none;
+  }
+  .bux-chat-input:focus {
+    border-color: color-mix(in srgb, var(--bux-brass) 55%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--bux-brass) 35%, transparent);
+  }
+  .bux-chat-input:disabled {
+    opacity: 0.55;
+  }
+
+  .bux-chat-send {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.55rem;
+    border: 1px solid color-mix(in srgb, var(--bux-brass) 30%, transparent);
+    background: var(--bux-accent-deep);
+    color: white;
+    transition: background-color 0.12s ease, opacity 0.12s ease;
+  }
+  .bux-chat-send:hover:not(:disabled) {
+    background: var(--bux-accent);
+  }
+  .bux-chat-send:disabled {
+    background: color-mix(in srgb, var(--bux-panel) 80%, #64748b);
+    opacity: 0.7;
+  }
+
+  .bux-chat-player-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 0.55rem;
+    border: 1px solid transparent;
+    padding: 0.4rem 0.5rem;
+    transition: background-color 0.12s ease, border-color 0.12s ease;
+  }
+  .bux-chat-player-row:hover {
+    background: color-mix(in srgb, var(--bux-panel) 80%, transparent);
+    border-color: color-mix(in srgb, var(--bux-brass) 28%, transparent);
   }
 
   /* Table emoji reactions */

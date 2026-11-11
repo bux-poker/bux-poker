@@ -158,6 +158,8 @@ type BuxModalProps = {
   showCloseButton?: boolean;
   zIndexClass?: string;
   className?: string;
+  /** Extra classes for the scrollable body (e.g. overflow-hidden for nested scroll panes). */
+  bodyClassName?: string;
 };
 
 const MAX_W = {
@@ -181,13 +183,14 @@ export function BuxModal({
   showCloseButton,
   zIndexClass = "z-[120]",
   className = "",
+  bodyClassName = "",
 }: BuxModalProps) {
   if (!open) return null;
   const showX = onClose != null && (showCloseButton ?? footer == null);
 
   return (
     <div
-      className={`${position} inset-0 ${zIndexClass} pointer-events-none flex items-center justify-center p-4`}
+      className={`${position} inset-0 ${zIndexClass} pointer-events-none flex items-center justify-center p-2 sm:p-4`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="bux-modal-title"
@@ -214,7 +217,7 @@ export function BuxModal({
             </button>
           )}
         </div>
-        <div className="bux-modal-body">{children}</div>
+        <div className={`bux-modal-body ${bodyClassName}`}>{children}</div>
         {footer != null && <div className="bux-modal-footer">{footer}</div>}
       </div>
     </div>

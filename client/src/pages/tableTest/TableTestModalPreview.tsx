@@ -142,6 +142,8 @@ function MockLobbyShell({
       maxWidth="xl"
       align="left"
       zIndexClass="z-[130]"
+      className="h-[min(92dvh,100%)] overflow-hidden"
+      bodyClassName="!overflow-hidden"
     >
       <div className="-mx-1 border-b border-slate-700/80">
         <nav className="flex -mb-px overflow-x-auto">

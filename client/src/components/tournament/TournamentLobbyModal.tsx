@@ -245,7 +245,8 @@ export function TournamentLobbyModal({
       onClose={onClose}
       maxWidth="xl"
       align="left"
-      className="!max-h-[90vh] overflow-hidden flex flex-col"
+      className="h-[min(92dvh,100%)] overflow-hidden"
+      bodyClassName="!overflow-hidden"
     >
       <div className="-mx-1 flex min-h-0 flex-1 flex-col">
         <div className="border-b border-slate-800">

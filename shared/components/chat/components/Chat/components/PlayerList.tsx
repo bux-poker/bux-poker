@@ -79,40 +79,38 @@ export const PlayerList: React.FC<PlayerListProps> = ({
     return (
       <div
         key={player.id}
-        className="flex items-center justify-between p-3 hover:bg-gray-700 rounded-lg transition-colors"
+        className="bux-chat-player-row justify-between"
       >
-        <div className="flex items-center gap-3 flex-1">
-          {/* Avatar with online indicator */}
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="relative">
             <img
               src={isBot ? BOT_AVATAR : (player.avatarUrl || GUEST_AVATAR)}
               alt={player.username || player.name}
-              className="w-10 h-10 rounded-full"
+              className="h-9 w-9 rounded-full border border-[color:var(--bux-panel-border)]"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = isBot ? BOT_AVATAR : GUEST_AVATAR;
               }}
             />
-            {/* Green dot for online status */}
-            <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-gray-800 rounded-full"></div>
+            <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[color:var(--bux-ink-elevated)] bg-emerald-500" />
           </div>
-          
-          <div className="flex-1 min-w-0">
+
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <div
-                className="font-medium text-white truncate cursor-pointer hover:text-blue-300"
+                className="font-display cursor-pointer truncate font-semibold tracking-wide text-[color:var(--bux-text)] hover:text-[color:var(--bux-brass)]"
                 style={{ fontSize: fontSizes.playerName }}
                 onClick={() => onPlayerClick && onPlayerClick(player)}
               >
                 {isBot ? abbreviateBotName(player.username || player.name) : (player.username || player.name)}
                 {isSpectator && <EyeIcon />}
               </div>
-              {isBot && <span className="text-xs text-gray-400">(Bot)</span>}
+              {isBot && <span className="text-[10px] text-[color:var(--bux-text-muted)]">(Bot)</span>}
             </div>
-            <div className="text-xs text-gray-400" style={{ fontSize: fontSizes.status }}>
+            <div className="text-[color:var(--bux-text-muted)]" style={{ fontSize: fontSizes.status }}>
               {isSpectator ? 'Spectator' : 'Player'}
               {status !== 'not_friend' && (
                 <span className="ml-1">
-                  {status === 'friend' ? '👥 Friend' : '🚫 Blocked'}
+                  {status === 'friend' ? 'Friend' : 'Blocked'}
                 </span>
               )}
             </div>
@@ -156,41 +154,37 @@ export const PlayerList: React.FC<PlayerListProps> = ({
   };
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-2">
-      {/* Players Section */}
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
       {players.length > 0 && (
-        <div className="mb-4">
+        <div className="mb-3">
           <h3
-            className="text-white font-semibold mb-2 pb-1 border-b border-gray-600"
+            className="font-display mb-1.5 border-b border-[color:var(--bux-panel-border)] pb-1 font-semibold tracking-wide text-[color:var(--bux-brass)]"
             style={{ fontSize: fontSizes.sectionTitle }}
           >
             Players ({players.length})
           </h3>
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {players.map(player => renderPlayer(player, false))}
           </div>
         </div>
       )}
-      
-      {/* Spectators Section */}
+
       {spectators.length > 0 && (
         <div>
           <h3
-            className="text-white font-semibold mb-2 pb-1 border-b border-gray-600"
+            className="font-display mb-1.5 border-b border-[color:var(--bux-panel-border)] pb-1 font-semibold tracking-wide text-[color:var(--bux-brass)]"
             style={{ fontSize: fontSizes.sectionTitle }}
           >
             Spectators ({spectators.length})
           </h3>
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {spectators.map(player => renderPlayer(player, true))}
           </div>
         </div>
       )}
-      
-      {/* Empty state */}
+
       {players.length === 0 && spectators.length === 0 && (
-        <div className="text-center text-gray-400 py-8">
-          <div className="text-4xl mb-2">👥</div>
+        <div className="py-8 text-center text-[color:var(--bux-text-muted)]">
           <div style={{ fontSize: fontSizes.playerName }}>No players online</div>
         </div>
       )}

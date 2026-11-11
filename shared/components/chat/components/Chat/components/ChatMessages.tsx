@@ -1,5 +1,4 @@
 // Chat messages display component
-// Extracted from Chat.tsx
 
 import React, { useRef, useEffect } from 'react';
 import type { ChatMessage } from "../../../Chat";
@@ -18,15 +17,12 @@ interface ChatMessagesProps {
   onUnblockUser?: (playerId: string) => void;
 }
 
-// Fallback avatars 
 const GUEST_AVATAR = "/guest-avatar.png";
-const BOT_AVATAR = "/bot-avatar.jpg";
 
-// Add EyeIcon SVG component
 const EyeIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline-block w-5 h-5 ml-1 align-middle">
-    <path d="M12 5C5.63636 5 2 12 2 12C2 12 5.63636 19 12 19C18.3636 19 22 12 22 12C22 12 18.3636 5 12 5Z" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
-    <path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
+  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline-block h-4 w-4 align-middle">
+    <path d="M12 5C5.63636 5 2 12 2 12C2 12 5.63636 19 12 19C18.3636 19 22 12 22 12C22 12 18.3636 5 12 5Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
+    <path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
   </svg>
 );
 
@@ -36,12 +32,6 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
   scaleFactor,
   userAvatar,
   currentUserId,
-  onPlayerClick,
-  playerStatuses = {},
-  onAddFriend,
-  onRemoveFriend,
-  onBlockUser,
-  onUnblockUser
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -53,130 +43,110 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
     container.scrollTop = container.scrollHeight;
   }, [messages]);
 
-  // Calculate font sizes based on scale factor
-  const getFontSizes = () => {
-    const baseSize = isMobile ? 14 : 14;
-    return {
-      messageText: `${Math.floor(baseSize * scaleFactor)}px`,
-      timestamp: `${Math.floor((baseSize - 2) * scaleFactor)}px`,
-      username: `${Math.floor((baseSize - 1) * scaleFactor)}px`
-    };
+  const fontSizes = {
+    messageText: `${Math.floor(13 * scaleFactor)}px`,
+    timestamp: `${Math.floor(11 * scaleFactor)}px`,
+    username: `${Math.floor(12 * scaleFactor)}px`,
   };
 
-  const fontSizes = getFontSizes();
-
   const formatTimestamp = (timestamp: number | string | any) => {
-    // Handle both ISO strings (from server) and Unix timestamps (from client)
-    // Also handle edge cases where timestamp might be an object
     let date: Date;
     if (typeof timestamp === 'string') {
-      // If it's an ISO string, parse it directly
       date = new Date(timestamp);
     } else if (typeof timestamp === 'number') {
-      // If it's a number, treat it as Unix timestamp
       date = new Date(timestamp);
     } else if (timestamp && typeof timestamp === 'object') {
-      // If it's an object, try to extract a valid timestamp
-      // This handles edge cases where timestamp might be wrapped in an object
       const ts = timestamp.timestamp || timestamp.time || timestamp.value || Date.now();
       date = new Date(ts);
     } else {
-      // Fallback to current time
       date = new Date();
     }
-    
-    // Check if date is valid
+
     if (isNaN(date.getTime())) {
-      // Invalid date, return current time
       date = new Date();
     }
-    
+
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const getPlayerStatus = (userId: string) => {
-    return playerStatuses[userId] || 'not_friend';
-  };
-
-  // Removed friend/block functionality - not needed for poker
+  const avatarSize = isMobile ? 22 : 28;
 
   return (
-    <div
-      ref={containerRef}
-      className={`flex h-full min-h-0 w-full flex-col overflow-y-auto overscroll-contain p-4 ${isMobile ? "gap-y-2" : "gap-y-4"}`}
-    >
+    <div ref={containerRef} className="bux-chat-messages">
       {messages.map((message, index) => {
-        // Ensure message.message is a string, not an object
-        const messageText = typeof message.message === 'string' 
-          ? message.message 
+        const messageText = typeof message.message === 'string'
+          ? message.message
           : typeof message.message === 'object' && message.message !== null
             ? String(message.message)
             : '';
-        
-        // Ensure message.timestamp is valid - handle edge cases
+
         let messageTimestamp = message.timestamp;
         if (messageTimestamp && typeof messageTimestamp === 'object') {
-          // If timestamp is an object, try to extract a valid timestamp
           messageTimestamp = messageTimestamp.timestamp || messageTimestamp.time || messageTimestamp.value || Date.now();
         }
         if (!messageTimestamp || (typeof messageTimestamp !== 'number' && typeof messageTimestamp !== 'string')) {
-          // Fallback to current time if timestamp is invalid
           messageTimestamp = Date.now();
         }
-        
+
         const isSystemMessage = message.userId === 'system' || message.userId === 'DEALER';
         const isCurrentUser = currentUserId ? message.userId === currentUserId : false;
-        
+
         if (isSystemMessage) {
           return (
-            <div
-              key={message.id || index}
-              className="w-full text-center my-2"
-            >
-              <span className="text-orange-400 italic flex items-center justify-center gap-1" style={{ fontSize: fontSizes.messageText }}>
+            <div key={message.id || index} className="bux-chat-system" style={{ fontSize: fontSizes.messageText }}>
+              <span className="inline-flex items-center justify-center gap-1">
                 {messageText.includes('spectating') && <EyeIcon />}
                 {messageText}
               </span>
             </div>
           );
         }
-        
+
         return (
           <div
             key={message.id || index}
-            className={`${isMobile ? 'mb-1' : 'mb-2'} flex items-start ${isCurrentUser ? 'justify-end' : ''}`}
+            className={`flex items-start ${isCurrentUser ? 'justify-end' : ''}`}
           >
             {!isCurrentUser && (
-              <div className={`${isMobile ? 'w-6 h-6 mr-1.5' : 'w-8 h-8 mr-2'} rounded-full overflow-hidden flex-shrink-0`}>
-                <img 
-                  src={message.userAvatar || GUEST_AVATAR} 
-                  alt={message.userName || ''} 
-                  width={32}
-                  height={32}
-                  className="w-full h-full object-cover"
+              <div
+                className="mr-1.5 shrink-0 overflow-hidden rounded-full border border-[color:var(--bux-panel-border)]"
+                style={{ width: avatarSize, height: avatarSize }}
+              >
+                <img
+                  src={message.userAvatar || GUEST_AVATAR}
+                  alt={message.userName || ''}
+                  className="h-full w-full object-cover"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = GUEST_AVATAR;
                   }}
                 />
               </div>
             )}
-            <div className={`max-w-[80%] ${isCurrentUser ? 'bg-blue-600 text-white' : 'bg-gray-700 text-white'} rounded-lg ${isMobile ? 'px-2 py-1.5' : 'px-3 py-2'}`}>
-              <div className="flex justify-between items-center mb-1">
+            <div className={`bux-chat-bubble ${isCurrentUser ? 'is-self' : 'is-other'}`}>
+              <div className="mb-0.5 flex items-center justify-between gap-2">
                 {!isCurrentUser && (
-                  <span className="font-medium opacity-80" style={{ fontSize: fontSizes.username }}>{message.userName}</span>
+                  <span
+                    className="font-display font-semibold tracking-wide opacity-90"
+                    style={{ fontSize: fontSizes.username, color: 'var(--bux-brass)' }}
+                  >
+                    {message.userName}
+                  </span>
                 )}
-                <span className="opacity-75 ml-auto" style={{ fontSize: fontSizes.timestamp }}> {formatTimestamp(messageTimestamp)}</span>
+                <span className="ml-auto opacity-60" style={{ fontSize: fontSizes.timestamp }}>
+                  {formatTimestamp(messageTimestamp)}
+                </span>
               </div>
               <p style={{ fontSize: fontSizes.messageText }}>{messageText}</p>
             </div>
             {isCurrentUser && (
-              <div className={`${isMobile ? 'w-6 h-6 ml-1.5' : 'w-8 h-8 ml-2'} rounded-full overflow-hidden flex-shrink-0`}>
-                <img 
-                  src={userAvatar || GUEST_AVATAR} 
-                  alt="You" 
-                  width={32}
-                  height={32}
-                  className="w-full h-full object-cover"
+              <div
+                className="ml-1.5 shrink-0 overflow-hidden rounded-full border border-[color:var(--bux-panel-border)]"
+                style={{ width: avatarSize, height: avatarSize }}
+              >
+                <img
+                  src={userAvatar || GUEST_AVATAR}
+                  alt="You"
+                  className="h-full w-full object-cover"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = GUEST_AVATAR;
                   }}

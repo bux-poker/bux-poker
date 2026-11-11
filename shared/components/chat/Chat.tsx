@@ -7,9 +7,6 @@ import { ChatHeader } from './components/Chat/components/ChatHeader';
 import { ChatMessages } from './components/Chat/components/ChatMessages';
 import { ChatInput } from './components/Chat/components/ChatInput';
 import { PlayerList } from './components/Chat/components/PlayerList';
-// PlayerStatsModal will be passed as a prop or imported from client
-// This avoids path resolution issues between shared and client
-// import PlayerStatsModal from '@/components/modals/PlayerStatsModal';
 import type { Player } from '../../types/game';
 
 export interface ChatMessage {
@@ -22,11 +19,10 @@ export interface ChatMessage {
   userAvatar?: string;
 }
 
-// Define PlayerStatsModalProps if it's not already defined globally or in a shared type file
 interface PlayerStatsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  player: any; // TODO: Define a proper Player type
+  player: any;
 }
 
 interface ChatProps {
@@ -43,8 +39,8 @@ interface ChatProps {
   gameMessages?: Record<string, ChatMessage>;
   isSpectator?: boolean;
   onPlayerClick?: (player: Player) => void;
-  PlayerStatsModal?: React.ComponentType<PlayerStatsModalProps>; // Make it an optional prop
-  showDealerMessages?: boolean; // Toggle to show/hide dealer messages
+  PlayerStatsModal?: React.ComponentType<PlayerStatsModalProps>;
+  showDealerMessages?: boolean;
 }
 
 export default function Chat({
@@ -61,13 +57,10 @@ export default function Chat({
   gameMessages = {},
   isSpectator = false,
   onPlayerClick,
-  PlayerStatsModal, // Destructure the prop
-  showDealerMessages = true // Default to showing dealer messages
+  PlayerStatsModal,
+  showDealerMessages = true
 }: ChatProps) {
-  
-  // Use the chat hooks for all state management and event handling
   const {
-    // State
     messages,
     newMessage,
     setNewMessage,
@@ -82,19 +75,8 @@ export default function Chat({
     statsPlayer,
     setStatsPlayer,
     playerStatuses,
-    
-    // Refs
-    messagesEndRef,
-    emojiPickerRef,
-    lobbyEmojiPickerRef,
-    
-    // Socket state
-    socket,
     isAuthenticated,
     isConnected,
-    isReady,
-    
-    // Actions
     sendMessage,
     addFriend,
     removeFriend,
@@ -115,8 +97,7 @@ export default function Chat({
 
   return (
     <>
-      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-gray-800 border-l border-gray-600">
-        {/* Chat Header */}
+      <div className="bux-chat">
         <ChatHeader
           activeTab={activeTab}
           onTabChange={setActiveTab}
@@ -126,7 +107,6 @@ export default function Chat({
           isMobile={isMobile}
         />
 
-        {/* Chat Content — column fills sidebar; messages scroll, input stays pinned */}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {activeTab === 'chat' ? (
             <>
@@ -175,7 +155,6 @@ export default function Chat({
         </div>
       </div>
 
-      {/* Player Stats Modal */}
       {PlayerStatsModal && (
         <PlayerStatsModal
           isOpen={isStatsOpen}
