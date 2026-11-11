@@ -242,23 +242,25 @@
     }
   }
 
-  @keyframes bux-drawer-in {
-    from {
-      transform: translateX(100%);
-      opacity: 0.6;
-    }
-    to {
-      transform: translateX(0);
-      opacity: 1;
-    }
-  }
-
+  /* Slide open/close — same 220ms ease both directions; keep mounted so draft persists */
   .bux-chat-drawer {
-    animation: bux-drawer-in 0.22s ease-out;
-    /* Keep drawer paint/scroll isolated so open/close never reflows the felt */
+    transform: translateX(0);
+    transition: transform 0.22s ease-out;
     contain: layout paint;
     overscroll-behavior: contain;
     will-change: transform;
+  }
+
+  .bux-chat-drawer.is-closed {
+    transform: translateX(100%);
+    pointer-events: none;
+  }
+
+  .bux-chat-drawer-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 109;
+    background: transparent;
   }
 
   /* Table emoji reactions */
