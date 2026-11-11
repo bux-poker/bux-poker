@@ -43,11 +43,14 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
   onBlockUser,
   onUnblockUser
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Scroll only inside the chat panel — never scrollIntoView (that shifts the table behind).
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = containerRef.current;
+    if (!container) return;
+    container.scrollTop = container.scrollHeight;
   }, [messages]);
 
   // Calculate font sizes based on scale factor
@@ -99,6 +102,7 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
 
   return (
     <div
+      ref={containerRef}
       className={`flex h-full min-h-0 w-full flex-col overflow-y-auto overscroll-contain p-4 ${isMobile ? "gap-y-2" : "gap-y-4"}`}
     >
       {messages.map((message, index) => {

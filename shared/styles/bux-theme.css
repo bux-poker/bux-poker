@@ -255,6 +255,10 @@
 
   .bux-chat-drawer {
     animation: bux-drawer-in 0.22s ease-out;
+    /* Keep drawer paint/scroll isolated so open/close never reflows the felt */
+    contain: layout paint;
+    overscroll-behavior: contain;
+    will-change: transform;
   }
 
   /* Table emoji reactions */
