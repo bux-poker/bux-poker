@@ -1732,14 +1732,19 @@ export function PokerGameView() {
 
           {/* Action dock — hero hand left, controls right */}
           <div
-            className={`bux-action-dock relative flex h-[100px] min-h-[92px] w-full shrink-0 items-stretch overflow-hidden px-2 py-1.5 [@media(min-width:640px)_and_(min-height:520px)]:h-[156px] [@media(min-width:640px)_and_(min-height:520px)]:min-h-[108px] [@media(min-width:640px)_and_(min-height:520px)]:px-4 [@media(min-width:640px)_and_(min-height:520px)]:py-2 ${isMyTurn ? "ring-1 ring-inset ring-[color:var(--bux-brass)]/40" : ""}`}
+            className={`bux-action-dock relative flex w-full shrink-0 items-stretch overflow-hidden px-2 py-1 [@media(min-width:640px)_and_(min-height:520px)]:px-4 [@media(min-width:640px)_and_(min-height:520px)]:py-2 ${isMyTurn ? "ring-1 ring-inset ring-[color:var(--bux-brass)]/40" : ""}`}
+            style={{
+              height: "var(--action-dock-height, 100px)",
+              minHeight: "var(--action-dock-height, 100px)",
+              maxHeight: "var(--action-dock-height, 100px)",
+            }}
           >
             {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
-              <div className={`absolute left-2 sm:left-4 top-0 bottom-0 z-50 flex flex-col justify-center gap-1 items-start ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ visibility: 'visible' }}>
-                <span className="font-display text-xs sm:text-sm font-semibold uppercase tracking-wide whitespace-nowrap leading-tight" style={{ color: "var(--bux-brass)" }}>
+              <div className={`absolute left-2 sm:left-4 top-0 bottom-0 z-50 flex flex-col justify-center gap-0.5 items-start ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ visibility: 'visible' }}>
+                <span className="font-display text-[10px] sm:text-sm font-semibold uppercase tracking-wide whitespace-nowrap leading-tight" style={{ color: "var(--bux-brass)" }}>
                   {getHandDescription(myPlayer.holeCards, communityCards, gameState.street || "PREFLOP")}
                 </span>
-                <div className="flex gap-1.5 sm:gap-2 items-center flex-1 min-h-0">
+                <div className="flex gap-1 sm:gap-2 items-center flex-1 min-h-0">
                 {myPlayer.holeCards.map((card: Card, idx: number) => {
                   const getCardImage = (c: Card): string => {
                     const suitMap: Record<string, string> = {
@@ -1754,8 +1759,12 @@ export function PokerGameView() {
                       key={idx}
                       src={`/cards/${getCardImage(card)}`}
                       alt={`${card.rank}${card.suit}`}
-                      className="h-[72px] sm:h-[92px] w-auto max-h-[90%] object-contain rounded-lg shadow-lg flex-shrink-0 border"
-                      style={{ display: 'block', borderColor: "rgba(196, 165, 116, 0.35)" }}
+                      className="w-auto max-h-[90%] object-contain rounded-lg shadow-lg flex-shrink-0 border"
+                      style={{
+                        display: "block",
+                        height: "var(--hero-card-height, 72px)",
+                        borderColor: "rgba(196, 165, 116, 0.35)",
+                      }}
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
                         target.style.display = 'none';
@@ -1766,7 +1775,7 @@ export function PokerGameView() {
                 </div>
               </div>
             )}
-              <div className="relative z-[60] ml-auto flex h-full min-h-0 flex-col items-end justify-center gap-2">
+              <div className="relative z-[60] ml-auto flex h-full min-h-0 max-w-[58%] flex-col items-end justify-center gap-1 sm:gap-2">
                 {gameState.showdownNeedsChoice && (
                   <div className="flex flex-col items-end gap-1">
                     <p className="text-xs font-medium text-slate-400">Show your cards?</p>

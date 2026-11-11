@@ -4,6 +4,18 @@
  * Starting from 901-1000px and working down
  */
 
+/* Capsule / dock defaults (overridden by width + height tiers below) */
+:root {
+  --player-name-max-width: 72px;
+  --player-capsule-padding-x: 6px;
+  --player-capsule-padding-y: 3px;
+  --action-dock-height: 100px;
+  --hero-card-height: 72px;
+  --table-rail-width: 8px;
+  --table-rail-inset: 2px;
+  --table-padding-top: 48px;
+}
+
 /* 901-1000px (iPad landscape, small tablets) */
 @media (min-width: 901px) and (max-width: 1000px) {
   :root {
@@ -21,6 +33,9 @@
     --player-avatar-size: 38px;
     --player-name-size: 9px;
     --player-chips-size: 8px;
+    --player-name-max-width: 72px;
+    --player-capsule-padding-x: 6px;
+    --player-capsule-padding-y: 3px;
     
     --dealer-button-size: 12.8px;
     --timer-text-size: 20px;
@@ -58,6 +73,9 @@
     --countdown-padding-x: 12px;
     --countdown-padding-y: 8px;
     --countdown-border-width: 2px;
+    --table-rail-width: 7px;
+    --action-dock-height: 100px;
+    --hero-card-height: 68px;
   }
 }
 
@@ -78,6 +96,11 @@
     --player-name-size: 15px;
     --player-chips-size: 13px;
     --player-name-max-width: 120px;
+    --player-capsule-padding-x: 8px;
+    --player-capsule-padding-y: 4px;
+    --table-rail-width: 10px;
+    --action-dock-height: 156px;
+    --hero-card-height: 92px;
     
     --dealer-button-size: 12.8px;
     --timer-text-size: 20px;
@@ -135,6 +158,9 @@
     --player-avatar-size: 36px;
     --player-name-size: 9px;
     --player-chips-size: 8px;
+    --player-name-max-width: 64px;
+    --player-capsule-padding-x: 5px;
+    --player-capsule-padding-y: 2px;
     
     --dealer-button-size: 12px;
     --timer-text-size: 19px;
@@ -172,6 +198,9 @@
     --countdown-padding-x: 10px;
     --countdown-padding-y: 6px;
     --countdown-border-width: 2px;
+    --table-rail-width: 7px;
+    --action-dock-height: 96px;
+    --hero-card-height: 64px;
   }
 }
 
@@ -192,6 +221,9 @@
     --player-avatar-size: 34px;
     --player-name-size: 9px;
     --player-chips-size: 8px;
+    --player-name-max-width: 60px;
+    --player-capsule-padding-x: 5px;
+    --player-capsule-padding-y: 2px;
     
     --dealer-button-size: 11.6px;
     --timer-text-size: 18px;
@@ -229,6 +261,9 @@
     --countdown-padding-x: 9px;
     --countdown-padding-y: 5px;
     --countdown-border-width: 2px;
+    --table-rail-width: 6px;
+    --action-dock-height: 94px;
+    --hero-card-height: 60px;
   }
 }
 
@@ -249,6 +284,9 @@
     --player-avatar-size: 32px;
     --player-name-size: 9px;
     --player-chips-size: 8px;
+    --player-name-max-width: 56px;
+    --player-capsule-padding-x: 5px;
+    --player-capsule-padding-y: 2px;
     
     --dealer-button-size: 11.2px;
     --timer-text-size: 17px;
@@ -286,6 +324,9 @@
     --countdown-padding-x: 8px;
     --countdown-padding-y: 5px;
     --countdown-border-width: 2px;
+    --table-rail-width: 6px;
+    --action-dock-height: 92px;
+    --hero-card-height: 58px;
   }
 }
 
@@ -306,6 +347,9 @@
     --player-avatar-size: 30px;
     --player-name-size: 9px;
     --player-chips-size: 8px;
+    --player-name-max-width: 54px;
+    --player-capsule-padding-x: 4px;
+    --player-capsule-padding-y: 2px;
     
     --dealer-button-size: 10.8px;
     --timer-text-size: 16px;
@@ -342,6 +386,9 @@
     --countdown-padding-x: 7px;
     --countdown-padding-y: 4px;
     --countdown-border-width: 2px;
+    --table-rail-width: 6px;
+    --action-dock-height: 90px;
+    --hero-card-height: 56px;
   }
 }
 
@@ -362,6 +409,9 @@
     --player-avatar-size: 29px;
     --player-name-size: 9px;
     --player-chips-size: 8px;
+    --player-name-max-width: 52px;
+    --player-capsule-padding-x: 4px;
+    --player-capsule-padding-y: 2px;
     
     --dealer-button-size: 10.4px;
     --timer-text-size: 15px;
@@ -399,6 +449,9 @@
     --countdown-padding-x: 6px;
     --countdown-padding-y: 4px;
     --countdown-border-width: 2px;
+    --table-rail-width: 6px;
+    --action-dock-height: 88px;
+    --hero-card-height: 54px;
   }
 }
 
@@ -419,6 +472,9 @@
     --player-avatar-size: 29px;
     --player-name-size: 9px;
     --player-chips-size: 8px;
+    --player-name-max-width: 50px;
+    --player-capsule-padding-x: 4px;
+    --player-capsule-padding-y: 2px;
     
     --dealer-button-size: 10.4px;
     --timer-text-size: 15px;
@@ -456,6 +512,9 @@
     --countdown-padding-x: 6px;
     --countdown-padding-y: 4px;
     --countdown-border-width: 2px;
+    --table-rail-width: 5px;
+    --action-dock-height: 86px;
+    --hero-card-height: 52px;
   }
 }
 
@@ -476,6 +535,9 @@
     --player-avatar-size: 29px;
     --player-name-size: 9px;
     --player-chips-size: 8px;
+    --player-name-max-width: 48px;
+    --player-capsule-padding-x: 4px;
+    --player-capsule-padding-y: 2px;
     
     --dealer-button-size: 10.4px;
     --timer-text-size: 15px;
@@ -513,6 +575,9 @@
     --countdown-padding-x: 6px;
     --countdown-padding-y: 4px;
     --countdown-border-width: 2px;
+    --table-rail-width: 5px;
+    --action-dock-height: 84px;
+    --hero-card-height: 50px;
   }
 }
 
@@ -533,6 +598,9 @@
     --player-avatar-size: 29px;
     --player-name-size: 9px;
     --player-chips-size: 8px;
+    --player-name-max-width: 48px;
+    --player-capsule-padding-x: 4px;
+    --player-capsule-padding-y: 2px;
     
     --dealer-button-size: 10.4px;
     --timer-text-size: 15px;
@@ -570,6 +638,9 @@
     --countdown-padding-x: 6px;
     --countdown-padding-y: 4px;
     --countdown-border-width: 2px;
+    --table-rail-width: 5px;
+    --action-dock-height: 82px;
+    --hero-card-height: 48px;
   }
 }
 
@@ -590,6 +661,9 @@
     --player-avatar-size: 29px;
     --player-name-size: 9px;
     --player-chips-size: 8px;
+    --player-name-max-width: 46px;
+    --player-capsule-padding-x: 4px;
+    --player-capsule-padding-y: 2px;
     
     --dealer-button-size: 10.4px;
     --timer-text-size: 15px;
@@ -627,6 +701,9 @@
     --countdown-padding-x: 6px;
     --countdown-padding-y: 4px;
     --countdown-border-width: 2px;
+    --table-rail-width: 5px;
+    --action-dock-height: 80px;
+    --hero-card-height: 46px;
   }
 }
 
@@ -647,6 +724,9 @@
     --player-avatar-size: 29px;
     --player-name-size: 9px;
     --player-chips-size: 8px;
+    --player-name-max-width: 44px;
+    --player-capsule-padding-x: 3px;
+    --player-capsule-padding-y: 2px;
     
     --dealer-button-size: 10.4px;
     --timer-text-size: 15px;
@@ -684,6 +764,9 @@
     --countdown-padding-x: 6px;
     --countdown-padding-y: 4px;
     --countdown-border-width: 2px;
+    --table-rail-width: 5px;
+    --action-dock-height: 78px;
+    --hero-card-height: 44px;
   }
 }
 
@@ -704,6 +787,9 @@
     --player-avatar-size: 29px;
     --player-name-size: 9px;
     --player-chips-size: 8px;
+    --player-name-max-width: 42px;
+    --player-capsule-padding-x: 3px;
+    --player-capsule-padding-y: 2px;
     
     --dealer-button-size: 10.4px;
     --timer-text-size: 15px;
@@ -741,6 +827,9 @@
     --countdown-padding-x: 6px;
     --countdown-padding-y: 4px;
     --countdown-border-width: 2px;
+    --table-rail-width: 5px;
+    --action-dock-height: 76px;
+    --hero-card-height: 42px;
   }
 }
 
@@ -755,4 +844,51 @@
     --hole-card-width: 14px;
     --hole-card-height: 20px;
   }
+}/* Short viewports (phone landscape) — shrink dock + padding so seats never hit controls */
+@media (max-height: 520px) {
+  :root {
+    --table-padding: 10px;
+    --table-padding-top: 36px;
+    --table-rail-width: 5px;
+    --table-rail-inset: 2px;
+    --action-dock-height: 84px;
+    --hero-card-height: 46px;
+    --action-button-height: 24px;
+    --action-button-text: 10px;
+    --action-button-padding-x: 8px;
+    --preset-button-text: 8px;
+    --preset-button-padding-x: 4px;
+    --preset-button-padding-y: 2px;
+    --amount-input-height: 28px;
+    --amount-input-width: 56px;
+    --amount-input-text: 11px;
+    --input-button-size: 26px;
+    --community-card-width: 34px;
+    --community-card-height: 48px;
+    --hole-card-width: 14px;
+    --hole-card-height: 20px;
+    --player-name-max-width: 52px;
+    --player-capsule-padding-x: 4px;
+    --player-capsule-padding-y: 2px;
+    --player-avatar-size: 28px;
+    --player-name-size: 8px;
+    --player-chips-size: 7px;
+  }
 }
+
+@media (max-height: 420px) {
+  :root {
+    --table-padding: 6px;
+    --table-padding-top: 28px;
+    --table-rail-width: 4px;
+    --action-dock-height: 76px;
+    --hero-card-height: 40px;
+    --action-button-height: 22px;
+    --amount-input-height: 24px;
+    --community-card-width: 28px;
+    --community-card-height: 40px;
+    --player-name-max-width: 46px;
+    --player-avatar-size: 24px;
+  }
+}
+

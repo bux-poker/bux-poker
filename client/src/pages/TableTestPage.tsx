@@ -131,7 +131,14 @@ export function TableTestPage() {
           </div>
 
           {/* Betting controls bar - same as game view, with hole cards + hand text for layout test */}
-          <div className="relative border-t border-slate-800 bg-slate-900/95 px-2 py-1.5 backdrop-blur-sm sm:px-4 sm:py-2 min-h-[96px] sm:min-h-[108px] flex items-stretch">
+          <div
+            className="bux-action-dock relative flex w-full shrink-0 items-stretch overflow-hidden px-2 py-1 sm:px-4 sm:py-2"
+            style={{
+              height: "var(--action-dock-height, 100px)",
+              minHeight: "var(--action-dock-height, 100px)",
+              maxHeight: "var(--action-dock-height, 100px)",
+            }}
+          >
             {/* Mock "my" hole cards + hand text (player 1) - matches game view layout */}
             {(() => {
               const myHoleCards = players[0]?.holeCards;
@@ -144,26 +151,25 @@ export function TableTestPage() {
                 return `${rank}${suit}.png`;
               };
               return (
-                <div className="absolute left-2 sm:left-4 top-0 bottom-0 z-50 flex flex-col justify-center gap-1 items-start" style={{ visibility: "visible" }}>
-                  <span className="text-slate-300 text-sm sm:text-base font-medium whitespace-nowrap leading-tight">
+                <div className="absolute left-2 sm:left-4 top-0 bottom-0 z-50 flex flex-col justify-center gap-0.5 items-start" style={{ visibility: "visible" }}>
+                  <span className="font-display text-[10px] sm:text-sm font-semibold uppercase tracking-wide whitespace-nowrap leading-tight" style={{ color: "var(--bux-brass)" }}>
                     {getHandDescription(myHoleCards, COMMUNITY_CARDS, "FLOP")}
                   </span>
-                  <div className="flex gap-1.5 sm:gap-2 items-center flex-1 min-h-0">
+                  <div className="flex gap-1 sm:gap-2 items-center flex-1 min-h-0">
                     {myHoleCards.map((card: Card, idx: number) => {
                       const isRed = card.suit === "HEARTS" || card.suit === "DIAMONDS";
                       if (isMobile) {
-                        const cardH = 64;
-                        const cardW = Math.round(cardH * (80 / 112));
-                        const rankSize = Math.max(10, Math.floor(cardH * 0.42));
-                        const suitSize = Math.max(10, Math.floor(cardH * 0.38));
                         return (
                           <div
                             key={idx}
-                            className="flex flex-col items-center justify-center rounded-lg border-2 border-slate-300 bg-white shadow py-1 px-0.5 flex-shrink-0"
-                            style={{ width: cardW, height: cardH, minWidth: cardW, minHeight: cardH }}
+                            className="flex flex-col items-center justify-center rounded-lg border-2 border-slate-300 bg-white shadow py-0.5 px-0.5 flex-shrink-0"
+                            style={{
+                              height: "var(--hero-card-height, 64px)",
+                              width: "calc(var(--hero-card-height, 64px) * 0.71)",
+                            }}
                           >
-                            <span className="font-bold leading-none text-slate-900" style={{ fontSize: rankSize }}>{card.rank}</span>
-                            <span className="leading-none" style={{ fontSize: suitSize, color: isRed ? "#b91c1c" : "#1a1a1a" }}>{suitSymbols[card.suit] ?? card.suit[0]}</span>
+                            <span className="font-bold leading-none text-slate-900" style={{ fontSize: "clamp(9px, 40%, 14px)" }}>{card.rank}</span>
+                            <span className="leading-none" style={{ fontSize: "clamp(9px, 36%, 13px)", color: isRed ? "#b91c1c" : "#1a1a1a" }}>{suitSymbols[card.suit] ?? card.suit[0]}</span>
                           </div>
                         );
                       }
@@ -172,8 +178,8 @@ export function TableTestPage() {
                           key={idx}
                           src={`/cards/${getCardImage(card)}`}
                           alt={`${card.rank}${card.suit}`}
-                          className="h-[88px] sm:h-[100px] w-auto max-h-[90%] object-contain rounded-lg shadow border border-white/20 flex-shrink-0"
-                          style={{ display: "block" }}
+                          className="w-auto max-h-[90%] object-contain rounded-lg shadow border border-white/20 flex-shrink-0"
+                          style={{ display: "block", height: "var(--hero-card-height, 88px)" }}
                           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                         />
                       );
@@ -182,7 +188,7 @@ export function TableTestPage() {
                 </div>
               );
             })()}
-            <div className="ml-auto">
+            <div className="relative z-[60] ml-auto flex h-full min-h-0 max-w-[58%] flex-col items-end justify-center gap-1 sm:gap-2">
             <BettingControls
               onAction={() => {}}
               currentBet={CURRENT_BET}

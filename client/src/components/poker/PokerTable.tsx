@@ -70,7 +70,10 @@ export function PokerTable({
   });
   
   // Window size state to trigger re-renders when CSS variables change
-  const [windowSize, setWindowSize] = useState({ width: typeof window !== 'undefined' ? window.innerWidth : 1400 });
+  const [windowSize, setWindowSize] = useState({
+    width: typeof window !== "undefined" ? window.innerWidth : 1400,
+    height: typeof window !== "undefined" ? window.innerHeight : 900,
+  });
   const isMobile = useIsMobile();
 
   const rotateSeats = useCallback((dir: 1 | -1) => {
@@ -133,10 +136,10 @@ export function PokerTable({
   // Listen for window resize to trigger re-render for CSS variable recalculation
   useEffect(() => {
     const handleResize = () => {
-      setWindowSize({ width: window.innerWidth });
+      setWindowSize({ width: window.innerWidth, height: window.innerHeight });
     };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   return (
@@ -240,9 +243,11 @@ export function PokerTable({
 
       {/* Oval table — textured felt + wood/brass rail */}
       <div 
-        className="bux-felt bux-rail relative h-full w-full max-h-[calc(85vh-4rem)] max-w-[calc(90vw-4rem)] rounded-[50%]" 
+        className="bux-felt bux-rail relative h-full w-full max-h-full max-w-full rounded-[50%]" 
         style={{ 
-          aspectRatio: '3/2'
+          aspectRatio: "3/2",
+          maxHeight: "min(100%, calc(100dvh - var(--action-dock-height, 100px) - 1.5rem))",
+          maxWidth: "min(100%, 96vw)",
         }}
       >
         
@@ -384,8 +389,13 @@ export function PokerTable({
           // visualIdx = where this server seat appears on screen after user rotate
           const visualIdx = (seatIdx + seatRotate) % 10;
           const position = PLAYER_POSITIONS[visualIdx];
-          // Calculate radius to position at table edge (use percentage of table size)
-          const radiusPercent = 45; // Position at 45% from center (near edge)
+          // Keep seats slightly inward on short/narrow viewports so labels don't clip or hit the dock.
+          const radiusPercent =
+            windowSize.height > 0 && windowSize.height < 520
+              ? 40
+              : windowSize.width < 900
+                ? 42
+                : 45;
           const angleRad = (position.angle * Math.PI) / 180;
           
           const isMyPlayer = player && (String(myUserId ?? "") === String(player.id ?? "") || String(myUserId ?? "") === String(player.userId ?? ""));
@@ -424,12 +434,9 @@ export function PokerTable({
           const visualSeat = visualIdx + 1;
           const cardsOnRight = [1, 2, 3, 9, 10].includes(visualSeat);
           const baseCardOffset = 80;
-          // Face-up cards need more horizontal separation on small screens (was 50% — pulled cards onto chip labels).
-          const offsetScale =
-            windowSize.width < 1000 ? (seatCardsFaceUp ? 0.9 : 0.5) : 1;
+          // Same offset for face-up and face-down so hole cards share one orbit.
+          const offsetScale = windowSize.width < 1000 ? 0.62 : 1;
           const cardOffset = cardsOnRight ? baseCardOffset * offsetScale : -baseCardOffset * offsetScale;
-          const cardVerticalNudge =
-            isMobile && seatCardsFaceUp ? (visualSeat <= 5 ? -16 : 16) : 0;
           // Adjust vertical position for smaller screens: seats 1-5 down, 6-10 up
           let verticalOffset = 0;
           if (windowSize.width <= 900) {
@@ -445,21 +452,21 @@ export function PokerTable({
               verticalOffset = -20;
             }
           }
-          // Hole cards only: pull inward near top/bottom so they aren't clipped by overflow.
+          // Pull hole cards slightly inward near top/bottom so they stay inside the table area.
           let cardRimNudge = 0;
-          if (windowSize.width < 1100 && seatCardsFaceUp) {
+          if (windowSize.width < 1100) {
             const rimY = Math.sin(angleRad);
-            if (rimY < -0.7) cardRimNudge = 28;
-            else if (rimY > 0.7) cardRimNudge = -12;
+            if (rimY < -0.7) cardRimNudge = 18;
+            else if (rimY > 0.7) cardRimNudge = -10;
           }
 
           const baseHorizontalOffset = [1, 2, 3, 9, 10].includes(visualSeat) ? -20 : 20;
-          // Additional horizontal tweak for smaller screens
+          // Additional horizontal tweak for smaller screens — keep side seats inside the frame.
           const smallScreenOffset = windowSize.width <= 900
-            ? ((visualIdx === 0 || visualIdx === 9) ? -12 : ((visualIdx === 4 || visualIdx === 5) ? 12 : 0))
+            ? ((visualIdx === 0 || visualIdx === 9) ? -8 : ((visualIdx === 4 || visualIdx === 5) ? 8 : 0))
             : 0;
-          // Fixed-width capsules sit over hole cards — nudge seat only (not cards) away.
-          const seatClearance = windowSize.width < 1000 ? 26 : 22;
+          // Capsules share space with hole cards — nudge seat only (not cards) away.
+          const seatClearance = windowSize.width < 1000 ? 12 : 22;
           const seatFromCardsOffset = cardsOnRight ? -seatClearance : seatClearance;
           const layoutHorizontalOffset = baseHorizontalOffset + smallScreenOffset;
           const seatHorizontalOffset = layoutHorizontalOffset + seatFromCardsOffset;
@@ -640,7 +647,7 @@ export function PokerTable({
                       </div>
 
                       <div
-                        className="bux-seat-capsule mt-1"
+                        className="bux-seat-capsule mt-0.5"
                         style={{
                           zIndex:
                             isMobile && seatCardsFaceUp ? 85 : isMyPlayer && isMobile ? 80 : 50,
@@ -691,15 +698,10 @@ export function PokerTable({
               ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hole-card-height')) || 39
               : 39;
             
-            // Never 2× on mobile; slightly smaller face-up cards so chip counts stay visible.
+            // Never 2× on mobile — keep face-up/face-down sizes close so layout stays stable.
             const enlargeFaceUp = showFaceUp && !isMobile;
-            const mobileFaceUpScale = isMobile && showFaceUp ? 0.95 : 1;
-            const holeWidth = Math.round(
-              (enlargeFaceUp ? baseHoleWidth * 2 : baseHoleWidth) * mobileFaceUpScale
-            );
-            const holeHeight = Math.round(
-              (enlargeFaceUp ? baseHoleHeight * 2 : baseHoleHeight) * mobileFaceUpScale
-            );
+            const holeWidth = Math.round(enlargeFaceUp ? baseHoleWidth * 2 : baseHoleWidth);
+            const holeHeight = Math.round(enlargeFaceUp ? baseHoleHeight * 2 : baseHoleHeight);
             
             elements.push(
               <div
@@ -707,7 +709,7 @@ export function PokerTable({
                 className={`absolute flex flex-col items-center gap-1 ${isFolded ? 'opacity-50' : ''}`}
                 style={{
                   left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset + layoutHorizontalOffset}px)`,
-                  top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}% + ${verticalOffset + cardVerticalNudge + cardRimNudge}px)`,
+                  top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}% + ${verticalOffset + cardRimNudge}px)`,
                   transform: 'translate(-50%, -50%)',
                   transition: 'transform 0.5s ease-in-out',
                   zIndex: isMobile && showFaceUp ? 40 : 70,

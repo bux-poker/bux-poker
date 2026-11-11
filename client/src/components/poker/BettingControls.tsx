@@ -147,24 +147,28 @@ export function BettingControls({
   };
 
   // Window size state to trigger re-renders when CSS variables change
-  const [windowSize, setWindowSize] = useState({ width: typeof window !== 'undefined' ? window.innerWidth : 1400 });
+  const [windowSize, setWindowSize] = useState({
+    width: typeof window !== "undefined" ? window.innerWidth : 1400,
+    height: typeof window !== "undefined" ? window.innerHeight : 900,
+  });
   
   // Listen for window resize to update CSS variable calculations
   useEffect(() => {
     const handleResize = () => {
-      setWindowSize({ width: window.innerWidth });
+      setWindowSize({ width: window.innerWidth, height: window.innerHeight });
     };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
   
   // Calculate button width - using CSS variables directly in styles, but need container width
   // Calculate container width using CSS variables (trigger recalculation on resize)
-  const containerWidth = typeof window !== 'undefined'
-    ? `calc(${getComputedStyle(document.documentElement).getPropertyValue('--action-button-width') || '140px'} * 3 + 0.75rem * 2)`
-    : 'calc(140px * 3 + 0.75rem * 2)';
-  // Use windowSize to force recalculation
+  const containerWidth = typeof window !== "undefined"
+    ? `calc(${getComputedStyle(document.documentElement).getPropertyValue("--action-button-width") || "140px"} * 3 + 0.75rem * 2)`
+    : "calc(140px * 3 + 0.75rem * 2)";
+  // Use windowSize to force recalculation on rotate / resize
   void windowSize.width;
+  void windowSize.height;
 
   // Determine which buttons to show
   // You can CHECK when your contribution equals the current bet (no bet to call)
@@ -193,8 +197,8 @@ export function BettingControls({
   } as const;
 
   return (
-    <div className="flex flex-col items-end gap-2">
-      <div className="flex items-center gap-2" style={{ width: containerWidth }}>
+    <div className="flex max-h-full flex-col items-end justify-center gap-1 sm:gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2" style={{ width: containerWidth }}>
         <button
           onClick={handleFold}
           disabled={!isMyTurn}
@@ -243,9 +247,9 @@ export function BettingControls({
         </button>
       </div>
 
-      <div className="flex items-center gap-2" style={{ width: containerWidth }}>
-        <div className="flex flex-1 flex-col gap-1.5">
-          <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 sm:gap-2" style={{ width: containerWidth }}>
+        <div className="flex flex-1 flex-col gap-1">
+          <div className="flex items-center gap-1 sm:gap-1.5">
             <button
               onClick={() => handlePreset("half")}
               disabled={presetHalfDisabled}
@@ -263,7 +267,7 @@ export function BettingControls({
               POT
             </button>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 sm:gap-1.5">
             <button
               onClick={() => handlePreset("twothirds")}
               disabled={presetTwoThirdsDisabled}
