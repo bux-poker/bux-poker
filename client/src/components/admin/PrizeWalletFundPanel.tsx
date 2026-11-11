@@ -35,8 +35,12 @@ type SolanaProvider = {
 };
 
 function getProvider(): SolanaProvider | null {
-  const w = window as unknown as { solana?: SolanaProvider; phantom?: { solana?: SolanaProvider } };
-  return w.solana ?? w.phantom?.solana ?? null;
+  const w = window as unknown as {
+    solana?: SolanaProvider;
+    phantom?: { solana?: SolanaProvider };
+    solflare?: SolanaProvider;
+  };
+  return w.solana ?? w.phantom?.solana ?? w.solflare ?? null;
 }
 
 async function ensureAtaIx(
@@ -195,7 +199,7 @@ export function PrizeWalletFundPanel({ kind, eventId, requirements, onFunded }: 
           : `/api/admin/tournaments/${eventId}/prize-funding/confirm`;
       await api.post(
         path,
-        { fundingTxSignature: signature },
+        { signatures: [signature] },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 

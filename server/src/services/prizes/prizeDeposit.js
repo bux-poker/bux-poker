@@ -45,14 +45,77 @@ export function buildPrizeDepositRequirements({
 function accountKeys(tx) {
   const message = tx.transaction.message;
   const keys = message.accountKeys || [];
-  return keys.map((k) => (typeof k === "string" ? k : k.pubkey?.toBase58?.() || k.toString()));
+  return keys.map((k) =>
+    typeof k === "string" ? k : k.pubkey?.toBase58?.() || k.toString()
+  );
+}
+
+function normalizeSignatures(input) {
+  if (Array.isArray(input)) {
+    return [...new Set(input.map((s) => String(s ?? "").trim()).filter(Boolean))];
+  }
+  const one = String(input ?? "").trim();
+  return one ? [one] : [];
 }
 
 /**
- * Verify a confirmed deposit tx sent the required SOL (+ optional SPL/NFT) to the vault.
- * Cover-this-event amounts only — does not look at prior vault balance.
+ * Sum SOL + token gains to `dest` across one parsed tx.
+ */
+function gainsFromParsedTx(tx, dest) {
+  let solReceived = 0n;
+  /** @type {Map<string, bigint>} */
+  const tokenGains = new Map();
+
+  const keys = accountKeys(tx);
+  const destIndex = keys.findIndex((k) => k === dest);
+  if (destIndex >= 0 && tx.meta) {
+    const pre = BigInt(tx.meta.preBalances[destIndex] ?? 0);
+    const post = BigInt(tx.meta.postBalances[destIndex] ?? 0);
+    if (post > pre) solReceived = post - pre;
+  }
+
+  const preTokens = tx.meta?.preTokenBalances || [];
+  const postTokens = tx.meta?.postTokenBalances || [];
+
+  for (const postBal of postTokens) {
+    if (postBal.owner !== dest) continue;
+    const mint = postBal.mint;
+    const postAmt = BigInt(postBal.uiTokenAmount?.amount || 0);
+    const preBal = preTokens.find(
+      (p) =>
+        p.owner === dest &&
+        p.mint === mint &&
+        p.accountIndex === postBal.accountIndex
+    );
+    const preAmt = BigInt(preBal?.uiTokenAmount?.amount || 0);
+    const gain = postAmt > preAmt ? postAmt - preAmt : 0n;
+    if (gain > 0n) {
+      tokenGains.set(mint, (tokenGains.get(mint) || 0n) + gain);
+    }
+  }
+
+  for (const postBal of postTokens) {
+    if (postBal.owner !== dest) continue;
+    const mint = postBal.mint;
+    if (tokenGains.has(mint)) continue;
+    const hadPre = preTokens.some((p) => p.owner === dest && p.mint === mint);
+    if (!hadPre) {
+      const postAmt = BigInt(postBal.uiTokenAmount?.amount || 0);
+      if (postAmt > 0n) tokenGains.set(mint, postAmt);
+    }
+  }
+
+  return { solReceived, tokenGains, involved: destIndex >= 0 };
+}
+
+/**
+ * Verify confirmed deposit tx(s) sent the required SOL (+ SPL/NFT) to the vault.
+ * Amounts are for THIS event only — sums across all provided signatures.
+ *
+ * @param {{ signatures?: string[], signature?: string, prizeStructureJson: string, feeLamports: any, prizeWalletAddress: string }} args
  */
 export async function verifyPrizeDepositTransaction({
+  signatures,
   signature,
   prizeStructureJson,
   feeLamports,
@@ -65,6 +128,21 @@ export async function verifyPrizeDepositTransaction({
     throw err;
   }
 
+  try {
+    new PublicKey(dest);
+  } catch {
+    const err = new Error("Invalid prize wallet address");
+    err.status = 400;
+    throw err;
+  }
+
+  const sigs = normalizeSignatures(signatures ?? signature);
+  if (!sigs.length) {
+    const err = new Error("At least one deposit transaction signature is required");
+    err.status = 400;
+    throw err;
+  }
+
   const requirements = buildPrizeDepositRequirements({
     prizeStructureJson,
     feeLamports,
@@ -72,66 +150,45 @@ export async function verifyPrizeDepositTransaction({
   });
 
   const connection = getSolanaConnection();
-  const tx = await connection.getParsedTransaction(signature, {
-    maxSupportedTransactionVersion: 0,
-    commitment: "confirmed",
-  });
+  let solReceived = 0n;
+  /** @type {Map<string, bigint>} */
+  const tokenGains = new Map();
+  let anyInvolved = false;
 
-  if (!tx || !tx.meta || tx.meta.err) {
-    const err = new Error("Deposit transaction not found or failed on-chain");
+  for (const sig of sigs) {
+    const tx = await connection.getParsedTransaction(sig, {
+      maxSupportedTransactionVersion: 0,
+      commitment: "confirmed",
+    });
+
+    if (!tx || !tx.meta || tx.meta.err) {
+      const err = new Error(
+        `Deposit transaction not found or failed on-chain (${sig.slice(0, 8)}…)`
+      );
+      err.status = 400;
+      throw err;
+    }
+
+    const gains = gainsFromParsedTx(tx, dest);
+    if (gains.involved) anyInvolved = true;
+    solReceived += gains.solReceived;
+    for (const [mint, amt] of gains.tokenGains) {
+      tokenGains.set(mint, (tokenGains.get(mint) || 0n) + amt);
+    }
+  }
+
+  if (!anyInvolved) {
+    const err = new Error("Deposit transaction(s) do not involve the prize wallet");
     err.status = 400;
     throw err;
   }
-
-  const keys = accountKeys(tx);
-  const destIndex = keys.findIndex((k) => k === dest);
-  if (destIndex < 0) {
-    const err = new Error("Deposit transaction does not involve the prize wallet");
-    err.status = 400;
-    throw err;
-  }
-
-  const pre = BigInt(tx.meta.preBalances[destIndex] ?? 0);
-  const post = BigInt(tx.meta.postBalances[destIndex] ?? 0);
-  const solReceived = post > pre ? post - pre : 0n;
-  const needSol = BigInt(requirements.solLamports);
 
   const missing = [];
+  const needSol = BigInt(requirements.solLamports);
   if (solReceived < needSol) {
     missing.push(
       `SOL: deposit sent ${lamportsToSolString(solReceived)}, need ${requirements.solAmount}`
     );
-  }
-
-  /** @type {Map<string, bigint>} */
-  const tokenGains = new Map();
-  const preTokens = tx.meta.preTokenBalances || [];
-  const postTokens = tx.meta.postTokenBalances || [];
-
-  for (const postBal of postTokens) {
-    if (postBal.owner !== dest) continue;
-    const mint = postBal.mint;
-    const postAmt = BigInt(postBal.uiTokenAmount?.amount || 0);
-    const preBal = preTokens.find(
-      (p) => p.owner === dest && p.mint === mint && p.accountIndex === postBal.accountIndex
-    );
-    const preAmt = BigInt(preBal?.uiTokenAmount?.amount || 0);
-    const gain = postAmt > preAmt ? postAmt - preAmt : 0n;
-    if (gain > 0n) {
-      tokenGains.set(mint, (tokenGains.get(mint) || 0n) + gain);
-    }
-  }
-
-  // Also catch brand-new ATAs (no pre balance row)
-  for (const postBal of postTokens) {
-    if (postBal.owner !== dest) continue;
-    const mint = postBal.mint;
-    if (tokenGains.has(mint)) continue;
-    const hadPre = preTokens.some((p) => p.owner === dest && p.mint === mint);
-    if (!hadPre) {
-      const postAmt = BigInt(postBal.uiTokenAmount?.amount || 0);
-      if (postAmt > 0n) tokenGains.set(mint, postAmt);
-    }
   }
 
   for (const { mint, amount } of requirements.spl) {
@@ -156,18 +213,9 @@ export async function verifyPrizeDepositTransaction({
     throw err;
   }
 
-  // Sanity: destination is a valid pubkey
-  try {
-    new PublicKey(dest);
-  } catch {
-    const err = new Error("Invalid prize wallet address");
-    err.status = 400;
-    throw err;
-  }
-
   return {
     ok: true,
-    signature,
+    signatures: sigs,
     requirements,
     tokenProgramId: TOKEN_PROGRAM_ID.toBase58(),
   };

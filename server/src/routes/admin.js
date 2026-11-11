@@ -308,10 +308,11 @@ router.post("/tournaments", async (req, res, next) => {
       },
     });
 
-    // Create TournamentPost entries immediately for selected servers (even if posting fails)
+    // Create TournamentPost rows for selected servers. MANUAL posts Discord now;
+    // WALLET waits until prize deposit is confirmed (see prize-funding/confirm).
+    const isWalletPrizes = prizeDbFields.prizeMode === "WALLET";
     if (serverIds && serverIds.length > 0) {
       try {
-        // Find Discord servers by serverId
         const discordServers = await prisma.discordServer.findMany({
           where: {
             serverId: { in: serverIds },
@@ -320,7 +321,6 @@ router.post("/tournaments", async (req, res, next) => {
           },
         });
 
-        // Create post entries for each server (messageId will be null until post succeeds)
         await Promise.all(
           discordServers.map((server) =>
             prisma.tournamentPost.upsert({
@@ -330,30 +330,31 @@ router.post("/tournaments", async (req, res, next) => {
                   serverId: server.id,
                 },
               },
-              update: {}, // No update needed if exists
+              update: {},
               create: {
                 tournamentId: tournament.id,
                 serverId: server.id,
-                messageId: null, // Will be set when embed is successfully posted
+                messageId: null,
                 postedAt: null,
               },
             })
           )
         );
 
-        console.log(`[ADMIN] Created TournamentPost entries for ${discordServers.length} server(s)`);
+        console.log(
+          `[ADMIN] Created TournamentPost entries for ${discordServers.length} server(s)` +
+            (isWalletPrizes ? " (Discord embed deferred until funded)" : "")
+        );
       } catch (error) {
         console.error("[ADMIN] Error creating tournament post entries:", error);
-        // Continue even if post creation fails
       }
 
-      // Now attempt to post tournament embed to Discord
-      try {
-        await postTournamentEmbed(tournament, serverIds);
-      } catch (error) {
-        console.error("[ADMIN] Error posting tournament embed:", error);
-        // Don't fail the tournament creation if embed posting fails
-        // Posts are already created, so servers will still show
+      if (!isWalletPrizes) {
+        try {
+          await postTournamentEmbed(tournament, serverIds);
+        } catch (error) {
+          console.error("[ADMIN] Error posting tournament embed:", error);
+        }
       }
     }
 
@@ -722,15 +723,23 @@ router.get("/prize-wallet", async (_req, res) => {
   });
 });
 
-async function confirmPrizeDeposit(prismaModel, id, signature) {
-  const sig = String(signature ?? "").trim();
-  if (!sig) {
-    const err = new Error("fundingTxSignature is required");
-    err.status = 400;
-    throw err;
-  }
+function signaturesFromConfirmBody(body) {
+  if (Array.isArray(body?.signatures)) return body.signatures;
+  if (body?.fundingTxSignature) return [body.fundingTxSignature];
+  if (body?.signature) return [body.signature];
+  return [];
+}
 
-  const row = await prisma[prismaModel].findUnique({ where: { id } });
+async function confirmPrizeDeposit(prismaModel, id, signatures) {
+  const row = await prisma[prismaModel].findUnique({
+    where: { id },
+    include:
+      prismaModel === "tournament"
+        ? {
+            posts: { include: { server: { select: { serverId: true } } } },
+          }
+        : undefined,
+  });
   if (!row) {
     const err = new Error(
       prismaModel === "league" ? "League not found" : "Tournament not found"
@@ -744,7 +753,6 @@ async function confirmPrizeDeposit(prismaModel, id, signature) {
     throw err;
   }
 
-  // Ensure row points at shared vault
   const shared = getSharedPrizeWalletAddress();
   if (!shared) {
     const err = new Error(
@@ -765,16 +773,35 @@ async function confirmPrizeDeposit(prismaModel, id, signature) {
   }
 
   await verifyPrizeDepositTransaction({
-    signature: sig,
+    signatures,
     prizeStructureJson: row.prizeStructureJson,
     feeLamports: row.prizeFeeSolLamports,
     prizeWalletAddress: shared,
   });
 
+  const wasPending = row.prizeFundingStatus !== "FUNDED";
+
   const updated = await prisma[prismaModel].update({
     where: { id },
     data: { prizeFundingStatus: "FUNDED", prizeWalletAddress: shared },
   });
+
+  // WALLET tournaments: post Discord embeds only after funding is confirmed
+  if (prismaModel === "tournament" && wasPending) {
+    const serverIds = (row.posts || [])
+      .map((p) => p.server?.serverId)
+      .filter(Boolean);
+    if (serverIds.length > 0) {
+      try {
+        await postTournamentEmbed(updated, serverIds);
+      } catch (error) {
+        console.error(
+          "[ADMIN] Error posting tournament embed after funding:",
+          error
+        );
+      }
+    }
+  }
 
   return attachPrizeFundingSummary(updated);
 }
@@ -787,7 +814,7 @@ router.post(
       const result = await confirmPrizeDeposit(
         "tournament",
         req.params.id,
-        req.body?.fundingTxSignature
+        signaturesFromConfirmBody(req.body)
       );
       res.json(result);
     } catch (err) {
@@ -810,7 +837,7 @@ router.post(
       const result = await confirmPrizeDeposit(
         "league",
         req.params.id,
-        req.body?.fundingTxSignature
+        signaturesFromConfirmBody(req.body)
       );
       res.json(result);
     } catch (err) {
