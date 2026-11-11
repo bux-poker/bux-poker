@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import {
-  Connection,
   PublicKey,
   SystemProgram,
   Transaction,
@@ -10,10 +9,14 @@ import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountInstruction,
   createTransferInstruction,
-  getAssociatedTokenAddress,
-  getAccount,
 } from '@solana/spl-token';
 import api from '../../services/api';
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
+  return btoa(binary);
+}
 
 export interface DepositRequirements {
   prizeWalletAddress: string;
@@ -29,9 +32,7 @@ type SolanaProvider = {
   isPhantom?: boolean;
   publicKey?: { toBytes(): Uint8Array; toString(): string };
   connect: () => Promise<{ publicKey: { toString(): string } }>;
-  signAndSendTransaction: (
-    tx: Transaction
-  ) => Promise<{ signature: string } | string>;
+  signTransaction: (tx: Transaction) => Promise<Transaction>;
 };
 
 function getProvider(): SolanaProvider | null {
@@ -43,53 +44,9 @@ function getProvider(): SolanaProvider | null {
   return w.solana ?? w.phantom?.solana ?? w.solflare ?? null;
 }
 
-async function ensureAtaIx(
-  connection: Connection,
-  payer: PublicKey,
-  mint: PublicKey,
-  owner: PublicKey
-) {
-  const ata = await getAssociatedTokenAddress(
-    mint,
-    owner,
-    false,
-    TOKEN_PROGRAM_ID,
-    ASSOCIATED_TOKEN_PROGRAM_ID
-  );
-  try {
-    await getAccount(connection, ata, undefined, TOKEN_PROGRAM_ID);
-    return { ata, createIx: null as ReturnType<typeof createAssociatedTokenAccountInstruction> | null };
-  } catch {
-    return {
-      ata,
-      createIx: createAssociatedTokenAccountInstruction(
-        payer,
-        ata,
-        owner,
-        mint,
-        TOKEN_PROGRAM_ID,
-        ASSOCIATED_TOKEN_PROGRAM_ID
-      ),
-    };
-  }
-}
-
-async function findSourceTokenAccount(
-  connection: Connection,
-  owner: PublicKey,
-  mint: PublicKey,
-  need: bigint
-) {
-  const resp = await connection.getParsedTokenAccountsByOwner(owner, {
-    programId: TOKEN_PROGRAM_ID,
-  });
-  for (const acct of resp.value) {
-    const info = acct.account.data.parsed?.info;
-    if (!info || info.mint !== mint.toBase58()) continue;
-    const amount = BigInt(info.tokenAmount?.amount || 0);
-    if (amount >= need) return new PublicKey(acct.pubkey);
-  }
-  return null;
+function authHeaders() {
+  const token = localStorage.getItem('sessionToken');
+  return token ? { Authorization: `Bearer ${token}` } : undefined;
 }
 
 interface Props {
@@ -136,13 +93,27 @@ export function PrizeWalletFundPanel({ kind, eventId, requirements, onFunded }: 
     try {
       const provider = await connect();
       if (!provider?.publicKey) throw new Error('Wallet not connected');
+      if (typeof provider.signTransaction !== 'function') {
+        throw new Error('Wallet does not support signTransaction');
+      }
 
       const payer = new PublicKey(provider.publicKey.toString());
-      const dest = new PublicKey(requirements.prizeWalletAddress);
-      const connection = new Connection(requirements.rpcUrl, 'confirmed');
+      const preparePath =
+        kind === 'league'
+          ? `/api/admin/leagues/${eventId}/prize-funding/prepare`
+          : `/api/admin/tournaments/${eventId}/prize-funding/prepare`;
+
+      setMessage('Preparing deposit via API…');
+      const { data: plan } = await api.post(
+        preparePath,
+        { payerAddress: payer.toBase58() },
+        { headers: authHeaders() }
+      );
+
+      const dest = new PublicKey(plan.prizeWalletAddress);
       const tx = new Transaction();
 
-      const solLamports = BigInt(requirements.solLamports || '0');
+      const solLamports = BigInt(plan.solLamports || '0');
       if (solLamports > 0n) {
         tx.add(
           SystemProgram.transfer({
@@ -153,25 +124,28 @@ export function PrizeWalletFundPanel({ kind, eventId, requirements, onFunded }: 
         );
       }
 
-      const tokenTransfers = [
-        ...requirements.spl.map((s) => ({ mint: s.mint, amount: BigInt(s.amount) })),
-        ...requirements.nfts.map((n) => ({ mint: n.mint, amount: 1n })),
-      ];
-
-      for (const t of tokenTransfers) {
+      for (const t of plan.tokenTransfers || []) {
         const mint = new PublicKey(t.mint);
-        const source = await findSourceTokenAccount(connection, payer, mint, t.amount);
-        if (!source) {
-          throw new Error(`Your wallet is missing token ${t.mint.slice(0, 8)}…`);
+        const source = new PublicKey(t.source);
+        const ata = new PublicKey(t.destinationAta);
+        if (t.createDestAta) {
+          tx.add(
+            createAssociatedTokenAccountInstruction(
+              payer,
+              ata,
+              dest,
+              mint,
+              TOKEN_PROGRAM_ID,
+              ASSOCIATED_TOKEN_PROGRAM_ID
+            )
+          );
         }
-        const { ata, createIx } = await ensureAtaIx(connection, payer, mint, dest);
-        if (createIx) tx.add(createIx);
         tx.add(
           createTransferInstruction(
             source,
             ata,
             payer,
-            t.amount,
+            BigInt(t.amount),
             [],
             TOKEN_PROGRAM_ID
           )
@@ -182,31 +156,40 @@ export function PrizeWalletFundPanel({ kind, eventId, requirements, onFunded }: 
         throw new Error('Nothing to deposit');
       }
 
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
       tx.feePayer = payer;
-      tx.recentBlockhash = blockhash;
+      tx.recentBlockhash = plan.blockhash;
 
-      const sent = await provider.signAndSendTransaction(tx);
-      const signature = typeof sent === 'string' ? sent : sent.signature;
+      setMessage('Approve the deposit in your wallet…');
+      const signed = await provider.signTransaction(tx);
+      const signedTransaction = bytesToBase64(signed.serialize());
+
+      setMessage('Submitting via API…');
+      const { data: sent } = await api.post(
+        '/api/admin/solana/send-raw',
+        { signedTransaction },
+        { headers: authHeaders() }
+      );
+      const signature = sent.signature as string;
       setMessage(`Submitted ${signature.slice(0, 8)}… confirming…`);
 
-      await connection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
-
-      const token = localStorage.getItem('sessionToken');
-      const path =
+      const confirmPath =
         kind === 'league'
           ? `/api/admin/leagues/${eventId}/prize-funding/confirm`
           : `/api/admin/tournaments/${eventId}/prize-funding/confirm`;
       await api.post(
-        path,
+        confirmPath,
         { signatures: [signature] },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: authHeaders() }
       );
 
       setMessage('Prizes deposited — event is funded.');
       onFunded();
     } catch (err: any) {
-      setError(err.response?.data?.error || err.message || 'Deposit failed');
+      const msg =
+        err.response?.data?.error ||
+        err.message ||
+        'Deposit failed';
+      setError(msg);
     } finally {
       setBusy(false);
     }

@@ -26,6 +26,10 @@ import {
   refreshTournamentPrizeFunding,
 } from "../services/prizes/prizeFundingRefresh.js";
 import { verifyPrizeDepositTransaction } from "../services/prizes/prizeDeposit.js";
+import {
+  preparePrizeDeposit,
+  sendSignedPrizeDepositTransaction,
+} from "../services/prizes/prizeDepositPrepare.js";
 
 const router = Router();
 const engine = new TournamentEngine();
@@ -722,6 +726,77 @@ router.get("/prize-wallet", async (_req, res) => {
     rpcUrl: process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com",
   });
 });
+
+/** Submit a browser-signed deposit tx via the API host RPC (avoids public RPC 403 in browser). */
+router.post("/solana/send-raw", async (req, res, next) => {
+  try {
+    const result = await sendSignedPrizeDepositTransaction(
+      req.body?.signedTransaction
+    );
+    res.json(result);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
+});
+
+async function prepareDepositForModel(prismaModel, id, payerAddress) {
+  const row = await prisma[prismaModel].findUnique({ where: { id } });
+  if (!row) {
+    const err = new Error(
+      prismaModel === "league" ? "League not found" : "Tournament not found"
+    );
+    err.status = 404;
+    throw err;
+  }
+  if (row.prizeMode !== "WALLET") {
+    const err = new Error("This event does not use wallet prize mode");
+    err.status = 400;
+    throw err;
+  }
+  return preparePrizeDeposit({
+    prizeStructureJson: row.prizeStructureJson,
+    feeLamports: row.prizeFeeSolLamports,
+    prizeWalletAddress: row.prizeWalletAddress,
+    payerAddress,
+  });
+}
+
+router.post(
+  "/tournaments/:id/prize-funding/prepare",
+  requireTournamentAdmin(),
+  async (req, res, next) => {
+    try {
+      const plan = await prepareDepositForModel(
+        "tournament",
+        req.params.id,
+        req.body?.payerAddress
+      );
+      res.json(plan);
+    } catch (err) {
+      if (err.status) return res.status(err.status).json({ error: err.message });
+      next(err);
+    }
+  }
+);
+
+router.post(
+  "/leagues/:id/prize-funding/prepare",
+  requireLeagueAdmin(),
+  async (req, res, next) => {
+    try {
+      const plan = await prepareDepositForModel(
+        "league",
+        req.params.id,
+        req.body?.payerAddress
+      );
+      res.json(plan);
+    } catch (err) {
+      if (err.status) return res.status(err.status).json({ error: err.message });
+      next(err);
+    }
+  }
+);
 
 function signaturesFromConfirmBody(body) {
   if (Array.isArray(body?.signatures)) return body.signatures;
