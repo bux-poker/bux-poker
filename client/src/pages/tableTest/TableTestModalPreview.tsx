@@ -8,6 +8,56 @@ import {
   BuxModal,
   BuxModalButton,
 } from "../../components/ui/BuxModal";
+import { PrizeClaimSummary } from "../../components/tournament/PrizeClaimSummary";
+
+const MOCK_WALLET_PRIZE_TOURNAMENT = {
+  prizePlaces: 3,
+  prizeMode: "WALLET" as const,
+  hasPrizes: true,
+  prizeStructure: [
+    {
+      place: 1,
+      items: [
+        { kind: "SOL", lamports: "500000000" },
+        { kind: "NFT", mint: "BuXNfT1111111111111111111111111111111111111" },
+      ],
+    },
+    {
+      place: 2,
+      items: [{ kind: "SPL", mint: "BuXTok2222222222222222222222222222222222222", amount: "1000000", decimals: 6 }],
+    },
+    {
+      place: 3,
+      items: [{ kind: "SOL", lamports: "100000000" }],
+    },
+  ],
+  myPrizeClaim: {
+    id: "mock-claim",
+    finishingPlace: 1,
+    status: "ELIGIBLE",
+    eligibleUntil: new Date(Date.now() + 7 * 864e5).toISOString(),
+  },
+};
+
+const MOCK_MANUAL_PRIZE_TOURNAMENT = {
+  prizePlaces: 3,
+  prizeMode: "MANUAL" as const,
+  hasPrizes: true,
+  prizeStructure: [
+    { place: 1, description: "1 SOL + BUX Champion NFT" },
+    { place: 2, description: "0.5 SOL" },
+    { place: 3, description: "Discord role + merch" },
+  ],
+  prizeClaimServer: {
+    serverName: "BUX Poker Official",
+    inviteLink: "https://discord.gg/example",
+  },
+  myPrizeClaim: {
+    id: "mock-manual-claim",
+    finishingPlace: 2,
+    status: "MANUAL_PENDING",
+  },
+};
 
 export const TABLE_TEST_MODAL_OPTIONS = [
   { id: "none", label: "None (clear)" },
@@ -157,9 +207,10 @@ export function TableTestModalPreview({
   if (selected === "elimination") {
     return (
       <BuxModal
-        title="You have been eliminated"
+        title="Cashed — eliminated"
         icon="eliminated"
-        tone="danger"
+        tone="success"
+        maxWidth="md"
         onClose={onClear}
         zIndexClass="z-[130]"
         footer={
@@ -171,7 +222,14 @@ export function TableTestModalPreview({
           </>
         }
       >
-        <p>You finished in position 13.</p>
+        <p>You finished in position 2.</p>
+        <PrizeClaimSummary
+          place={2}
+          tournament={{
+            ...MOCK_MANUAL_PRIZE_TOURNAMENT,
+            myPrizeClaim: { ...MOCK_MANUAL_PRIZE_TOURNAMENT.myPrizeClaim, finishingPlace: 2 },
+          }}
+        />
       </BuxModal>
     );
   }
@@ -182,6 +240,7 @@ export function TableTestModalPreview({
         title="Tournament Winner!"
         icon="trophy"
         tone="success"
+        maxWidth="md"
         onClose={onClear}
         zIndexClass="z-[130]"
         footer={
@@ -197,26 +256,31 @@ export function TableTestModalPreview({
           Congratulations, you finished <span className="font-semibold">1st</span> in this
           tournament.
         </p>
+        <PrizeClaimSummary
+          place={1}
+          tournament={MOCK_WALLET_PRIZE_TOURNAMENT}
+          claimEndpoint="/api/tournaments/table-test/claim-prize"
+        />
       </BuxModal>
     );
   }
 
   if (selected === "break") {
     return (
-      <BuxModal
-        title="Tournament break"
-        icon="break"
-        onClose={onClear}
-        maxWidth="md"
-        zIndexClass="z-[130]"
-        footer={<BuxModalButton onClick={onClear}>Dismiss</BuxModalButton>}
-      >
+      <BuxModal title="Tournament break" icon="break" maxWidth="md" zIndexClass="z-[130]">
         <p className="text-slate-300">Stretch your legs — play resumes soon.</p>
         <p className="mt-4 font-mono text-4xl font-semibold tabular-nums text-white">
           {Math.floor(breakRemainSec / 60)}:
           {(breakRemainSec % 60).toString().padStart(2, "0")}
         </p>
-        <p className="mt-2 text-sm text-slate-400">No new hands until the break ends.</p>
+        <p className="mt-2 text-sm text-slate-400">
+          No new hands until the break ends. This closes automatically when the timer hits zero.
+        </p>
+        <div className="pointer-events-auto mt-4 text-center">
+          <button type="button" onClick={onClear} className="text-xs text-slate-500 underline">
+            Clear preview
+          </button>
+        </div>
       </BuxModal>
     );
   }

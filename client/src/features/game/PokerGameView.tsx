@@ -17,6 +17,10 @@ import { useTournament } from "../../hooks/useTournaments";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { TournamentLobbyModal } from "../../components/tournament/TournamentLobbyModal";
 import { BuxBanner, BuxModal, BuxModalButton } from "../../components/ui/BuxModal";
+import {
+  PrizeClaimSummary,
+  isPaidFinishingPlace,
+} from "../../components/tournament/PrizeClaimSummary";
 import { soundManager, type SoundName } from "../../utils/soundManager";
 import { preloadCards } from "../../utils/cardPreloader";
 import { getHandDescription } from "@shared/utils/handEvaluator";
@@ -976,6 +980,7 @@ export function PokerGameView() {
       setEliminationModalDismissed(false);
       setConsolidationWaiting(null);
       setPendingConsolidationWaiting(null);
+      void refetchTournament({ silent: true });
     }
 
     // Show winner modal when tournament is completed and this player finished 1st
@@ -988,8 +993,9 @@ export function PokerGameView() {
       setWinnerModalOpen(true);
       setConsolidationWaiting(null);
       setPendingConsolidationWaiting(null);
+      void refetchTournament({ silent: true });
     }
-  }, [myTournamentPlayerSig, tournament?.status, tournament?.id, user, winnerModalOpen, winnerModalDismissed]);
+  }, [myTournamentPlayerSig, tournament?.status, tournament?.id, user, winnerModalOpen, winnerModalDismissed, refetchTournament]);
 
   // Sound effects: Play sounds when game state changes
   useEffect(() => {
@@ -1501,9 +1507,16 @@ export function PokerGameView() {
           {/* Elimination modal — centered on table column */}
           {eliminationInfo && !eliminationModalDismissed && (
             <BuxModal
-              title="You have been eliminated"
+              title={
+                isPaidFinishingPlace(tournament, eliminationInfo.place)
+                  ? "Cashed — eliminated"
+                  : "You have been eliminated"
+              }
               icon="eliminated"
-              tone="danger"
+              tone={
+                isPaidFinishingPlace(tournament, eliminationInfo.place) ? "success" : "danger"
+              }
+              maxWidth="md"
               onClose={() => setEliminationModalDismissed(true)}
               footer={
                 <>
@@ -1521,6 +1534,20 @@ export function PokerGameView() {
                   ? `You finished in position ${eliminationInfo.place}.`
                   : "You are out of the tournament."}
               </p>
+              {isPaidFinishingPlace(tournament, eliminationInfo.place) &&
+                tournament &&
+                eliminationInfo.place != null && (
+                  <PrizeClaimSummary
+                    place={eliminationInfo.place}
+                    tournament={tournament}
+                    claimEndpoint={
+                      gameState?.tournamentId
+                        ? `/api/tournaments/${gameState.tournamentId}/claim-prize`
+                        : undefined
+                    }
+                    onUpdated={() => void refetchTournament({ silent: true })}
+                  />
+                )}
             </BuxModal>
           )}
 
@@ -1530,6 +1557,7 @@ export function PokerGameView() {
               title="Tournament Winner!"
               icon="trophy"
               tone="success"
+              maxWidth="md"
               onClose={() => {
                 setWinnerModalDismissed(true);
                 setWinnerModalOpen(false);
@@ -1554,6 +1582,18 @@ export function PokerGameView() {
                 Congratulations, you finished <span className="font-semibold">1st</span> in this
                 tournament.
               </p>
+              {tournament && isPaidFinishingPlace(tournament, 1) && (
+                <PrizeClaimSummary
+                  place={1}
+                  tournament={tournament}
+                  claimEndpoint={
+                    gameState?.tournamentId
+                      ? `/api/tournaments/${gameState.tournamentId}/claim-prize`
+                      : undefined
+                  }
+                  onUpdated={() => void refetchTournament({ silent: true })}
+                />
+              )}
             </BuxModal>
           )}
 
@@ -1614,20 +1654,6 @@ export function PokerGameView() {
                 icon="break"
                 maxWidth="md"
                 zIndexClass="z-[101]"
-                onClose={() => {
-                  setScheduleModal(null);
-                  void refetchTournament({ silent: true });
-                }}
-                footer={
-                  <BuxModalButton
-                    onClick={() => {
-                      setScheduleModal(null);
-                      void refetchTournament({ silent: true });
-                    }}
-                  >
-                    Dismiss
-                  </BuxModalButton>
-                }
               >
                 {scheduleModal.message ? (
                   <p className="text-slate-300">{scheduleModal.message}</p>
@@ -1636,7 +1662,10 @@ export function PokerGameView() {
                   {Math.floor(breakRemainSec / 60)}:
                   {(breakRemainSec % 60).toString().padStart(2, "0")}
                 </p>
-                <p className="mt-2 text-sm text-slate-400">No new hands until the break ends.</p>
+                <p className="mt-2 text-sm text-slate-400">
+                  No new hands until the break ends. This closes automatically when the timer hits
+                  zero.
+                </p>
               </BuxModal>
             )}
             {scheduleModal?.kind === "LEVEL_UP" && (
