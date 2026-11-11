@@ -57,5 +57,8 @@ export interface PokerTableProps {
     emojiId: TableReactionEmojiId;
     toUserId: string;
     kind: TableReactionKind;
+    fromUserId?: string;
   }) => void;
+  /** Remaining ms before this user can send another emoji */
+  reactionCooldownMs?: number;
 }

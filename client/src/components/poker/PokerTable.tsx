@@ -41,6 +41,7 @@ export function PokerTable({
   onTournamentLobbyClick,
   reactions = [],
   onSendReaction,
+  reactionCooldownMs = 0,
 }: PokerTableProps) {
   // Create array with 10 seats (empty seats if needed)
   const allSeats = Array.from({ length: 10 }, (_, idx) => {
@@ -103,6 +104,7 @@ export function PokerTable({
         playerMatchesUser({ id: pickerTargetUserId, userId: pickerTargetUserId }, myUserId);
       onSendReaction({
         emojiId,
+        fromUserId: myKey,
         toUserId: isSelf ? myKey : pickerTargetUserId,
         kind: isSelf ? "self" : "throw",
       });
@@ -798,6 +800,7 @@ export function PokerTable({
           onClosePicker={() => setPickerTargetUserId(null)}
           seatRefs={seatRefs}
           tableRef={tableRootRef}
+          cooldownRemainingMs={reactionCooldownMs}
         />
       )}
     </div>

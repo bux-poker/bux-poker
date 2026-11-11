@@ -9,8 +9,8 @@ const EMOJI_BY_ID = {
   cool: "😎",
 };
 
-const lastBySocket = new Map(); // socketId -> ms
-const RATE_MS = 250;
+const lastByUser = new Map(); // userId|socketId -> ms
+const RATE_MS = 10_000;
 
 /**
  * Broadcast table emoji reactions (self-bounce or throw) to the game room.
@@ -36,10 +36,6 @@ export function registerTableReaction(socket, io) {
   socket.on("table-reaction", (payload = {}) => {
     try {
       const now = Date.now();
-      const prev = lastBySocket.get(socket.id) || 0;
-      if (now - prev < RATE_MS) return;
-      lastBySocket.set(socket.id, now);
-
       const gameId = typeof payload.gameId === "string" ? payload.gameId.trim() : "";
       if (!gameId) return;
       if (!socket.rooms.has(`game:${gameId}`)) {
@@ -55,6 +51,11 @@ export function registerTableReaction(socket, io) {
       ).trim();
       const toUserId = String(payload.toUserId || fromUserId || "").trim();
       if (!fromUserId || !toUserId) return;
+
+      const rateKey = fromUserId || socket.id;
+      const prev = lastByUser.get(rateKey) || 0;
+      if (now - prev < RATE_MS) return;
+      lastByUser.set(rateKey, now);
 
       const event = {
         id:

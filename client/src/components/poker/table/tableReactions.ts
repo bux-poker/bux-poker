@@ -1,11 +1,16 @@
 export const TABLE_REACTION_EMOJIS = [
-  { id: "sad", emoji: "😢", label: "Sad" },
-  { id: "angry", emoji: "😠", label: "Angry" },
-  { id: "celebrate", emoji: "🎉", label: "Celebrate" },
-  { id: "snore", emoji: "😴", label: "Snore" },
-  { id: "shit", emoji: "💩", label: "Shit" },
-  { id: "love", emoji: "❤️", label: "Love" },
-  { id: "cool", emoji: "😎", label: "Cool" },
+  { id: "sad", emoji: "😢", label: "Sad", src: "/images/reactions/sad.svg" },
+  { id: "angry", emoji: "😠", label: "Angry", src: "/images/reactions/angry.svg" },
+  {
+    id: "celebrate",
+    emoji: "🎉",
+    label: "Celebrate",
+    src: "/images/reactions/celebrate.svg",
+  },
+  { id: "snore", emoji: "😴", label: "Snore", src: "/images/reactions/snore.svg" },
+  { id: "shit", emoji: "💩", label: "Shit", src: "/images/reactions/shit.svg" },
+  { id: "love", emoji: "❤️", label: "Love", src: "/images/reactions/love.svg" },
+  { id: "cool", emoji: "😎", label: "Cool", src: "/images/reactions/cool.svg" },
 ] as const;
 
 export type TableReactionEmojiId = (typeof TABLE_REACTION_EMOJIS)[number]["id"];
@@ -22,6 +27,12 @@ export type TableReactionEvent = {
   toUserId: string;
   createdAt: number;
 };
+
+export const REACTION_COOLDOWN_MS = 10_000;
+
+export function reactionEmojiSrc(emojiId: string): string | undefined {
+  return TABLE_REACTION_EMOJIS.find((e) => e.id === emojiId)?.src;
+}
 
 export function createReactionId() {
   return `rx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

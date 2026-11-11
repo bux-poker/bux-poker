@@ -157,7 +157,10 @@ export function PokerGameView() {
   const lastActionSoundSeqRef = useRef<Map<string, number>>(new Map());
   const [preActionSelected, setPreActionSelected] = useState<PreActionKind | null>(null);
   const { user } = useAuth();
-  const { reactions, sendReaction } = useTableReactions(id, user?.id);
+  const { reactions, sendReaction, cooldownRemainingMs } = useTableReactions(
+    id,
+    user?.id
+  );
   /** Keeps GET /api/tournaments/:id loading when game-state drops tournamentId but consolidation sockets still name the MTT. */
   const [socketTournamentIdHint, setSocketTournamentIdHint] = useState<string | null>(null);  const effectiveTournamentId = gameState?.tournamentId ?? socketTournamentIdHint ?? undefined;
   const { tournament, refetch: refetchTournament } = useTournament(effectiveTournamentId);
@@ -1671,6 +1674,7 @@ export function PokerGameView() {
               topRightPosition={myPositionStr ?? undefined}
               reactions={reactions}
               onSendReaction={user?.id ? sendReaction : undefined}
+              reactionCooldownMs={cooldownRemainingMs}
             />
           </div>
 

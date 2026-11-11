@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getSocket } from "../services/socket";
 import { soundManager } from "../utils/soundManager";
 import {
+  REACTION_COOLDOWN_MS,
   TABLE_REACTION_EMOJIS,
   createReactionId,
   type TableReactionEmojiId,
@@ -10,7 +11,8 @@ import {
 } from "../components/poker/table/tableReactions";
 
 const MAX_LIVE = 24;
-const TTL_MS = 2200;
+/** Must cover throw flight + bounce settle (see bux-emoji-throw). */
+const TTL_MS = 3400;
 
 /**
  * Local + socket-synced table emoji reactions.
@@ -18,7 +20,17 @@ const TTL_MS = 2200;
  */
 export function useTableReactions(gameId: string | undefined, myUserId: string | undefined) {
   const [reactions, setReactions] = useState<TableReactionEvent[]>([]);
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
   const seenRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (cooldownUntil <= Date.now()) return;
+    const id = window.setInterval(() => setNow(Date.now()), 200);
+    return () => window.clearInterval(id);
+  }, [cooldownUntil]);
+
+  const cooldownRemainingMs = Math.max(0, cooldownUntil - now);
 
   const pushReaction = useCallback((event: TableReactionEvent, playSound: boolean) => {
     if (seenRef.current.has(event.id)) return;
@@ -67,29 +79,34 @@ export function useTableReactions(gameId: string | undefined, myUserId: string |
       emojiId: TableReactionEmojiId;
       toUserId: string;
       kind: TableReactionKind;
+      fromUserId?: string;
     }) => {
-      if (!gameId || !myUserId) return;
+      if (!gameId || !myUserId) return false;
+      if (Date.now() < cooldownUntil) return false;
       const def = TABLE_REACTION_EMOJIS.find((e) => e.id === opts.emojiId);
-      if (!def) return;
+      if (!def) return false;
       const event: TableReactionEvent = {
         id: createReactionId(),
         gameId,
         emoji: def.emoji,
         emojiId: def.id,
         kind: opts.kind,
-        fromUserId: myUserId,
+        fromUserId: opts.fromUserId || myUserId,
         toUserId: opts.toUserId,
         createdAt: Date.now(),
       };
+      setCooldownUntil(Date.now() + REACTION_COOLDOWN_MS);
+      setNow(Date.now());
       pushReaction(event, true);
       try {
         getSocket().emit("table-reaction", event);
       } catch {
         /* local-only fallback */
       }
+      return true;
     },
-    [gameId, myUserId, pushReaction]
+    [gameId, myUserId, pushReaction, cooldownUntil]
   );
 
-  return { reactions, sendReaction };
+  return { reactions, sendReaction, cooldownRemainingMs };
 }

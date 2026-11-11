@@ -54,7 +54,10 @@ function buildTestPlayers(myUserId?: string) {
 export function TableTestPage() {
   const { user } = useAuth();
   const players = useMemo(() => buildTestPlayers(user?.id), [user?.id]);
-  const { reactions, sendReaction } = useTableReactions("table-test", user?.id);
+  const { reactions, sendReaction, cooldownRemainingMs } = useTableReactions(
+    "table-test",
+    user?.id
+  );
   const isMobile = useIsMobile();
   const [chatCollapsed, setChatCollapsed] = useState(() => typeof window !== "undefined" && (window.innerWidth <= 1024 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || "ontouchstart" in window));
   const [showDealerMessages, setShowDealerMessages] = useState(true);
@@ -99,6 +102,7 @@ export function TableTestPage() {
               topRightPlayers="28/45"
               reactions={reactions}
               onSendReaction={user?.id ? sendReaction : undefined}
+              reactionCooldownMs={cooldownRemainingMs}
             />
           </div>
 
