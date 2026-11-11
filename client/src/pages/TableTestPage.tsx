@@ -100,7 +100,10 @@ export function TableTestPage() {
   }));
 
   return (
-    <div className="flex h-[100dvh] min-h-screen w-screen flex-col overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900">
+    <div
+      className="flex h-[100dvh] min-h-screen w-screen flex-col overflow-hidden"
+      style={{ background: "var(--bux-ink, #141b24)" }}
+    >
       {/* Main area: table + controls | chat */}
       <div className="relative z-20 flex min-h-0 flex-1 overflow-hidden">
         {/* Table column — modals are contained here so chat stays clear */}
@@ -117,7 +120,10 @@ export function TableTestPage() {
             selected={previewModal}
             onClear={() => setPreviewModal("none")}
           />
-          <div className="relative min-h-0 flex-1 overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900">
+          <div
+            className="relative min-h-0 flex-1 overflow-hidden"
+            style={{ background: "var(--bux-ink, #141b24)" }}
+          >
             {/* Opponents face-down; hero seat cards face-up at 60% community size */}
             <PokerTable
               gameId="table-test"

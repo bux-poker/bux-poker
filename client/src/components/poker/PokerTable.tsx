@@ -148,7 +148,7 @@ export function PokerTable({
       className="relative flex h-full w-full items-end justify-center overflow-hidden"
       style={{
         background:
-          "radial-gradient(ellipse at center, #121820 0%, var(--bux-ink, #0b0f14) 70%)",
+          "radial-gradient(ellipse at center, var(--bux-ink-elevated, #1c2530) 0%, var(--bux-ink, #141b24) 70%)",
         paddingTop: "var(--table-padding-top, 56px)",
         paddingRight: "var(--table-padding, 32px)",
         // Small inset only — action corners live in a flow row below this container.
