@@ -424,7 +424,7 @@ export function PokerTable({
           const visualSeat = visualIdx + 1;
           const cardsOnRight = [1, 2, 3, 9, 10].includes(visualSeat);
 
-          // Face-down uses CSS hole size. Face-up scales both axes equally (~1.65×), capped under community.
+          // Face-down uses CSS hole size. Face-up is 2× face-down, capped under community.
           const css = typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null;
           const baseHoleWidth = css ? parseInt(css.getPropertyValue("--hole-card-width"), 10) || 28 : 28;
           const baseHoleHeight = css ? parseInt(css.getPropertyValue("--hole-card-height"), 10) || 39 : 39;
@@ -434,25 +434,24 @@ export function PokerTable({
           let holeWidth = baseHoleWidth;
           let holeHeight = baseHoleHeight;
           if (seatCardsFaceUp) {
-            const scale = 1.65;
-            holeWidth = Math.round(baseHoleWidth * scale);
-            holeHeight = Math.round(baseHoleHeight * scale);
-            const maxW = Math.max(baseHoleWidth + 2, communityW - 6);
-            const maxH = Math.max(baseHoleHeight + 2, communityH - 6);
+            // 2× face-down, same aspect; never reach community size.
+            holeWidth = Math.round(baseHoleWidth * 2);
+            holeHeight = Math.round(baseHoleHeight * 2);
+            const maxW = Math.max(baseHoleWidth + 4, communityW - 4);
+            const maxH = Math.max(baseHoleHeight + 4, communityH - 4);
             if (holeWidth > maxW || holeHeight > maxH) {
               const fit = Math.min(maxW / holeWidth, maxH / holeHeight);
-              holeWidth = Math.round(holeWidth * fit);
-              holeHeight = Math.round(holeHeight * fit);
+              holeWidth = Math.max(baseHoleWidth + 4, Math.round(holeWidth * fit));
+              holeHeight = Math.max(baseHoleHeight + 4, Math.round(holeHeight * fit));
             }
           }
 
-          // Same avatar→card gap for face-up and face-down.
+          // Horizontal gap avatar→cards (same face-up / face-down).
           const CARD_SEAT_GAP = windowSize.width < 1000 ? 6 : 8;
-          // Center on PFP when possible; if taller than avatar, extend upward only (never into the label).
-          const cardStackTop = Math.max(
-            Math.round((avatarSize - holeHeight) / 2),
-            avatarSize - holeHeight
-          );
+          // Label sits outside the felt (below seats 1–5, above 6–10). Pin cards to that
+          // avatar edge so the vertical gap to the label matches on top and bottom.
+          const labelBelow = visualSeat <= 5;
+          const cardStackTop = labelBelow ? avatarSize - holeHeight : 0;
 
           // Adjust vertical position for smaller screens: seats 1-5 down, 6-10 up
           let verticalOffset = 0;
@@ -680,31 +679,17 @@ export function PokerTable({
 
                         {showSeatCards && (
                           <div
-                            className={`absolute flex flex-col items-center gap-1 ${isFolded ? "opacity-50" : ""}`}
+                            className={`absolute flex items-center ${isFolded ? "opacity-50" : ""}`}
                             style={{
                               top: cardStackTop,
+                              height: holeHeight,
                               zIndex: isMobile && showFaceUp ? 40 : 70,
                               ...(cardsOnRight
                                 ? { left: "100%", marginLeft: CARD_SEAT_GAP }
                                 : { right: "100%", marginRight: CARD_SEAT_GAP }),
                             }}
                           >
-                            {visualSeat <= 5 && (
-                              <div className="flex flex-wrap items-center justify-center gap-1">
-                                {(player.contribution ?? 0) > 0 && <BetChip value={player.contribution!} />}
-                                {isWinner && potWon > 0 && (
-                                  <div className="flex items-center gap-0.5 rounded-md border-2 border-amber-400/80 bg-amber-500/30 px-1.5 py-0.5 shadow-md">
-                                    <span
-                                      className="font-bold text-amber-200"
-                                      style={{ fontSize: "var(--bet-chip-text-size, 13px)" }}
-                                    >
-                                      +{potWon.toLocaleString()}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                            <div className="flex" style={{ gap: "var(--hole-card-gap, 4px)" }}>
+                            <div className="relative flex" style={{ gap: "var(--hole-card-gap, 4px)" }}>
                               {player.holeCards!.map((card, cardIdx) => {
                                 const hasWinnerHighlight =
                                   showdownActive &&
@@ -734,29 +719,41 @@ export function PokerTable({
                                   </div>
                                 );
                               })}
+                              {/* Bet / pot won toward table center — outside the label-gap box */}
+                              {((player.contribution ?? 0) > 0 || (isWinner && potWon > 0)) && (
+                                <div
+                                  className="absolute left-1/2 flex -translate-x-1/2 flex-wrap items-center justify-center gap-1"
+                                  style={
+                                    labelBelow
+                                      ? { bottom: "100%", marginBottom: 2 }
+                                      : { top: "100%", marginTop: 2 }
+                                  }
+                                >
+                                  {(player.contribution ?? 0) > 0 && (
+                                    <BetChip value={player.contribution!} />
+                                  )}
+                                  {isWinner && potWon > 0 && (
+                                    <div className="flex items-center gap-0.5 rounded-md border-2 border-amber-400/80 bg-amber-500/30 px-1.5 py-0.5 shadow-md">
+                                      <span
+                                        className="font-bold text-amber-200"
+                                        style={{ fontSize: "var(--bet-chip-text-size, 13px)" }}
+                                      >
+                                        +{potWon.toLocaleString()}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                            {visualSeat > 5 && (
-                              <div className="flex flex-wrap items-center justify-center gap-1">
-                                {(player.contribution ?? 0) > 0 && <BetChip value={player.contribution!} />}
-                                {isWinner && potWon > 0 && (
-                                  <div className="flex items-center gap-0.5 rounded-md border-2 border-amber-400/80 bg-amber-500/30 px-1.5 py-0.5 shadow-md">
-                                    <span
-                                      className="font-bold text-amber-200"
-                                      style={{ fontSize: "var(--bet-chip-text-size, 13px)" }}
-                                    >
-                                      +{potWon.toLocaleString()}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
                           </div>
                         )}
                       </div>
 
                       <div
-                        className="bux-seat-capsule mt-0.5"
+                        className="bux-seat-capsule"
                         style={{
+                          marginTop: labelBelow ? 4 : 0,
+                          marginBottom: labelBelow ? 0 : 4,
                           zIndex:
                             isMobile && seatCardsFaceUp ? 85 : isMyPlayer && isMobile ? 80 : 50,
                         }}
