@@ -296,9 +296,11 @@
     max-width: var(--player-name-max-width, 120px);
     padding: 4px 8px 5px;
     border-radius: 8px;
-    background: color-mix(in srgb, var(--bux-ink-elevated) 92%, transparent);
-    border: 1px solid color-mix(in srgb, var(--bux-brass) 28%, transparent);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    background: color-mix(in srgb, var(--bux-ink-elevated) 94%, transparent);
+    border: 1.5px solid color-mix(in srgb, var(--bux-brass) 72%, #f5e6c8);
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.55),
+      0 4px 14px rgba(0, 0, 0, 0.4);
   }
 
   .bux-seat-name {

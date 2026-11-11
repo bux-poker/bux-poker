@@ -456,14 +456,18 @@ export function PokerTable({
           const smallScreenOffset = windowSize.width <= 900
             ? ((visualIdx === 0 || visualIdx === 9) ? -12 : ((visualIdx === 4 || visualIdx === 5) ? 12 : 0))
             : 0;
-          const horizontalOffset = baseHorizontalOffset + smallScreenOffset;
+          // Fixed-width capsules sit over hole cards — nudge seat only (not cards) away.
+          const seatClearance = windowSize.width < 1000 ? 26 : 22;
+          const seatFromCardsOffset = cardsOnRight ? -seatClearance : seatClearance;
+          const layoutHorizontalOffset = baseHorizontalOffset + smallScreenOffset;
+          const seatHorizontalOffset = layoutHorizontalOffset + seatFromCardsOffset;
 
           const elements = [
             <div
               key={`player-${player?.id || `seat-${seatIdx + 1}`}`}
               className="absolute z-[60]"
               style={{
-                left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${horizontalOffset}px)`,
+                left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${seatHorizontalOffset}px)`,
                 top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}% + ${verticalOffset}px)`,
                 transform: 'translate(-50%, -50%)',
               }}
@@ -700,7 +704,7 @@ export function PokerTable({
                 key={`cards-${player.id}`}
                 className={`absolute flex flex-col items-center gap-1 ${isFolded ? 'opacity-50' : ''}`}
                 style={{
-                  left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset + horizontalOffset}px)`,
+                  left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset + layoutHorizontalOffset}px)`,
                   top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}% + ${verticalOffset + cardVerticalNudge + cardRimNudge}px)`,
                   transform: 'translate(-50%, -50%)',
                   transition: 'transform 0.5s ease-in-out',
@@ -770,7 +774,7 @@ export function PokerTable({
                 key={`bet-${player.id}`}
                 className="absolute z-20"
                 style={{
-                  left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset + horizontalOffset}px)`,
+                  left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset + layoutHorizontalOffset}px)`,
                   top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}% + ${visualSeat <= 5 ? -60 : 60}px)`,
                   transform: 'translate(-50%, -50%)',
                 }}
