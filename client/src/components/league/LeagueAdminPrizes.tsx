@@ -95,14 +95,14 @@ export function LeagueAdminPrizes({ leagueId, league, onUpdated }: Props) {
             placeholder="Prize wallet public address"
             value={walletAddress}
             onChange={(e) => setWalletAddress(e.target.value)}
-            className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 font-mono text-xs text-slate-100"
+            className="w-full bux-field px-3 py-2 font-mono text-xs text-slate-100"
           />
           <textarea
             placeholder="Private key (base58, base64, or JSON byte array)"
             value={privateKey}
             onChange={(e) => setPrivateKey(e.target.value)}
             rows={2}
-            className="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 font-mono text-xs text-slate-100"
+            className="w-full bux-field px-3 py-2 font-mono text-xs text-slate-100"
           />
           <button
             type="button"

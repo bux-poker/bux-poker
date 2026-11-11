@@ -257,6 +257,83 @@
     }
   }
 
+  /* Site-wide surfaces — match table ink/brass language */
+  .bux-surface {
+    border: 1px solid var(--bux-panel-border);
+    background: color-mix(in srgb, var(--bux-panel) 78%, transparent);
+    border-radius: 0.75rem;
+  }
+  .bux-surface-hover {
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+  .bux-surface-hover:hover {
+    border-color: color-mix(in srgb, var(--bux-brass) 48%, transparent);
+    background: color-mix(in srgb, var(--bux-panel) 92%, transparent);
+  }
+  .bux-field {
+    border: 1px solid color-mix(in srgb, var(--bux-brass) 22%, #334155);
+    background: color-mix(in srgb, var(--bux-ink) 92%, transparent);
+    color: var(--bux-text);
+    border-radius: 0.5rem;
+  }
+  .bux-field:focus {
+    border-color: color-mix(in srgb, var(--bux-brass) 55%, transparent);
+    outline: none;
+  }
+  .bux-code {
+    border-radius: 0.35rem;
+    background: color-mix(in srgb, var(--bux-ink) 88%, transparent);
+    padding: 0.12rem 0.45rem;
+    color: var(--bux-accent);
+    font-size: 0.875em;
+  }
+  .bux-nav-link {
+    color: rgb(203 213 225);
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: color 0.12s ease;
+  }
+  .bux-nav-link:hover {
+    color: var(--bux-brass-bright);
+  }
+  .bux-btn-ghost {
+    border: 1px solid var(--bux-panel-border);
+    background: transparent;
+    color: white;
+    font-weight: 600;
+    border-radius: 0.55rem;
+    transition: background-color 0.12s ease, border-color 0.12s ease;
+  }
+  .bux-btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: color-mix(in srgb, var(--bux-brass) 45%, transparent);
+  }
+  .bux-btn-muted {
+    border-radius: 0.55rem;
+    background: color-mix(in srgb, var(--bux-panel) 90%, transparent);
+    border: 1px solid var(--bux-panel-border);
+    color: var(--bux-text);
+    font-weight: 600;
+    transition: background-color 0.12s ease;
+  }
+  .bux-btn-muted:hover {
+    background: color-mix(in srgb, var(--bux-panel) 100%, #475569);
+  }
+  .bux-section-label {
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--bux-brass);
+  }
+  .bux-page {
+    color: var(--bux-text);
+  }
+  .bux-muted {
+    color: var(--bux-text-muted);
+  }
+
   .bux-btn-accent {
     background: var(--bux-accent-deep);
     color: white;

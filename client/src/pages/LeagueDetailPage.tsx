@@ -117,14 +117,14 @@ export function LeagueDetailPage() {
   ];
 
   return (
-    <div className="space-y-6 py-6">
+    <div className="bux-page space-y-6 py-6">
       <div>
-        <Link to="/leagues" className="text-sm text-emerald-400 hover:underline">
+        <Link to="/leagues" className="bux-nav-link text-sm hover:underline">
           ← Leagues
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold text-white">{league.name}</h1>
+        <h1 className="font-display mt-2 text-2xl font-bold text-white">{league.name}</h1>
         {league.status === 'COMPLETED' && (
-          <p className="mt-2 inline-block rounded-md bg-slate-700 px-3 py-1 text-sm font-medium text-slate-100">
+          <p className="bux-btn-muted mt-2 inline-block px-3 py-1 text-sm">
             League completed — final standings below
           </p>
         )}
@@ -133,9 +133,9 @@ export function LeagueDetailPage() {
             League cancelled
           </p>
         )}
-        {league.description && <p className="mt-1 text-slate-400">{league.description}</p>}
+        {league.description && <p className="bux-muted mt-1 text-sm">{league.description}</p>}
         {league.timezone && (
-          <p className="mt-1 text-xs text-slate-500">Creator timezone: {league.timezone}</p>
+          <p className="bux-muted mt-1 text-xs">Creator timezone: {league.timezone}</p>
         )}
       </div>
 
@@ -147,7 +147,7 @@ export function LeagueDetailPage() {
         />
       )}
 
-      <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-2">
+      <div className="flex flex-wrap gap-2 border-b border-[color:var(--bux-panel-border)] pb-2">
         {tabs.map((t) => (
           <button
             key={t.key}
@@ -156,7 +156,7 @@ export function LeagueDetailPage() {
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               tab === t.key
                 ? 'bg-emerald-600 text-white'
-                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                : 'bux-btn-muted'
             }`}
           >
             {t.label}
@@ -165,9 +165,9 @@ export function LeagueDetailPage() {
       </div>
 
       {tab === 'table' && (
-        <div className="overflow-x-auto rounded-lg border border-slate-800">
+        <div className="overflow-x-auto rounded-lg border border-[color:var(--bux-panel-border)]">
           <table className="w-full text-left text-sm text-slate-200">
-            <thead className="border-b border-slate-800 bg-slate-900/80 text-slate-400">
+            <thead className="border-b border-[color:var(--bux-panel-border)] bg-slate-900/80 text-slate-400">
               <tr>
                 <th className="px-4 py-3">#</th>
                 <th className="px-4 py-3">Player</th>
@@ -185,7 +185,7 @@ export function LeagueDetailPage() {
                 </tr>
               ) : (
                 league.standings.map((row, i) => (
-                  <tr key={row.id} className="border-b border-slate-800/80">
+                  <tr key={row.id} className="border-b border-[color:var(--bux-panel-border)]/80">
                     <td className="px-4 py-2">{i + 1}</td>
                     <td className="px-4 py-2 font-medium">{row.user.username}</td>
                     <td className="px-4 py-2">{row.points}</td>
@@ -222,7 +222,7 @@ export function LeagueDetailPage() {
       )}
 
       {tab === 'next' && (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
+        <div className="bux-surface p-6">
           {nextGame ? (
             <>
               <p className="text-slate-300">
@@ -251,7 +251,7 @@ export function LeagueDetailPage() {
           {scheduleGames.map((g) => (
             <li
               key={g.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-3"
+              className="flex flex-wrap items-center justify-between gap-2 bux-surface px-4 py-3"
             >
               <span className="text-slate-200">
                 Game {g.gameNumber}: {g.tournament.name}
@@ -274,7 +274,7 @@ export function LeagueDetailPage() {
               <li key={g.id}>
                 <Link
                   to={`/tournaments/${g.tournament.id}`}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-3 transition-colors hover:border-emerald-500/30"
+                  className="bux-surface bux-surface-hover flex flex-wrap items-center justify-between gap-2 px-4 py-3"
                 >
                   <span>
                     Game {g.gameNumber}: {g.tournament.name}

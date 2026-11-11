@@ -43,7 +43,7 @@ export function AddToHomeScreen({ className = '', compact = false }: AddToHomeSc
     <>
       <button
         onClick={() => setOpen(true)}
-        className={`inline-flex items-center gap-2 rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 hover:border-emerald-500/70 ${compact ? 'px-2 py-1.5 text-xs' : ''} ${className}`}
+        className={`bux-btn-ghost inline-flex items-center gap-2 px-3 py-2 text-sm ${compact ? 'px-2 py-1.5 text-xs' : ''} ${className}`}
         aria-label="Add to Home Screen for full screen play"
       >
         <svg className={compact ? 'h-4 w-4' : 'h-5 w-5'} fill="none" stroke="currentColor" viewBox="0 0 24 24">

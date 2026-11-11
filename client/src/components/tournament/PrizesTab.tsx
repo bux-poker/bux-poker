@@ -102,7 +102,7 @@ export function PrizesTab({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+      <div className="bux-surface p-4">
         <p className="text-sm text-slate-400">
           Paid places: <span className="text-slate-200">{tournament.prizePlaces}</span>
           {' · '}
@@ -125,7 +125,7 @@ export function PrizesTab({
         {structure.map((row) => (
           <div
             key={row.place}
-            className="rounded-lg border border-slate-800 bg-slate-800/30 px-4 py-3"
+            className="bux-surface px-4 py-3"
           >
             <p className="text-sm font-medium text-emerald-400">{placeLabel(row.place)} place</p>
             {'description' in row && row.description ? (
@@ -142,7 +142,7 @@ export function PrizesTab({
       </div>
 
       {!prizesAvailable && (
-        <p className="rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-3 text-sm text-slate-400">
+        <p className="bux-surface px-4 py-3 text-sm text-slate-400">
           Prize claims open when the league completes and final standings are locked in.
         </p>
       )}

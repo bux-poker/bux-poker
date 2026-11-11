@@ -154,7 +154,7 @@ export function CreateTournament() {
 
   if (!user) {
     return (
-      <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
+      <div className="bux-surface p-6">
         <p className="text-slate-400">Please log in to create tournaments.</p>
       </div>
     );
@@ -338,7 +338,8 @@ export function CreateTournament() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Admin — Create</h1>
+        <p className="bux-section-label mb-2">Admin</p>
+        <h1 className="font-display text-2xl font-bold text-white">Create tournament</h1>
         <p className="mt-1 text-sm text-slate-400">
           Tournament or multi-game league (Discord posts open 1h before each leg)
         </p>
@@ -351,7 +352,7 @@ export function CreateTournament() {
           className={`rounded-lg px-4 py-2 text-sm font-medium ${
             createMode === 'tournament'
               ? 'bg-emerald-600 text-white'
-              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              : 'bux-btn-muted'
           }`}
         >
           Single tournament
@@ -362,7 +363,7 @@ export function CreateTournament() {
           className={`rounded-lg px-4 py-2 text-sm font-medium ${
             createMode === 'league'
               ? 'bg-emerald-600 text-white'
-              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              : 'bux-btn-muted'
           }`}
         >
           League
@@ -374,7 +375,7 @@ export function CreateTournament() {
         className="space-y-6"
       >
         {createMode === 'tournament' ? (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
+        <div className="bux-surface p-6">
           <h2 className="mb-4 text-lg font-semibold">Basic Information</h2>
           <div className="space-y-4">
             <div>
@@ -386,7 +387,7 @@ export function CreateTournament() {
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+                className="mt-1 w-full bux-field px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
                 placeholder="Weekly Tournament #1"
               />
             </div>
@@ -398,7 +399,7 @@ export function CreateTournament() {
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+                className="mt-1 w-full bux-field px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
                 rows={3}
                 placeholder="Tournament description..."
               />
@@ -413,7 +414,7 @@ export function CreateTournament() {
                 required
                 value={formData.startTime}
                 onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+                className="mt-1 w-full bux-field px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
               />
               <p className="mt-1.5 text-xs text-slate-500">
                 Use your device&apos;s local time above. Everyone sees the start time converted to their own timezone in the lobby.
@@ -424,7 +425,7 @@ export function CreateTournament() {
           </div>
         </div>
         ) : (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
+        <div className="bux-surface p-6">
           <h2 className="mb-4 text-lg font-semibold">League</h2>
           <div className="space-y-4">
             <div>
@@ -433,7 +434,7 @@ export function CreateTournament() {
                 type="text"
                 value={leagueName}
                 onChange={(e) => setLeagueName(e.target.value)}
-                className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+                className="mt-1 w-full bux-field px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
                 placeholder="Spring League 2026"
               />
             </div>
@@ -442,7 +443,7 @@ export function CreateTournament() {
               <textarea
                 value={leagueDescription}
                 onChange={(e) => setLeagueDescription(e.target.value)}
-                className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+                className="mt-1 w-full bux-field px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
                 rows={3}
               />
             </div>
@@ -454,7 +455,7 @@ export function CreateTournament() {
                 type="text"
                 value={leagueTimezone}
                 onChange={(e) => setLeagueTimezone(e.target.value)}
-                className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+                className="mt-1 w-full bux-field px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
                 placeholder="Europe/London"
               />
               <p className="mt-1 text-xs text-slate-500">
@@ -469,7 +470,7 @@ export function CreateTournament() {
                 max={52}
                 value={numLeagueGames}
                 onChange={(e) => onNumLeagueGamesChange(parseInt(e.target.value, 10) || 1)}
-                className="mt-1 w-full max-w-xs rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+                className="mt-1 w-full max-w-xs bux-field px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
               />
             </div>
             <div className="space-y-3">
@@ -485,7 +486,7 @@ export function CreateTournament() {
                       next[i] = e.target.value;
                       setLeagueGameTimes(next);
                     }}
-                    className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+                    className="mt-1 w-full bux-field px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
                   />
                 </div>
               ))}
@@ -499,7 +500,7 @@ export function CreateTournament() {
         )}
 
         {/* Tournament Settings */}
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
+        <div className="bux-surface p-6">
           <h2 className="mb-4 text-lg font-semibold">Tournament Settings</h2>
           <div className="grid gap-4 md:grid-cols-2">
             <div>
@@ -513,7 +514,7 @@ export function CreateTournament() {
                 onChange={(e) =>
                   setFormData({ ...formData, maxPlayers: parseInt(e.target.value) })
                 }
-                className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+                className="mt-1 w-full bux-field px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
               />
             </div>
 
@@ -529,7 +530,7 @@ export function CreateTournament() {
                 onChange={(e) =>
                   setFormData({ ...formData, seatsPerTable: parseInt(e.target.value) })
                 }
-                className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+                className="mt-1 w-full bux-field px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
               />
             </div>
 
@@ -542,7 +543,7 @@ export function CreateTournament() {
                 onChange={(e) =>
                   setFormData({ ...formData, startingChips: parseInt(e.target.value) })
                 }
-                className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+                className="mt-1 w-full bux-field px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
               >
                 {startingChipsOptions.map((chips) => (
                   <option key={chips} value={chips}>
@@ -564,7 +565,7 @@ export function CreateTournament() {
         />
 
         {/* Blind Levels */}
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
+        <div className="bux-surface p-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold">Blind Levels</h2>
             <button
@@ -586,7 +587,7 @@ export function CreateTournament() {
               min="1"
               value={blindRoundDuration}
               onChange={(e) => handleBlindRoundDurationChange(parseInt(e.target.value))}
-              className="mt-1 w-full max-w-xs rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+              className="mt-1 w-full max-w-xs bux-field px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
             />
           </div>
 
@@ -596,7 +597,7 @@ export function CreateTournament() {
               return (
                 <div
                   key={index}
-                  className="rounded border border-slate-700 bg-slate-800/50 p-3"
+                  className="bux-field/50 p-3"
                 >
                   <div className="flex flex-wrap items-end gap-3">
                     <div className="w-16 text-sm font-medium text-slate-300">
@@ -612,7 +613,7 @@ export function CreateTournament() {
                         onChange={(e) =>
                           updateBlindLevel(index, 'smallBlind', parseInt(e.target.value))
                         }
-                        className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                        className="mt-1 w-full bux-field px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
                       />
                     </div>
                     <div className="flex-1 min-w-[120px]">
@@ -624,12 +625,12 @@ export function CreateTournament() {
                         onChange={(e) =>
                           updateBlindLevel(index, 'bigBlind', parseInt(e.target.value))
                         }
-                        className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                        className="mt-1 w-full bux-field px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
                       />
                     </div>
                     <div className="w-32">
                       <label className="block text-xs text-slate-400">Duration</label>
-                      <div className="mt-1 flex items-center gap-1 rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100">
+                      <div className="mt-1 flex items-center gap-1 bux-field px-2 py-1 text-sm text-slate-100">
                         {isFinalRound ? (
                           <span className="text-emerald-400 font-medium">∞ Infinite</span>
                         ) : (
@@ -645,7 +646,7 @@ export function CreateTournament() {
                           const value = e.target.value ? parseInt(e.target.value) : undefined;
                           updateBlindLevelBreak(index, value);
                         }}
-                        className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+                        className="mt-1 w-full bux-field px-2 py-1 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
                       >
                         <option value="">No break</option>
                         <option value="5">5 minutes</option>
@@ -670,7 +671,7 @@ export function CreateTournament() {
         </div>
 
         {/* Discord Server Selection */}
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
+        <div className="bux-surface p-6">
           <h2 className="mb-4 text-lg font-semibold">Discord Servers</h2>
           <p className="mb-4 text-sm text-slate-400">
             Select which Discord servers to post this tournament to. Servers must be set up with /setup command first.
@@ -688,10 +689,10 @@ export function CreateTournament() {
                   key={server.id}
                   className={`flex cursor-pointer items-center gap-3 rounded border p-3 transition-colors ${
                     !server.setupCompleted
-                      ? 'border-slate-700 bg-slate-800/30 opacity-50'
+                      ? 'border-[color:var(--bux-panel-border)] bg-[color:var(--bux-panel)] opacity-50'
                       : selectedServerIds.includes(server.serverId)
                       ? 'border-emerald-500 bg-emerald-500/10'
-                      : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                      : 'border-[color:var(--bux-panel-border)] bg-[color:var(--bux-panel)] hover:border-slate-600'
                   }`}
                 >
                   <input

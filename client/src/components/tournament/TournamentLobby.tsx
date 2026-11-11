@@ -637,7 +637,7 @@ export function TournamentLobby() {
         )}
 
         {canManage && !isCompleted && (
-          <div className="mt-4 flex flex-col gap-2 border-t border-slate-800 pt-4">
+          <div className="mt-4 flex flex-col gap-2 border-t border-[color:var(--bux-panel-border)] pt-4">
             <div className="flex flex-wrap gap-3">
             {isRegistering && (
               <button
@@ -684,7 +684,7 @@ export function TournamentLobby() {
 
         {/* Running Tournament Stats */}
         {isRunning && (
-          <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4 rounded-lg border border-slate-800 bg-slate-800/30 p-4">
+          <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4 bux-surface p-4">
             <div>
               <span className="text-xs text-slate-400">Running For</span>
               <p className="mt-1 text-lg font-semibold text-slate-200">{runningTime}</p>
@@ -747,13 +747,13 @@ export function TournamentLobby() {
 
         {/* Discord Server Info */}
         {servers.length > 0 && (
-          <div className="mt-6 border-t border-slate-800 pt-6">
+          <div className="mt-6 border-t border-[color:var(--bux-panel-border)] pt-6">
             <div className="mb-2 text-xs font-medium text-slate-400">Registration Available From:</div>
             <div className="flex flex-wrap gap-2">
               {servers.map((server) => (
                 <div
                   key={server.id}
-                  className="flex items-center gap-2 rounded bg-slate-800/50 px-3 py-1.5 text-xs"
+                  className="flex items-center gap-2 rounded bg-[color:var(--bux-panel)]/80 px-3 py-1.5 text-xs"
                 >
                   <img
                     src="/images/bux-poker.png"
@@ -779,8 +779,8 @@ export function TournamentLobby() {
       </div>
 
       {/* Tabs */}
-      <div className="rounded-lg border border-slate-800 bg-slate-900/50">
-        <div className="border-b border-slate-800">
+      <div className="bux-surface">
+        <div className="border-b border-[color:var(--bux-panel-border)]">
           <nav className="flex -mb-px">
             <button
               onClick={() => setActiveTab('players')}
@@ -840,7 +840,7 @@ export function TournamentLobby() {
                   return (
                   <div
                     key={player.id}
-                    className={`flex items-center justify-between rounded-lg border border-slate-800 bg-slate-800/30 p-4 ${
+                    className={`flex items-center justify-between bux-surface p-4 ${
                       user?.id === player.userId ? 'border-emerald-500/50 bg-emerald-500/5' : ''
                     }`}
                   >
@@ -906,7 +906,7 @@ export function TournamentLobby() {
                       className={`rounded-lg border p-4 ${
                         isCurrent
                           ? 'border-emerald-500 bg-emerald-500/10'
-                          : 'border-slate-800 bg-slate-800/30'
+                          : 'bux-surface border-[color:var(--bux-panel-border)]'
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -967,7 +967,7 @@ export function TournamentLobby() {
                       className={`rounded-lg border p-4 ${
                         isMyTable
                           ? 'border-emerald-500 bg-emerald-500/10'
-                          : 'border-slate-800 bg-slate-800/30'
+                          : 'bux-surface border-[color:var(--bux-panel-border)]'
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -986,7 +986,7 @@ export function TournamentLobby() {
                               {activePlayers.map((player: any) => (
                                 <span
                                   key={player.id}
-                                  className="rounded bg-slate-700 px-2 py-1 text-xs text-slate-300"
+                                  className="rounded bg-[color:var(--bux-panel)] px-2 py-1 text-xs text-[color:var(--bux-text-muted)]"
                                 >
                                   {player.user?.username || 'Player'}
                                   {player.userId === user?.id && ' (You)'}

@@ -121,10 +121,11 @@ export function LeagueListPage() {
   }
 
   return (
-    <div className="space-y-6 py-6">
+    <div className="bux-page space-y-6 py-6">
       <div>
-        <h1 className="text-2xl font-semibold text-white">Leagues</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <p className="bux-section-label mb-2">Standings</p>
+        <h1 className="font-display text-2xl font-bold text-white">Leagues</h1>
+        <p className="bux-muted mt-1 text-sm">
           Ongoing and recently completed leagues — table, schedule, and links to each leg.
         </p>
       </div>
@@ -136,12 +137,12 @@ export function LeagueListPage() {
             <li key={L.id}>
               <Link
                 to={`/leagues/${L.id}`}
-                className="block rounded-lg border border-slate-800 bg-slate-900/50 p-4 transition-colors hover:border-emerald-500/40"
+                className="bux-surface bux-surface-hover block p-4"
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium text-white">{L.name}</span>
                   {L.status === 'COMPLETED' && (
-                    <span className="rounded bg-slate-700 px-2 py-0.5 text-xs font-medium text-slate-200">
+                    <span className="rounded bg-[color:var(--bux-panel)] px-2 py-0.5 text-xs font-medium text-[color:var(--bux-text)]">
                       Completed
                     </span>
                   )}
@@ -169,7 +170,7 @@ export function LeagueListPage() {
 
                 {isAdmin && (L.canCancel || L.canDelete) && (
                   <div
-                    className="admin-actions mt-4 flex flex-wrap gap-2 border-t border-slate-800 pt-4"
+                    className="admin-actions mt-4 flex flex-wrap gap-2 border-t border-[color:var(--bux-panel-border)] pt-4"
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();

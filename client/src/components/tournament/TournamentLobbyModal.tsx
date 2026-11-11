@@ -249,7 +249,7 @@ export function TournamentLobbyModal({
       bodyClassName="!overflow-hidden"
     >
       <div className="-mx-1 flex min-h-0 flex-1 flex-col">
-        <div className="border-b border-slate-800">
+        <div className="border-b border-[color:var(--bux-panel-border)]">
           <nav className="flex -mb-px overflow-x-auto">
             <button
               onClick={() => setActiveTab('players')}
@@ -331,7 +331,7 @@ export function TournamentLobbyModal({
                       className={`flex items-center justify-between rounded-lg border p-3 sm:p-4 ${
                         isYou
                           ? 'border-emerald-500 bg-emerald-500/15 ring-1 ring-emerald-500/50'
-                          : 'border-slate-800 bg-slate-800/30'
+                          : 'bux-surface border-[color:var(--bux-panel-border)]'
                       }`}
                     >
                       <div className="flex min-w-0 items-center gap-3 sm:gap-4">
@@ -405,7 +405,7 @@ export function TournamentLobbyModal({
                       className={`rounded-lg border p-3 sm:p-4 ${
                         isCurrentRound
                           ? 'border-emerald-500 bg-emerald-500/15 ring-1 ring-emerald-500/50'
-                          : 'border-slate-800 bg-slate-800/30'
+                          : 'bux-surface border-[color:var(--bux-panel-border)]'
                       }`}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -450,7 +450,7 @@ export function TournamentLobbyModal({
                   return (
                     <div
                       key={table.id}
-                      className="rounded-lg border border-slate-800 bg-slate-800/30 p-4"
+                      className="bux-surface p-4"
                     >
                       <h3 className="font-semibold text-slate-200">
                         Table {table.tableNumber}
@@ -463,7 +463,7 @@ export function TournamentLobbyModal({
                           {activePlayers.map((p: any) => (
                             <span
                               key={p.id}
-                              className="rounded bg-slate-700 px-2 py-1 text-xs text-slate-300"
+                              className="rounded bg-[color:var(--bux-panel)] px-2 py-1 text-xs text-[color:var(--bux-text-muted)]"
                             >
                               {p.user?.username || 'Player'}
                               {p.userId === user?.id && ' (You)'}
@@ -479,12 +479,12 @@ export function TournamentLobbyModal({
           )}
         </div>
 
-        <div className="border-t border-slate-800 px-4 py-3 sm:px-6">
+        <div className="border-t border-[color:var(--bux-panel-border)] px-4 py-3 sm:px-6">
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-400">
             <span>
               {remainingPlayers} / {registeredCount} players
             </span>
-            <span className="rounded bg-slate-700/50 px-2 py-0.5 font-medium text-slate-300">
+            <span className="rounded bg-[color:var(--bux-panel)] px-2 py-0.5 font-medium text-[color:var(--bux-text-muted)]">
               {tournament.status}
             </span>
           </div>

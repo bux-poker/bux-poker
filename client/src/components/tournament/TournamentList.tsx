@@ -69,7 +69,7 @@ function TournamentCard({ tournament, onCancel, onDuplicate, onAddTestPlayers, o
     <Link
       to={`/tournaments/${tournament.id}`}
       onClick={handleCardClick}
-      className="block rounded-lg border border-slate-800 bg-slate-900/50 p-6 transition-all hover:border-emerald-500/50 hover:bg-slate-900"
+      className="bux-surface bux-surface-hover block p-6"
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">
@@ -109,14 +109,14 @@ function TournamentCard({ tournament, onCancel, onDuplicate, onAddTestPlayers, o
       </div>
 
       {serversWithMembership.length > 0 && (
-        <div className="mt-4 border-t border-slate-800 pt-4">
+        <div className="mt-4 border-t border-[color:var(--bux-panel-border)] pt-4">
           <div className="mb-2 text-xs font-medium text-slate-400">Registration Available From:</div>
           <div className="space-y-2">
             {serversWithMembership.map((server) => (
               <div
                 key={server.id}
                 className={`flex items-center gap-2 rounded px-2 py-1.5 text-xs ${
-                  server.isMember ? 'bg-slate-800/30' : 'bg-slate-800/50'
+                  server.isMember ? 'bg-[color:var(--bux-panel)]/60' : 'bg-[color:var(--bux-panel)]/80'
                 }`}
               >
                 {server.isMember ? (
@@ -165,7 +165,7 @@ function TournamentCard({ tournament, onCancel, onDuplicate, onAddTestPlayers, o
 
       {/* Admin Actions */}
       {tournament.canManage && (
-        <div className="admin-actions mt-4 border-t border-slate-800 pt-4 flex flex-wrap gap-2">
+        <div className="admin-actions mt-4 border-t border-[color:var(--bux-panel-border)] pt-4 flex flex-wrap gap-2">
           {(tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING' || tournament.status === 'REGISTRATION') && (
             <>
               <button
@@ -407,7 +407,7 @@ export function TournamentList() {
 
   if (tournaments.length === 0) {
     return (
-      <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-8 text-center">
+      <div className="bux-surface p-8 text-center">
         <p className="text-slate-400">No tournaments available</p>
       </div>
     );
@@ -440,19 +440,22 @@ export function TournamentList() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="bux-page space-y-6 py-6">
       {/* Header with Filter */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-semibold text-slate-100">Tournaments</h1>
+        <div>
+          <p className="bux-section-label mb-2">Events</p>
+          <h1 className="font-display text-2xl font-bold text-white">Tournaments</h1>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <AddToHomeScreen compact />
-          <div className="flex gap-2 rounded-lg border border-slate-800 bg-slate-900/50 p-1">
+          <div className="bux-surface flex gap-2 p-1">
           <button
             onClick={() => setFilter('all')}
             className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
               filter === 'all'
-                ? 'bg-emerald-600 text-white'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-[color:var(--bux-accent-deep)] text-white'
+                : 'bux-muted hover:text-white'
             }`}
           >
             All
@@ -461,8 +464,8 @@ export function TournamentList() {
             onClick={() => setFilter('registering')}
             className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
               filter === 'registering'
-                ? 'bg-emerald-600 text-white'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-[color:var(--bux-accent-deep)] text-white'
+                : 'bux-muted hover:text-white'
             }`}
           >
             Registering
@@ -471,8 +474,8 @@ export function TournamentList() {
             onClick={() => setFilter('in-progress')}
             className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
               filter === 'in-progress'
-                ? 'bg-emerald-600 text-white'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-[color:var(--bux-accent-deep)] text-white'
+                : 'bux-muted hover:text-white'
             }`}
           >
             In Progress
@@ -481,8 +484,8 @@ export function TournamentList() {
             onClick={() => setFilter('completed')}
             className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
               filter === 'completed'
-                ? 'bg-emerald-600 text-white'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-[color:var(--bux-accent-deep)] text-white'
+                : 'bux-muted hover:text-white'
             }`}
           >
             Completed
@@ -493,7 +496,7 @@ export function TournamentList() {
 
       {/* Tournament Grid */}
       {sortedTournaments.length === 0 ? (
-        <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-8 text-center">
+        <div className="bux-surface p-8 text-center">
           <p className="text-slate-400">
             {filter === 'all'
               ? 'No tournaments available'

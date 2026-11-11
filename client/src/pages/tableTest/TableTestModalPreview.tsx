@@ -176,7 +176,7 @@ function MockLobbyShell({
             {["You", "AceHigh", "RiverRat", "BluffBot"].map((name, i) => (
               <li
                 key={name}
-                className="flex items-center justify-between rounded-lg border border-slate-700/80 bg-slate-800/50 px-3 py-2"
+                className="flex items-center justify-between rounded-lg border border-slate-700/80 bg-[color:var(--bux-panel)]/80 px-3 py-2"
               >
                 <span className="font-medium text-slate-100">
                   {i + 1}. {name}

@@ -23,19 +23,23 @@ export function LoginPage() {
   const message = code ? MESSAGES[code] || `Something went wrong (${code}).` : null;
 
   return (
-    <div className="mx-auto max-w-lg space-y-6 py-12">
-      <h1 className="text-2xl font-semibold text-white">Sign in</h1>
+    <div className="bux-page mx-auto max-w-lg space-y-6 py-12">
+      <p className="bux-section-label">Account</p>
+      <h1 className="font-display text-2xl font-bold text-white">Sign in</h1>
       {message && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-100">
+        <div
+          className="bux-surface p-4 text-sm text-amber-100"
+          style={{ borderColor: "color-mix(in srgb, var(--bux-warn) 45%, transparent)" }}
+        >
           {message}
         </div>
       )}
       {!message && (
-        <p className="text-slate-400">Use Discord to sign in to BUX Poker.</p>
+        <p className="bux-muted text-sm">Use Discord to sign in to BUX Poker.</p>
       )}
       <div className="flex flex-wrap items-center gap-4">
         <LoginButton />
-        <Link to="/" className="text-sm text-emerald-400 hover:underline">
+        <Link to="/" className="bux-nav-link text-sm">
           Back to home
         </Link>
       </div>

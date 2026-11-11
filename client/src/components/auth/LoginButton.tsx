@@ -41,7 +41,7 @@ export function LoginButton() {
         </span>
         <button
           onClick={logout}
-          className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 transition-colors hover:bg-slate-700 sm:text-sm"
+          className="bux-btn-muted px-3 py-1.5 text-xs sm:text-sm"
         >
           Logout
         </button>

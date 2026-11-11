@@ -135,7 +135,7 @@ export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: P
   }, [maxPlayers]);
 
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6">
+    <div className="bux-surface p-6">
       <h2 className="mb-1 text-lg font-semibold">Prizes</h2>
       <p className="mb-4 text-sm text-slate-400">
         Paid places and prizes are locked in at create time. Wallet mode requires full funding before
@@ -151,7 +151,7 @@ export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: P
             max={maxPlayers}
             value={value.prizePlaces}
             onChange={(e) => syncPlaces(parseInt(e.target.value, 10) || 1)}
-            className="mt-1 w-full max-w-xs rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+            className="mt-1 w-full max-w-xs bux-field px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
           />
         </div>
         <div>
@@ -161,7 +161,7 @@ export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: P
             onChange={(e) =>
               onChange({ ...value, prizeMode: e.target.value as PrizeMode })
             }
-            className="mt-1 w-full max-w-md rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+            className="mt-1 w-full max-w-md bux-field px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
           >
             <option value="MANUAL">Manual — Discord ticket claim</option>
             <option value="WALLET">Wallet — on-site Solana claim</option>
@@ -180,7 +180,7 @@ export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: P
             onChange={(e) =>
               onChange({ ...value, prizeClaimServerId: e.target.value })
             }
-            className="mt-1 w-full max-w-md rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+            className="mt-1 w-full max-w-md bux-field px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
           >
             <option value="">Select a server…</option>
             {setupServers.map((s) => (
@@ -204,7 +204,7 @@ export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: P
               onChange({ ...value, refundWalletAddress: e.target.value })
             }
             placeholder="Your Solana address"
-            className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 font-mono text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+            className="mt-1 w-full bux-field px-3 py-2 font-mono text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
           />
           <p className="mt-1 text-xs text-slate-500">
             After create, configure your prize wallet address and private key before funding
@@ -218,7 +218,7 @@ export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: P
           ? value.manualPlaces.map((place, idx) => (
               <div
                 key={place.place}
-                className="rounded border border-slate-700 bg-slate-800/40 p-3"
+                className="bux-field/40 p-3"
               >
                 <label className="block text-sm font-medium text-slate-300">
                   {place.place === 1
@@ -239,14 +239,14 @@ export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: P
                     onChange({ ...value, manualPlaces });
                   }}
                   placeholder="e.g. 500 USDC, Discord role, NFT xyz…"
-                  className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
+                  className="mt-1 w-full bux-field px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
                 />
               </div>
             ))
           : value.walletPlaces.map((place, pIdx) => (
               <div
                 key={place.place}
-                className="rounded border border-slate-700 bg-slate-800/40 p-3"
+                className="bux-field/40 p-3"
               >
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-sm font-medium text-slate-300">
@@ -285,7 +285,7 @@ export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: P
                           walletPlaces[pIdx] = { ...place, items };
                           onChange({ ...value, walletPlaces });
                         }}
-                        className="rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
+                        className="bux-field px-2 py-1.5 text-sm text-slate-100"
                       >
                         <option value="SOL">SOL</option>
                         <option value="SPL">Token (SPL)</option>
@@ -305,7 +305,7 @@ export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: P
                             walletPlaces[pIdx] = { ...place, items };
                             onChange({ ...value, walletPlaces });
                           }}
-                          className="min-w-[120px] flex-1 rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
+                          className="min-w-[120px] flex-1 bux-field px-2 py-1.5 text-sm text-slate-100"
                         />
                       )}
                       {item.kind === 'SPL' && (
@@ -321,7 +321,7 @@ export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: P
                               walletPlaces[pIdx] = { ...place, items };
                               onChange({ ...value, walletPlaces });
                             }}
-                            className="min-w-[180px] flex-1 rounded border border-slate-700 bg-slate-800 px-2 py-1.5 font-mono text-xs text-slate-100"
+                            className="min-w-[180px] flex-1 bux-field px-2 py-1.5 font-mono text-xs text-slate-100"
                           />
                           <input
                             type="text"
@@ -334,7 +334,7 @@ export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: P
                               walletPlaces[pIdx] = { ...place, items };
                               onChange({ ...value, walletPlaces });
                             }}
-                            className="w-28 rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
+                            className="w-28 bux-field px-2 py-1.5 text-sm text-slate-100"
                           />
                           <input
                             type="number"
@@ -352,7 +352,7 @@ export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: P
                               walletPlaces[pIdx] = { ...place, items };
                               onChange({ ...value, walletPlaces });
                             }}
-                            className="w-20 rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm text-slate-100"
+                            className="w-20 bux-field px-2 py-1.5 text-sm text-slate-100"
                           />
                         </>
                       )}
@@ -368,7 +368,7 @@ export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: P
                             walletPlaces[pIdx] = { ...place, items };
                             onChange({ ...value, walletPlaces });
                           }}
-                          className="min-w-[200px] flex-1 rounded border border-slate-700 bg-slate-800 px-2 py-1.5 font-mono text-xs text-slate-100"
+                          className="min-w-[200px] flex-1 bux-field px-2 py-1.5 font-mono text-xs text-slate-100"
                         />
                       )}
                       {place.items.length > 1 && (
