@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getSocket } from "../../services/socket";
 import { PokerTable } from "../../components/poker/PokerTable";
+import { PokerCardImage } from "../../components/poker/table/PokerCardImage";
 import type { Card } from "@shared/types/poker";
 import { BettingControls } from "../../components/poker/BettingControls";
 import {
@@ -144,6 +145,20 @@ export function PokerGameView() {
   const [socketConnected, setSocketConnected] = useState(false);
   const [tournamentLobbyOpen, setTournamentLobbyOpen] = useState(false);
   const isMobile = useIsMobile();
+  const [communityCardSize, setCommunityCardSize] = useState({ width: 64, height: 90 });
+  useEffect(() => {
+    const read = () => {
+      if (typeof window === "undefined") return;
+      const styles = getComputedStyle(document.documentElement);
+      setCommunityCardSize({
+        width: parseInt(styles.getPropertyValue("--community-card-width"), 10) || 64,
+        height: parseInt(styles.getPropertyValue("--community-card-height"), 10) || 90,
+      });
+    };
+    read();
+    window.addEventListener("resize", read);
+    return () => window.removeEventListener("resize", read);
+  }, []);
   // Chat is a drawer on all viewports so the felt keeps full width.
   const [chatCollapsed, setChatCollapsed] = useState(true);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
@@ -1730,93 +1745,47 @@ export function PokerGameView() {
             />
           </div>
 
-          {/* Action dock — hero hand left, controls right */}
-          <div
-            className={`bux-action-dock relative flex w-full shrink-0 items-stretch overflow-hidden px-2 py-1 [@media(min-width:640px)_and_(min-height:520px)]:px-4 [@media(min-width:640px)_and_(min-height:520px)]:py-2 ${isMyTurn ? "ring-1 ring-inset ring-[color:var(--bux-brass)]/40" : ""}`}
-            style={{
-              height: "var(--action-dock-height, 100px)",
-              minHeight: "var(--action-dock-height, 100px)",
-              maxHeight: "var(--action-dock-height, 100px)",
-            }}
-          >
-            {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
-              <div className={`absolute left-2 sm:left-4 top-0 bottom-0 z-50 flex flex-col justify-center gap-0.5 items-start ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ visibility: 'visible' }}>
-                <span className="font-display text-[10px] sm:text-sm font-semibold uppercase tracking-wide whitespace-nowrap leading-tight" style={{ color: "var(--bux-brass)" }}>
-                  {getHandDescription(myPlayer.holeCards, communityCards, gameState.street || "PREFLOP")}
-                </span>
-                <div className="flex gap-1 sm:gap-2 items-center flex-1 min-h-0">
-                {myPlayer.holeCards.map((card: Card, idx: number) => {
-                  const getCardImage = (c: Card): string => {
-                    const suitMap: Record<string, string> = {
-                      "SPADES": "S", "HEARTS": "H", "DIAMONDS": "D", "CLUBS": "C"
-                    };
-                    const suit = suitMap[c.suit] || c.suit.charAt(0);
-                    const rank = c.rank === "10" ? "10" : c.rank;
-                    return `${rank}${suit}.png`;
-                  };
-                  return (
-                    <img
-                      key={idx}
-                      src={`/cards/${getCardImage(card)}`}
-                      alt={`${card.rank}${card.suit}`}
-                      className="w-auto max-h-[90%] object-contain rounded-lg shadow-lg flex-shrink-0 border"
-                      style={{
-                        display: "block",
-                        height: "var(--hero-card-height, 72px)",
-                        borderColor: "rgba(196, 165, 116, 0.35)",
-                      }}
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'none';
-                      }}
-                    />
-                  );
-                })}
-                </div>
+          {/* Bottom-left: hand strength + hole cards (community size). Bottom-right: controls. Middle clear. */}
+          {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
+            <div
+              className={`bux-action-corner bux-action-corner-hand absolute bottom-2 left-2 z-[60] flex flex-col items-start gap-1 ${myPlayer.status === "FOLDED" ? "opacity-50" : ""}`}
+            >
+              <span
+                className="font-display text-[10px] sm:text-sm font-semibold uppercase tracking-wide whitespace-nowrap leading-tight"
+                style={{ color: "var(--bux-brass)" }}
+              >
+                {getHandDescription(myPlayer.holeCards, communityCards, gameState.street || "PREFLOP")}
+              </span>
+              <div className="flex items-center" style={{ gap: "var(--community-card-gap, 8px)" }}>
+                {myPlayer.holeCards.map((card: Card, idx: number) => (
+                  <PokerCardImage
+                    key={`${idx}-${communityCardSize.width}x${communityCardSize.height}`}
+                    card={card}
+                    width={communityCardSize.width}
+                    height={communityCardSize.height}
+                    className="shadow-lg"
+                    useTextCard={isMobile}
+                  />
+                ))}
               </div>
-            )}
-              <div className="relative z-[60] ml-auto flex h-full min-h-0 max-w-[58%] flex-col items-end justify-center gap-1 sm:gap-2">
-                {gameState.showdownNeedsChoice && (
-                  <div className="flex flex-col items-end gap-1">
-                    <p className="text-xs font-medium text-slate-400">Show your cards?</p>
-                    <div className="flex items-center gap-3" style={{ width: "calc(var(--action-button-width, 140px) * 2 + 0.75rem)" }}>
-                      <button
-                        type="button"
-                        onClick={() => handleShowdownChoice("SHOW")}
-                        className="rounded-lg bg-blue-600 font-bold text-white shadow-lg hover:bg-blue-700 transition-colors flex-1 whitespace-nowrap"
-                        style={{
-                          minWidth: `var(--action-button-width, 140px)`,
-                          height: `var(--action-button-height, 48px)`,
-                          paddingLeft: `var(--action-button-padding-x, 24px)`,
-                          paddingRight: `var(--action-button-padding-x, 24px)`,
-                          fontSize: `var(--action-button-text, 16px)`,
-                        }}
-                      >
-                        SHOW
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleShowdownChoice("MUCK")}
-                        className="rounded-lg bg-slate-600 font-bold text-white shadow-lg hover:bg-slate-500 transition-colors flex-1 whitespace-nowrap"
-                        style={{
-                          minWidth: `var(--action-button-width, 140px)`,
-                          height: `var(--action-button-height, 48px)`,
-                          paddingLeft: `var(--action-button-padding-x, 24px)`,
-                          paddingRight: `var(--action-button-padding-x, 24px)`,
-                          fontSize: `var(--action-button-text, 16px)`,
-                        }}
-                      >
-                        MUCK
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {myPlayer?.isAway && !gameState.showdownActive && (
-                  <div className="flex flex-1 items-center justify-center">
+            </div>
+          )}
+
+          {(gameState.showdownNeedsChoice ||
+            (myPlayer?.isAway && !gameState.showdownActive) ||
+            (isMyTurn && !gameState.showdownActive && !myPlayer?.isAway) ||
+            canPreAction) && (
+            <div
+              className={`bux-action-corner bux-action-corner-controls absolute bottom-2 right-2 z-[60] flex flex-col items-end justify-center gap-1 sm:gap-2 ${isMyTurn ? "ring-1 ring-[color:var(--bux-brass)]/50" : ""}`}
+            >
+              {gameState.showdownNeedsChoice && (
+                <div className="flex flex-col items-end gap-1">
+                  <p className="text-xs font-medium text-slate-400">Show your cards?</p>
+                  <div className="flex items-center gap-3" style={{ width: "calc(var(--action-button-width, 140px) * 2 + 0.75rem)" }}>
                     <button
                       type="button"
-                      onClick={handleImBack}
-                      className="rounded-lg bg-emerald-600 font-bold text-white shadow-lg hover:bg-emerald-500 transition-colors whitespace-nowrap"
+                      onClick={() => handleShowdownChoice("SHOW")}
+                      className="rounded-lg bg-blue-600 font-bold text-white shadow-lg hover:bg-blue-700 transition-colors flex-1 whitespace-nowrap"
                       style={{
                         minWidth: `var(--action-button-width, 140px)`,
                         height: `var(--action-button-height, 48px)`,
@@ -1825,37 +1794,68 @@ export function PokerGameView() {
                         fontSize: `var(--action-button-text, 16px)`,
                       }}
                     >
-                      I&apos;m back
+                      SHOW
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleShowdownChoice("MUCK")}
+                      className="rounded-lg bg-slate-600 font-bold text-white shadow-lg hover:bg-slate-500 transition-colors flex-1 whitespace-nowrap"
+                      style={{
+                        minWidth: `var(--action-button-width, 140px)`,
+                        height: `var(--action-button-height, 48px)`,
+                        paddingLeft: `var(--action-button-padding-x, 24px)`,
+                        paddingRight: `var(--action-button-padding-x, 24px)`,
+                        fontSize: `var(--action-button-text, 16px)`,
+                      }}
+                    >
+                      MUCK
                     </button>
                   </div>
-                )}
-                {isMyTurn && !gameState.showdownActive && !myPlayer?.isAway && (
-                  <BettingControls
-                    onAction={handleAction}
-                    currentBet={gameState.currentBet || 0}
-                    bigBlind={bigBlind}
-                    myChips={myPlayer?.chips || 0}
-                    street={gameState.street || "PREFLOP"}
-                    minimumRaise={gameState.minimumRaise || bigBlind}
-                    isBigBlind={myPlayer?.seatNumber === gameState.bigBlindSeat}
-                    isMyTurn
-                    myContribution={myContribution}
-                    players={gameState.players}
-                    myUserId={user?.id}
-                    potSize={gameState.pot}
-                  />
-                )}
-                {canPreAction && (
-                  <PreActionControls
-                    selected={preActionSelected}
-                    onSelect={(k) => {
-                      preActionRef.current = k;
-                      setPreActionSelected(k);
-                    }}
-                  />
-                )}
-              </div>
-          </div>
+                </div>
+              )}
+              {myPlayer?.isAway && !gameState.showdownActive && (
+                <button
+                  type="button"
+                  onClick={handleImBack}
+                  className="rounded-lg bg-emerald-600 font-bold text-white shadow-lg hover:bg-emerald-500 transition-colors whitespace-nowrap"
+                  style={{
+                    minWidth: `var(--action-button-width, 140px)`,
+                    height: `var(--action-button-height, 48px)`,
+                    paddingLeft: `var(--action-button-padding-x, 24px)`,
+                    paddingRight: `var(--action-button-padding-x, 24px)`,
+                    fontSize: `var(--action-button-text, 16px)`,
+                  }}
+                >
+                  I&apos;m back
+                </button>
+              )}
+              {isMyTurn && !gameState.showdownActive && !myPlayer?.isAway && (
+                <BettingControls
+                  onAction={handleAction}
+                  currentBet={gameState.currentBet || 0}
+                  bigBlind={bigBlind}
+                  myChips={myPlayer?.chips || 0}
+                  street={gameState.street || "PREFLOP"}
+                  minimumRaise={gameState.minimumRaise || bigBlind}
+                  isBigBlind={myPlayer?.seatNumber === gameState.bigBlindSeat}
+                  isMyTurn
+                  myContribution={myContribution}
+                  players={gameState.players}
+                  myUserId={user?.id}
+                  potSize={gameState.pot}
+                />
+              )}
+              {canPreAction && (
+                <PreActionControls
+                  selected={preActionSelected}
+                  onSelect={(k) => {
+                    preActionRef.current = k;
+                    setPreActionSelected(k);
+                  }}
+                />
+              )}
+            </div>
+          )}
         </div>
 
         {/* Chat drawer — overlays table; does not shrink felt */}

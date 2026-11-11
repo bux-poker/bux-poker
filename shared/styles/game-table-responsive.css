@@ -858,8 +858,8 @@
     --table-padding-top: 34px;
     --table-rail-width: 5px;
     --table-rail-inset: 2px;
-    --action-dock-height: 84px;
-    --hero-card-height: 46px;
+    --action-dock-height: 102px;
+    --hero-card-height: 70px;
     --action-button-height: 24px;
     --action-button-text: 10px;
     --action-button-padding-x: 8px;
@@ -889,8 +889,8 @@
     --table-padding: 6px;
     --table-padding-top: 28px;
     --table-rail-width: 4px;
-    --action-dock-height: 76px;
-    --hero-card-height: 40px;
+    --action-dock-height: 92px;
+    --hero-card-height: 62px;
     --action-button-height: 22px;
     --amount-input-height: 24px;
     --community-card-width: 44px;

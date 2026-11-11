@@ -4,8 +4,9 @@
  * Open /table-test to tweak PLAYER_POSITIONS in components/poker/table/pokerTableConstants.ts while viewing.
  * Also used to try emoji reactions (self + throw) with socket sync in the table-test room.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PokerTable } from "../components/poker/PokerTable";
+import { PokerCardImage } from "../components/poker/table/PokerCardImage";
 import { BettingControls } from "../components/poker/BettingControls";
 import Chat from "@shared/components/chat/Chat";
 import { useAuth } from "@shared/features/auth/AuthContext";
@@ -67,6 +68,19 @@ export function TableTestPage() {
   const [chatCollapsed, setChatCollapsed] = useState(() => typeof window !== "undefined" && (window.innerWidth <= 1024 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || "ontouchstart" in window));
   const [showDealerMessages, setShowDealerMessages] = useState(true);
   const [previewModal, setPreviewModal] = useState<TableTestModalId>("none");
+  const [communityCardSize, setCommunityCardSize] = useState({ width: 64, height: 90 });
+  useEffect(() => {
+    const read = () => {
+      const styles = getComputedStyle(document.documentElement);
+      setCommunityCardSize({
+        width: parseInt(styles.getPropertyValue("--community-card-width"), 10) || 64,
+        height: parseInt(styles.getPropertyValue("--community-card-height"), 10) || 90,
+      });
+    };
+    read();
+    window.addEventListener("resize", read);
+    return () => window.removeEventListener("resize", read);
+  }, []);
 
   const chatPlayers = players.map((p) => ({
     id: p.id,
@@ -130,65 +144,34 @@ export function TableTestPage() {
             />
           </div>
 
-          {/* Betting controls bar - same as game view, with hole cards + hand text for layout test */}
-          <div
-            className="bux-action-dock relative flex w-full shrink-0 items-stretch overflow-hidden px-2 py-1 sm:px-4 sm:py-2"
-            style={{
-              height: "var(--action-dock-height, 100px)",
-              minHeight: "var(--action-dock-height, 100px)",
-              maxHeight: "var(--action-dock-height, 100px)",
-            }}
-          >
-            {/* Mock "my" hole cards + hand text (player 1) - matches game view layout */}
-            {(() => {
-              const myHoleCards = players[0]?.holeCards;
-              if (!myHoleCards || !Array.isArray(myHoleCards) || myHoleCards.length === 0) return null;
-              const suitSymbols: Record<string, string> = { SPADES: "♠", HEARTS: "♥", DIAMONDS: "♦", CLUBS: "♣" };
-              const getCardImage = (card: Card): string => {
-                const suitMap: Record<string, string> = { SPADES: "S", HEARTS: "H", DIAMONDS: "D", CLUBS: "C" };
-                const suit = suitMap[card.suit] || card.suit.charAt(0);
-                const rank = card.rank === "10" ? "10" : card.rank;
-                return `${rank}${suit}.png`;
-              };
-              return (
-                <div className="absolute left-2 sm:left-4 top-0 bottom-0 z-50 flex flex-col justify-center gap-0.5 items-start" style={{ visibility: "visible" }}>
-                  <span className="font-display text-[10px] sm:text-sm font-semibold uppercase tracking-wide whitespace-nowrap leading-tight" style={{ color: "var(--bux-brass)" }}>
-                    {getHandDescription(myHoleCards, COMMUNITY_CARDS, "FLOP")}
-                  </span>
-                  <div className="flex gap-1 sm:gap-2 items-center flex-1 min-h-0">
-                    {myHoleCards.map((card: Card, idx: number) => {
-                      const isRed = card.suit === "HEARTS" || card.suit === "DIAMONDS";
-                      if (isMobile) {
-                        return (
-                          <div
-                            key={idx}
-                            className="flex flex-col items-center justify-center rounded-lg border-2 border-slate-300 bg-white shadow py-0.5 px-0.5 flex-shrink-0"
-                            style={{
-                              height: "var(--hero-card-height, 64px)",
-                              width: "calc(var(--hero-card-height, 64px) * 0.71)",
-                            }}
-                          >
-                            <span className="font-bold leading-none text-slate-900" style={{ fontSize: "clamp(9px, 40%, 14px)" }}>{card.rank}</span>
-                            <span className="leading-none" style={{ fontSize: "clamp(9px, 36%, 13px)", color: isRed ? "#b91c1c" : "#1a1a1a" }}>{suitSymbols[card.suit] ?? card.suit[0]}</span>
-                          </div>
-                        );
-                      }
-                      return (
-                        <img
-                          key={idx}
-                          src={`/cards/${getCardImage(card)}`}
-                          alt={`${card.rank}${card.suit}`}
-                          className="w-auto max-h-[90%] object-contain rounded-lg shadow border border-white/20 flex-shrink-0"
-                          style={{ display: "block", height: "var(--hero-card-height, 88px)" }}
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                        />
-                      );
-                    })}
-                  </div>
+          {/* Bottom-left hand + bottom-right controls (middle clear) */}
+          {(() => {
+            const myHoleCards = players[0]?.holeCards;
+            if (!myHoleCards || !Array.isArray(myHoleCards) || myHoleCards.length === 0) return null;
+            return (
+              <div className="bux-action-corner bux-action-corner-hand absolute bottom-2 left-2 z-[60] flex flex-col items-start gap-1">
+                <span
+                  className="font-display text-[10px] sm:text-sm font-semibold uppercase tracking-wide whitespace-nowrap leading-tight"
+                  style={{ color: "var(--bux-brass)" }}
+                >
+                  {getHandDescription(myHoleCards, COMMUNITY_CARDS, "FLOP")}
+                </span>
+                <div className="flex items-center" style={{ gap: "var(--community-card-gap, 8px)" }}>
+                  {myHoleCards.map((card: Card, idx: number) => (
+                    <PokerCardImage
+                      key={`${idx}-${communityCardSize.width}x${communityCardSize.height}`}
+                      card={card}
+                      width={communityCardSize.width}
+                      height={communityCardSize.height}
+                      className="shadow-lg"
+                      useTextCard={isMobile}
+                    />
+                  ))}
                 </div>
-              );
-            })()}
-            <div className="relative z-[60] ml-auto flex h-full min-h-0 max-w-[58%] flex-col items-end justify-center gap-1 sm:gap-2">
+              </div>
+            );
+          })()}
+          <div className="bux-action-corner bux-action-corner-controls absolute bottom-2 right-2 z-[60] flex flex-col items-end justify-center gap-1 sm:gap-2">
             <BettingControls
               onAction={() => {}}
               currentBet={CURRENT_BET}
@@ -202,7 +185,6 @@ export function TableTestPage() {
               players={players}
               myUserId={user?.id}
             />
-            </div>
           </div>
         </div>
 

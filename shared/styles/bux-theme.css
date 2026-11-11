@@ -72,6 +72,23 @@
     border-top: 1px solid var(--bux-panel-border);
   }
 
+  /* Floating corners — hand left, controls right; middle of table stays clear */
+  .bux-action-corner {
+    background: color-mix(in srgb, var(--bux-ink-elevated) 92%, transparent);
+    border: 1px solid var(--bux-panel-border);
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  .bux-action-corner-hand {
+    padding: 6px 8px 8px;
+  }
+
+  .bux-action-corner-controls {
+    padding: 6px 8px;
+  }
+
   .bux-banner {
     border: 1px solid var(--bux-panel-border);
     background: color-mix(in srgb, var(--bux-panel) 94%, transparent);

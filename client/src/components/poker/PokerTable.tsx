@@ -149,10 +149,12 @@ export function PokerTable({
       style={{
         background:
           "radial-gradient(ellipse at center, #121820 0%, var(--bux-ink, #0b0f14) 70%)",
-        paddingTop: 'var(--table-padding-top, 56px)',
-        paddingRight: 'var(--table-padding, 32px)',
-        paddingBottom: 'var(--table-padding, 32px)',
-        paddingLeft: 'var(--table-padding, 32px)',
+        paddingTop: "var(--table-padding-top, 56px)",
+        paddingRight: "var(--table-padding, 32px)",
+        // Leave room for floating hand + control corners at the bottom.
+        paddingBottom:
+          "max(var(--table-padding, 32px), calc(var(--action-dock-height, 100px) - 4px))",
+        paddingLeft: "var(--table-padding, 32px)",
       }}
     >
       {/* Top-left: blinds / next + rotate seats */}
@@ -234,7 +236,7 @@ export function PokerTable({
         className="bux-felt bux-rail relative h-full w-full max-h-full max-w-full rounded-[50%]" 
         style={{ 
           aspectRatio: "3/2",
-          maxHeight: "min(100%, calc(100dvh - var(--action-dock-height, 100px) - 1.5rem))",
+          maxHeight: "100%",
           maxWidth: "min(100%, 96vw)",
         }}
       >
