@@ -405,14 +405,6 @@ export function TournamentList() {
     );
   }
 
-  if (tournaments.length === 0) {
-    return (
-      <div className="bux-surface p-8 text-center">
-        <p className="text-slate-400">No tournaments available</p>
-      </div>
-    );
-  }
-
   // Filter tournaments based on selected filter (cancelled events are hidden)
   const filteredTournaments = tournaments.filter((t) => {
     if (t.status === 'CANCELLED') return false;
@@ -486,7 +478,9 @@ export function TournamentList() {
       {sortedTournaments.length === 0 ? (
         <div className="bux-surface p-8 text-center">
           <p className="text-slate-400">
-            {filter === 'registering'
+            {tournaments.length === 0
+              ? 'No tournaments available'
+              : filter === 'registering'
               ? 'No registering tournaments'
               : filter === 'in-progress'
               ? 'No running tournaments'

@@ -42,7 +42,7 @@ router.get("/my-active-table", authenticateToken, async (req, res, next) => {
         game: {
           status: "ACTIVE",
           tournament: {
-            status: { in: ["SEATED", "RUNNING", "ACTIVE"] },
+            status: { in: ["SEATED", "RUNNING"] },
           },
         },
       },

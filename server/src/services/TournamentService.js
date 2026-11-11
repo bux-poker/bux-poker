@@ -128,8 +128,12 @@ export class TournamentService {
               inviteLink: post.server.inviteLink || null,
             }));
 
+          const { prizeWalletSecretEnc: _secret, prizeFeeSolLamports, ...rest } =
+            tournament;
           return {
-            ...tournament,
+            ...rest,
+            prizeFeeSolLamports:
+              prizeFeeSolLamports != null ? prizeFeeSolLamports.toString() : null,
             registeredCount: registrations.filter(
               (r) => r.status === "CONFIRMED" || r.status === "PENDING"
             ).length,
@@ -138,8 +142,11 @@ export class TournamentService {
         } catch (transformError) {
           console.error(`[TOURNAMENT SERVICE] Error transforming tournament ${tournament.id}:`, transformError);
           // Return tournament with safe defaults
+          const { prizeWalletSecretEnc: _s, prizeFeeSolLamports: fee, ...rest } =
+            tournament;
           return {
-            ...tournament,
+            ...rest,
+            prizeFeeSolLamports: fee != null ? fee.toString() : null,
             registeredCount: 0,
             servers: [],
           };
