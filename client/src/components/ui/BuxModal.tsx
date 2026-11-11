@@ -154,6 +154,8 @@ type BuxModalProps = {
   maxWidth?: "sm" | "md" | "lg" | "xl";
   /** Center body text (dialogs) vs left-aligned (forms/lists) */
   align?: "center" | "left";
+  /** Corner X — defaults off when a footer is present (use Close/Cancel there instead). */
+  showCloseButton?: boolean;
   zIndexClass?: string;
   className?: string;
 };
@@ -176,10 +178,12 @@ export function BuxModal({
   position = "absolute",
   maxWidth = "sm",
   align = "center",
+  showCloseButton,
   zIndexClass = "z-[120]",
   className = "",
 }: BuxModalProps) {
   if (!open) return null;
+  const showX = onClose != null && (showCloseButton ?? footer == null);
 
   return (
     <div
@@ -199,7 +203,7 @@ export function BuxModal({
           <h2 id="bux-modal-title" className={`bux-modal-title ${TONE_TITLE[tone]}`}>
             {title}
           </h2>
-          {onClose && (
+          {showX && (
             <button
               type="button"
               onClick={onClose}
