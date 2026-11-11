@@ -128,100 +128,58 @@ export function PokerTable({
         paddingLeft: 'var(--table-padding, 32px)',
       }}
     >
-      {/* Top-left corner: tournament lobby button + blinds + timer (inside play area) - bigger on desktop */}
-      {(onTournamentLobbyClick != null || topLeftBlinds != null || topLeftTimer != null) && (() => {
-        const isDesktop = windowSize.width >= 1000;
-        const cornerLabelSize = isDesktop ? '12px' : '9px';
-        const cornerValueSize = isDesktop ? '16px' : '11px';
-        const cornerPadding = isDesktop ? '8px 10px' : '4px 6px';
-        return (
+      {/* Slim tournament HUD strip */}
+      {(onTournamentLobbyClick != null ||
+        topLeftBlinds != null ||
+        topLeftTimer != null ||
+        topRightPlayers != null ||
+        topRightPosition != null) && (
         <div
-          className="absolute left-0 top-0 z-10 flex items-start gap-1"
-          style={{ marginLeft: '6px', marginTop: '6px' }}
+          className="absolute left-1/2 top-2 z-10 flex -translate-x-1/2 items-center gap-2"
+          style={{ maxWidth: "calc(100% - 16px)" }}
         >
-          {(topLeftBlinds != null || topLeftTimer != null) && (
-            <div
-              className="rounded border border-slate-600/60 bg-slate-900/90"
-              style={{ padding: cornerPadding }}
-            >
-              <div className="flex flex-col gap-1 leading-snug">
-                {topLeftBlinds != null && (
-                  <div className="flex flex-col">
-                    <span className="font-semibold uppercase tracking-wide text-slate-400" style={{ fontSize: cornerLabelSize }}>
-                      BLINDS
-                    </span>
-                    <span className="font-bold text-white" style={{ fontSize: cornerValueSize }}>
-                      {topLeftBlinds}
-                    </span>
-                  </div>
-                )}
-                {topLeftTimer != null && (
-                  <div className="flex flex-col">
-                    <span className="font-semibold uppercase tracking-wide text-slate-400" style={{ fontSize: cornerLabelSize }}>
-                      NEXT BLIND
-                    </span>
-                    <span className="font-bold text-white" style={{ fontSize: cornerValueSize }}>
-                      {topLeftTimer}
-                    </span>
-                  </div>
-                )}
+          <div className="bux-hud-strip max-w-full overflow-x-auto">
+            {topLeftBlinds != null && (
+              <div className="bux-hud-item">
+                <span className="bux-hud-label">Blinds</span>
+                <span className="bux-hud-value">{topLeftBlinds}</span>
               </div>
-            </div>
-          )}
-          {onTournamentLobbyClick != null && (
-            <button
-              type="button"
-              onClick={onTournamentLobbyClick}
-              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded border border-slate-600/60 bg-slate-900/90 text-slate-300 transition-colors hover:bg-slate-800 hover:text-white sm:h-10 sm:w-10"
-              aria-label="Tournament info"
-              title="Tournament info"
-            >
-              <svg className="h-5 w-5 sm:h-5 sm:w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" strokeWidth={2} />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16v-4M12 8h.01" />
-              </svg>
-            </button>
-          )}
-        </div>
-        );
-      })()}
-
-      {/* Top-right corner: position + players (inside play area) - bigger on desktop */}
-      {(topRightPosition != null || topRightPlayers != null) && (() => {
-        const isDesktop = windowSize.width >= 1000;
-        const cornerLabelSize = isDesktop ? '12px' : '9px';
-        const cornerValueSize = isDesktop ? '16px' : '11px';
-        const cornerPadding = isDesktop ? '8px 10px' : '4px 6px';
-        return (
-        <div
-          className="absolute right-0 top-0 z-10 rounded border border-slate-600/60 bg-slate-900/90"
-          style={{ marginRight: '6px', marginTop: '6px', padding: cornerPadding }}
-        >
-          <div className="flex flex-col items-end gap-1 leading-snug">
+            )}
+            {topLeftTimer != null && (
+              <div className="bux-hud-item">
+                <span className="bux-hud-label">Next</span>
+                <span className="bux-hud-value">{topLeftTimer}</span>
+              </div>
+            )}
             {topRightPlayers != null && (
-              <div className="flex flex-col text-right">
-                <span className="font-semibold uppercase tracking-wide text-slate-400" style={{ fontSize: cornerLabelSize }}>
-                  PLAYERS
-                </span>
-                <span className="font-bold text-white" style={{ fontSize: cornerValueSize }}>
-                  {topRightPlayers}
-                </span>
+              <div className="bux-hud-item">
+                <span className="bux-hud-label">Players</span>
+                <span className="bux-hud-value">{topRightPlayers}</span>
               </div>
             )}
             {topRightPosition != null && (
-              <div className="flex flex-col text-right">
-                <span className="font-semibold uppercase tracking-wide text-slate-400" style={{ fontSize: cornerLabelSize }}>
-                  RANK
-                </span>
-                <span className="font-bold text-white" style={{ fontSize: cornerValueSize }}>
-                  {topRightPosition}
-                </span>
+              <div className="bux-hud-item">
+                <span className="bux-hud-label">Rank</span>
+                <span className="bux-hud-value">{topRightPosition}</span>
               </div>
+            )}
+            {onTournamentLobbyClick != null && (
+              <button
+                type="button"
+                onClick={onTournamentLobbyClick}
+                className="ml-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                aria-label="Tournament info"
+                title="Tournament info"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" strokeWidth={2} />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16v-4M12 8h.01" />
+                </svg>
+              </button>
             )}
           </div>
         </div>
-        );
-      })()}
+      )}
 
       {/* Oval table — textured felt + wood/brass rail */}
       <div 
@@ -271,42 +229,34 @@ export function PokerTable({
         >
           {/* Winner message: show for both real showdown and fold wins (fold wins have no handCategory, no card reveal) */}
           {showdownResults?.winners?.length > 0 ? (
-            <div className="flex flex-col items-center gap-1 rounded-lg border border-amber-500/60 bg-slate-900/95 px-3 py-2 text-center shadow-xl">
+            <div className="bux-panel rounded-xl px-4 py-2 text-center shadow-xl">
               {showdownResults.winners.length === 1 ? (
-                <span className="font-bold text-amber-300" style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}>
+                <span className="font-display font-bold text-amber-200" style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}>
                   {showdownResults.winners[0].handCategory
                     ? `${showdownResults.winners[0].name} wins with ${formatHandCategory(showdownResults.winners[0].handCategory)}`
-                    : `${showdownResults.winners[0].name} wins ${(showdownResults.winners[0].potWon ?? 0).toLocaleString()} chips`}
+                    : `${showdownResults.winners[0].name} wins ${(showdownResults.winners[0].potWon ?? 0).toLocaleString()}`}
                 </span>
               ) : (
-                <span className="font-bold text-amber-300" style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}>
+                <span className="font-display font-bold text-amber-200" style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}>
                   {showdownResults.winners[0]?.handCategory
                     ? `${showdownResults.winners.map((w: any) => w.name).join(" & ")} split with ${formatHandCategory(showdownResults.winners[0]?.handCategory)}`
-                    : `${showdownResults.winners.map((w: any) => w.name).join(" & ")} split ${(showdownResults.winners[0]?.potWon ?? 0).toLocaleString()} chips`}
+                    : `${showdownResults.winners.map((w: any) => w.name).join(" & ")} split ${(showdownResults.winners[0]?.potWon ?? 0).toLocaleString()}`}
                 </span>
               )}
             </div>
           ) : (
-            /* Total pot above community cards when not showing winner */
-            <div className="flex flex-col items-center gap-1">
+            <div className="bux-pot">
+              <span className="bux-pot-label">Pot</span>
               <div className="flex items-center gap-2">
-                <span 
-                  className="font-semibold uppercase tracking-wide text-slate-300"
-                  style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}
-                >
-                  TOTAL POT :
-                </span>
-                <BetChip value={pot} />
+                <BetChip value={pot} hideLabel />
+                <span className="bux-pot-value">{pot.toLocaleString()}</span>
               </div>
               {sidePots.length > 1 && (
-                <div
-                  className="flex flex-col items-center gap-0.5 rounded-md border border-slate-600/50 bg-slate-900/80 px-2 py-1 text-center"
-                  style={{ fontSize: 'calc(var(--bet-chip-text-size, 13px) * 0.85)' }}
-                >
+                <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[11px] text-slate-400">
                   {sidePots.map((sp, idx) => (
-                    <span key={`${sp.label || "pot"}-${idx}`} className="text-slate-300">
-                      {(sp.label || (idx === 0 ? "Main" : `Side ${idx}`)).toUpperCase()}:{" "}
-                      <span className="font-semibold text-amber-200">{sp.amount.toLocaleString()}</span>
+                    <span key={`${sp.label || "pot"}-${idx}`}>
+                      {(sp.label || (idx === 0 ? "Main" : `Side ${idx}`))}:{" "}
+                      <span className="font-semibold text-amber-200/90">{sp.amount.toLocaleString()}</span>
                     </span>
                   ))}
                 </div>
@@ -362,7 +312,7 @@ export function PokerTable({
                     } ${
                       isLosingCard ? 'opacity-40 grayscale' : ''
                     }`}
-                    useTextCard={isMobile}
+                    useTextCard={false}
                   />
                 </div>
               );
@@ -371,8 +321,9 @@ export function PokerTable({
           )}
         </div>
 
-        {/* Player Positions - 10 seats at table edge */}
+        {/* Player Positions — occupied seats only */}
         {allSeats.flatMap((player, seatIdx) => {
+          if (!player) return [];
           const position = PLAYER_POSITIONS[seatIdx];
           // Calculate radius to position at table edge (use percentage of table size)
           const radiusPercent = 45; // Position at 45% from center (near edge)
@@ -462,19 +413,50 @@ export function PokerTable({
                   flexDirection: ((seatIdx + 1) >= 6 && (seatIdx + 1) <= 10) ? 'column-reverse' : 'column'
                 }}
               >
-                  {/* Player Avatar or Empty Seat */}
+                  {/* Occupied seats only — empty seats stay quiet */}
                   {player ? (
                     <>
                       <div
-                        className={`relative rounded-full ${hasActiveTimer || isCurrentTurn ? 'bux-turn-ring' : ''}`}
+                        className={`relative rounded-full ${isCurrentTurn && !hasActiveTimer ? "bux-turn-ring" : ""}`}
                         ref={(el) => {
                           const key = playerKey(player);
                           if (key) seatRefs.current.set(key, el);
-                          // Also index by both ids so throws resolve either key
                           if (player.userId) seatRefs.current.set(String(player.userId), el);
                           if (player.id) seatRefs.current.set(String(player.id), el);
                         }}
                       >
+                        {hasActiveTimer && turnTimer && (
+                          <svg
+                            className={`bux-timer-ring ${
+                              timerRemaining != null && timerRemaining <= 5 ? "urgent" : ""
+                            }`}
+                            viewBox="0 0 40 40"
+                            aria-hidden
+                          >
+                            <circle className="track" cx="20" cy="20" r="18" />
+                            <circle
+                              className="progress"
+                              cx="20"
+                              cy="20"
+                              r="18"
+                              strokeDasharray={`${2 * Math.PI * 18}`}
+                              strokeDashoffset={`${
+                                2 *
+                                Math.PI *
+                                18 *
+                                (1 -
+                                  Math.min(
+                                    1,
+                                    Math.max(
+                                      0,
+                                      (turnTimer.expiresAt - currentTime) /
+                                        Math.max(1, turnTimer.duration || 20000)
+                                    )
+                                  ))
+                              }`}
+                            />
+                          </svg>
+                        )}
                         <button
                           type="button"
                           data-seat-avatar
@@ -483,14 +465,18 @@ export function PokerTable({
                             e.stopPropagation();
                             handleSeatAvatarClick(playerKey(player));
                           }}
-                          className={`overflow-hidden rounded-full border-2 border-slate-700 bg-slate-800 relative ${
+                          className={`relative overflow-hidden rounded-full border-2 bg-slate-800 ${
+                            isCurrentTurn
+                              ? "border-[color:var(--bux-brass)]"
+                              : "border-slate-700"
+                          } ${
                             onSendReaction && myUserId
                               ? "cursor-pointer transition-transform hover:scale-105 active:scale-95"
                               : "cursor-default"
                           }`}
-                          style={{ 
-                            width: 'var(--player-avatar-size, 64px)',
-                            height: 'var(--player-avatar-size, 64px)'
+                          style={{
+                            width: "var(--player-avatar-size, 64px)",
+                            height: "var(--player-avatar-size, 64px)",
                           }}
                           title={
                             onSendReaction && myUserId
@@ -506,117 +492,79 @@ export function PokerTable({
                           }
                         >
                           {(() => {
-                            // Use Discord avatar for real players (not test players)
-                            const isTestPlayer = player.name.toLowerCase().startsWith('test player');
+                            const isTestPlayer = player.name.toLowerCase().startsWith("test player");
                             if (!isTestPlayer && player.avatarUrl) {
                               return (
-                                <img 
-                                  src={player.avatarUrl} 
+                                <img
+                                  src={player.avatarUrl}
                                   alt={player.name}
-                                  className="h-full w-full object-cover pointer-events-none"
+                                  className="pointer-events-none h-full w-full object-cover"
                                   onError={(e) => {
-                                    (e.target as HTMLImageElement).src = '/guest-avatar.png';
+                                    (e.target as HTMLImageElement).src = "/guest-avatar.png";
                                   }}
                                 />
                               );
                             }
-                            // Fallback to initial for test players or no avatar
                             return (
-                              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-700 to-teal-900 text-2xl font-bold text-white pointer-events-none">
+                              <div className="pointer-events-none flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-700 to-teal-900 text-2xl font-bold text-white">
                                 {player.name.charAt(0).toUpperCase()}
                               </div>
                             );
                           })()}
-                          
-                          {/* AWAY overlay */}
-                          {player.isAway && player.status !== "FOLDED" && player.status !== "ELIMINATED" && (
-                            <div className="absolute inset-0 flex items-center justify-center rounded-full bg-slate-950/75">
-                              <span className="font-extrabold uppercase tracking-wide text-amber-300 select-none" style={{ fontSize: '11px' }}>
-                                Away
-                              </span>
-                            </div>
-                          )}
 
-                          {/* Elimination overlay: after showdown, show red X over eliminated players before they disappear next hand */}
-                          {showdownActive && player.status === 'ELIMINATED' && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-red-900/60">
-                              <span className="text-red-300 font-extrabold text-3xl select-none">
-                                ✕
-                              </span>
-                            </div>
-                          )}
-                          
-                          {/* Seat overlay: strict exclusivity between action text and timer */}
-                          {(() => {
-                            const playerId = player.id || player.userId || '';
-                            const overlay = actionOverlays[playerId];
-                            const now = Date.now();
-                            const hasOverlay = !!overlay;
-                            const age = hasOverlay ? now - overlay.timestamp : 0;
-                            const permanent = hasOverlay ? isPermanentAction(overlay.action) : false;
-                            const actionOpacity = hasOverlay ? (permanent ? 1 : Math.max(0, 1 - (age / ACTION_FADE_MS))) : 0;
-
-                            // First priority: action overlay when active/visible.
-                            if (hasOverlay && actionOpacity > 0) {
-                              const actionInfo = getActionInfo(overlay.action);
-                              const risePx = permanent ? 0 : Math.min(10, age / 80);
-                              return (
-                                <div
-                                  className="absolute inset-0 flex items-center justify-center rounded-full"
-                                  style={{
-                                    background: `linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.6) 100%)`,
-                                    opacity: actionOpacity,
-                                    transition: 'opacity 0.1s ease-out',
-                                    pointerEvents: 'none',
-                                    zIndex: 15
-                                  }}
+                          {player.isAway &&
+                            player.status !== "FOLDED" &&
+                            player.status !== "ELIMINATED" && (
+                              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-slate-950/75">
+                                <span
+                                  className="select-none font-extrabold uppercase tracking-wide text-amber-300"
+                                  style={{ fontSize: "11px" }}
                                 >
-                                  <span
-                                    className="font-bold drop-shadow-lg text-center px-1"
-                                    style={{
-                                      color: actionInfo.color,
-                                      fontSize: 'var(--player-name-size, 15px)',
-                                      textShadow: '0 2px 4px rgba(0,0,0,0.8)',
-                                      transform: `translateY(${-risePx}px)`,
-                                      transition: permanent ? 'none' : 'transform 0.1s linear'
-                                    }}
-                                  >
-                                    {actionInfo.text}
-                                  </span>
-                                </div>
-                              );
-                            }
+                                  Away
+                                </span>
+                              </div>
+                            )}
 
-                            // Second priority: timer only when there is no visible action overlay.
-                            if (hasActiveTimer && timerRemaining !== null) {
-                              return (
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-full" style={{ zIndex: 10 }}>
-                                  <span 
-                                    className="font-bold text-yellow-400 drop-shadow-lg"
-                                    style={{ fontSize: 'var(--timer-text-size, 21px)' }}
-                                  >
-                                    {timerRemaining}
-                                  </span>
-                                </div>
-                              );
-                            }
-                            return null;
-                          })()}
+                          {showdownActive && player.status === "ELIMINATED" && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-red-900/60">
+                              <span className="select-none text-3xl font-extrabold text-red-300">✕</span>
+                            </div>
+                          )}
                         </button>
-                      
-                        {/* Dealer Button */}
+
+                        {/* Action badge below face — never covers avatar */}
+                        {(() => {
+                          const playerId = player.id || player.userId || "";
+                          const overlay = actionOverlays[playerId];
+                          if (!overlay) return null;
+                          const age = Date.now() - overlay.timestamp;
+                          const permanent = isPermanentAction(overlay.action);
+                          const actionOpacity = permanent
+                            ? 1
+                            : Math.max(0, 1 - age / ACTION_FADE_MS);
+                          if (actionOpacity <= 0) return null;
+                          const actionInfo = getActionInfo(overlay.action);
+                          return (
+                            <div
+                              className="bux-seat-action-badge"
+                              style={{ color: actionInfo.color, opacity: actionOpacity }}
+                            >
+                              {actionInfo.text}
+                            </div>
+                          );
+                        })()}
+
                         {player.isDealer && (
-                          <div 
-                            className="absolute -right-2 -top-2 flex items-center justify-center rounded-full bg-yellow-500 border-2 border-white shadow-lg"
-                            style={{ 
-                              width: 'var(--dealer-button-size, 32px)',
-                              height: 'var(--dealer-button-size, 32px)',
-                              zIndex: 60
+                          <div
+                            className="absolute -right-1 -top-1 z-[60] flex items-center justify-center rounded-full border-2 border-white bg-yellow-500 shadow-lg"
+                            style={{
+                              width: "var(--dealer-button-size, 28px)",
+                              height: "var(--dealer-button-size, 28px)",
                             }}
                           >
-                            <span 
+                            <span
                               className="font-bold text-yellow-900"
-                              style={{ fontSize: 'calc(var(--dealer-button-size, 32px) * 0.375)' }}
+                              style={{ fontSize: "calc(var(--dealer-button-size, 28px) * 0.4)" }}
                             >
                               D
                             </span>
@@ -624,64 +572,28 @@ export function PokerTable({
                         )}
                       </div>
 
-                      {/* Player Name and Chips - In containers, no wrapping */}
-                      <div 
-                        className="flex flex-col items-center min-w-0"
-                        style={{ 
-                          maxWidth: 'var(--player-name-max-width, 120px)',
+                      <div
+                        className="bux-seat-capsule mt-1"
+                        style={{
                           zIndex:
                             isMobile && seatCardsFaceUp ? 85 : isMyPlayer && isMobile ? 80 : 50,
                         }}
                       >
-                        <div className="w-full px-2 py-1 rounded bg-slate-900/80 border border-slate-700/50">
-                          <div 
-                            className="font-semibold text-white drop-shadow-lg truncate text-center whitespace-nowrap"
-                            style={{ fontSize: 'var(--player-name-size, 15px)' }}
-                          >
-                            {player.name}
-                          </div>
-                        </div>
-                        <div className="w-full px-2 py-1 rounded bg-slate-900/80 border border-slate-700/50">
-                          <div 
-                            className="font-medium text-emerald-300 text-center whitespace-nowrap"
-                            style={{ fontSize: 'var(--player-chips-size, 13px)' }}
-                          >
-                            {player.chips.toLocaleString()}
-                          </div>
-                        </div>
+                        <div className="bux-seat-name">{player.name}</div>
+                        <div className="bux-seat-stack">{player.chips.toLocaleString()}</div>
                       </div>
                     </>
-                  ) : (
-                    /* Empty Seat Indicator */
-                    <div className="relative mb-2 opacity-30">
-                      <div 
-                        className="overflow-hidden rounded-full border-2 border-dashed border-slate-600 bg-slate-800/50"
-                        style={{ 
-                          width: 'var(--player-avatar-size, 64px)',
-                          height: 'var(--player-avatar-size, 64px)'
-                        }}
-                      >
-                        <div className="flex h-full w-full items-center justify-center">
-                          <span 
-                            className="text-slate-500"
-                            style={{ fontSize: 'var(--player-chips-size, 13px)' }}
-                          >
-                            {seatIdx + 1}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  ) : null}
               </div>
             </div>
           ];
 
           // Add cards as separate element if player has cards (including own player)
           // Hide table cards for folded players unless optional showdown reveal (show/muck)
-          const hideOwnSeatCardsOnMobile =
+          // Dock already shows hero hand — keep seat orbit clean.
+          const hideOwnSeatCards =
             !debugAllSeatCardsFaceUp &&
-            isMyPlayer &&
-            isMobile &&
+            !!isMyPlayer &&
             !showdownActive &&
             !showFoldedReveal;
           if (
@@ -689,7 +601,7 @@ export function PokerTable({
             player.holeCards &&
             player.holeCards.length > 0 &&
             (!isFolded || showFoldedReveal) &&
-            !hideOwnSeatCardsOnMobile
+            !hideOwnSeatCards
           ) {
             const showFaceUp = seatCardsFaceUp;
             

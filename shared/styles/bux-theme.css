@@ -247,4 +247,247 @@
   .bux-emoji-picker button:active {
     transform: scale(0.96);
   }
+
+  /* —— Premium table chrome —— */
+  .bux-hud-strip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--bux-panel) 88%, transparent);
+    border: 1px solid var(--bux-panel-border);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  .bux-hud-item {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+    min-width: 0;
+  }
+
+  .bux-hud-label {
+    font-family: var(--font-display);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--bux-brass) 85%, white);
+    opacity: 0.85;
+  }
+
+  .bux-hud-value {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--bux-text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .bux-seat-capsule {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    min-width: 0;
+    max-width: var(--player-name-max-width, 120px);
+    padding: 3px 8px 4px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--bux-ink-elevated) 92%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bux-brass) 28%, transparent);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  }
+
+  .bux-seat-name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    text-align: center;
+    font-size: var(--player-name-size, 12px);
+  }
+
+  .bux-seat-stack {
+    font-weight: 600;
+    color: var(--bux-accent);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    font-size: var(--player-chips-size, 11px);
+  }
+
+  .bux-seat-action-badge {
+    position: absolute;
+    left: 50%;
+    bottom: -2px;
+    transform: translate(-50%, 100%);
+    z-index: 20;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    pointer-events: none;
+    background: rgba(11, 15, 20, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+
+  .bux-timer-ring {
+    position: absolute;
+    inset: -4px;
+    pointer-events: none;
+    transform: rotate(-90deg);
+  }
+
+  .bux-timer-ring circle {
+    fill: none;
+    stroke-width: 3;
+  }
+
+  .bux-timer-ring .track {
+    stroke: rgba(255, 255, 255, 0.12);
+  }
+
+  .bux-timer-ring .progress {
+    stroke: var(--bux-brass-bright);
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.1s linear;
+    filter: drop-shadow(0 0 4px rgba(196, 165, 116, 0.55));
+  }
+
+  .bux-timer-ring.urgent .progress {
+    stroke: #f59e0b;
+    filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.55));
+  }
+
+  .bux-pot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .bux-pot-label {
+    font-family: var(--font-display);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--bux-brass) 80%, white);
+  }
+
+  .bux-pot-value {
+    font-size: clamp(18px, 2.6vw, 28px);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: white;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+    letter-spacing: 0.02em;
+  }
+
+  .bux-chip {
+    position: relative;
+    border-radius: 999px;
+    box-shadow:
+      inset 0 0 0 2px rgba(255, 255, 255, 0.35),
+      inset 0 0 0 5px rgba(0, 0, 0, 0.22),
+      0 3px 8px rgba(0, 0, 0, 0.45);
+  }
+
+  .bux-chip::after {
+    content: "";
+    position: absolute;
+    inset: 22%;
+    border-radius: 999px;
+    border: 1.5px dashed rgba(255, 255, 255, 0.45);
+    pointer-events: none;
+  }
+
+  .bux-btn-fold {
+    background: linear-gradient(180deg, #ef4444, #b91c1c);
+    color: white;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 6px 16px rgba(185, 28, 28, 0.35);
+  }
+  .bux-btn-fold:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+
+  .bux-btn-call {
+    background: linear-gradient(180deg, #3f4b5c, #1f2937);
+    color: white;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    border: 1px solid color-mix(in srgb, var(--bux-brass) 45%, transparent);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  }
+  .bux-btn-call:hover:not(:disabled) {
+    border-color: var(--bux-brass);
+  }
+
+  .bux-btn-raise {
+    background: linear-gradient(180deg, #34d399, #059669);
+    color: #042f1e;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 6px 18px rgba(5, 150, 105, 0.4);
+  }
+  .bux-btn-raise:hover:not(:disabled) {
+    filter: brightness(1.06);
+  }
+
+  .bux-preset {
+    background: color-mix(in srgb, var(--bux-panel) 90%, transparent);
+    color: var(--bux-text-muted);
+    border: 1px solid var(--bux-panel-border);
+    font-weight: 700;
+    letter-spacing: 0.03em;
+  }
+  .bux-preset:hover:not(:disabled) {
+    color: white;
+    border-color: color-mix(in srgb, var(--bux-brass) 50%, transparent);
+  }
+
+  .bux-preset-danger {
+    background: color-mix(in srgb, #7f1d1d 70%, var(--bux-panel));
+    color: #fecaca;
+    border: 1px solid rgba(248, 113, 113, 0.35);
+    font-weight: 700;
+  }
+
+  .bux-preaction {
+    display: inline-flex;
+    gap: 4px;
+    padding: 3px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--bux-panel) 90%, transparent);
+    border: 1px solid var(--bux-panel-border);
+  }
+
+  .bux-preaction button {
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--bux-text-muted);
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+
+  .bux-preaction button[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--bux-accent) 28%, transparent);
+    color: white;
+  }
+
+  .bux-preaction button:hover {
+    color: white;
+  }
 }

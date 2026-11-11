@@ -175,23 +175,31 @@ export function BettingControls({
   // RAISE button shows total bet amount to raise TO (currentBet + minimumRaise)
   const actionAmount = raiseAmount;
 
+  const btnStyle = {
+    minWidth: `var(--action-button-width, 140px)`,
+    height: `var(--action-button-height, 48px)`,
+    paddingLeft: `var(--action-button-padding-x, 24px)`,
+    paddingRight: `var(--action-button-padding-x, 24px)`,
+    fontSize: `var(--action-button-text, 16px)`,
+  } as const;
+
+  const presetStyle = {
+    paddingLeft: `var(--preset-button-padding-x, 12px)`,
+    paddingRight: `var(--preset-button-padding-x, 12px)`,
+    paddingTop: `var(--preset-button-padding-y, 6px)`,
+    paddingBottom: `var(--preset-button-padding-y, 6px)`,
+    fontSize: `var(--preset-button-text, 13px)`,
+    height: `var(--preset-button-height, auto)`,
+  } as const;
+
   return (
-    <div className="flex flex-col items-end gap-3">
-      {/* Main Action Buttons - Right justified, same size, wider to prevent wrapping */}
-      <div className="flex items-center gap-3" style={{ width: containerWidth }}>
+    <div className="flex flex-col items-end gap-2">
+      <div className="flex items-center gap-2" style={{ width: containerWidth }}>
         <button
           onClick={handleFold}
           disabled={!isMyTurn}
-          className="rounded-lg bg-red-600 font-bold text-white shadow-lg hover:bg-red-700 transition-colors flex-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ 
-            minWidth: `var(--action-button-width, 140px)`, 
-            height: `var(--action-button-height, 48px)`,
-            paddingLeft: `var(--action-button-padding-x, 24px)`,
-            paddingRight: `var(--action-button-padding-x, 24px)`,
-            paddingTop: `var(--action-button-padding-y, 12px)`,
-            paddingBottom: `var(--action-button-padding-y, 12px)`,
-            fontSize: `var(--action-button-text, 16px)`
-          }}
+          className="bux-btn-fold flex-1 whitespace-nowrap rounded-xl transition disabled:cursor-not-allowed disabled:opacity-45"
+          style={btnStyle}
         >
           FOLD
         </button>
@@ -199,16 +207,8 @@ export function BettingControls({
           <button
             onClick={() => onAction("CHECK", 0)}
             disabled={!isMyTurn}
-            className="rounded-lg bg-blue-600 font-bold text-white shadow-lg hover:bg-blue-700 transition-colors flex-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ 
-              minWidth: `var(--action-button-width, 140px)`, 
-              height: `var(--action-button-height, 48px)`,
-              paddingLeft: `var(--action-button-padding-x, 24px)`,
-              paddingRight: `var(--action-button-padding-x, 24px)`,
-              paddingTop: `var(--action-button-padding-y, 12px)`,
-              paddingBottom: `var(--action-button-padding-y, 12px)`,
-              fontSize: `var(--action-button-text, 16px)`
-            }}
+            className="bux-btn-call flex-1 whitespace-nowrap rounded-xl transition disabled:cursor-not-allowed disabled:opacity-45"
+            style={btnStyle}
           >
             CHECK
           </button>
@@ -216,113 +216,69 @@ export function BettingControls({
           <button
             onClick={() => onAction(isAllInOnly ? "ALL_IN" : "CALL", callAmount)}
             disabled={!isMyTurn}
-            className="rounded-lg bg-blue-600 font-bold text-white shadow-lg hover:bg-blue-700 transition-colors flex-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ 
-              minWidth: `var(--action-button-width, 140px)`, 
-              height: `var(--action-button-height, 48px)`,
-              paddingLeft: `var(--action-button-padding-x, 24px)`,
-              paddingRight: `var(--action-button-padding-x, 24px)`,
-              paddingTop: `var(--action-button-padding-y, 12px)`,
-              paddingBottom: `var(--action-button-padding-y, 12px)`,
-              fontSize: `var(--action-button-text, 16px)`
-            }}
+            className="bux-btn-call flex-1 whitespace-nowrap rounded-xl transition disabled:cursor-not-allowed disabled:opacity-45"
+            style={btnStyle}
           >
             {isAllInOnly ? `ALL IN ${myChips}` : `CALL ${callAmount}`}
           </button>
         )}
         <button
           onClick={() => {
-            // When user chose ALL IN preset, send explicit ALL_IN so server uses full stack
             const isAllInBet = actionAmount === myContribution + myChips && myChips > 0;
             if (isAllInBet) {
               onAction("ALL_IN", myChips);
               return;
             }
-            // Server expects additional chips to put in, not total; BET/RAISE displays total
-            const amountToSend = (actionLabel === "BET" || actionLabel === "RAISE") ? actionAmount - myContribution : actionAmount;
+            const amountToSend =
+              actionLabel === "BET" || actionLabel === "RAISE"
+                ? actionAmount - myContribution
+                : actionAmount;
             onAction(actionLabel, amountToSend);
           }}
           disabled={!isMyTurn}
-          className="rounded-lg bg-emerald-600 font-bold text-white shadow-lg hover:bg-emerald-700 transition-colors flex-1 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ 
-            minWidth: `var(--action-button-width, 140px)`, 
-            height: `var(--action-button-height, 48px)`,
-            paddingLeft: `var(--action-button-padding-x, 24px)`,
-            paddingRight: `var(--action-button-padding-x, 24px)`,
-            paddingTop: `var(--action-button-padding-y, 12px)`,
-            paddingBottom: `var(--action-button-padding-y, 12px)`,
-            fontSize: `var(--action-button-text, 16px)`
-          }}
+          className="bux-btn-raise flex-1 whitespace-nowrap rounded-xl transition disabled:cursor-not-allowed disabled:opacity-45"
+          style={btnStyle}
         >
           {actionLabel} {actionAmount}
         </button>
       </div>
 
-      {/* Preset Buttons and Input - Right justified, input to the right */}
-      <div className="flex items-center gap-3" style={{ width: containerWidth }}>
-        {/* Left side: Preset buttons in 2 columns */}
-        <div className="flex flex-col gap-2 flex-1">
-          {/* Top row: 1/2 and POT */}
-          <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2" style={{ width: containerWidth }}>
+        <div className="flex flex-1 flex-col gap-1.5">
+          <div className="flex items-center gap-1.5">
             <button
-              onClick={() => handlePreset('half')}
+              onClick={() => handlePreset("half")}
               disabled={presetHalfDisabled}
-              className="rounded bg-slate-700 font-medium text-slate-200 hover:bg-slate-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                paddingLeft: `var(--preset-button-padding-x, 12px)`,
-                paddingRight: `var(--preset-button-padding-x, 12px)`,
-                paddingTop: `var(--preset-button-padding-y, 8px)`,
-                paddingBottom: `var(--preset-button-padding-y, 8px)`,
-                fontSize: `var(--preset-button-text, 14px)`,
-                height: `var(--preset-button-height, auto)`
-              }}
+              className="bux-preset flex-1 rounded-lg transition disabled:cursor-not-allowed disabled:opacity-40"
+              style={presetStyle}
             >
               1/2
             </button>
             <button
-              onClick={() => handlePreset('pot')}
+              onClick={() => handlePreset("pot")}
               disabled={presetPotDisabled}
-              className="rounded bg-slate-700 font-medium text-slate-200 hover:bg-slate-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                paddingLeft: `var(--preset-button-padding-x, 12px)`,
-                paddingRight: `var(--preset-button-padding-x, 12px)`,
-                paddingTop: `var(--preset-button-padding-y, 8px)`,
-                paddingBottom: `var(--preset-button-padding-y, 8px)`,
-                fontSize: `var(--preset-button-text, 14px)`,
-                height: `var(--preset-button-height, auto)`
-              }}
+              className="bux-preset flex-1 rounded-lg transition disabled:cursor-not-allowed disabled:opacity-40"
+              style={presetStyle}
             >
               POT
             </button>
           </div>
-          {/* Bottom row: 2/3 and ALL IN */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
-              onClick={() => handlePreset('twothirds')}
+              onClick={() => handlePreset("twothirds")}
               disabled={presetTwoThirdsDisabled}
-              className="rounded bg-slate-700 font-medium text-slate-200 hover:bg-slate-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                paddingLeft: `var(--preset-button-padding-x, 12px)`,
-                paddingRight: `var(--preset-button-padding-x, 12px)`,
-                paddingTop: `var(--preset-button-padding-y, 8px)`,
-                paddingBottom: `var(--preset-button-padding-y, 8px)`,
-                fontSize: `var(--preset-button-text, 14px)`,
-                height: `var(--preset-button-height, auto)`
-              }}
+              className="bux-preset flex-1 rounded-lg transition disabled:cursor-not-allowed disabled:opacity-40"
+              style={presetStyle}
             >
               2/3
             </button>
             <button
-              onClick={() => handlePreset('allin')}
+              onClick={() => handlePreset("allin")}
               disabled={!isMyTurn}
-              className="rounded bg-red-700 font-medium text-white hover:bg-red-600 transition-colors flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bux-preset-danger flex-1 rounded-lg transition disabled:cursor-not-allowed disabled:opacity-40"
               style={{
-                paddingLeft: `var(--preset-button-padding-x, 12px)`,
-                paddingRight: `var(--preset-button-padding-x, 12px)`,
-                paddingTop: `var(--preset-button-padding-y, 8px)`,
-                paddingBottom: `var(--preset-button-padding-y, 8px)`,
-                fontSize: `var(--allin-button-text, var(--preset-button-text, 14px))`,
-                height: `var(--preset-button-height, auto)`
+                ...presetStyle,
+                fontSize: `var(--allin-button-text, var(--preset-button-text, 13px))`,
               }}
             >
               ALL IN
@@ -330,35 +286,34 @@ export function BettingControls({
           </div>
         </div>
 
-        {/* Right side: Amount Input with +/- Controls - same height as both preset rows combined */}
-        <div className="flex items-center gap-2">
-            <button
-              onClick={() =>
-                setRaiseAmount((a) => Math.max(inputMin, a - stepSize))
-              }
-              disabled={!isMyTurn || raiseAmount <= inputMin}
-              className="flex items-center justify-center rounded-full bg-slate-700 font-bold text-white hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                width: `var(--input-button-size, 48px)`,
-                height: `var(--amount-input-height, 68px)`,
-                fontSize: `var(--input-button-text, 20px)`
-              }}
-            >
-              −
-            </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setRaiseAmount((a) => Math.max(inputMin, a - stepSize))}
+            disabled={!isMyTurn || raiseAmount <= inputMin}
+            className="bux-preset flex items-center justify-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-40"
+            style={{
+              width: `var(--input-button-size, 40px)`,
+              height: `var(--amount-input-height, 56px)`,
+              fontSize: `var(--input-button-text, 18px)`,
+            }}
+          >
+            −
+          </button>
           <input
             type="number"
             disabled={!isMyTurn}
-            className="rounded-lg border-2 border-slate-600 bg-slate-800 text-center font-bold text-white focus:border-emerald-500 focus:outline-none no-spinner disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ 
-              width: `var(--amount-input-width, 128px)`,
-              height: `var(--amount-input-height, 68px)`,
-              paddingLeft: 'var(--amount-input-padding, 16px)',
-              paddingRight: 'var(--amount-input-padding, 16px)',
-              fontSize: `var(--amount-input-text, 18px)`,
-              WebkitAppearance: 'none',
-              MozAppearance: 'textfield',
-              appearance: 'textfield'
+            className="no-spinner rounded-xl border text-center font-bold text-white focus:outline-none disabled:cursor-not-allowed disabled:opacity-45"
+            style={{
+              width: `var(--amount-input-width, 112px)`,
+              height: `var(--amount-input-height, 56px)`,
+              paddingLeft: "var(--amount-input-padding, 12px)",
+              paddingRight: "var(--amount-input-padding, 12px)",
+              fontSize: `var(--amount-input-text, 17px)`,
+              background: "color-mix(in srgb, var(--bux-panel) 92%, transparent)",
+              borderColor: "var(--bux-panel-border)",
+              WebkitAppearance: "none",
+              MozAppearance: "textfield",
+              appearance: "textfield",
             }}
             value={raiseAmount}
             onChange={(e) => {
@@ -373,15 +328,13 @@ export function BettingControls({
             max={inputMax}
           />
           <button
-            onClick={() =>
-              setRaiseAmount((a) => Math.min(inputMax, a + stepSize))
-            }
+            onClick={() => setRaiseAmount((a) => Math.min(inputMax, a + stepSize))}
             disabled={!isMyTurn || raiseAmount >= inputMax}
-            className="flex items-center justify-center rounded-full bg-slate-700 font-bold text-white hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bux-preset flex items-center justify-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-40"
             style={{
-              width: `var(--input-button-size, 48px)`,
-              height: `var(--amount-input-height, 68px)`,
-              fontSize: `var(--input-button-text, 20px)`
+              width: `var(--input-button-size, 40px)`,
+              height: `var(--amount-input-height, 56px)`,
+              fontSize: `var(--input-button-text, 18px)`,
             }}
           >
             +

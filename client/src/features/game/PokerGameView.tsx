@@ -1676,7 +1676,7 @@ export function PokerGameView() {
 
           {/* Action dock — hero hand left, controls right */}
           <div
-            className={`bux-action-dock relative flex h-[104px] min-h-[96px] w-full shrink-0 items-stretch overflow-hidden px-2 py-1.5 [@media(min-width:640px)_and_(min-height:520px)]:h-[180px] [@media(min-width:640px)_and_(min-height:520px)]:min-h-[108px] [@media(min-width:640px)_and_(min-height:520px)]:px-4 [@media(min-width:640px)_and_(min-height:520px)]:py-2 ${isMyTurn ? "ring-1 ring-inset ring-[color:var(--bux-brass)]/40" : ""}`}
+            className={`bux-action-dock relative flex h-[100px] min-h-[92px] w-full shrink-0 items-stretch overflow-hidden px-2 py-1.5 [@media(min-width:640px)_and_(min-height:520px)]:h-[156px] [@media(min-width:640px)_and_(min-height:520px)]:min-h-[108px] [@media(min-width:640px)_and_(min-height:520px)]:px-4 [@media(min-width:640px)_and_(min-height:520px)]:py-2 ${isMyTurn ? "ring-1 ring-inset ring-[color:var(--bux-brass)]/40" : ""}`}
           >
             {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
               <div className={`absolute left-2 sm:left-4 top-0 bottom-0 z-50 flex flex-col justify-center gap-1 items-start ${myPlayer.status === 'FOLDED' ? 'opacity-50' : ''}`} style={{ visibility: 'visible' }}>
