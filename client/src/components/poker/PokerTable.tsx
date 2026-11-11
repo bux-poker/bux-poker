@@ -748,8 +748,7 @@ export function PokerTable({
                         style={{
                           marginTop: labelBelow ? 4 : 0,
                           marginBottom: labelBelow ? 0 : 4,
-                          zIndex:
-                            isMobile && seatCardsFaceUp ? 85 : isMyPlayer && isMobile ? 80 : 50,
+                          zIndex: 50,
                         }}
                       >
                         <div className="bux-seat-name">{player.name}</div>
