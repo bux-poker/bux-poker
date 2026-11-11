@@ -14,7 +14,7 @@
   --table-rail-width: 8px;
   --table-rail-inset: 2px;
   --table-padding-top: 48px;
-  --table-padding-bottom: 28px;
+  --table-padding-bottom: 12px;
 }
 
 /* 901-1000px (iPad landscape, small tablets) */
@@ -857,7 +857,7 @@
   :root {
     --table-padding: 8px;
     --table-padding-top: 34px;
-    --table-padding-bottom: 24px;
+    --table-padding-bottom: 10px;
     --table-rail-width: 5px;
     --table-rail-inset: 2px;
     --action-dock-height: 102px;
@@ -890,7 +890,7 @@
   :root {
     --table-padding: 6px;
     --table-padding-top: 28px;
-    --table-padding-bottom: 20px;
+    --table-padding-bottom: 8px;
     --table-rail-width: 4px;
     --action-dock-height: 92px;
     --hero-card-height: 62px;

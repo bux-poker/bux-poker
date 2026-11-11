@@ -144,47 +144,51 @@ export function TableTestPage() {
             />
           </div>
 
-          {/* Corner panels only — no full-width dock */}
-          {(() => {
-            const myHoleCards = players[0]?.holeCards;
-            if (!myHoleCards || !Array.isArray(myHoleCards) || myHoleCards.length === 0) return null;
-            return (
-              <div className="bux-action-corner bux-action-corner-hand absolute bottom-2 left-2 z-[60] flex flex-col items-start gap-1">
-                <span
-                  className="font-display text-[10px] sm:text-sm font-semibold uppercase tracking-wide whitespace-nowrap leading-tight"
-                  style={{ color: "var(--bux-brass)" }}
-                >
-                  {getHandDescription(myHoleCards, COMMUNITY_CARDS, "FLOP")}
-                </span>
-                <div className="flex items-center" style={{ gap: "var(--community-card-gap, 8px)" }}>
-                  {myHoleCards.map((card: Card, idx: number) => (
-                    <PokerCardImage
-                      key={`${idx}-${communityCardSize.width}x${communityCardSize.height}`}
-                      card={card}
-                      width={communityCardSize.width}
-                      height={communityCardSize.height}
-                      className="shadow-lg"
-                      useTextCard={isMobile}
-                    />
-                  ))}
+          {/* Transparent flow row keeps the felt above the corners without a full-width dock. */}
+          <div className="pointer-events-none relative z-[60] flex w-full shrink-0 items-end justify-between gap-3 px-2 pb-2 pt-1">
+            {(() => {
+              const myHoleCards = players[0]?.holeCards;
+              if (!myHoleCards || !Array.isArray(myHoleCards) || myHoleCards.length === 0) {
+                return <div className="min-w-0" />;
+              }
+              return (
+                <div className="pointer-events-auto bux-action-corner bux-action-corner-hand flex flex-col items-start gap-1">
+                  <span
+                    className="font-display text-[10px] sm:text-sm font-semibold uppercase tracking-wide whitespace-nowrap leading-tight"
+                    style={{ color: "var(--bux-brass)" }}
+                  >
+                    {getHandDescription(myHoleCards, COMMUNITY_CARDS, "FLOP")}
+                  </span>
+                  <div className="flex items-center" style={{ gap: "var(--community-card-gap, 8px)" }}>
+                    {myHoleCards.map((card: Card, idx: number) => (
+                      <PokerCardImage
+                        key={`${idx}-${communityCardSize.width}x${communityCardSize.height}`}
+                        card={card}
+                        width={communityCardSize.width}
+                        height={communityCardSize.height}
+                        className="shadow-lg"
+                        useTextCard={isMobile}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            );
-          })()}
-          <div className="bux-action-corner bux-action-corner-controls absolute bottom-2 right-2 z-[60] flex flex-col items-end justify-center gap-1 sm:gap-2">
-            <BettingControls
-              onAction={() => {}}
-              currentBet={CURRENT_BET}
-              bigBlind={BIG_BLIND}
-              myChips={1000}
-              street="PREFLOP"
-              minimumRaise={BIG_BLIND}
-              isBigBlind={false}
-              isMyTurn={false}
-              myContribution={0}
-              players={players}
-              myUserId={user?.id}
-            />
+              );
+            })()}
+            <div className="pointer-events-auto bux-action-corner bux-action-corner-controls flex flex-col items-end justify-center gap-1 sm:gap-2">
+              <BettingControls
+                onAction={() => {}}
+                currentBet={CURRENT_BET}
+                bigBlind={BIG_BLIND}
+                myChips={1000}
+                street="PREFLOP"
+                minimumRaise={BIG_BLIND}
+                isBigBlind={false}
+                isMyTurn={false}
+                myContribution={0}
+                players={players}
+                myUserId={user?.id}
+              />
+            </div>
           </div>
         </div>
 
