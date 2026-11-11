@@ -53,7 +53,6 @@ export function PokerCardImage({
   if (useTextCard) {
     const suitSymbol = SUIT_SYMBOLS[card.suit] ?? card.suit.charAt(0);
     const isRed = RED_SUITS.has(card.suit);
-    // Pack rank + suit as large as the card allows (tight vertical stack).
     const rankSize = Math.max(11, Math.floor(height * 0.5));
     const suitSize = Math.max(11, Math.floor(height * 0.42));
     const cornerRadius = Math.max(2, Math.round(width * 0.1));
@@ -70,6 +69,7 @@ export function PokerCardImage({
           paddingTop: padY,
           paddingBottom: padY,
           gap: Math.max(0, Math.round(height * 0.02)),
+          boxSizing: "border-box",
         }}
       >
         <span
@@ -88,22 +88,21 @@ export function PokerCardImage({
     );
   }
 
+  // Shared PNG path for community + desktop hole cards — do not distort.
   const filename = getCardImageFilename(card);
   const src = "/cards/" + filename;
-  const cornerRadius = Math.max(2, Math.round(width * 0.1));
   return (
     <motion.img
       src={src}
       alt={card.rank + card.suit}
       className={className}
       style={{
-        width,
+        width: width - 2,
         height,
-        objectFit: "cover",
+        objectFit: "contain",
         padding: 0,
         margin: 0,
-        borderRadius: cornerRadius,
-        display: "block",
+        borderRadius: "1px",
       }}
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}

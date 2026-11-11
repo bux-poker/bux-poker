@@ -424,32 +424,31 @@ export function PokerTable({
           const visualSeat = visualIdx + 1;
           const cardsOnRight = [1, 2, 3, 9, 10].includes(visualSeat);
 
-          // Card sizes first — face-up bigger than face-down, always smaller than community.
+          // Face-down uses CSS hole size. Face-up scales both axes equally (~1.65×), capped under community.
           const css = typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null;
           const baseHoleWidth = css ? parseInt(css.getPropertyValue("--hole-card-width"), 10) || 28 : 28;
           const baseHoleHeight = css ? parseInt(css.getPropertyValue("--hole-card-height"), 10) || 39 : 39;
           const communityW = css ? parseInt(css.getPropertyValue("--community-card-width"), 10) || 64 : 64;
           const communityH = css ? parseInt(css.getPropertyValue("--community-card-height"), 10) || 90 : 90;
           const avatarSize = css ? parseInt(css.getPropertyValue("--player-avatar-size"), 10) || 32 : 32;
-          // Standard poker card ratio (2.5 × 3.5). Face-up ~1.7× face-down, still under community.
-          const CARD_ASPECT = 2.5 / 3.5;
+          let holeWidth = baseHoleWidth;
           let holeHeight = baseHoleHeight;
-          let holeWidth = Math.round(holeHeight * CARD_ASPECT);
           if (seatCardsFaceUp) {
-            holeHeight = Math.round(baseHoleHeight * 1.7);
-            holeWidth = Math.round(holeHeight * CARD_ASPECT);
-            const maxW = communityW - 4;
-            const maxH = communityH - 4;
+            const scale = 1.65;
+            holeWidth = Math.round(baseHoleWidth * scale);
+            holeHeight = Math.round(baseHoleHeight * scale);
+            const maxW = Math.max(baseHoleWidth + 2, communityW - 6);
+            const maxH = Math.max(baseHoleHeight + 2, communityH - 6);
             if (holeWidth > maxW || holeHeight > maxH) {
-              const scale = Math.min(maxW / holeWidth, maxH / holeHeight);
-              holeWidth = Math.round(holeWidth * scale);
-              holeHeight = Math.round(holeHeight * scale);
+              const fit = Math.min(maxW / holeWidth, maxH / holeHeight);
+              holeWidth = Math.round(holeWidth * fit);
+              holeHeight = Math.round(holeHeight * fit);
             }
           }
 
-          // Gap between avatar edge and hole-card stack (same for face-up / face-down).
+          // Same avatar→card gap for face-up and face-down.
           const CARD_SEAT_GAP = windowSize.width < 1000 ? 6 : 8;
-          // Prefer vertical center on PFP; if taller than avatar, grow upward only so label gap stays clear.
+          // Center on PFP when possible; if taller than avatar, extend upward only (never into the label).
           const cardStackTop = Math.max(
             Math.round((avatarSize - holeHeight) / 2),
             avatarSize - holeHeight
@@ -522,15 +521,16 @@ export function PokerTable({
                   {/* Occupied seats only — empty seats stay quiet */}
                   {player ? (
                     <>
-                      {/* Avatar column is layout-stable; cards are absolute beside PFP so face-up size never nudges the label. */}
+                      {/* Avatar column is layout-stable; cards absolute beside PFP (parent must not clip). */}
                       <div
-                        className={`relative rounded-full ${isCurrentTurn && !hasActiveTimer ? "bux-turn-ring" : ""}`}
+                        className={`relative ${isCurrentTurn && !hasActiveTimer ? "bux-turn-ring" : ""}`}
                         ref={(el) => {
                           const key = playerKey(player);
                           if (key) seatRefs.current.set(key, el);
                           if (player.userId) seatRefs.current.set(String(player.userId), el);
                           if (player.id) seatRefs.current.set(String(player.id), el);
                         }}
+                        style={{ width: "var(--player-avatar-size, 64px)", height: "var(--player-avatar-size, 64px)" }}
                       >
                         {hasActiveTimer && turnTimer && (
                           <svg
