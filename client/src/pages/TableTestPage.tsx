@@ -14,6 +14,11 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { useTableReactions } from "../hooks/useTableReactions";
 import { getHandDescription } from "@shared/utils/handEvaluator";
 import type { Card } from "@shared/types/poker";
+import {
+  TableTestModalPicker,
+  TableTestModalPreview,
+  type TableTestModalId,
+} from "./tableTest/TableTestModalPreview";
 
 const COMMUNITY_CARDS: Card[] = [
   { suit: "SPADES", rank: "K" },
@@ -61,6 +66,7 @@ export function TableTestPage() {
   const isMobile = useIsMobile();
   const [chatCollapsed, setChatCollapsed] = useState(() => typeof window !== "undefined" && (window.innerWidth <= 1024 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || "ontouchstart" in window));
   const [showDealerMessages, setShowDealerMessages] = useState(true);
+  const [previewModal, setPreviewModal] = useState<TableTestModalId>("none");
 
   const chatPlayers = players.map((p) => ({
     id: p.id,
@@ -80,6 +86,19 @@ export function TableTestPage() {
 
   return (
     <div className="flex h-[100dvh] min-h-screen w-screen flex-col overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900">
+      {/* Modal preview picker — always on top for UI review */}
+      <div className="pointer-events-none absolute left-1/2 top-2 z-[140] -translate-x-1/2">
+        <TableTestModalPicker
+          selected={previewModal}
+          onSelect={setPreviewModal}
+          onClear={() => setPreviewModal("none")}
+        />
+      </div>
+      <TableTestModalPreview
+        selected={previewModal}
+        onClear={() => setPreviewModal("none")}
+      />
+
       {/* Main area: table + controls | chat */}
       <div className="relative z-20 flex min-h-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -97,12 +116,17 @@ export function TableTestPage() {
               myUserId={user?.id}
               topLeftBlinds="50/100"
               topLeftTimer="2:15 mins"
-              onTournamentLobbyClick={() => alert("Tournament lobby (test – check button position)")}
+              onTournamentLobbyClick={() => setPreviewModal("tournament-lobby")}
               topRightPosition="13th"
               topRightPlayers="28/45"
               reactions={reactions}
               onSendReaction={user?.id ? sendReaction : undefined}
               reactionCooldownMs={cooldownRemainingMs}
+              tournamentCountdown={
+                previewModal === "starting-countdown"
+                  ? { startTime: new Date().toISOString(), seconds: 87 }
+                  : undefined
+              }
             />
           </div>
 
