@@ -431,16 +431,14 @@ export function PokerTable({
           const communityW = css ? parseInt(css.getPropertyValue("--community-card-width"), 10) || 64 : 64;
           const communityH = css ? parseInt(css.getPropertyValue("--community-card-height"), 10) || 90 : 90;
           const avatarSize = css ? parseInt(css.getPropertyValue("--player-avatar-size"), 10) || 32 : 32;
+          // Face-down = hole size. Face-up = clearly larger (~1.7×), still below community.
           let holeWidth = baseHoleWidth;
           let holeHeight = baseHoleHeight;
           if (seatCardsFaceUp) {
-            // ~60% of the way from face-down → community, then clamp strictly below community.
-            holeWidth = Math.round(baseHoleWidth + (communityW - baseHoleWidth) * 0.6);
-            holeHeight = Math.round(baseHoleHeight + (communityH - baseHoleHeight) * 0.6);
-            holeWidth = Math.min(holeWidth, communityW - 6);
-            holeHeight = Math.min(holeHeight, communityH - 6);
-            holeWidth = Math.max(holeWidth, baseHoleWidth + 4);
-            holeHeight = Math.max(holeHeight, baseHoleHeight + 4);
+            holeWidth = Math.round(baseHoleWidth * 1.7);
+            holeHeight = Math.round(baseHoleHeight * 1.7);
+            if (holeWidth >= communityW) holeWidth = Math.max(baseHoleWidth + 2, communityW - 4);
+            if (holeHeight >= communityH) holeHeight = Math.max(baseHoleHeight + 2, communityH - 4);
           }
 
           // Gap between avatar edge and hole-card stack (cards sit inline with the PFP).

@@ -90,18 +90,20 @@ export function PokerCardImage({
 
   const filename = getCardImageFilename(card);
   const src = "/cards/" + filename;
+  const cornerRadius = Math.max(2, Math.round(width * 0.1));
   return (
     <motion.img
       src={src}
       alt={card.rank + card.suit}
       className={className}
       style={{
-        width: width - 2,
+        width,
         height,
-        objectFit: "contain",
+        objectFit: "fill",
         padding: 0,
         margin: 0,
-        borderRadius: "1px",
+        borderRadius: cornerRadius,
+        display: "block",
       }}
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
