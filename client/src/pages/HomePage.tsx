@@ -107,14 +107,16 @@ function Tile({
   icon,
 }: {
   title: string;
-  body: React.ReactNode;
-  icon: React.ReactNode;
+  body: ReactNode;
+  icon: ReactNode;
 }) {
   return (
-    <div className="bux-home-tile h-full">
-      <div className="bux-home-tile-icon">{icon}</div>
-      <h3 className="font-display mt-3 text-base font-bold text-white">{title}</h3>
-      <p className="mt-1.5 text-[13px] leading-relaxed text-slate-300">{body}</p>
+    <div className="bux-home-tile flex h-full items-start gap-3 !p-3 sm:!px-3.5 sm:!py-3">
+      <div className="bux-home-tile-icon shrink-0">{icon}</div>
+      <div className="min-w-0">
+        <h3 className="font-display text-sm font-bold text-white sm:text-base">{title}</h3>
+        <p className="mt-0.5 text-xs leading-snug text-slate-300 sm:text-[13px]">{body}</p>
+      </div>
     </div>
   );
 }
@@ -129,12 +131,15 @@ export function HomePage() {
       <div className="bux-home-bg absolute inset-0" aria-hidden />
       <div className="bux-home-grid absolute inset-0 opacity-[0.14]" aria-hidden />
 
-      <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-4 sm:px-6 lg:gap-5 lg:px-8 lg:py-5">
-        {/* Top: brand + CTAs | hero art (own column, no overlap) */}
-        <div className="grid min-h-0 flex-[0.95] items-center gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-8">
+      <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-1 flex-col gap-3 px-4 py-4 sm:px-6 lg:gap-4 lg:px-8 lg:py-5">
+        {/* Hero ~65% of page height: larger brand copy + larger art */}
+        <div
+          className="grid min-h-0 items-center gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-10"
+          style={{ flex: "65 1 0%" }}
+        >
           <div className="min-w-0">
             <div
-              className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]"
+              className="inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.14em]"
               style={{
                 borderColor: "color-mix(in srgb, var(--bux-sol-cyan) 35%, transparent)",
                 color: "var(--bux-sol-cyan)",
@@ -143,48 +148,51 @@ export function HomePage() {
             >
               Discord communities · Solana payouts
             </div>
-            <div className="mt-3 flex items-center gap-3">
+            <div className="mt-5 flex items-center gap-4">
               <img
                 src="/images/bux-poker.png"
                 alt="BUX Poker"
-                className="h-12 w-12 rounded-xl object-contain sm:h-14 sm:w-14"
+                className="h-16 w-16 rounded-xl object-contain sm:h-[4.5rem] sm:w-[4.5rem]"
               />
-              <h1 className="font-display text-4xl font-extrabold tracking-tight text-white sm:text-5xl lg:text-[3.1rem] lg:leading-none">
+              <h1 className="font-display text-5xl font-extrabold tracking-tight text-white sm:text-6xl lg:text-[4rem] lg:leading-none">
                 BUX Poker
               </h1>
             </div>
-            <p className="mt-3 max-w-lg text-sm text-slate-300 sm:text-[15px]">
+            <p className="mt-4 max-w-xl text-base text-slate-300 sm:text-lg">
               Live Hold&apos;em for Discord communities — synced tables, shared blinds, and Solana
               payouts without wallet connect.
             </p>
-            <div className="mt-4 flex flex-wrap items-center gap-3">
+            <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link
                 to="/tournaments"
-                className="bux-btn-accent rounded-lg px-5 py-2.5 text-sm shadow-lg shadow-emerald-900/40"
+                className="bux-btn-accent rounded-lg px-6 py-3 text-sm shadow-lg shadow-emerald-900/40 sm:text-base"
               >
                 Browse tournaments
               </Link>
-              <Link to="/invite" className="bux-btn-ghost px-5 py-2.5 text-sm">
+              <Link to="/invite" className="bux-btn-ghost px-6 py-3 text-sm sm:text-base">
                 Invite the bot
               </Link>
-              <Link to="/leagues" className="bux-nav-link text-sm">
+              <Link to="/leagues" className="bux-nav-link text-sm sm:text-base">
                 Leagues
               </Link>
               <AddToHomeScreen />
             </div>
           </div>
 
-          <div className="relative hidden h-full min-h-[200px] items-center justify-center lg:flex">
+          <div className="relative hidden h-full min-h-[240px] items-center justify-center lg:flex">
             <img
               src="/images/aces.png"
               alt="Ace of hearts, ace of spades, and chips"
-              className="max-h-[min(38vh,320px)] w-auto max-w-full object-contain drop-shadow-2xl"
+              className="max-h-[min(52vh,460px)] w-auto max-w-full object-contain drop-shadow-2xl"
             />
           </div>
         </div>
 
-        {/* Bottom: clear split — Players vs Communities */}
-        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-2 lg:gap-5">
+        {/* Bottom ~35%: Players (left, vertical) | Communities (right, vertical) */}
+        <div
+          className="grid min-h-0 gap-4 lg:grid-cols-2 lg:gap-6"
+          style={{ flex: "35 1 0%" }}
+        >
           <section className="flex min-h-0 flex-col">
             <div className="mb-2 flex items-baseline justify-between gap-3">
               <p className="bux-section-label">For players</p>
@@ -192,7 +200,7 @@ export function HomePage() {
                 Find a table →
               </Link>
             </div>
-            <div className="grid flex-1 gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+            <div className="flex flex-1 flex-col gap-2.5">
               {PLAYER_TILES.map((tile) => (
                 <Tile key={tile.title} {...tile} />
               ))}
@@ -206,7 +214,7 @@ export function HomePage() {
                 Add the bot →
               </Link>
             </div>
-            <div className="grid flex-1 gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+            <div className="flex flex-1 flex-col gap-2.5">
               {COMMUNITY_TILES.map((tile) => (
                 <Tile key={tile.title} {...tile} />
               ))}
