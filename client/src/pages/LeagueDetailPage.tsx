@@ -42,6 +42,15 @@ interface LeagueDetail {
   prizeWalletAddress?: string | null;
   walletConfigured?: boolean;
   requiredFeeSol?: string | null;
+  depositRequirements?: {
+    prizeWalletAddress: string;
+    solLamports: string;
+    solAmount: string;
+    feeSol?: string;
+    spl: { mint: string; amount: string }[];
+    nfts: { mint: string }[];
+    rpcUrl: string;
+  } | null;
   prizeClaimServer?: { serverName: string; inviteLink: string | null } | null;
   myPrizeClaim?: MyPrizeClaim | null;
   hasPrizes?: boolean;

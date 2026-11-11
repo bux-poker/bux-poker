@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@shared/features/auth/AuthContext';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
 import {
   PrizeStructureEditor,
   defaultPrizeFormState,
   prizeFormToPayload,
 } from './PrizeStructureEditor';
+import {
+  PrizeWalletFundPanel,
+  type DepositRequirements,
+} from './PrizeWalletFundPanel';
 
 interface BlindLevel {
   level: number;
@@ -31,6 +35,12 @@ export function CreateTournament() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [pendingFund, setPendingFund] = useState<{
+    kind: 'tournament' | 'league';
+    id: string;
+    name: string;
+    requirements: DepositRequirements;
+  } | null>(null);
   const [servers, setServers] = useState<DiscordServer[]>([]);
   const [selectedServerIds, setSelectedServerIds] = useState<string[]>([]);
   const [loadingServers, setLoadingServers] = useState(true);
@@ -200,10 +210,27 @@ export function CreateTournament() {
       );
 
       if (response.data) {
-        setSuccess(true);
-        // Clear URL params
         setSearchParams({});
-        // Reset form
+        const created = response.data;
+        const requirements =
+          created.depositRequirements || created.prizeFundingSummary?.depositRequirements;
+        if (
+          prizeForm.prizeMode === 'WALLET' &&
+          created.prizeFundingStatus !== 'FUNDED' &&
+          requirements?.prizeWalletAddress
+        ) {
+          setPendingFund({
+            kind: 'tournament',
+            id: created.id,
+            name: created.name || formData.name,
+            requirements,
+          });
+          setSuccess(false);
+        } else {
+          setPendingFund(null);
+          setSuccess(true);
+          setTimeout(() => setSuccess(false), 3000);
+        }
         setFormData({
           name: '',
           description: '',
@@ -212,7 +239,6 @@ export function CreateTournament() {
           seatsPerTable: 9,
           startingChips: 10000,
         });
-        setTimeout(() => setSuccess(false), 3000);
       }
     } catch (err: any) {
       setError(err.response?.data?.error || err.message || 'Failed to create tournament');
@@ -258,11 +284,29 @@ export function CreateTournament() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      setSuccess(true);
+      const created = response.data;
+      const requirements =
+        created?.depositRequirements || created?.prizeFundingSummary?.depositRequirements;
+      if (
+        prizeForm.prizeMode === 'WALLET' &&
+        created?.prizeFundingStatus !== 'FUNDED' &&
+        requirements?.prizeWalletAddress
+      ) {
+        setPendingFund({
+          kind: 'league',
+          id: created.id,
+          name: created.name || leagueName,
+          requirements,
+        });
+        setSuccess(false);
+      } else {
+        setPendingFund(null);
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 4000);
+      }
       setLeagueName('');
       setLeagueDescription('');
       setLeagueGameTimes(Array(numLeagueGames).fill(''));
-      setTimeout(() => setSuccess(false), 4000);
     } catch (err: any) {
       setError(err.response?.data?.error || err.message || 'Failed to create league');
     } finally {
@@ -729,17 +773,51 @@ export function CreateTournament() {
           </div>
         )}
 
-        {success && (
+        {pendingFund && (
+          <div className="space-y-3">
+            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-amber-100">
+              <p className="font-medium">
+                {pendingFund.kind === 'league' ? 'League' : 'Tournament'} “{pendingFund.name}” created —
+                deposit prizes to finish setup.
+              </p>
+              <p className="mt-1 text-xs text-slate-300">
+                Auto-claim events cannot start until this deposit is confirmed.
+              </p>
+            </div>
+            <PrizeWalletFundPanel
+              kind={pendingFund.kind}
+              eventId={pendingFund.id}
+              requirements={pendingFund.requirements}
+              onFunded={() => {
+                setPendingFund(null);
+                setSuccess(true);
+                setTimeout(() => setSuccess(false), 4000);
+              }}
+            />
+            <p className="text-xs text-slate-500">
+              You can also fund later from the{' '}
+              {pendingFund.kind === 'league' ? (
+                <Link className="text-emerald-400 hover:underline" to={`/leagues/${pendingFund.id}`}>
+                  league page
+                </Link>
+              ) : (
+                <Link
+                  className="text-emerald-400 hover:underline"
+                  to={`/tournaments/${pendingFund.id}`}
+                >
+                  tournament lobby
+                </Link>
+              )}
+              .
+            </p>
+          </div>
+        )}
+
+        {success && !pendingFund && (
           <div className="rounded-lg border border-emerald-500/50 bg-emerald-500/10 p-4 text-emerald-200">
             {createMode === 'league'
               ? 'League created successfully. Discord posts go out 1 hour before each game.'
               : 'Tournament created successfully!'}
-            {prizeForm.prizeMode === 'WALLET' && (
-              <span className="block mt-2 text-sm text-slate-300">
-                Wallet mode: add your prize wallet address and private key before start (API or
-                admin UI coming next), then fund the wallet with all prize assets and fee SOL.
-              </span>
-            )}
             {createMode === 'tournament' && selectedServerIds.length > 0 && (
               <span className="block mt-2 text-sm">
                 Tournament created and embed post requested for {selectedServerIds.length} Discord server(s).

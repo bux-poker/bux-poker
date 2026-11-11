@@ -3,6 +3,12 @@ import {
   lamportsToSolString,
   validateAndNormalizePrizeConfig,
 } from "./prizeStructure.js";
+import {
+  getSharedPrizeWalletAddress,
+  isPrizeWalletConfigured,
+  isSharedPrizeWalletConfigured,
+} from "./prizeWallet.js";
+import { buildPrizeDepositRequirements } from "./prizeDeposit.js";
 
 export async function resolvePrizeClaimServerId(prizeClaimServerId) {
   if (!prizeClaimServerId) return null;
@@ -76,14 +82,33 @@ export async function buildPrizeFieldsFromRequest(body, { maxPlayers, requirePri
   };
 
   if (normalized.prizeMode === "WALLET") {
+    if (!isSharedPrizeWalletConfigured()) {
+      const err = new Error(
+        "Shared prize wallet is not configured on the server. Set PRIZE_WALLET_PRIVATE_KEY (Fly secret) before creating auto-claim tournaments."
+      );
+      err.status = 503;
+      throw err;
+    }
+    const sharedAddress = getSharedPrizeWalletAddress();
+    const depositRequirements = buildPrizeDepositRequirements({
+      prizeStructureJson: normalized.prizeStructureJson,
+      feeLamports: normalized.prizeFeeSolLamports,
+      prizeWalletAddress: sharedAddress,
+    });
+
     return {
       ...base,
+      prizeWalletAddress: sharedAddress,
+      // Signing uses Fly env key; do not store per-event secrets.
+      prizeWalletSecretEnc: null,
+      prizeFundingStatus: "PENDING",
       prizeFundingSummary: {
-        prizeWalletAddress: null,
+        prizeWalletAddress: sharedAddress,
         requiredFeeSol: lamportsToSolString(normalized.prizeFeeSolLamports),
         fundingStatus: "PENDING",
-        walletConfigured: false,
+        walletConfigured: true,
       },
+      depositRequirements,
     };
   }
 
@@ -92,17 +117,30 @@ export async function buildPrizeFieldsFromRequest(body, { maxPlayers, requirePri
 
 export function attachPrizeFundingSummary(record) {
   if (!record) return record;
-  const walletConfigured = !!(
-    record.prizeWalletAddress && record.prizeWalletSecretEnc
-  );
+  const walletConfigured = isPrizeWalletConfigured(record);
   const { prizeWalletSecretEnc: _secret, ...safe } = record;
   if (safe.prizeMode !== "WALLET") return safe;
+
+  let depositRequirements = null;
+  try {
+    if (safe.prizeStructureJson && safe.prizeWalletAddress) {
+      depositRequirements = buildPrizeDepositRequirements({
+        prizeStructureJson: safe.prizeStructureJson,
+        feeLamports: safe.prizeFeeSolLamports,
+        prizeWalletAddress: safe.prizeWalletAddress,
+      });
+    }
+  } catch {
+    depositRequirements = null;
+  }
+
   return {
     ...safe,
     prizeFeeSolLamports:
       safe.prizeFeeSolLamports != null
         ? safe.prizeFeeSolLamports.toString()
         : null,
+    depositRequirements,
     prizeFundingSummary: safe.prizeFundingSummary ?? {
       prizeWalletAddress: safe.prizeWalletAddress,
       requiredFeeSol: safe.prizeFeeSolLamports

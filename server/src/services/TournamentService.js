@@ -3,6 +3,7 @@ import { attachCanManageToTournaments, canManageTournament } from "../utils/tour
 import { parsePrizeStructureJson, lamportsToSolString } from "./prizes/prizeStructure.js";
 import { getViewerPrizeClaim } from "./prizes/prizeClaims.js";
 import { isPrizeWalletConfigured } from "./prizes/prizeWallet.js";
+import { buildPrizeDepositRequirements } from "./prizes/prizeDeposit.js";
 
 /** All registered players appear; first eliminated (worst finishing place) near bottom. */
 function mergeRegistrationsIntoStandings(livePlayers, registrations) {
@@ -349,8 +350,22 @@ export class TournamentService {
           canonicalBlindLevelIndex = Math.max(canonicalBlindLevelIndex, idx);
         }
 
+        const { prizeWalletSecretEnc: _secret, ...tournamentSafe } = tournament;
+        let depositRequirements = null;
+        if (tournament.prizeMode === "WALLET" && tournament.prizeWalletAddress) {
+          try {
+            depositRequirements = buildPrizeDepositRequirements({
+              prizeStructureJson: tournament.prizeStructureJson,
+              feeLamports: tournament.prizeFeeSolLamports,
+              prizeWalletAddress: tournament.prizeWalletAddress,
+            });
+          } catch {
+            depositRequirements = null;
+          }
+        }
+
         const result = {
-          ...tournament,
+          ...tournamentSafe,
           startedAt: tournament.startedAt, // Include startedAt for blind timer
           blindLevels: blindLevels, // Add parsed blind levels
           canonicalBlindLevelIndex,
@@ -376,6 +391,7 @@ export class TournamentService {
           requiredFeeSol: tournament.prizeFeeSolLamports
             ? lamportsToSolString(tournament.prizeFeeSolLamports)
             : null,
+          depositRequirements,
           servers: (tournament.posts || []).map((post) => {
             if (!post || !post.server) {
               return null;

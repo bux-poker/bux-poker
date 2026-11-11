@@ -2,11 +2,11 @@ import { prisma } from "../../config/database.js";
 import { isPrizeWalletConfigured } from "./prizeWallet.js";
 
 function walletNotReadyError(kind) {
-  if (!kind?.prizeWalletAddress || !kind?.prizeWalletSecretEnc) {
-    return "Prize wallet address and private key must be configured before starting";
+  if (!isPrizeWalletConfigured(kind)) {
+    return "Shared prize wallet must be configured (PRIZE_WALLET_PRIVATE_KEY) before starting";
   }
   if (kind.prizeFundingStatus !== "FUNDED") {
-    return "Prize wallet must be fully funded before starting";
+    return "Prizes must be deposited to the prize wallet before starting";
   }
   return null;
 }

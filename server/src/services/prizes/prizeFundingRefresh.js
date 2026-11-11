@@ -18,7 +18,9 @@ export async function refreshTournamentPrizeFunding(tournamentId) {
     throw err;
   }
   if (!isPrizeWalletConfigured(tournament)) {
-    const err = new Error("Prize wallet address and private key must be configured first");
+    const err = new Error(
+      "Prize wallet is not configured (set PRIZE_WALLET_PRIVATE_KEY on the API host)"
+    );
     err.status = 400;
     throw err;
   }
@@ -53,7 +55,9 @@ export async function refreshLeaguePrizeFunding(leagueId) {
     throw err;
   }
   if (!isPrizeWalletConfigured(league)) {
-    const err = new Error("Prize wallet address and private key must be configured first");
+    const err = new Error(
+      "Prize wallet is not configured (set PRIZE_WALLET_PRIVATE_KEY on the API host)"
+    );
     err.status = 400;
     throw err;
   }

@@ -131,6 +131,14 @@ DISCORD_CALLBACK_URL=http://localhost:3000/api/auth/discord/callback
 DISCORD_BOT_TOKEN=...
 JWT_SECRET=replace_me
 
+# Shared Solana prize vault (Fly secrets for production). Required for WALLET auto-claim events.
+# Admins deposit prizes into this address when creating a tournament; the API signs winner payouts from it.
+PRIZE_WALLET_PRIVATE_KEY=base58_or_json_64_byte_secret
+# Optional — must match the pubkey derived from the private key if set:
+# PRIZE_WALLET_ADDRESS=
+# Optional — prefer a paid mainnet RPC in production:
+# SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+
 # Discord Developer Portal → Bot → enable **Privileged Gateway Intents → Server Members Intent**.
 # Required for `GET /guilds/.../members/...` (used to verify your saved `adminRoleId` for the web admin panel).
 

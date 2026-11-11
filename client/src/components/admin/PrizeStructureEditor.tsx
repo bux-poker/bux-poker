@@ -207,8 +207,8 @@ export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: P
             className="mt-1 w-full bux-field px-3 py-2 font-mono text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
           />
           <p className="mt-1 text-xs text-slate-500">
-            After create, configure your prize wallet address and private key before funding
-            and start. Include all prize assets plus fee SOL in that wallet.
+            After create you will sign a deposit that moves these prizes plus a small SOL fee
+            buffer into the shared prize vault. Unclaimed prizes return here after 7 days.
           </p>
         </div>
       )}

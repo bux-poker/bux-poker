@@ -6,6 +6,7 @@ import {
 } from "./prizes/prizeStructure.js";
 import { getViewerLeaguePrizeClaim, ensureLeaguePrizeClaims } from "./prizes/prizeClaims.js";
 import { isPrizeWalletConfigured } from "./prizes/prizeWallet.js";
+import { buildPrizeDepositRequirements } from "./prizes/prizeDeposit.js";
 
 /** League domain service */
 export class LeagueService {
@@ -68,8 +69,22 @@ export class LeagueService {
       return af - bf;
     });
 
+    const { prizeWalletSecretEnc: _secret, ...leagueSafe } = league;
+    let depositRequirements = null;
+    if (league.prizeMode === "WALLET" && league.prizeWalletAddress) {
+      try {
+        depositRequirements = buildPrizeDepositRequirements({
+          prizeStructureJson: league.prizeStructureJson,
+          feeLamports: league.prizeFeeSolLamports,
+          prizeWalletAddress: league.prizeWalletAddress,
+        });
+      } catch {
+        depositRequirements = null;
+      }
+    }
+
     const result = {
-      ...league,
+      ...leagueSafe,
       standings,
       prizePlaces: league.prizePlaces ?? 0,
       prizeMode: league.prizeMode ?? null,
@@ -80,6 +95,7 @@ export class LeagueService {
       requiredFeeSol: league.prizeFeeSolLamports
         ? lamportsToSolString(league.prizeFeeSolLamports)
         : null,
+      depositRequirements,
       prizeClaimServer: league.prizeClaimServer
         ? {
             serverName: league.prizeClaimServer.serverName,

@@ -8,7 +8,7 @@ function invalid(message) {
   return err;
 }
 
-/** Parse creator-supplied Solana secret key (JSON byte array, base64, or base58). */
+/** Parse Solana secret key (JSON byte array, base64, or base58). */
 export function parseSuppliedSecretKey(raw) {
   const trimmed = String(raw ?? "").trim();
   if (!trimmed) throw invalid("Prize wallet private key is required");
@@ -47,6 +47,37 @@ export function parseSuppliedSecretKey(raw) {
   );
 }
 
+/** Shared vault from Fly env — used for all WALLET tournaments/leagues. */
+export function getSharedPrizeWalletKeypair() {
+  const raw = process.env.PRIZE_WALLET_PRIVATE_KEY;
+  if (!raw || !String(raw).trim()) return null;
+  try {
+    return Keypair.fromSecretKey(parseSuppliedSecretKey(raw));
+  } catch (err) {
+    console.error("[prizes] Invalid PRIZE_WALLET_PRIVATE_KEY:", err.message);
+    return null;
+  }
+}
+
+export function getSharedPrizeWalletAddress() {
+  const kp = getSharedPrizeWalletKeypair();
+  if (!kp) return null;
+  const derived = kp.publicKey.toBase58();
+  const configured = String(process.env.PRIZE_WALLET_ADDRESS || "").trim();
+  if (configured && configured !== derived) {
+    console.error(
+      "[prizes] PRIZE_WALLET_ADDRESS does not match PRIZE_WALLET_PRIVATE_KEY pubkey"
+    );
+    return null;
+  }
+  return derived;
+}
+
+export function isSharedPrizeWalletConfigured() {
+  return !!getSharedPrizeWalletAddress();
+}
+
+/** @deprecated Prefer shared env wallet; kept for one-off legacy saves. */
 export function buildPrizeWalletRecordFromSupplied({ prizeWalletAddress, privateKey }) {
   const address = String(prizeWalletAddress ?? "").trim();
   if (!address) throw invalid("Prize wallet address is required");
@@ -78,16 +109,42 @@ export function buildPrizeWalletRecordFromSupplied({ prizeWalletAddress, private
   };
 }
 
+/**
+ * Ready to pay claims when shared Fly vault is set (and row points at it),
+ * or legacy per-event encrypted secret is present.
+ */
 export function isPrizeWalletConfigured(record) {
+  const shared = getSharedPrizeWalletAddress();
+  if (shared) {
+    if (!record?.prizeWalletAddress) return false;
+    return record.prizeWalletAddress === shared || !!record.prizeWalletSecretEnc;
+  }
   return !!(record?.prizeWalletAddress && record?.prizeWalletSecretEnc);
 }
 
 export function loadPrizeWalletKeypair(record) {
-  if (!isPrizeWalletConfigured(record)) {
-    const err = new Error("Prize wallet is not configured");
+  const sharedKp = getSharedPrizeWalletKeypair();
+  const sharedAddr = sharedKp?.publicKey.toBase58() ?? null;
+
+  if (sharedKp && record?.prizeWalletAddress) {
+    if (
+      record.prizeWalletAddress === sharedAddr ||
+      !record.prizeWalletSecretEnc
+    ) {
+      return sharedKp;
+    }
+  }
+
+  if (!record?.prizeWalletAddress || !record?.prizeWalletSecretEnc) {
+    const err = new Error(
+      sharedAddr
+        ? "Prize wallet is not configured on this event"
+        : "Shared prize wallet is not configured (set PRIZE_WALLET_PRIVATE_KEY on the API host)"
+    );
     err.status = 400;
     throw err;
   }
+
   const secretB64 = decryptPrizeWalletSecret(record.prizeWalletSecretEnc);
   if (!secretB64) {
     const err = new Error("Could not decrypt prize wallet key");

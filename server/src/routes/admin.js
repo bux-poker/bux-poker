@@ -17,11 +17,15 @@ import {
   attachPrizeFundingSummary,
   buildPrizeFieldsFromRequest,
 } from "../services/prizes/prizeCreateHelpers.js";
-import { buildPrizeWalletRecordFromSupplied } from "../services/prizes/prizeWallet.js";
+import {
+  getSharedPrizeWalletAddress,
+  isSharedPrizeWalletConfigured,
+} from "../services/prizes/prizeWallet.js";
 import {
   refreshLeaguePrizeFunding,
   refreshTournamentPrizeFunding,
 } from "../services/prizes/prizeFundingRefresh.js";
+import { verifyPrizeDepositTransaction } from "../services/prizes/prizeDeposit.js";
 
 const router = Router();
 const engine = new TournamentEngine();
@@ -249,7 +253,8 @@ router.post("/tournaments", async (req, res, next) => {
       }
       throw prizeErr;
     }
-    const { prizeFundingSummary, ...prizeDbFields } = prizeFields;
+    const { prizeFundingSummary, depositRequirements: _dep, ...prizeDbFields } =
+      prizeFields;
 
     // Default blind levels if not provided
     const defaultBlindLevels = [
@@ -511,7 +516,12 @@ router.post("/leagues", async (req, res, next) => {
       }
       throw prizeErr;
     }
-    const { prizeFundingSummary, hasPrizes: _hp, ...leaguePrizeDb } = leaguePrizeFields;
+    const {
+      prizeFundingSummary,
+      hasPrizes: _hp,
+      depositRequirements: _leagueDep,
+      ...leaguePrizeDb
+    } = leaguePrizeFields;
 
     const league = await prisma.league.create({
       data: {
@@ -703,8 +713,23 @@ router.delete("/leagues/:id", requireLeagueAdmin(), async (req, res, next) => {
   }
 });
 
-async function applySuppliedPrizeWallet(prismaModel, id, body) {
-  const { prizeWalletAddress, prizeWalletPrivateKey } = body ?? {};
+router.get("/prize-wallet", async (_req, res) => {
+  const address = getSharedPrizeWalletAddress();
+  res.json({
+    configured: isSharedPrizeWalletConfigured(),
+    prizeWalletAddress: address,
+    rpcUrl: process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com",
+  });
+});
+
+async function confirmPrizeDeposit(prismaModel, id, signature) {
+  const sig = String(signature ?? "").trim();
+  if (!sig) {
+    const err = new Error("fundingTxSignature is required");
+    err.status = 400;
+    throw err;
+  }
+
   const row = await prisma[prismaModel].findUnique({ where: { id } });
   if (!row) {
     const err = new Error(
@@ -718,42 +743,87 @@ async function applySuppliedPrizeWallet(prismaModel, id, body) {
     err.status = 400;
     throw err;
   }
-  const wallet = buildPrizeWalletRecordFromSupplied({
-    prizeWalletAddress,
-    privateKey: prizeWalletPrivateKey,
+
+  // Ensure row points at shared vault
+  const shared = getSharedPrizeWalletAddress();
+  if (!shared) {
+    const err = new Error(
+      "Shared prize wallet is not configured (PRIZE_WALLET_PRIVATE_KEY)"
+    );
+    err.status = 503;
+    throw err;
+  }
+
+  if (row.prizeWalletAddress !== shared) {
+    await prisma[prismaModel].update({
+      where: { id },
+      data: {
+        prizeWalletAddress: shared,
+        prizeWalletSecretEnc: null,
+      },
+    });
+  }
+
+  await verifyPrizeDepositTransaction({
+    signature: sig,
+    prizeStructureJson: row.prizeStructureJson,
+    feeLamports: row.prizeFeeSolLamports,
+    prizeWalletAddress: shared,
   });
-  return prisma[prismaModel].update({
+
+  const updated = await prisma[prismaModel].update({
     where: { id },
-    data: {
-      prizeWalletAddress: wallet.prizeWalletAddress,
-      prizeWalletSecretEnc: wallet.prizeWalletSecretEnc,
-      prizeFundingStatus:
-        row.prizeFundingStatus === "FUNDED" ? "FUNDED" : "PENDING",
-    },
+    data: { prizeFundingStatus: "FUNDED", prizeWalletAddress: shared },
   });
+
+  return attachPrizeFundingSummary(updated);
 }
 
-router.post("/tournaments/:id/prize-wallet", requireTournamentAdmin(), async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const updated = await applySuppliedPrizeWallet("tournament", id, req.body);
-    res.json(attachPrizeFundingSummary(updated));
-  } catch (err) {
-    if (err.status) return res.status(err.status).json({ error: err.message });
-    next(err);
+router.post(
+  "/tournaments/:id/prize-funding/confirm",
+  requireTournamentAdmin(),
+  async (req, res, next) => {
+    try {
+      const result = await confirmPrizeDeposit(
+        "tournament",
+        req.params.id,
+        req.body?.fundingTxSignature
+      );
+      res.json(result);
+    } catch (err) {
+      if (err.status) {
+        return res.status(err.status).json({
+          error: err.message,
+          missing: err.missing,
+        });
+      }
+      next(err);
+    }
   }
-});
+);
 
-router.post("/leagues/:id/prize-wallet", requireLeagueAdmin(), async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const updated = await applySuppliedPrizeWallet("league", id, req.body);
-    res.json(attachPrizeFundingSummary(updated));
-  } catch (err) {
-    if (err.status) return res.status(err.status).json({ error: err.message });
-    next(err);
+router.post(
+  "/leagues/:id/prize-funding/confirm",
+  requireLeagueAdmin(),
+  async (req, res, next) => {
+    try {
+      const result = await confirmPrizeDeposit(
+        "league",
+        req.params.id,
+        req.body?.fundingTxSignature
+      );
+      res.json(result);
+    } catch (err) {
+      if (err.status) {
+        return res.status(err.status).json({
+          error: err.message,
+          missing: err.missing,
+        });
+      }
+      next(err);
+    }
   }
-});
+);
 
 router.post(
   "/tournaments/:id/prize-funding/refresh",

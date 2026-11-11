@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@paralleldrive/cuid2": "^2.2.2",
+    "@solana/spl-token": "^0.4.13",
+    "@solana/web3.js": "^1.98.4",
     "@vercel/node": "^3.2.29",
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
