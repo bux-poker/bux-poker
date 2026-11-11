@@ -424,7 +424,7 @@ export function PokerTable({
           const visualSeat = visualIdx + 1;
           const cardsOnRight = [1, 2, 3, 9, 10].includes(visualSeat);
 
-          // Face-down uses CSS hole size. Face-up is 2× face-down, capped under community.
+          // Face-down = CSS hole size. Face-up = 60% of community (always larger than face-down).
           const css = typeof window !== "undefined" ? getComputedStyle(document.documentElement) : null;
           const baseHoleWidth = css ? parseInt(css.getPropertyValue("--hole-card-width"), 10) || 28 : 28;
           const baseHoleHeight = css ? parseInt(css.getPropertyValue("--hole-card-height"), 10) || 39 : 39;
@@ -434,16 +434,10 @@ export function PokerTable({
           let holeWidth = baseHoleWidth;
           let holeHeight = baseHoleHeight;
           if (seatCardsFaceUp) {
-            // 2× face-down, same aspect; never reach community size.
-            holeWidth = Math.round(baseHoleWidth * 2);
-            holeHeight = Math.round(baseHoleHeight * 2);
-            const maxW = Math.max(baseHoleWidth + 4, communityW - 4);
-            const maxH = Math.max(baseHoleHeight + 4, communityH - 4);
-            if (holeWidth > maxW || holeHeight > maxH) {
-              const fit = Math.min(maxW / holeWidth, maxH / holeHeight);
-              holeWidth = Math.max(baseHoleWidth + 4, Math.round(holeWidth * fit));
-              holeHeight = Math.max(baseHoleHeight + 4, Math.round(holeHeight * fit));
-            }
+            holeWidth = Math.round(communityW * 0.6);
+            holeHeight = Math.round(communityH * 0.6);
+            holeWidth = Math.max(holeWidth, baseHoleWidth + 4);
+            holeHeight = Math.max(holeHeight, baseHoleHeight + 4);
           }
 
           // Horizontal gap avatar→cards (same face-up / face-down).
@@ -683,7 +677,7 @@ export function PokerTable({
                             style={{
                               top: cardStackTop,
                               height: holeHeight,
-                              zIndex: isMobile && showFaceUp ? 40 : 70,
+                              zIndex: 80,
                               ...(cardsOnRight
                                 ? { left: "100%", marginLeft: CARD_SEAT_GAP }
                                 : { right: "100%", marginRight: CARD_SEAT_GAP }),
