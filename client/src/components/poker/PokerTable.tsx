@@ -513,174 +513,171 @@ export function PokerTable({
                   {/* Occupied seats only — empty seats stay quiet */}
                   {player ? (
                     <>
-                      {/* PFP + hole cards on one horizontal line; left/right from seat side */}
+                      {/* Avatar column is layout-stable; cards are absolute beside PFP so face-up size never nudges the label. */}
                       <div
-                        className="flex items-center"
-                        style={{
-                          flexDirection: cardsOnRight ? "row" : "row-reverse",
-                          gap: CARD_SEAT_GAP,
+                        className={`relative rounded-full ${isCurrentTurn && !hasActiveTimer ? "bux-turn-ring" : ""}`}
+                        ref={(el) => {
+                          const key = playerKey(player);
+                          if (key) seatRefs.current.set(key, el);
+                          if (player.userId) seatRefs.current.set(String(player.userId), el);
+                          if (player.id) seatRefs.current.set(String(player.id), el);
                         }}
                       >
-                        <div
-                          className={`relative rounded-full ${isCurrentTurn && !hasActiveTimer ? "bux-turn-ring" : ""}`}
-                          ref={(el) => {
-                            const key = playerKey(player);
-                            if (key) seatRefs.current.set(key, el);
-                            if (player.userId) seatRefs.current.set(String(player.userId), el);
-                            if (player.id) seatRefs.current.set(String(player.id), el);
-                          }}
-                        >
-                          {hasActiveTimer && turnTimer && (
-                            <svg
-                              className={`bux-timer-ring ${
-                                timerRemaining != null && timerRemaining <= 5 ? "urgent" : ""
-                              }`}
-                              viewBox="0 0 40 40"
-                              aria-hidden
-                            >
-                              <circle className="track" cx="20" cy="20" r="18" />
-                              <circle
-                                className="progress"
-                                cx="20"
-                                cy="20"
-                                r="18"
-                                strokeDasharray={`${2 * Math.PI * 18}`}
-                                strokeDashoffset={`${
-                                  2 *
-                                  Math.PI *
-                                  18 *
-                                  (1 -
-                                    Math.min(
-                                      1,
-                                      Math.max(
-                                        0,
-                                        (turnTimer.expiresAt - currentTime) /
-                                          Math.max(1, turnTimer.duration || 20000)
-                                      )
-                                    ))
-                                }`}
-                              />
-                            </svg>
-                          )}
-                          <button
-                            type="button"
-                            data-seat-avatar
-                            disabled={!onSendReaction || !myUserId}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSeatAvatarClick(playerKey(player));
-                            }}
-                            className={`relative overflow-hidden rounded-full border-2 bg-slate-800 ${
-                              isCurrentTurn
-                                ? "border-[color:var(--bux-brass)]"
-                                : "border-slate-700"
-                            } ${
-                              onSendReaction && myUserId
-                                ? "cursor-pointer transition-transform hover:scale-105 active:scale-95"
-                                : "cursor-default"
+                        {hasActiveTimer && turnTimer && (
+                          <svg
+                            className={`bux-timer-ring ${
+                              timerRemaining != null && timerRemaining <= 5 ? "urgent" : ""
                             }`}
-                            style={{
-                              width: "var(--player-avatar-size, 64px)",
-                              height: "var(--player-avatar-size, 64px)",
-                            }}
-                            title={
-                              onSendReaction && myUserId
-                                ? playerMatchesUser(player, myUserId)
-                                  ? "React"
-                                  : `React at ${player.name}`
-                                : player.name
-                            }
-                            aria-label={
-                              playerMatchesUser(player, myUserId)
-                                ? "Open your emoji reactions"
-                                : `Throw emoji at ${player.name}`
-                            }
+                            viewBox="0 0 40 40"
+                            aria-hidden
                           >
-                            {(() => {
-                              const isTestPlayer = player.name.toLowerCase().startsWith("test player");
-                              if (!isTestPlayer && player.avatarUrl) {
-                                return (
-                                  <img
-                                    src={player.avatarUrl}
-                                    alt={player.name}
-                                    className="pointer-events-none h-full w-full object-cover"
-                                    onError={(e) => {
-                                      (e.target as HTMLImageElement).src = "/guest-avatar.png";
-                                    }}
-                                  />
-                                );
-                              }
-                              return (
-                                <div className="pointer-events-none flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-700 to-teal-900 text-2xl font-bold text-white">
-                                  {player.name.charAt(0).toUpperCase()}
-                                </div>
-                              );
-                            })()}
-
-                            {player.isAway &&
-                              player.status !== "FOLDED" &&
-                              player.status !== "ELIMINATED" && (
-                                <div className="absolute inset-0 flex items-center justify-center rounded-full bg-slate-950/75">
-                                  <span
-                                    className="select-none font-extrabold uppercase tracking-wide text-amber-300"
-                                    style={{ fontSize: "11px" }}
-                                  >
-                                    Away
-                                  </span>
-                                </div>
-                              )}
-
-                            {showdownActive && player.status === "ELIMINATED" && (
-                              <div className="absolute inset-0 flex items-center justify-center bg-red-900/60">
-                                <span className="select-none text-3xl font-extrabold text-red-300">✕</span>
-                              </div>
-                            )}
-                          </button>
-
-                          {/* Action badge below face — never covers avatar */}
+                            <circle className="track" cx="20" cy="20" r="18" />
+                            <circle
+                              className="progress"
+                              cx="20"
+                              cy="20"
+                              r="18"
+                              strokeDasharray={`${2 * Math.PI * 18}`}
+                              strokeDashoffset={`${
+                                2 *
+                                Math.PI *
+                                18 *
+                                (1 -
+                                  Math.min(
+                                    1,
+                                    Math.max(
+                                      0,
+                                      (turnTimer.expiresAt - currentTime) /
+                                        Math.max(1, turnTimer.duration || 20000)
+                                    )
+                                  ))
+                              }`}
+                            />
+                          </svg>
+                        )}
+                        <button
+                          type="button"
+                          data-seat-avatar
+                          disabled={!onSendReaction || !myUserId}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSeatAvatarClick(playerKey(player));
+                          }}
+                          className={`relative overflow-hidden rounded-full border-2 bg-slate-800 ${
+                            isCurrentTurn
+                              ? "border-[color:var(--bux-brass)]"
+                              : "border-slate-700"
+                          } ${
+                            onSendReaction && myUserId
+                              ? "cursor-pointer transition-transform hover:scale-105 active:scale-95"
+                              : "cursor-default"
+                          }`}
+                          style={{
+                            width: "var(--player-avatar-size, 64px)",
+                            height: "var(--player-avatar-size, 64px)",
+                          }}
+                          title={
+                            onSendReaction && myUserId
+                              ? playerMatchesUser(player, myUserId)
+                                ? "React"
+                                : `React at ${player.name}`
+                              : player.name
+                          }
+                          aria-label={
+                            playerMatchesUser(player, myUserId)
+                              ? "Open your emoji reactions"
+                              : `Throw emoji at ${player.name}`
+                          }
+                        >
                           {(() => {
-                            const playerId = player.id || player.userId || "";
-                            const overlay = actionOverlays[playerId];
-                            if (!overlay) return null;
-                            const age = Date.now() - overlay.timestamp;
-                            const permanent = isPermanentAction(overlay.action);
-                            const actionOpacity = permanent
-                              ? 1
-                              : Math.max(0, 1 - age / ACTION_FADE_MS);
-                            if (actionOpacity <= 0) return null;
-                            const actionInfo = getActionInfo(overlay.action);
+                            const isTestPlayer = player.name.toLowerCase().startsWith("test player");
+                            if (!isTestPlayer && player.avatarUrl) {
+                              return (
+                                <img
+                                  src={player.avatarUrl}
+                                  alt={player.name}
+                                  className="pointer-events-none h-full w-full object-cover"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).src = "/guest-avatar.png";
+                                  }}
+                                />
+                              );
+                            }
                             return (
-                              <div
-                                className="bux-seat-action-badge"
-                                style={{ color: actionInfo.color, opacity: actionOpacity }}
-                              >
-                                {actionInfo.text}
+                              <div className="pointer-events-none flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-700 to-teal-900 text-2xl font-bold text-white">
+                                {player.name.charAt(0).toUpperCase()}
                               </div>
                             );
                           })()}
 
-                          {player.isDealer && (
-                            <div
-                              className="absolute -right-1 -top-1 z-[60] flex items-center justify-center rounded-full border-2 border-white bg-yellow-500 shadow-lg"
-                              style={{
-                                width: "var(--dealer-button-size, 28px)",
-                                height: "var(--dealer-button-size, 28px)",
-                              }}
-                            >
-                              <span
-                                className="font-bold text-yellow-900"
-                                style={{ fontSize: "calc(var(--dealer-button-size, 28px) * 0.4)" }}
-                              >
-                                D
-                              </span>
+                          {player.isAway &&
+                            player.status !== "FOLDED" &&
+                            player.status !== "ELIMINATED" && (
+                              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-slate-950/75">
+                                <span
+                                  className="select-none font-extrabold uppercase tracking-wide text-amber-300"
+                                  style={{ fontSize: "11px" }}
+                                >
+                                  Away
+                                </span>
+                              </div>
+                            )}
+
+                          {showdownActive && player.status === "ELIMINATED" && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-red-900/60">
+                              <span className="select-none text-3xl font-extrabold text-red-300">✕</span>
                             </div>
                           )}
-                        </div>
+                        </button>
+
+                        {/* Action badge below face — never covers avatar */}
+                        {(() => {
+                          const playerId = player.id || player.userId || "";
+                          const overlay = actionOverlays[playerId];
+                          if (!overlay) return null;
+                          const age = Date.now() - overlay.timestamp;
+                          const permanent = isPermanentAction(overlay.action);
+                          const actionOpacity = permanent
+                            ? 1
+                            : Math.max(0, 1 - age / ACTION_FADE_MS);
+                          if (actionOpacity <= 0) return null;
+                          const actionInfo = getActionInfo(overlay.action);
+                          return (
+                            <div
+                              className="bux-seat-action-badge"
+                              style={{ color: actionInfo.color, opacity: actionOpacity }}
+                            >
+                              {actionInfo.text}
+                            </div>
+                          );
+                        })()}
+
+                        {player.isDealer && (
+                          <div
+                            className="absolute -right-1 -top-1 z-[60] flex items-center justify-center rounded-full border-2 border-white bg-yellow-500 shadow-lg"
+                            style={{
+                              width: "var(--dealer-button-size, 28px)",
+                              height: "var(--dealer-button-size, 28px)",
+                            }}
+                          >
+                            <span
+                              className="font-bold text-yellow-900"
+                              style={{ fontSize: "calc(var(--dealer-button-size, 28px) * 0.4)" }}
+                            >
+                              D
+                            </span>
+                          </div>
+                        )}
 
                         {showSeatCards && (
                           <div
-                            className={`flex flex-col items-center gap-1 ${isFolded ? "opacity-50" : ""}`}
-                            style={{ zIndex: isMobile && showFaceUp ? 40 : 70 }}
+                            className={`absolute top-1/2 flex -translate-y-1/2 flex-col items-center gap-1 ${isFolded ? "opacity-50" : ""}`}
+                            style={{
+                              zIndex: isMobile && showFaceUp ? 40 : 70,
+                              ...(cardsOnRight
+                                ? { left: "100%", marginLeft: CARD_SEAT_GAP }
+                                : { right: "100%", marginRight: CARD_SEAT_GAP }),
+                            }}
                           >
                             {visualSeat <= 5 && (
                               <div className="flex flex-wrap items-center justify-center gap-1">
