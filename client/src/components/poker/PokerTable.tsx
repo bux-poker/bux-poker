@@ -57,10 +57,32 @@ export function PokerTable({
   const [pickerTargetUserId, setPickerTargetUserId] = useState<string | null>(null);
   const tableRootRef = useRef<HTMLDivElement | null>(null);
   const seatRefs = useRef<Map<string, HTMLElement | null>>(new Map());
+  /** Visual seat orbit offset (0–9). Lets players sit where they like without changing server seats. */
+  const [seatRotate, setSeatRotate] = useState(() => {
+    try {
+      const raw = localStorage.getItem("bux-poker-seat-rotate");
+      const n = raw != null ? parseInt(raw, 10) : 0;
+      return Number.isFinite(n) ? ((n % 10) + 10) % 10 : 0;
+    } catch {
+      return 0;
+    }
+  });
   
   // Window size state to trigger re-renders when CSS variables change
   const [windowSize, setWindowSize] = useState({ width: typeof window !== 'undefined' ? window.innerWidth : 1400 });
   const isMobile = useIsMobile();
+
+  const rotateSeats = useCallback((dir: 1 | -1) => {
+    setSeatRotate((prev) => {
+      const next = ((prev + dir) % 10 + 10) % 10;
+      try {
+        localStorage.setItem("bux-poker-seat-rotate", String(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
 
   const handleSeatAvatarClick = useCallback(
     (targetKey: string) => {
@@ -128,17 +150,13 @@ export function PokerTable({
         paddingLeft: 'var(--table-padding, 32px)',
       }}
     >
-      {/* Slim tournament HUD strip */}
-      {(onTournamentLobbyClick != null ||
-        topLeftBlinds != null ||
-        topLeftTimer != null ||
-        topRightPlayers != null ||
-        topRightPosition != null) && (
-        <div
-          className="absolute left-1/2 top-2 z-10 flex -translate-x-1/2 items-center gap-2"
-          style={{ maxWidth: "calc(100% - 16px)" }}
-        >
-          <div className="bux-hud-strip max-w-full overflow-x-auto">
+      {/* Top-left: blinds / next + rotate seats */}
+      <div
+        className="absolute left-0 top-0 z-10 flex items-start gap-1.5"
+        style={{ marginLeft: "8px", marginTop: "8px" }}
+      >
+        {(topLeftBlinds != null || topLeftTimer != null) && (
+          <div className="bux-hud-strip flex-col !items-start !rounded-2xl !px-3 !py-2">
             {topLeftBlinds != null && (
               <div className="bux-hud-item">
                 <span className="bux-hud-label">Blinds</span>
@@ -146,36 +164,73 @@ export function PokerTable({
               </div>
             )}
             {topLeftTimer != null && (
-              <div className="bux-hud-item">
+              <div className="bux-hud-item mt-1">
                 <span className="bux-hud-label">Next</span>
                 <span className="bux-hud-value">{topLeftTimer}</span>
               </div>
             )}
+          </div>
+        )}
+        <div className="bux-hud-strip !gap-1 !rounded-2xl !px-1.5 !py-1.5">
+          <button
+            type="button"
+            onClick={() => rotateSeats(-1)}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+            title="Rotate seats anti-clockwise"
+            aria-label="Rotate seats anti-clockwise"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 12a9 9 0 1 0 9-9" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4v8h8" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => rotateSeats(1)}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+            title="Rotate seats clockwise"
+            aria-label="Rotate seats clockwise"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 1 1-9-9" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 4v8h-8" />
+            </svg>
+          </button>
+          {onTournamentLobbyClick != null && (
+            <button
+              type="button"
+              onClick={onTournamentLobbyClick}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+              aria-label="Tournament info"
+              title="Tournament info"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" strokeWidth={2} />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16v-4M12 8h.01" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Top-right: players / rank */}
+      {(topRightPlayers != null || topRightPosition != null) && (
+        <div
+          className="absolute right-0 top-0 z-10"
+          style={{ marginRight: "8px", marginTop: "8px" }}
+        >
+          <div className="bux-hud-strip flex-col !items-end !rounded-2xl !px-3 !py-2">
             {topRightPlayers != null && (
-              <div className="bux-hud-item">
+              <div className="bux-hud-item text-right">
                 <span className="bux-hud-label">Players</span>
                 <span className="bux-hud-value">{topRightPlayers}</span>
               </div>
             )}
             {topRightPosition != null && (
-              <div className="bux-hud-item">
+              <div className="bux-hud-item mt-1 text-right">
                 <span className="bux-hud-label">Rank</span>
                 <span className="bux-hud-value">{topRightPosition}</span>
               </div>
-            )}
-            {onTournamentLobbyClick != null && (
-              <button
-                type="button"
-                onClick={onTournamentLobbyClick}
-                className="ml-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
-                aria-label="Tournament info"
-                title="Tournament info"
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="10" strokeWidth={2} />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16v-4M12 8h.01" />
-                </svg>
-              </button>
             )}
           </div>
         </div>
@@ -324,7 +379,9 @@ export function PokerTable({
         {/* Player Positions — occupied seats only */}
         {allSeats.flatMap((player, seatIdx) => {
           if (!player) return [];
-          const position = PLAYER_POSITIONS[seatIdx];
+          // visualIdx = where this server seat appears on screen after user rotate
+          const visualIdx = (seatIdx + seatRotate) % 10;
+          const position = PLAYER_POSITIONS[visualIdx];
           // Calculate radius to position at table edge (use percentage of table size)
           const radiusPercent = 45; // Position at 45% from center (near edge)
           const angleRad = (position.angle * Math.PI) / 180;
@@ -362,38 +419,36 @@ export function PokerTable({
               showFoldedReveal ||
               (isMyPlayer && !isMobile));
           
-          // Determine card positioning relative to avatar
-          // Seats 1, 2, 3, 9, 10: cards to the RIGHT of avatar (positive offset)
-          // Seats 4, 5, 6, 7, 8: cards to the LEFT of avatar (negative offset)
-          const cardsOnRight = [1, 2, 3, 9, 10].includes(seatIdx + 1);
+          // Layout uses visual position index (after rotate), not server seat number
+          const visualSeat = visualIdx + 1;
+          const cardsOnRight = [1, 2, 3, 9, 10].includes(visualSeat);
           const baseCardOffset = 80;
           // Face-up cards need more horizontal separation on small screens (was 50% — pulled cards onto chip labels).
           const offsetScale =
             windowSize.width < 1000 ? (seatCardsFaceUp ? 0.9 : 0.5) : 1;
           const cardOffset = cardsOnRight ? baseCardOffset * offsetScale : -baseCardOffset * offsetScale;
-          const seatNumber = seatIdx + 1;
           const cardVerticalNudge =
-            isMobile && seatCardsFaceUp ? (seatNumber <= 5 ? -16 : 16) : 0;
+            isMobile && seatCardsFaceUp ? (visualSeat <= 5 ? -16 : 16) : 0;
           // Adjust vertical position for smaller screens: seats 1-5 down, 6-10 up
           let verticalOffset = 0;
           if (windowSize.width <= 900) {
-            verticalOffset = seatNumber <= 5 ? 6 : -22;
+            verticalOffset = visualSeat <= 5 ? 6 : -22;
           } else if (windowSize.width >= 901 && windowSize.width <= 1000) {
-            if (seatNumber === 1 || seatNumber === 5) {
+            if (visualSeat === 1 || visualSeat === 5) {
               verticalOffset = 13;
-            } else if (seatNumber === 6 || seatNumber === 10) {
+            } else if (visualSeat === 6 || visualSeat === 10) {
               verticalOffset = -28;
-            } else if (seatNumber <= 5) {
+            } else if (visualSeat <= 5) {
               verticalOffset = 5;
             } else {
               verticalOffset = -20;
             }
           }
 
-          const baseHorizontalOffset = [1, 2, 3, 9, 10].includes(seatNumber) ? -20 : 20;
+          const baseHorizontalOffset = [1, 2, 3, 9, 10].includes(visualSeat) ? -20 : 20;
           // Additional horizontal tweak for smaller screens
           const smallScreenOffset = windowSize.width <= 900
-            ? ((seatIdx === 0 || seatIdx === 9) ? -12 : ((seatIdx === 4 || seatIdx === 5) ? 12 : 0))
+            ? ((visualIdx === 0 || visualIdx === 9) ? -12 : ((visualIdx === 4 || visualIdx === 5) ? 12 : 0))
             : 0;
           const horizontalOffset = baseHorizontalOffset + smallScreenOffset;
 
@@ -410,7 +465,7 @@ export function PokerTable({
               <div 
                 className="flex flex-col items-center"
                 style={{
-                  flexDirection: ((seatIdx + 1) >= 6 && (seatIdx + 1) <= 10) ? 'column-reverse' : 'column'
+                  flexDirection: visualSeat >= 6 && visualSeat <= 10 ? 'column-reverse' : 'column'
                 }}
               >
                   {/* Occupied seats only — empty seats stay quiet */}
@@ -655,7 +710,7 @@ export function PokerTable({
                 }}
               >
                 {/* Bet chip and winner +pot above cards for seats 1-5 */}
-                {(seatIdx + 1 <= 5) && (
+                {(visualSeat <= 5) && (
                   <div className="flex flex-wrap items-center justify-center gap-1">
                     {(player.contribution ?? 0) > 0 && <BetChip value={player.contribution!} />}
                     {isWinner && potWon > 0 && (
@@ -698,7 +753,7 @@ export function PokerTable({
                   })}
                 </div>
                 {/* Bet chip and winner +pot below cards for seats 6-10 */}
-                {(seatIdx + 1 > 5) && (
+                {(visualSeat > 5) && (
                   <div className="flex flex-wrap items-center justify-center gap-1">
                     {(player.contribution ?? 0) > 0 && <BetChip value={player.contribution!} />}
                     {isWinner && potWon > 0 && (
@@ -718,7 +773,7 @@ export function PokerTable({
                 className="absolute z-20"
                 style={{
                   left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset + horizontalOffset}px)`,
-                  top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}% + ${seatIdx + 1 <= 5 ? -60 : 60}px)`,
+                  top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}% + ${visualSeat <= 5 ? -60 : 60}px)`,
                   transform: 'translate(-50%, -50%)',
                 }}
               >
