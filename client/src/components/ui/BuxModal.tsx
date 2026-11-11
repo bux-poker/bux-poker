@@ -183,16 +183,13 @@ export function BuxModal({
 
   return (
     <div
-      className={`${position} inset-0 ${zIndexClass} flex items-center justify-center bg-black/65 p-4 backdrop-blur-[2px]`}
+      className={`${position} inset-0 ${zIndexClass} pointer-events-none flex items-center justify-center p-4`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="bux-modal-title"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && onClose) onClose();
-      }}
     >
       <div
-        className={`bux-modal ${MAX_W[maxWidth]} w-full ${align === "center" ? "text-center" : "text-left"} ${className}`}
+        className={`bux-modal pointer-events-auto ${MAX_W[maxWidth]} w-full ${align === "center" ? "text-center" : "text-left"} ${className}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className={`bux-modal-header ${align === "center" ? "justify-center" : ""}`}>
