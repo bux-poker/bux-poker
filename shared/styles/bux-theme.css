@@ -19,6 +19,9 @@
     --bux-warn: #d97706;
     --bux-text: #e8eef5;
     --bux-text-muted: #94a3b8;
+    /* Solana accents on dark ink (marketing home) */
+    --bux-sol-cyan: #14f195;
+    --bux-sol-violet: #9945ff;
     --font-display: "Syne", ui-sans-serif, system-ui, sans-serif;
     --font-body: "Figtree", ui-sans-serif, system-ui, sans-serif;
   }
@@ -332,6 +335,58 @@
   }
   .bux-muted {
     color: var(--bux-text-muted);
+  }
+
+  .bux-home-bg {
+    background:
+      radial-gradient(ellipse 55% 45% at 85% 20%, color-mix(in srgb, var(--bux-sol-violet) 22%, transparent), transparent 70%),
+      radial-gradient(ellipse 50% 40% at 15% 75%, color-mix(in srgb, var(--bux-sol-cyan) 16%, transparent), transparent 65%),
+      radial-gradient(ellipse 40% 35% at 55% 45%, color-mix(in srgb, var(--bux-felt) 45%, transparent), transparent 60%),
+      linear-gradient(155deg, var(--bux-ink) 0%, var(--bux-ink-elevated) 55%, #152018 100%);
+  }
+
+  .bux-home-grid {
+    background-image:
+      linear-gradient(color-mix(in srgb, var(--bux-sol-cyan) 12%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, var(--bux-sol-violet) 10%, transparent) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 20%, transparent 75%);
+  }
+
+  .bux-home-tile {
+    border-radius: 1rem;
+    border: 1px solid color-mix(in srgb, var(--bux-sol-cyan) 18%, var(--bux-panel-border));
+    background:
+      linear-gradient(
+        145deg,
+        color-mix(in srgb, var(--bux-panel) 88%, transparent),
+        color-mix(in srgb, var(--bux-ink) 70%, transparent)
+      );
+    padding: 1rem 1.05rem 1.1rem;
+    backdrop-filter: blur(10px);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--bux-sol-violet) 8%, transparent),
+      0 12px 28px rgba(0, 0, 0, 0.28);
+    transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .bux-home-tile:hover {
+    border-color: color-mix(in srgb, var(--bux-sol-cyan) 40%, var(--bux-panel-border));
+    transform: translateY(-2px);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--bux-sol-cyan) 18%, transparent),
+      0 16px 32px rgba(0, 0, 0, 0.35);
+  }
+
+  .bux-home-tile-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.65rem;
+    color: var(--bux-sol-cyan);
+    background: color-mix(in srgb, var(--bux-sol-cyan) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bux-sol-cyan) 28%, transparent);
   }
 
   .bux-btn-accent {

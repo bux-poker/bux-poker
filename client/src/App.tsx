@@ -15,6 +15,7 @@ import { LeagueListPage } from "./pages/LeagueListPage";
 import { LeagueDetailPage } from "./pages/LeagueDetailPage";
 import { LoginPage } from "./pages/LoginPage";
 import { HomePage } from "./pages/HomePage";
+import { SiteFooter } from "./components/SiteFooter";
 
 function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -26,7 +27,7 @@ function App() {
 
   return (
     <div
-      className={`bux-page min-h-screen ${isGameRoute ? "flex min-h-[100dvh] flex-col" : ""}`}
+      className={`bux-page min-h-screen ${isGameRoute || isHomeRoute ? "flex min-h-[100dvh] flex-col" : ""}`}
       style={{ background: "var(--bux-ink, #1e2733)" }}
     >
       {!isGameRoute && (
@@ -185,6 +186,7 @@ function App() {
           <Route path="/leagues/:id" element={<LeagueDetailPage />} />
         </Routes>
       </main>
+      {!isGameRoute && !isHomeRoute && <SiteFooter />}
     </div>
   );
 }
