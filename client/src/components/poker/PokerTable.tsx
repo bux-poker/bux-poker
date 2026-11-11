@@ -447,10 +447,20 @@ export function PokerTable({
           const labelBelow = visualSeat <= 5;
           const cardStackTop = labelBelow ? avatarSize - holeHeight : 0;
 
-          // Adjust vertical position for smaller screens: seats 1-5 down, 6-10 up
+          // Adjust vertical position for smaller screens: seats 1-5 down, 6-10 up.
+          // Side pairs (1+10 left, 5+6 right) need extra separation so cards/chips don't overlap.
           let verticalOffset = 0;
-          if (windowSize.width <= 900) {
-            verticalOffset = visualSeat <= 5 ? 6 : -22;
+          const isCompact = windowSize.width <= 900 || windowSize.height < 520;
+          if (isCompact) {
+            if (visualSeat === 1 || visualSeat === 5) {
+              verticalOffset = 18;
+            } else if (visualSeat === 6 || visualSeat === 10) {
+              verticalOffset = -36;
+            } else if (visualSeat <= 5) {
+              verticalOffset = 6;
+            } else {
+              verticalOffset = -22;
+            }
           } else if (windowSize.width >= 901 && windowSize.width <= 1000) {
             if (visualSeat === 1 || visualSeat === 5) {
               verticalOffset = 13;

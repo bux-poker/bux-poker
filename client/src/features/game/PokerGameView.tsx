@@ -1746,7 +1746,11 @@ export function PokerGameView() {
           </div>
 
           {/* Transparent flow row: reserves height so the felt cannot pass the controls; no full-width chrome. */}
-          <div className="pointer-events-none relative z-[60] flex w-full shrink-0 items-end justify-between gap-3 px-2 pb-2 pt-1">
+          <div
+            className={`pointer-events-none relative z-[60] flex w-full shrink-0 items-end justify-between gap-3 px-2 pb-2 ${
+              isMobile ? "pt-2" : "pt-1"
+            }`}
+          >
             <div className="pointer-events-auto min-w-0">
               {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
                 <div

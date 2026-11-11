@@ -849,6 +849,7 @@
     --player-name-size: 11px;
     --player-chips-size: 10px;
     --player-name-max-width: 72px;
+    --table-padding-bottom: 18px;
   }
 }
 
@@ -857,7 +858,8 @@
   :root {
     --table-padding: 8px;
     --table-padding-top: 34px;
-    --table-padding-bottom: 10px;
+    /* Extra bottom pad so community cards clear the corner hand */
+    --table-padding-bottom: 20px;
     --table-rail-width: 5px;
     --table-rail-inset: 2px;
     --action-dock-height: 102px;
@@ -890,7 +892,7 @@
   :root {
     --table-padding: 6px;
     --table-padding-top: 28px;
-    --table-padding-bottom: 8px;
+    --table-padding-bottom: 16px;
     --table-rail-width: 4px;
     --action-dock-height: 92px;
     --hero-card-height: 62px;
