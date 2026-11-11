@@ -55,8 +55,6 @@ type Props = {
   tournament: PrizeTournamentSlice;
   claimEndpoint?: string;
   onUpdated?: () => void;
-  /** When true, lead with congratulations (paid elimination / winner). */
-  congratulate?: boolean;
 };
 
 /**
@@ -67,7 +65,6 @@ export function PrizeClaimSummary({
   tournament,
   claimEndpoint,
   onUpdated,
-  congratulate = true,
 }: Props) {
   const row = getPrizeRowForPlace(tournament, place);
   if (!row) return null;
@@ -83,13 +80,11 @@ export function PrizeClaimSummary({
 
   return (
     <div className="mt-4 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-4 text-center">
-      {congratulate && (
-        <p className="font-display text-sm font-bold uppercase tracking-wide text-emerald-300">
-          Congratulations — {placeLabel(place)} place prize
-        </p>
-      )}
+      <p className="font-display text-sm font-bold uppercase tracking-wide text-emerald-300">
+        {placeLabel(place)} place prize
+      </p>
 
-      <div className={`flex flex-col items-center gap-4 ${congratulate ? "mt-3" : ""}`}>
+      <div className="mt-3 flex flex-col items-center gap-4">
         {"description" in row && row.description ? (
           <ManualPrizeVisual description={row.description} />
         ) : (

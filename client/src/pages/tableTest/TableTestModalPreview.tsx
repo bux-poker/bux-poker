@@ -74,7 +74,8 @@ const MOCK_MANUAL_PRIZE_TOURNAMENT = {
 
 export const TABLE_TEST_MODAL_OPTIONS = [
   { id: "none", label: "None (clear)" },
-  { id: "elimination", label: "Elimination" },
+  { id: "elimination", label: "Elimination (unpaid)" },
+  { id: "itm", label: "In The Money" },
   { id: "winner", label: "Tournament winner" },
   { id: "break", label: "Tournament break" },
   { id: "level-up", label: "Blind level up" },
@@ -220,9 +221,9 @@ export function TableTestModalPreview({
   if (selected === "elimination") {
     return (
       <BuxModal
-        title="Cashed — eliminated"
+        title="You have been eliminated"
         icon="eliminated"
-        tone="success"
+        tone="danger"
         maxWidth="md"
         onClose={onClear}
         zIndexClass="z-[130]"
@@ -235,7 +236,33 @@ export function TableTestModalPreview({
           </>
         }
       >
-        <p>You finished in position 2.</p>
+        <p>You finished in position 13.</p>
+      </BuxModal>
+    );
+  }
+
+  if (selected === "itm") {
+    return (
+      <BuxModal
+        title="In The Money!"
+        icon="trophy"
+        tone="success"
+        maxWidth="md"
+        onClose={onClear}
+        zIndexClass="z-[130]"
+        footer={
+          <>
+            <BuxModalButton onClick={onClear}>Stay at Table</BuxModalButton>
+            <BuxModalButton variant="primary" onClick={onClear}>
+              Close Table
+            </BuxModalButton>
+          </>
+        }
+      >
+        <p>
+          Congratulations, you finished <span className="font-semibold">2nd</span> in this
+          tournament.
+        </p>
         <PrizeClaimSummary
           place={2}
           tournament={{
