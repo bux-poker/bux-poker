@@ -220,7 +220,7 @@ function TournamentCard({ tournament, onCancel, onDuplicate, onAddTestPlayers, o
   );
 }
 
-type TournamentFilter = 'all' | 'registering' | 'in-progress' | 'completed';
+type TournamentFilter = 'registering' | 'in-progress' | 'completed';
 
 export function TournamentList() {
   const { tournaments, loading, error, refetch } = useTournaments();
@@ -229,7 +229,7 @@ export function TournamentList() {
   const [duplicating, setDuplicating] = useState<string | null>(null);
   const [addingTestPlayers, setAddingTestPlayers] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
-  const [filter, setFilter] = useState<TournamentFilter>('all');
+  const [filter, setFilter] = useState<TournamentFilter>('registering');
 
   const handleCancel = async (tournamentId: string) => {
     if (!confirm('Are you sure you want to cancel this tournament?')) {
@@ -427,8 +427,6 @@ export function TournamentList() {
         return t.status === 'ACTIVE' || t.status === 'RUNNING' || t.status === 'SEATED';
       case 'completed':
         return t.status === 'COMPLETED';
-      default:
-        return true; // 'all'
     }
   });
 
@@ -451,16 +449,6 @@ export function TournamentList() {
           <AddToHomeScreen compact />
           <div className="bux-surface flex gap-2 p-1">
           <button
-            onClick={() => setFilter('all')}
-            className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
-              filter === 'all'
-                ? 'bg-[color:var(--bux-accent-deep)] text-white'
-                : 'bux-muted hover:text-white'
-            }`}
-          >
-            All
-          </button>
-          <button
             onClick={() => setFilter('registering')}
             className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
               filter === 'registering'
@@ -478,7 +466,7 @@ export function TournamentList() {
                 : 'bux-muted hover:text-white'
             }`}
           >
-            In Progress
+            Running
           </button>
           <button
             onClick={() => setFilter('completed')}
@@ -498,9 +486,11 @@ export function TournamentList() {
       {sortedTournaments.length === 0 ? (
         <div className="bux-surface p-8 text-center">
           <p className="text-slate-400">
-            {filter === 'all'
-              ? 'No tournaments available'
-              : `No ${filter.replace('-', ' ')} tournaments`}
+            {filter === 'registering'
+              ? 'No registering tournaments'
+              : filter === 'in-progress'
+              ? 'No running tournaments'
+              : 'No completed tournaments'}
           </p>
         </div>
       ) : (
