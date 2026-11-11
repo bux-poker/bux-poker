@@ -409,15 +409,14 @@ export function PokerTable({
           const optionalRevealPhase = !!(showdownActive && showdownResults);
           const showFoldedReveal =
             isFolded && optionalRevealPhase && revealStatus === "SHOW";
+          // Hero always face-up at seat; forceSeatCardsFaceDown only affects opponents (table-test).
           const seatCardsFaceUp =
             !!player &&
             !!player.holeCards?.length &&
-            !forceSeatCardsFaceDown &&
             !isFolded &&
-            (debugAllSeatCardsFaceUp ||
-              showdownActive ||
-              showFoldedReveal ||
-              (isMyPlayer && !isMobile));
+            (isMyPlayer ||
+              (!forceSeatCardsFaceDown &&
+                (debugAllSeatCardsFaceUp || showdownActive || showFoldedReveal)));
           
           // Layout uses visual position index (after rotate), not server seat number
           const visualSeat = visualIdx + 1;
@@ -443,6 +442,13 @@ export function PokerTable({
             } else {
               verticalOffset = -20;
             }
+          }
+          // Hole cards only: pull inward near top/bottom so they aren't clipped by overflow.
+          let cardRimNudge = 0;
+          if (windowSize.width < 1100 && seatCardsFaceUp) {
+            const rimY = Math.sin(angleRad);
+            if (rimY < -0.7) cardRimNudge = 28;
+            else if (rimY > 0.7) cardRimNudge = -12;
           }
 
           const baseHorizontalOffset = [1, 2, 3, 9, 10].includes(visualSeat) ? -20 : 20;
@@ -643,20 +649,12 @@ export function PokerTable({
             </div>
           ];
 
-          // Add cards as separate element if player has cards (including own player)
-          // Hide table cards for folded players unless optional showdown reveal (show/muck)
-          // Dock already shows hero hand — keep seat orbit clean.
-          const hideOwnSeatCards =
-            !debugAllSeatCardsFaceUp &&
-            !!isMyPlayer &&
-            !showdownActive &&
-            !showFoldedReveal;
+          // Seat hole cards (hero face-up; others backs until showdown). Folded hide unless reveal.
           if (
             player &&
             player.holeCards &&
             player.holeCards.length > 0 &&
-            (!isFolded || showFoldedReveal) &&
-            !hideOwnSeatCards
+            (!isFolded || showFoldedReveal)
           ) {
             const showFaceUp = seatCardsFaceUp;
             
@@ -703,7 +701,7 @@ export function PokerTable({
                 className={`absolute flex flex-col items-center gap-1 ${isFolded ? 'opacity-50' : ''}`}
                 style={{
                   left: `calc(50% + ${Math.cos(angleRad) * radiusPercent}% + ${cardOffset + horizontalOffset}px)`,
-                  top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}% + ${verticalOffset + cardVerticalNudge}px)`,
+                  top: `calc(50% + ${Math.sin(angleRad) * radiusPercent}% + ${verticalOffset + cardVerticalNudge + cardRimNudge}px)`,
                   transform: 'translate(-50%, -50%)',
                   transition: 'transform 0.5s ease-in-out',
                   zIndex: isMobile && showFaceUp ? 40 : 70,
