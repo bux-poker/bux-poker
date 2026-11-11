@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@shared/features/auth/AuthContext';
 import { Link, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
@@ -11,6 +11,13 @@ import {
   PrizeWalletFundPanel,
   type DepositRequirements,
 } from './PrizeWalletFundPanel';
+
+function pickDepositRequirements(data: any): DepositRequirements | null {
+  const req =
+    data?.depositRequirements || data?.prizeFundingSummary?.depositRequirements;
+  if (req?.prizeWalletAddress && req?.solLamports != null) return req;
+  return null;
+}
 
 interface BlindLevel {
   level: number;
@@ -41,6 +48,7 @@ export function CreateTournament() {
     name: string;
     requirements: DepositRequirements;
   } | null>(null);
+  const fundStepRef = useRef<HTMLDivElement | null>(null);
   const [servers, setServers] = useState<DiscordServer[]>([]);
   const [selectedServerIds, setSelectedServerIds] = useState<string[]>([]);
   const [loadingServers, setLoadingServers] = useState(true);
@@ -212,20 +220,41 @@ export function CreateTournament() {
       if (response.data) {
         setSearchParams({});
         const created = response.data;
-        const requirements =
-          created.depositRequirements || created.prizeFundingSummary?.depositRequirements;
-        if (
-          prizeForm.prizeMode === 'WALLET' &&
-          created.prizeFundingStatus !== 'FUNDED' &&
-          requirements?.prizeWalletAddress
-        ) {
-          setPendingFund({
-            kind: 'tournament',
-            id: created.id,
-            name: created.name || formData.name,
-            requirements,
-          });
-          setSuccess(false);
+        const isWallet =
+          prizeForm.prizeMode === 'WALLET' || created.prizeMode === 'WALLET';
+        let requirements = pickDepositRequirements(created);
+
+        // API may be mid-deploy / omit nested fields — fetch tournament detail
+        if (isWallet && !requirements && created.id && created.prizeFundingStatus !== 'FUNDED') {
+          try {
+            const detail = await api.get(`/api/tournaments/${created.id}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            requirements = pickDepositRequirements(detail.data);
+          } catch {
+            /* keep null */
+          }
+        }
+
+        if (isWallet && created.prizeFundingStatus !== 'FUNDED') {
+          if (requirements) {
+            setPendingFund({
+              kind: 'tournament',
+              id: created.id,
+              name: created.name || formData.name,
+              requirements,
+            });
+            setSuccess(false);
+            requestAnimationFrame(() => {
+              fundStepRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+          } else {
+            setPendingFund(null);
+            setError(
+              `Tournament created, but prize deposit UI could not load. Open the tournament lobby to fund, or redeploy the API (fly deploy -a bux-poker) so PRIZE_WALLET_* is active.`
+            );
+            setSuccess(false);
+          }
         } else {
           setPendingFund(null);
           setSuccess(true);
@@ -285,20 +314,38 @@ export function CreateTournament() {
       );
 
       const created = response.data;
-      const requirements =
-        created?.depositRequirements || created?.prizeFundingSummary?.depositRequirements;
-      if (
-        prizeForm.prizeMode === 'WALLET' &&
-        created?.prizeFundingStatus !== 'FUNDED' &&
-        requirements?.prizeWalletAddress
-      ) {
-        setPendingFund({
-          kind: 'league',
-          id: created.id,
-          name: created.name || leagueName,
-          requirements,
-        });
-        setSuccess(false);
+      const isWallet =
+        prizeForm.prizeMode === 'WALLET' || created?.prizeMode === 'WALLET';
+      let requirements = pickDepositRequirements(created);
+      if (isWallet && !requirements && created?.id && created.prizeFundingStatus !== 'FUNDED') {
+        try {
+          const detail = await api.get(`/api/leagues/${created.id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          requirements = pickDepositRequirements(detail.data);
+        } catch {
+          /* keep null */
+        }
+      }
+      if (isWallet && created?.prizeFundingStatus !== 'FUNDED') {
+        if (requirements) {
+          setPendingFund({
+            kind: 'league',
+            id: created.id,
+            name: created.name || leagueName,
+            requirements,
+          });
+          setSuccess(false);
+          requestAnimationFrame(() => {
+            fundStepRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+        } else {
+          setPendingFund(null);
+          setError(
+            `League created, but prize deposit UI could not load. Open the league page to fund, or redeploy the API (fly deploy -a bux-poker).`
+          );
+          setSuccess(false);
+        }
       } else {
         setPendingFund(null);
         setSuccess(true);
@@ -388,6 +435,47 @@ export function CreateTournament() {
           Tournament or multi-game league (Discord posts open 1h before each leg)
         </p>
       </div>
+
+      {pendingFund && (
+        <div ref={fundStepRef} className="space-y-3">
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-amber-100">
+            <p className="font-medium">
+              {pendingFund.kind === 'league' ? 'League' : 'Tournament'} “{pendingFund.name}” created —
+              deposit prizes to finish setup.
+            </p>
+            <p className="mt-1 text-xs text-slate-300">
+              Auto-claim events cannot start until this deposit is confirmed. Discord posts wait until
+              funding succeeds.
+            </p>
+          </div>
+          <PrizeWalletFundPanel
+            kind={pendingFund.kind}
+            eventId={pendingFund.id}
+            requirements={pendingFund.requirements}
+            onFunded={() => {
+              setPendingFund(null);
+              setSuccess(true);
+              setTimeout(() => setSuccess(false), 4000);
+            }}
+          />
+          <p className="text-xs text-slate-500">
+            You can also fund later from the{' '}
+            {pendingFund.kind === 'league' ? (
+              <Link className="text-emerald-400 hover:underline" to={`/leagues/${pendingFund.id}`}>
+                league page
+              </Link>
+            ) : (
+              <Link
+                className="text-emerald-400 hover:underline"
+                to={`/tournaments/${pendingFund.id}`}
+              >
+                tournament lobby
+              </Link>
+            )}
+            .
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <button
@@ -770,46 +858,6 @@ export function CreateTournament() {
         {error && (
           <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-4 text-red-200">
             {error}
-          </div>
-        )}
-
-        {pendingFund && (
-          <div className="space-y-3">
-            <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-amber-100">
-              <p className="font-medium">
-                {pendingFund.kind === 'league' ? 'League' : 'Tournament'} “{pendingFund.name}” created —
-                deposit prizes to finish setup.
-              </p>
-              <p className="mt-1 text-xs text-slate-300">
-                Auto-claim events cannot start until this deposit is confirmed.
-              </p>
-            </div>
-            <PrizeWalletFundPanel
-              kind={pendingFund.kind}
-              eventId={pendingFund.id}
-              requirements={pendingFund.requirements}
-              onFunded={() => {
-                setPendingFund(null);
-                setSuccess(true);
-                setTimeout(() => setSuccess(false), 4000);
-              }}
-            />
-            <p className="text-xs text-slate-500">
-              You can also fund later from the{' '}
-              {pendingFund.kind === 'league' ? (
-                <Link className="text-emerald-400 hover:underline" to={`/leagues/${pendingFund.id}`}>
-                  league page
-                </Link>
-              ) : (
-                <Link
-                  className="text-emerald-400 hover:underline"
-                  to={`/tournaments/${pendingFund.id}`}
-                >
-                  tournament lobby
-                </Link>
-              )}
-              .
-            </p>
           </div>
         )}
 
