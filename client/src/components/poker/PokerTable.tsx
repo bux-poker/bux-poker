@@ -151,8 +151,8 @@ export function PokerTable({
           "radial-gradient(ellipse at center, #121820 0%, var(--bux-ink, #0b0f14) 70%)",
         paddingTop: "var(--table-padding-top, 56px)",
         paddingRight: "var(--table-padding, 32px)",
-        // Extra bottom inset so the lowest seat label never kisses the action row.
-        paddingBottom: "var(--table-padding-bottom, calc(var(--table-padding, 32px) + 28px))",
+        // Room for corner action panels under the oval without a huge empty strip.
+        paddingBottom: "var(--table-padding-bottom, var(--table-padding, 32px))",
         paddingLeft: "var(--table-padding, 32px)",
       }}
     >
@@ -467,10 +467,10 @@ export function PokerTable({
               verticalOffset = -20;
             }
           }
-          // Lift seats near the bottom of the oval so labels clear the action row.
+          // Mild lift for lowest seats so labels clear corner controls without a large gap.
           const rimY = Math.sin(angleRad);
-          if (rimY > 0.5) {
-            verticalOffset -= Math.round((rimY - 0.5) * 56);
+          if (rimY > 0.65) {
+            verticalOffset -= Math.round((rimY - 0.65) * 28);
           }
           // Pull hole cards slightly inward near top/bottom so they stay inside the table area.
           let cardRimNudge = 0;
