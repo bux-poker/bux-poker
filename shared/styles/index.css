@@ -11,40 +11,42 @@
 
 @layer base {
   :root {
-    --background: 15 23 42; /* slate-900 */
-    --foreground: 226 232 240; /* slate-200 */
-    --primary: 37 99 235; /* blue-600 */
+    /* Bridge tokens → BUX table palette (ink / brass / emerald) */
+    --background: 30 39 51; /* ~#1e2733 ink */
+    --foreground: 232 238 245; /* --bux-text */
+    --primary: 5 150 105; /* emerald / accent-deep */
     --primary-foreground: 255 255 255;
-    --secondary: 71 85 105; /* slate-600 */
-    --secondary-foreground: 226 232 240; /* slate-200 */
-    --muted: 51 65 85; /* slate-700 */
-    --muted-foreground: 148 163 184; /* slate-400 */
-    --accent: 59 130 246; /* blue-500 */
+    --secondary: 36 48 65; /* panel */
+    --secondary-foreground: 232 238 245;
+    --muted: 40 51 65;
+    --muted-foreground: 148 163 184;
+    --accent: 16 185 129;
     --accent-foreground: 255 255 255;
-    --card: 30 41 59; /* slate-800 */
-    --card-foreground: 226 232 240; /* slate-200 */
+    --card: 36 48 65;
+    --card-foreground: 232 238 245;
   }
 
   body {
-    @apply bg-slate-900 text-slate-200;
+    background-color: var(--bux-ink, #1e2733);
+    color: var(--bux-text, #e8eef5);
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
   /* Full-screen styles for game table only */
   :fullscreen {
-    background-color: #1f2937;
+    background-color: var(--bux-ink, #1e2733);
   }
-  
+
   :-webkit-full-screen {
-    background-color: #1f2937;
+    background-color: var(--bux-ink, #1e2733);
   }
-  
+
   :-moz-full-screen {
-    background-color: #1f2937;
+    background-color: var(--bux-ink, #1e2733);
   }
-  
+
   :-ms-fullscreen {
-    background-color: #1f2937;
+    background-color: var(--bux-ink, #1e2733);
   }
 }
 
@@ -66,25 +68,54 @@
   }
 
   .btn-primary {
-    @apply bg-blue-600 hover:bg-blue-700 text-white;
+    background: var(--bux-accent-deep, #059669);
+    color: white;
+    font-weight: 700;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--bux-accent, #10b981);
   }
 
   .btn-secondary {
-    @apply bg-slate-700 hover:bg-slate-600 text-white;
+    background: color-mix(in srgb, var(--bux-panel) 90%, transparent);
+    border: 1px solid var(--bux-panel-border);
+    color: var(--bux-text, #e8eef5);
+    font-weight: 600;
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--bux-panel) 100%, #475569);
   }
 
   .input {
-    @apply w-full px-4 py-2 rounded-md bg-slate-800 border border-slate-700 
-           text-slate-200 placeholder-slate-400
-           focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none;
+    width: 100%;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--bux-brass) 22%, #334155);
+    background: color-mix(in srgb, var(--bux-ink) 92%, transparent);
+    color: var(--bux-text, #e8eef5);
+  }
+  .input::placeholder {
+    color: var(--bux-text-muted, #94a3b8);
+  }
+  .input:focus {
+    border-color: color-mix(in srgb, var(--bux-brass) 55%, transparent);
+    outline: none;
   }
 
   .card {
-    @apply bg-slate-800 rounded-lg shadow-lg p-6 border border-slate-700;
+    border: 1px solid var(--bux-panel-border);
+    background: color-mix(in srgb, var(--bux-panel) 78%, transparent);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   }
 
   .link {
-    @apply text-blue-400 hover:text-blue-300 transition-colors duration-200;
+    color: var(--bux-brass-bright);
+    transition: color 0.15s ease;
+  }
+  .link:hover {
+    color: var(--bux-brass);
   }
 
   /* Game table specific full-screen styles */
