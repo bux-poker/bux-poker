@@ -431,18 +431,29 @@ export function PokerTable({
           const communityW = css ? parseInt(css.getPropertyValue("--community-card-width"), 10) || 64 : 64;
           const communityH = css ? parseInt(css.getPropertyValue("--community-card-height"), 10) || 90 : 90;
           const avatarSize = css ? parseInt(css.getPropertyValue("--player-avatar-size"), 10) || 32 : 32;
-          // Face-down = hole size. Face-up = clearly larger (~1.7×), still below community.
-          let holeWidth = baseHoleWidth;
+          // Standard poker card ratio (2.5 × 3.5). Face-up ~1.7× face-down, still under community.
+          const CARD_ASPECT = 2.5 / 3.5;
           let holeHeight = baseHoleHeight;
+          let holeWidth = Math.round(holeHeight * CARD_ASPECT);
           if (seatCardsFaceUp) {
-            holeWidth = Math.round(baseHoleWidth * 1.7);
             holeHeight = Math.round(baseHoleHeight * 1.7);
-            if (holeWidth >= communityW) holeWidth = Math.max(baseHoleWidth + 2, communityW - 4);
-            if (holeHeight >= communityH) holeHeight = Math.max(baseHoleHeight + 2, communityH - 4);
+            holeWidth = Math.round(holeHeight * CARD_ASPECT);
+            const maxW = communityW - 4;
+            const maxH = communityH - 4;
+            if (holeWidth > maxW || holeHeight > maxH) {
+              const scale = Math.min(maxW / holeWidth, maxH / holeHeight);
+              holeWidth = Math.round(holeWidth * scale);
+              holeHeight = Math.round(holeHeight * scale);
+            }
           }
 
-          // Gap between avatar edge and hole-card stack (cards sit inline with the PFP).
+          // Gap between avatar edge and hole-card stack (same for face-up / face-down).
           const CARD_SEAT_GAP = windowSize.width < 1000 ? 6 : 8;
+          // Prefer vertical center on PFP; if taller than avatar, grow upward only so label gap stays clear.
+          const cardStackTop = Math.max(
+            Math.round((avatarSize - holeHeight) / 2),
+            avatarSize - holeHeight
+          );
 
           // Adjust vertical position for smaller screens: seats 1-5 down, 6-10 up
           let verticalOffset = 0;
@@ -669,8 +680,9 @@ export function PokerTable({
 
                         {showSeatCards && (
                           <div
-                            className={`absolute top-1/2 flex -translate-y-1/2 flex-col items-center gap-1 ${isFolded ? "opacity-50" : ""}`}
+                            className={`absolute flex flex-col items-center gap-1 ${isFolded ? "opacity-50" : ""}`}
                             style={{
+                              top: cardStackTop,
                               zIndex: isMobile && showFaceUp ? 40 : 70,
                               ...(cardsOnRight
                                 ? { left: "100%", marginLeft: CARD_SEAT_GAP }

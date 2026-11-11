@@ -99,7 +99,7 @@ export function PokerCardImage({
       style={{
         width,
         height,
-        objectFit: "fill",
+        objectFit: "cover",
         padding: 0,
         margin: 0,
         borderRadius: cornerRadius,
