@@ -27,12 +27,13 @@
     --top-bar-padding-y: 6px;
     --top-bar-gap: 13px;
     
-    --community-card-width: 48px;
-    --community-card-height: 67px;
+    --community-card-width: 56px;
+    --community-card-height: 78px;
+    --community-card-gap: 5px;
     
     --player-avatar-size: 38px;
-    --player-name-size: 9px;
-    --player-chips-size: 8px;
+    --player-name-size: 11px;
+    --player-chips-size: 10px;
     --player-name-max-width: 72px;
     --player-capsule-padding-x: 6px;
     --player-capsule-padding-y: 3px;
@@ -152,13 +153,14 @@
     --top-bar-padding-y: 6px;
     --top-bar-gap: 12px;
     
-    --community-card-width: 44px;
-    --community-card-height: 62px;
+    --community-card-width: 52px;
+    --community-card-height: 73px;
+    --community-card-gap: 4px;
     
     --player-avatar-size: 36px;
-    --player-name-size: 9px;
-    --player-chips-size: 8px;
-    --player-name-max-width: 64px;
+    --player-name-size: 11px;
+    --player-chips-size: 10px;
+    --player-name-max-width: 68px;
     --player-capsule-padding-x: 5px;
     --player-capsule-padding-y: 2px;
     
@@ -215,13 +217,14 @@
     --top-bar-padding-y: 6px;
     --top-bar-gap: 11px;
     
-    --community-card-width: 32px;
-    --community-card-height: 45px;
+    --community-card-width: 50px;
+    --community-card-height: 70px;
+    --community-card-gap: 4px;
     
     --player-avatar-size: 34px;
-    --player-name-size: 9px;
-    --player-chips-size: 8px;
-    --player-name-max-width: 60px;
+    --player-name-size: 11px;
+    --player-chips-size: 10px;
+    --player-name-max-width: 68px;
     --player-capsule-padding-x: 5px;
     --player-capsule-padding-y: 2px;
     
@@ -278,13 +281,14 @@
     --top-bar-padding-y: 6px;
     --top-bar-gap: 10px;
     
-    --community-card-width: 36px;
-    --community-card-height: 50px;
+    --community-card-width: 48px;
+    --community-card-height: 67px;
+    --community-card-gap: 4px;
     
     --player-avatar-size: 32px;
-    --player-name-size: 9px;
-    --player-chips-size: 8px;
-    --player-name-max-width: 56px;
+    --player-name-size: 11px;
+    --player-chips-size: 10px;
+    --player-name-max-width: 68px;
     --player-capsule-padding-x: 5px;
     --player-capsule-padding-y: 2px;
     
@@ -345,9 +349,9 @@
     --community-card-height: 47px;
     
     --player-avatar-size: 30px;
-    --player-name-size: 9px;
-    --player-chips-size: 8px;
-    --player-name-max-width: 54px;
+    --player-name-size: 11px;
+    --player-chips-size: 10px;
+    --player-name-max-width: 68px;
     --player-capsule-padding-x: 4px;
     --player-capsule-padding-y: 2px;
     
@@ -407,9 +411,9 @@
     --community-card-height: 45px;
     
     --player-avatar-size: 29px;
-    --player-name-size: 9px;
-    --player-chips-size: 8px;
-    --player-name-max-width: 52px;
+    --player-name-size: 11px;
+    --player-chips-size: 10px;
+    --player-name-max-width: 68px;
     --player-capsule-padding-x: 4px;
     --player-capsule-padding-y: 2px;
     
@@ -470,9 +474,9 @@
     --community-card-height: 42px;
     
     --player-avatar-size: 29px;
-    --player-name-size: 9px;
-    --player-chips-size: 8px;
-    --player-name-max-width: 50px;
+    --player-name-size: 11px;
+    --player-chips-size: 10px;
+    --player-name-max-width: 68px;
     --player-capsule-padding-x: 4px;
     --player-capsule-padding-y: 2px;
     
@@ -533,9 +537,9 @@
     --community-card-height: 50px;
     
     --player-avatar-size: 29px;
-    --player-name-size: 9px;
-    --player-chips-size: 8px;
-    --player-name-max-width: 48px;
+    --player-name-size: 11px;
+    --player-chips-size: 10px;
+    --player-name-max-width: 68px;
     --player-capsule-padding-x: 4px;
     --player-capsule-padding-y: 2px;
     
@@ -596,9 +600,9 @@
     --community-card-height: 38px;
     
     --player-avatar-size: 29px;
-    --player-name-size: 9px;
-    --player-chips-size: 8px;
-    --player-name-max-width: 48px;
+    --player-name-size: 11px;
+    --player-chips-size: 10px;
+    --player-name-max-width: 68px;
     --player-capsule-padding-x: 4px;
     --player-capsule-padding-y: 2px;
     
@@ -659,9 +663,9 @@
     --community-card-height: 36px;
     
     --player-avatar-size: 29px;
-    --player-name-size: 9px;
-    --player-chips-size: 8px;
-    --player-name-max-width: 46px;
+    --player-name-size: 11px;
+    --player-chips-size: 10px;
+    --player-name-max-width: 68px;
     --player-capsule-padding-x: 4px;
     --player-capsule-padding-y: 2px;
     
@@ -722,9 +726,9 @@
     --community-card-height: 34px;
     
     --player-avatar-size: 29px;
-    --player-name-size: 9px;
-    --player-chips-size: 8px;
-    --player-name-max-width: 44px;
+    --player-name-size: 11px;
+    --player-chips-size: 10px;
+    --player-name-max-width: 68px;
     --player-capsule-padding-x: 3px;
     --player-capsule-padding-y: 2px;
     
@@ -785,9 +789,9 @@
     --community-card-height: 31px;
     
     --player-avatar-size: 29px;
-    --player-name-size: 9px;
-    --player-chips-size: 8px;
-    --player-name-max-width: 42px;
+    --player-name-size: 11px;
+    --player-chips-size: 10px;
+    --player-name-max-width: 68px;
     --player-capsule-padding-x: 3px;
     --player-capsule-padding-y: 2px;
     
@@ -833,22 +837,25 @@
   }
 }
 
-/* Global card scaling override for small screens only (not tablets/iPads)
- * Tablets (768px+) should use the specific breakpoint values above
- * Only apply this override for very small screens (< 768px)
- */
+/* Mobile portrait: larger community/face-up cards; face-down stays via --hole-card-* */
 @media (max-width: 767px) {
   :root {
-    --community-card-width: 32px;
-    --community-card-height: 45px;
-    --hole-card-width: 14px;
-    --hole-card-height: 20px;
+    --community-card-width: 46px;
+    --community-card-height: 64px;
+    --community-card-gap: 4px;
+    --hole-card-width: 22px;
+    --hole-card-height: 31px;
+    --player-name-size: 11px;
+    --player-chips-size: 10px;
+    --player-name-max-width: 72px;
   }
-}/* Short viewports (phone landscape) — shrink dock + padding so seats never hit controls */
+}
+
+/* Short viewports (phone landscape) — big board cards, readable seats, compact dock */
 @media (max-height: 520px) {
   :root {
-    --table-padding: 10px;
-    --table-padding-top: 36px;
+    --table-padding: 8px;
+    --table-padding-top: 34px;
     --table-rail-width: 5px;
     --table-rail-inset: 2px;
     --action-dock-height: 84px;
@@ -863,16 +870,17 @@
     --amount-input-width: 56px;
     --amount-input-text: 11px;
     --input-button-size: 26px;
-    --community-card-width: 34px;
-    --community-card-height: 48px;
-    --hole-card-width: 14px;
-    --hole-card-height: 20px;
-    --player-name-max-width: 52px;
-    --player-capsule-padding-x: 4px;
+    --community-card-width: 50px;
+    --community-card-height: 70px;
+    --community-card-gap: 3px;
+    --hole-card-width: 24px;
+    --hole-card-height: 34px;
+    --player-name-max-width: 76px;
+    --player-capsule-padding-x: 5px;
     --player-capsule-padding-y: 2px;
-    --player-avatar-size: 28px;
-    --player-name-size: 8px;
-    --player-chips-size: 7px;
+    --player-avatar-size: 30px;
+    --player-name-size: 11px;
+    --player-chips-size: 10px;
   }
 }
 
@@ -885,10 +893,14 @@
     --hero-card-height: 40px;
     --action-button-height: 22px;
     --amount-input-height: 24px;
-    --community-card-width: 28px;
-    --community-card-height: 40px;
-    --player-name-max-width: 46px;
-    --player-avatar-size: 24px;
+    --community-card-width: 44px;
+    --community-card-height: 62px;
+    --community-card-gap: 2px;
+    --hole-card-width: 20px;
+    --hole-card-height: 28px;
+    --player-name-max-width: 70px;
+    --player-avatar-size: 28px;
+    --player-name-size: 11px;
+    --player-chips-size: 10px;
   }
 }
-

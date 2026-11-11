@@ -53,20 +53,34 @@ export function PokerCardImage({
   if (useTextCard) {
     const suitSymbol = SUIT_SYMBOLS[card.suit] ?? card.suit.charAt(0);
     const isRed = RED_SUITS.has(card.suit);
-    const rankSize = Math.max(10, Math.floor(height * 0.42));
-    const suitSize = Math.max(10, Math.floor(height * 0.38));
+    // Pack rank + suit as large as the card allows (tight vertical stack).
+    const rankSize = Math.max(11, Math.floor(height * 0.5));
+    const suitSize = Math.max(11, Math.floor(height * 0.42));
     const cornerRadius = Math.max(2, Math.round(width * 0.1));
+    const padY = Math.max(1, Math.round(height * 0.04));
     return (
       <div
         className={`${className} flex flex-col items-center justify-center border border-slate-300 bg-white shadow-md`}
-        style={{ width, height, minWidth: width, minHeight: height, borderRadius: cornerRadius }}
+        style={{
+          width,
+          height,
+          minWidth: width,
+          minHeight: height,
+          borderRadius: cornerRadius,
+          paddingTop: padY,
+          paddingBottom: padY,
+          gap: Math.max(0, Math.round(height * 0.02)),
+        }}
       >
-        <span className="font-bold leading-none" style={{ fontSize: rankSize, color: "#1a1a1a" }}>
+        <span
+          className="font-bold leading-none"
+          style={{ fontSize: rankSize, color: "#1a1a1a", lineHeight: 1 }}
+        >
           {card.rank}
         </span>
         <span
           className="leading-none"
-          style={{ fontSize: suitSize, color: isRed ? "#b91c1c" : "#1a1a1a" }}
+          style={{ fontSize: suitSize, color: isRed ? "#b91c1c" : "#1a1a1a", lineHeight: 1 }}
         >
           {suitSymbol}
         </span>

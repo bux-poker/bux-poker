@@ -179,18 +179,6 @@ export function PokerTable({
         <div className="bux-hud-strip !gap-1 !rounded-2xl !px-1.5 !py-1.5">
           <button
             type="button"
-            onClick={() => rotateSeats(1)}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
-            title="Rotate seats anti-clockwise"
-            aria-label="Rotate seats anti-clockwise"
-          >
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 12a9 9 0 1 0 9-9" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4v8h8" />
-            </svg>
-          </button>
-          <button
-            type="button"
             onClick={() => rotateSeats(-1)}
             className="flex h-8 w-8 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
             title="Rotate seats clockwise"
@@ -284,47 +272,48 @@ export function PokerTable({
           </div>
         )}
 
-        {/* Center: when showdown with winners show who won + hand; else total pot + community cards */}
-        <div 
-          className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
-          style={{ gap: 'var(--community-card-gap, 8px)' }}
-        >
-          {/* Winner message: show for both real showdown and fold wins (fold wins have no handCategory, no card reveal) */}
-          {showdownResults?.winners?.length > 0 ? (
-            <div className="bux-panel rounded-xl px-4 py-2 text-center shadow-xl">
-              {showdownResults.winners.length === 1 ? (
-                <span className="font-display font-bold text-amber-200" style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}>
-                  {showdownResults.winners[0].handCategory
-                    ? `${showdownResults.winners[0].name} wins with ${formatHandCategory(showdownResults.winners[0].handCategory)}`
-                    : `${showdownResults.winners[0].name} wins ${(showdownResults.winners[0].potWon ?? 0).toLocaleString()}`}
-                </span>
-              ) : (
-                <span className="font-display font-bold text-amber-200" style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}>
-                  {showdownResults.winners[0]?.handCategory
-                    ? `${showdownResults.winners.map((w: any) => w.name).join(" & ")} split with ${formatHandCategory(showdownResults.winners[0]?.handCategory)}`
-                    : `${showdownResults.winners.map((w: any) => w.name).join(" & ")} split ${(showdownResults.winners[0]?.potWon ?? 0).toLocaleString()}`}
-                </span>
-              )}
-            </div>
-          ) : (
-            <div className="bux-pot">
-              <span className="bux-pot-label">Pot</span>
-              <div className="flex items-center gap-2">
-                <BetChip value={pot} hideLabel />
-                <span className="bux-pot-value">{pot.toLocaleString()}</span>
+        {/* Center: community cards at true center; pot/winner floats above to free vertical space */}
+        <div className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center">
+          <div
+            className="absolute bottom-full mb-1 flex flex-col items-center"
+            style={{ gap: "2px" }}
+          >
+            {showdownResults?.winners?.length > 0 ? (
+              <div className="bux-panel rounded-xl px-4 py-2 text-center shadow-xl">
+                {showdownResults.winners.length === 1 ? (
+                  <span className="font-display font-bold text-amber-200" style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}>
+                    {showdownResults.winners[0].handCategory
+                      ? `${showdownResults.winners[0].name} wins with ${formatHandCategory(showdownResults.winners[0].handCategory)}`
+                      : `${showdownResults.winners[0].name} wins ${(showdownResults.winners[0].potWon ?? 0).toLocaleString()}`}
+                  </span>
+                ) : (
+                  <span className="font-display font-bold text-amber-200" style={{ fontSize: 'var(--bet-chip-text-size, 13px)' }}>
+                    {showdownResults.winners[0]?.handCategory
+                      ? `${showdownResults.winners.map((w: any) => w.name).join(" & ")} split with ${formatHandCategory(showdownResults.winners[0]?.handCategory)}`
+                      : `${showdownResults.winners.map((w: any) => w.name).join(" & ")} split ${(showdownResults.winners[0]?.potWon ?? 0).toLocaleString()}`}
+                  </span>
+                )}
               </div>
-              {sidePots.length > 1 && (
-                <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[11px] text-slate-400">
-                  {sidePots.map((sp, idx) => (
-                    <span key={`${sp.label || "pot"}-${idx}`}>
-                      {(sp.label || (idx === 0 ? "Main" : `Side ${idx}`))}:{" "}
-                      <span className="font-semibold text-amber-200/90">{sp.amount.toLocaleString()}</span>
-                    </span>
-                  ))}
+            ) : (
+              <div className="bux-pot">
+                <span className="bux-pot-label">Pot</span>
+                <div className="flex items-center gap-2">
+                  <BetChip value={pot} hideLabel />
+                  <span className="bux-pot-value">{pot.toLocaleString()}</span>
                 </div>
-              )}
-            </div>
-          )}
+                {sidePots.length > 1 && (
+                  <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-[11px] text-slate-400">
+                    {sidePots.map((sp, idx) => (
+                      <span key={`${sp.label || "pot"}-${idx}`}>
+                        {(sp.label || (idx === 0 ? "Main" : `Side ${idx}`))}:{" "}
+                        <span className="font-semibold text-amber-200/90">{sp.amount.toLocaleString()}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
           {communityCards.length > 0 && (
           <div 
             className="flex"
@@ -359,7 +348,7 @@ export function PokerTable({
               // Use windowSize to trigger recalculation
               return (
                 <div
-                  key={`community-${idx}-${windowSize.width}`}
+                  key={`community-${idx}-${windowSize.width}x${windowSize.height}`}
                   className="relative transition-all duration-500"
                   style={{
                     transform: `scale(${showdownScale})`,
@@ -374,7 +363,7 @@ export function PokerTable({
                     } ${
                       isLosingCard ? 'opacity-40 grayscale' : ''
                     }`}
-                    useTextCard={false}
+                    useTextCard={isMobile}
                   />
                 </div>
               );
@@ -434,8 +423,15 @@ export function PokerTable({
           const visualSeat = visualIdx + 1;
           const cardsOnRight = [1, 2, 3, 9, 10].includes(visualSeat);
           const baseCardOffset = 80;
-          // Same offset for face-up and face-down so hole cards share one orbit.
-          const offsetScale = windowSize.width < 1000 ? 0.62 : 1;
+          // Face-up seats need a bit more clearance (larger cards); face-down stay tight to the avatar.
+          const offsetScale =
+            windowSize.width < 1000
+              ? seatCardsFaceUp
+                ? 0.55
+                : 0.38
+              : seatCardsFaceUp
+                ? 1
+                : 0.85;
           const cardOffset = cardsOnRight ? baseCardOffset * offsetScale : -baseCardOffset * offsetScale;
           // Adjust vertical position for smaller screens: seats 1-5 down, 6-10 up
           let verticalOffset = 0;
@@ -456,17 +452,17 @@ export function PokerTable({
           let cardRimNudge = 0;
           if (windowSize.width < 1100) {
             const rimY = Math.sin(angleRad);
-            if (rimY < -0.7) cardRimNudge = 18;
-            else if (rimY > 0.7) cardRimNudge = -10;
+            if (rimY < -0.7) cardRimNudge = 12;
+            else if (rimY > 0.7) cardRimNudge = -6;
           }
 
-          const baseHorizontalOffset = [1, 2, 3, 9, 10].includes(visualSeat) ? -20 : 20;
+          const baseHorizontalOffset = [1, 2, 3, 9, 10].includes(visualSeat) ? -12 : 12;
           // Additional horizontal tweak for smaller screens — keep side seats inside the frame.
           const smallScreenOffset = windowSize.width <= 900
-            ? ((visualIdx === 0 || visualIdx === 9) ? -8 : ((visualIdx === 4 || visualIdx === 5) ? 8 : 0))
+            ? ((visualIdx === 0 || visualIdx === 9) ? -6 : ((visualIdx === 4 || visualIdx === 5) ? 6 : 0))
             : 0;
           // Capsules share space with hole cards — nudge seat only (not cards) away.
-          const seatClearance = windowSize.width < 1000 ? 12 : 22;
+          const seatClearance = windowSize.width < 1000 ? (seatCardsFaceUp ? 8 : 4) : seatCardsFaceUp ? 18 : 14;
           const seatFromCardsOffset = cardsOnRight ? -seatClearance : seatClearance;
           const layoutHorizontalOffset = baseHorizontalOffset + smallScreenOffset;
           const seatHorizontalOffset = layoutHorizontalOffset + seatFromCardsOffset;
@@ -697,11 +693,25 @@ export function PokerTable({
             const baseHoleHeight = typeof window !== 'undefined'
               ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hole-card-height')) || 39
               : 39;
+            const communityW = typeof window !== 'undefined'
+              ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--community-card-width')) || 64
+              : 64;
+            const communityH = typeof window !== 'undefined'
+              ? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--community-card-height')) || 90
+              : 90;
             
-            // Never 2× on mobile — keep face-up/face-down sizes close so layout stays stable.
-            const enlargeFaceUp = showFaceUp && !isMobile;
-            const holeWidth = Math.round(enlargeFaceUp ? baseHoleWidth * 2 : baseHoleWidth);
-            const holeHeight = Math.round(enlargeFaceUp ? baseHoleHeight * 2 : baseHoleHeight);
+            // Mobile face-up matches community size; face-down stays smaller. Desktop face-up still enlarges.
+            let holeWidth = baseHoleWidth;
+            let holeHeight = baseHoleHeight;
+            if (showFaceUp) {
+              if (isMobile) {
+                holeWidth = communityW;
+                holeHeight = communityH;
+              } else {
+                holeWidth = Math.round(baseHoleWidth * 2);
+                holeHeight = Math.round(baseHoleHeight * 2);
+              }
+            }
             
             elements.push(
               <div
@@ -736,7 +746,7 @@ export function PokerTable({
                     
                     return (
                       <div 
-                        key={`${player.id}-${cardIdx}-${windowSize.width}`} 
+                        key={`${player.id}-${cardIdx}-${windowSize.width}x${windowSize.height}`} 
                         className="relative transition-all duration-500"
                         style={{
                           transform: `scale(${cardScale})`,

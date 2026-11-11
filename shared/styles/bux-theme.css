@@ -537,25 +537,27 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
+    gap: 1px;
   }
 
   .bux-pot-label {
     font-family: var(--font-display);
-    font-size: 10px;
+    font-size: clamp(8px, 1.4vw, 10px);
     font-weight: 700;
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: color-mix(in srgb, var(--bux-brass) 80%, white);
+    line-height: 1;
   }
 
   .bux-pot-value {
-    font-size: clamp(18px, 2.6vw, 28px);
+    font-size: clamp(14px, 2.2vw, 28px);
     font-weight: 800;
     font-variant-numeric: tabular-nums;
     color: white;
     text-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
     letter-spacing: 0.02em;
+    line-height: 1.1;
   }
 
   .bux-chip {
