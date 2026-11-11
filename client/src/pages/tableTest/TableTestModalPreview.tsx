@@ -19,12 +19,25 @@ const MOCK_WALLET_PRIZE_TOURNAMENT = {
       place: 1,
       items: [
         { kind: "SOL", lamports: "500000000" },
-        { kind: "NFT", mint: "BuXNfT1111111111111111111111111111111111111" },
+        // Wrapped SOL mint — Jupiter resolves a real logo for preview
+        {
+          kind: "SPL",
+          mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          amount: "25000000",
+          decimals: 6,
+        },
       ],
     },
     {
       place: 2,
-      items: [{ kind: "SPL", mint: "BuXTok2222222222222222222222222222222222222", amount: "1000000", decimals: 6 }],
+      items: [
+        {
+          kind: "SPL",
+          mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          amount: "10000000",
+          decimals: 6,
+        },
+      ],
     },
     {
       place: 3,

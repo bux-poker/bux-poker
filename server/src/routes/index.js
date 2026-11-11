@@ -3,6 +3,7 @@ import tournamentsRouter from "./tournaments.js";
 import leaguesRouter from "./leagues.js";
 import adminRouter from "./admin.js";
 import authRouter from "./auth.js";
+import prizesRouter from "./prizes.js";
 import { prisma } from "../config/database.js";
 
 const router = Router();
@@ -30,6 +31,7 @@ router.use("/tournaments", tournamentsRouter);
 router.use("/leagues", leaguesRouter);
 router.use("/admin", adminRouter);
 router.use("/auth", authRouter);
+router.use("/prizes", prizesRouter);
 
 export default router;
 

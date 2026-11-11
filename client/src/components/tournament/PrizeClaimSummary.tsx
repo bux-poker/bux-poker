@@ -1,5 +1,6 @@
 import type { ManualPrizePlace, MyPrizeClaim, WalletPrizePlace } from "./PrizesTab";
 import { WalletClaimPanel } from "./WalletClaimPanel";
+import { ManualPrizeVisual, PrizeAssetVisual } from "./PrizeAssetVisual";
 
 type PrizeStructureRow = ManualPrizePlace | WalletPrizePlace;
 
@@ -8,6 +9,8 @@ type PrizeTournamentSlice = {
   prizeMode?: "MANUAL" | "WALLET" | null;
   prizeStructure?: PrizeStructureRow[];
   prizeClaimServer?: { serverName: string; inviteLink: string | null } | null;
+  /** Fallback if claim server missing — first posted project Discord. */
+  servers?: Array<{ serverName: string; inviteLink: string | null }> | null;
   myPrizeClaim?: MyPrizeClaim | null;
   hasPrizes?: boolean;
 };
@@ -17,23 +20,6 @@ function placeLabel(place: number) {
   if (place === 2) return "2nd";
   if (place === 3) return "3rd";
   return `${place}th`;
-}
-
-function formatWalletItem(
-  item: { kind: string; lamports?: string; mint?: string; amount?: string; decimals?: number }
-) {
-  if (item.kind === "SOL") {
-    const lamports = BigInt(item.lamports || "0");
-    const sol = Number(lamports) / 1e9;
-    return `${sol} SOL`;
-  }
-  if (item.kind === "NFT" && item.mint) {
-    return `NFT · ${item.mint}`;
-  }
-  if (item.mint) {
-    return `Token · ${item.amount ?? "?"} · mint ${item.mint}`;
-  }
-  return "Prize asset";
 }
 
 export function getPrizeRowForPlace(
@@ -53,6 +39,15 @@ export function isPaidFinishingPlace(
   const places = tournament.prizePlaces ?? 0;
   if (places <= 0) return false;
   return place <= places && !!getPrizeRowForPlace(tournament, place);
+}
+
+function resolveClaimServer(tournament: PrizeTournamentSlice) {
+  if (tournament.prizeClaimServer?.serverName) return tournament.prizeClaimServer;
+  const first = tournament.servers?.[0];
+  if (first?.serverName) {
+    return { serverName: first.serverName, inviteLink: first.inviteLink ?? null };
+  }
+  return null;
 }
 
 type Props = {
@@ -84,58 +79,38 @@ export function PrizeClaimSummary({
       : tournament.myPrizeClaim ?? null;
 
   const isManual = tournament.prizeMode === "MANUAL" || "description" in row;
+  const claimServer = resolveClaimServer(tournament);
 
   return (
-    <div className="mt-4 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-3 text-left">
+    <div className="mt-4 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-4 text-center">
       {congratulate && (
         <p className="font-display text-sm font-bold uppercase tracking-wide text-emerald-300">
           Congratulations — {placeLabel(place)} place prize
         </p>
       )}
-      {"description" in row && row.description ? (
-        <p className={`text-slate-100 ${congratulate ? "mt-2" : ""}`}>{row.description}</p>
-      ) : (
-        <ul className={`space-y-2 text-sm text-slate-200 ${congratulate ? "mt-2" : ""}`}>
-          {(row as WalletPrizePlace).items?.map((item, i) => (
-            <li key={i} className="break-all">
-              <span className="font-medium text-emerald-200">{formatWalletItem(item)}</span>
-              {item.kind === "NFT" && item.mint && (
-                <a
-                  href={`https://solscan.io/token/${item.mint}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-0.5 block text-xs text-emerald-400/90 hover:underline"
-                >
-                  View NFT mint on Solscan →
-                </a>
-              )}
-              {item.kind === "SPL" && item.mint && (
-                <a
-                  href={`https://solscan.io/token/${item.mint}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-0.5 block text-xs text-emerald-400/90 hover:underline"
-                >
-                  View token mint on Solscan →
-                </a>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
 
-      {isManual && tournament.prizeClaimServer && (
-        <div className="mt-3 border-t border-emerald-500/20 pt-3">
+      <div className={`flex flex-col items-center gap-4 ${congratulate ? "mt-3" : ""}`}>
+        {"description" in row && row.description ? (
+          <ManualPrizeVisual description={row.description} />
+        ) : (
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            {(row as WalletPrizePlace).items?.map((item, i) => (
+              <PrizeAssetVisual key={i} item={item} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {isManual && claimServer && (
+        <div className="mt-4 border-t border-emerald-500/20 pt-3">
           <p className="text-sm text-slate-300">
             To claim, join{" "}
-            <span className="font-semibold text-slate-100">
-              {tournament.prizeClaimServer.serverName}
-            </span>{" "}
-            on Discord and open a prize ticket.
+            <span className="font-semibold text-slate-100">{claimServer.serverName}</span> on
+            Discord and open a prize ticket.
           </p>
-          {tournament.prizeClaimServer.inviteLink && (
+          {claimServer.inviteLink && (
             <a
-              href={tournament.prizeClaimServer.inviteLink}
+              href={claimServer.inviteLink}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-2 inline-block text-sm font-medium text-emerald-400 hover:underline"
@@ -147,7 +122,7 @@ export function PrizeClaimSummary({
       )}
 
       {!isManual && tournament.prizeMode === "WALLET" && (
-        <div className="mt-3 border-t border-emerald-500/20 pt-3">
+        <div className="mt-4 border-t border-emerald-500/20 pt-3 text-left">
           {myClaim ? (
             claimEndpoint &&
             (myClaim.status === "ELIGIBLE" || myClaim.status === "CLAIMED") ? (
@@ -157,7 +132,7 @@ export function PrizeClaimSummary({
                 onUpdated={onUpdated}
               />
             ) : (
-              <p className="text-sm text-slate-300">
+              <p className="text-center text-sm text-slate-300">
                 {myClaim.status === "MANUAL_PENDING"
                   ? "Open a Discord ticket to claim."
                   : myClaim.status === "CLAIMED"
@@ -166,17 +141,16 @@ export function PrizeClaimSummary({
               </p>
             )
           ) : (
-            <p className="text-sm text-slate-300">
-              Paste your Solana wallet address in the lobby Prizes tab once your claim is ready, or
-              wait a moment for claim eligibility to appear.
+            <p className="text-center text-sm text-slate-300">
+              Paste your Solana wallet address below once your claim is ready.
             </p>
           )}
         </div>
       )}
 
-      {isManual && !tournament.prizeClaimServer && (
+      {isManual && !claimServer && (
         <p className="mt-3 text-sm text-slate-400">
-          Claim details will be shared by the tournament organizers (usually via Discord).
+          Claim Discord server was not configured for this tournament.
         </p>
       )}
     </div>
