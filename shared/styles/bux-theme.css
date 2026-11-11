@@ -78,6 +78,116 @@
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   }
 
+  /* Shared modal / dialog chrome */
+  .bux-modal {
+    border-radius: 14px;
+    border: 1.5px solid color-mix(in srgb, var(--bux-brass) 55%, #f5e6c8);
+    background: color-mix(in srgb, var(--bux-ink-elevated) 96%, transparent);
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.55),
+      0 18px 40px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(12px);
+    padding: 1.25rem 1.35rem 1.35rem;
+  }
+
+  .bux-modal-header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin-bottom: 0.75rem;
+    min-height: 1.75rem;
+  }
+
+  .bux-modal-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.55rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .bux-modal-title {
+    font-family: var(--font-display);
+    font-size: 1.125rem;
+    font-weight: 700;
+    line-height: 1.25;
+    margin: 0;
+  }
+
+  .bux-modal-close {
+    position: absolute;
+    right: -0.25rem;
+    top: -0.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 0.5rem;
+    color: rgb(148 163 184);
+    transition: background-color 0.12s ease, color 0.12s ease;
+  }
+  .bux-modal-close:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: white;
+  }
+
+  .bux-modal-body {
+    color: rgb(226 232 240);
+    font-size: 0.95rem;
+    line-height: 1.45;
+  }
+
+  .bux-modal-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.65rem;
+    margin-top: 1.25rem;
+  }
+
+  .bux-modal-btn {
+    border-radius: 0.55rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: background-color 0.12s ease, transform 0.12s ease;
+  }
+  .bux-modal-btn:active {
+    transform: scale(0.98);
+  }
+  .bux-modal-btn-secondary {
+    background: rgb(51 65 85);
+    color: rgb(241 245 249);
+  }
+  .bux-modal-btn-secondary:hover {
+    background: rgb(71 85 105);
+  }
+  .bux-modal-btn-primary {
+    background: var(--bux-accent-deep, #059669);
+    color: white;
+  }
+  .bux-modal-btn-primary:hover {
+    background: var(--bux-accent, #10b981);
+  }
+  .bux-modal-btn-danger {
+    background: var(--bux-danger, #dc2626);
+    color: white;
+  }
+  .bux-modal-btn-danger:hover {
+    background: #ef4444;
+  }
+
+  .bux-modal-banner {
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    border: 1.5px solid color-mix(in srgb, var(--bux-brass) 45%, transparent);
+  }
+
   .bux-btn-accent {
     background: var(--bux-accent-deep);
     color: white;

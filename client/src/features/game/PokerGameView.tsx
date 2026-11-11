@@ -16,6 +16,7 @@ import { api } from "../../services/api";
 import { useTournament } from "../../hooks/useTournaments";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { TournamentLobbyModal } from "../../components/tournament/TournamentLobbyModal";
+import { BuxBanner, BuxModal, BuxModalButton } from "../../components/ui/BuxModal";
 import { soundManager, type SoundName } from "../../utils/soundManager";
 import { preloadCards } from "../../utils/cardPreloader";
 import { getHandDescription } from "@shared/utils/handEvaluator";
@@ -1478,9 +1479,19 @@ export function PokerGameView() {
         </div>
       )}
       {!socketConnected && gameState && (
-        <div className="flex items-center justify-between gap-4 border-b border-amber-500/40 bg-amber-500/20 px-4 py-2 text-sm text-amber-200 shrink-0">
-          <span>Connection lost. Game may be out of date.</span>
-          <button type="button" onClick={() => getSocket().connect()} className="rounded bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-500">Reconnect</button>
+        <div className="shrink-0 px-3 pt-3">
+          <BuxBanner
+            title="Connection lost"
+            icon="wifi"
+            tone="warning"
+            action={
+              <BuxModalButton variant="primary" onClick={() => getSocket().connect()}>
+                Reconnect
+              </BuxModalButton>
+            }
+          >
+            Game may be out of date until you reconnect.
+          </BuxBanner>
         </div>
       )}
       {/* Main game area - table + controls | chat (no header; info in table corners) */}
@@ -1489,71 +1500,68 @@ export function PokerGameView() {
         <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
           {/* Elimination modal — centered on table column */}
           {eliminationInfo && !eliminationModalDismissed && (
-            <div className="absolute inset-0 z-[120] flex items-center justify-center bg-black/70 p-4">
-              <div className="w-full max-w-sm rounded-lg border border-slate-700 bg-slate-900 p-6 text-center shadow-2xl">
-                <h2 className="mb-2 text-xl font-bold text-red-300">You have been eliminated</h2>
-                <p className="mb-4 text-slate-200">
-                  {eliminationInfo.place
-                    ? `You finished in position ${eliminationInfo.place}.`
-                    : "You are out of the tournament."}
-                </p>
-                <div className="flex justify-center gap-3">
-                  <button
-                    onClick={() => setEliminationModalDismissed(true)}
-                    className="rounded bg-slate-700 px-4 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600"
-                  >
+            <BuxModal
+              title="You have been eliminated"
+              icon="eliminated"
+              tone="danger"
+              onClose={() => setEliminationModalDismissed(true)}
+              footer={
+                <>
+                  <BuxModalButton onClick={() => setEliminationModalDismissed(true)}>
                     Stay and Spectate
-                  </button>
-                  <button
-                    onClick={handleCloseTable}
-                    className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-                  >
+                  </BuxModalButton>
+                  <BuxModalButton variant="primary" onClick={handleCloseTable}>
                     Close Table
-                  </button>
-                </div>
-              </div>
-            </div>
+                  </BuxModalButton>
+                </>
+              }
+            >
+              <p>
+                {eliminationInfo.place
+                  ? `You finished in position ${eliminationInfo.place}.`
+                  : "You are out of the tournament."}
+              </p>
+            </BuxModal>
           )}
 
           {/* Winner modal — centered on table column */}
           {winnerModalOpen && !winnerModalDismissed && (
-            <div className="absolute inset-0 z-[120] flex items-center justify-center bg-black/70 p-4">
-              <div className="w-full max-w-sm rounded-lg border border-emerald-500 bg-slate-900 p-6 text-center shadow-2xl">
-                <h2 className="mb-2 text-2xl font-bold text-emerald-300">🏆 Tournament Winner!</h2>
-                <p className="mb-4 text-slate-200">
-                  Congratulations, you finished <span className="font-semibold">1st</span> in this
-                  tournament.
-                </p>
-                <div className="flex justify-center gap-3">
-                  <button
+            <BuxModal
+              title="Tournament Winner!"
+              icon="trophy"
+              tone="success"
+              onClose={() => {
+                setWinnerModalDismissed(true);
+                setWinnerModalOpen(false);
+              }}
+              footer={
+                <>
+                  <BuxModalButton
                     onClick={() => {
                       setWinnerModalDismissed(true);
                       setWinnerModalOpen(false);
                     }}
-                    className="rounded bg-slate-700 px-4 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600"
                   >
                     Stay at Table
-                  </button>
-                  <button
-                    onClick={handleCloseTable}
-                    className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-                  >
+                  </BuxModalButton>
+                  <BuxModalButton variant="primary" onClick={handleCloseTable}>
                     Close Table
-                  </button>
-                </div>
-              </div>
-            </div>
+                  </BuxModalButton>
+                </>
+              }
+            >
+              <p>
+                Congratulations, you finished <span className="font-semibold">1st</span> in this
+                tournament.
+              </p>
+            </BuxModal>
           )}
 
           {showPersistentExitControls && (
             <div className="absolute bottom-4 left-1/2 z-[110] -translate-x-1/2">
-              <button
-                type="button"
-                onClick={handleCloseTable}
-                className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-black/40 hover:bg-emerald-500"
-              >
+              <BuxModalButton variant="primary" onClick={handleCloseTable}>
                 Close Table
-              </button>
+              </BuxModalButton>
             </div>
           )}
 
@@ -1584,76 +1592,68 @@ export function PokerGameView() {
               (!showConsolidationOverlay &&
                 handResolvedForReseat &&
                 !!effectiveConsolidationMessage)) && (
-              <div className="bux-banner absolute left-1/2 top-3 z-[100] max-w-lg -translate-x-1/2 rounded-xl px-5 py-3 text-center">
-                <p className="text-sm font-medium text-slate-100">
-                  {effectiveConsolidationMessage}
-                </p>
-                <p className="mt-1 text-xs text-slate-400">Please wait…</p>
+              <div className="absolute left-1/2 top-3 z-[100] w-full max-w-lg -translate-x-1/2 px-4">
+                <BuxBanner title="Tables consolidating" icon="wait">
+                  {effectiveConsolidationMessage} Please wait…
+                </BuxBanner>
               </div>
             )}
             {showBlindWaitOverlay && (
-              <div className="bux-banner absolute left-1/2 top-3 z-[95] max-w-lg -translate-x-1/2 rounded-xl px-5 py-3 text-center">
-                <p className="text-sm font-medium text-amber-100">{blindWaitMessage}</p>
-                <p className="mt-1 text-xs text-slate-400">
-                  Blinds rise together when every table finishes the current hand.
-                </p>
+              <div className="absolute left-1/2 top-3 z-[95] w-full max-w-lg -translate-x-1/2 px-4">
+                <BuxBanner title="Syncing blind level" icon="blinds" tone="warning">
+                  {blindWaitMessage}
+                  <span className="mt-1 block">
+                    Blinds rise together when every table finishes the current hand.
+                  </span>
+                </BuxBanner>
               </div>
             )}
-            {scheduleModal && (
-              <div
-                className="absolute inset-0 flex items-center justify-center bg-black/50 px-4 backdrop-blur-[2px]"
-                style={{ zIndex: 101 }}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="schedule-modal-title"
+            {scheduleModal?.kind === "BREAK" && (
+              <BuxModal
+                title="Tournament break"
+                icon="break"
+                maxWidth="md"
+                zIndexClass="z-[101]"
+                onClose={() => {
+                  setScheduleModal(null);
+                  void refetchTournament({ silent: true });
+                }}
+                footer={
+                  <BuxModalButton
+                    onClick={() => {
+                      setScheduleModal(null);
+                      void refetchTournament({ silent: true });
+                    }}
+                  >
+                    Dismiss
+                  </BuxModalButton>
+                }
               >
-                <div className="bux-panel w-full max-w-md rounded-xl px-8 py-6 text-center shadow-2xl">
-                  {scheduleModal.kind === "BREAK" ? (
-                    <>
-                      <p id="schedule-modal-title" className="text-lg font-medium text-slate-200">
-                        Tournament break
-                      </p>
-                      {scheduleModal.message ? (
-                        <p className="mt-2 text-base text-slate-300">{scheduleModal.message}</p>
-                      ) : null}
-                      <p className="mt-4 font-mono text-4xl font-semibold tabular-nums text-white">
-                        {Math.floor(breakRemainSec / 60)}:
-                        {(breakRemainSec % 60).toString().padStart(2, "0")}
-                      </p>
-                      <p className="mt-2 text-sm text-slate-400">No new hands until the break ends.</p>
-                      <button
-                        type="button"
-                        className="mt-6 rounded-lg bg-slate-700 px-5 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600"
-                        onClick={() => {
-                          setScheduleModal(null);
-                          void refetchTournament({ silent: true });
-                        }}
-                      >
-                        Dismiss
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <p id="schedule-modal-title" className="text-lg font-medium text-slate-200">
-                        Blind level up
-                      </p>
-                      <p className="mt-2 text-lg text-slate-200">
-                        {scheduleModal.message || "Blinds have increased."}
-                      </p>
-                      <p className="mt-3 text-sm text-slate-400">
-                        The blind timer restarts once every table has started the next hand.
-                      </p>
-                      <button
-                        type="button"
-                        className="mt-6 rounded-lg bg-slate-700 px-5 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600"
-                        onClick={() => setScheduleModal(null)}
-                      >
-                        OK
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
+                {scheduleModal.message ? (
+                  <p className="text-slate-300">{scheduleModal.message}</p>
+                ) : null}
+                <p className="mt-4 font-mono text-4xl font-semibold tabular-nums text-white">
+                  {Math.floor(breakRemainSec / 60)}:
+                  {(breakRemainSec % 60).toString().padStart(2, "0")}
+                </p>
+                <p className="mt-2 text-sm text-slate-400">No new hands until the break ends.</p>
+              </BuxModal>
+            )}
+            {scheduleModal?.kind === "LEVEL_UP" && (
+              <BuxModal
+                title="Blind level up"
+                icon="blinds"
+                tone="warning"
+                maxWidth="md"
+                zIndexClass="z-[101]"
+                onClose={() => setScheduleModal(null)}
+                footer={<BuxModalButton onClick={() => setScheduleModal(null)}>OK</BuxModalButton>}
+              >
+                <p>{scheduleModal.message || "Blinds have increased."}</p>
+                <p className="mt-2 text-sm text-slate-400">
+                  The blind timer restarts once every table has started the next hand.
+                </p>
+              </BuxModal>
             )}
             <PokerTable
               gameId={gameState.id}

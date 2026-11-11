@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useIsStandalone } from '../hooks/useIsStandalone';
+import { BuxModal } from './ui/BuxModal';
 
 /** Detect iOS (Safari on iPhone/iPad) */
 function isIOS(): boolean {
@@ -51,73 +52,60 @@ export function AddToHomeScreen({ className = '', compact = false }: AddToHomeSc
         {!compact && <span>Add to Home Screen</span>}
       </button>
 
-      {open && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="max-w-md rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-white">Full Screen Play</h3>
-              <button
-                onClick={() => setOpen(false)}
-                className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
-                aria-label="Close"
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <p className="mb-4 text-sm text-slate-300">
-              Add BUX Poker to your home screen for full screen gameplay without the browser bar.
-            </p>
+      <BuxModal
+        open={open}
+        title="Full Screen Play"
+        icon="home"
+        position="fixed"
+        maxWidth="md"
+        align="left"
+        onClose={() => setOpen(false)}
+        zIndexClass="z-[100]"
+      >
+        <p className="mb-4 text-sm text-slate-300">
+          Add BUX Poker to your home screen for full screen gameplay without the browser bar.
+        </p>
 
-            {ios && (
-              <ol className="space-y-3 text-sm text-slate-200">
-                <li className="flex gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/30 font-semibold text-emerald-300">1</span>
-                  <span>Tap the <strong>Share</strong> button <span className="text-slate-400">(square with arrow pointing up)</span> at the bottom of Safari</span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/30 font-semibold text-emerald-300">2</span>
-                  <span>Scroll down and tap <strong>Add to Home Screen</strong></span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/30 font-semibold text-emerald-300">3</span>
-                  <span>Tap <strong>Add</strong> in the top right, then open BUX Poker from your home screen</span>
-                </li>
-              </ol>
-            )}
+        {ios && (
+          <ol className="space-y-3 text-sm text-slate-200">
+            <li className="flex gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/30 font-semibold text-emerald-300">1</span>
+              <span>Tap the <strong>Share</strong> button <span className="text-slate-400">(square with arrow pointing up)</span> at the bottom of Safari</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/30 font-semibold text-emerald-300">2</span>
+              <span>Scroll down and tap <strong>Add to Home Screen</strong></span>
+            </li>
+            <li className="flex gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/30 font-semibold text-emerald-300">3</span>
+              <span>Tap <strong>Add</strong> in the top right, then open BUX Poker from your home screen</span>
+            </li>
+          </ol>
+        )}
 
-            {android && (
-              <ol className="space-y-3 text-sm text-slate-200">
-                <li className="flex gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/30 font-semibold text-emerald-300">1</span>
-                  <span>Tap the <strong>menu</strong> button <span className="text-slate-400">(three dots)</span> in your browser</span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/30 font-semibold text-emerald-300">2</span>
-                  <span>Tap <strong>Add to Home screen</strong> or <strong>Install app</strong></span>
-                </li>
-                <li className="flex gap-3">
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/30 font-semibold text-emerald-300">3</span>
-                  <span>Confirm and open BUX Poker from your home screen or app drawer</span>
-                </li>
-              </ol>
-            )}
+        {android && (
+          <ol className="space-y-3 text-sm text-slate-200">
+            <li className="flex gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/30 font-semibold text-emerald-300">1</span>
+              <span>Tap the <strong>menu</strong> button <span className="text-slate-400">(three dots)</span> in your browser</span>
+            </li>
+            <li className="flex gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/30 font-semibold text-emerald-300">2</span>
+              <span>Tap <strong>Add to Home screen</strong> or <strong>Install app</strong></span>
+            </li>
+            <li className="flex gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/30 font-semibold text-emerald-300">3</span>
+              <span>Confirm and open BUX Poker from your home screen or app drawer</span>
+            </li>
+          </ol>
+        )}
 
-            {!ios && !android && (
-              <p className="text-sm text-slate-400">
-                In your mobile browser, look for <strong>Add to Home screen</strong> or <strong>Install</strong> in the menu to add this app for full screen play.
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+        {!ios && !android && (
+          <p className="text-sm text-slate-400">
+            In your mobile browser, look for <strong>Add to Home screen</strong> or <strong>Install</strong> in the menu to add this app for full screen play.
+          </p>
+        )}
+      </BuxModal>
     </>
   );
 }

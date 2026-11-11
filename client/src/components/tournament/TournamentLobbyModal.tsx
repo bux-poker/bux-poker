@@ -8,6 +8,7 @@ import { useAuth } from '@shared/features/auth/AuthContext';
 import { getSocket } from '../../services/socket';
 import api from '../../services/api';
 import { PrizesTab } from './PrizesTab';
+import { BuxModal, BuxModalButton } from '../ui/BuxModal';
 
 type Tab = 'players' | 'blinds' | 'prizes' | 'tables';
 
@@ -209,54 +210,44 @@ export function TournamentLobbyModal({
 
   if (loading && !tournament) {
     return (
-      <div className={`${overlayPos} inset-0 z-50 flex items-center justify-center bg-black/70 p-4`}>
-        <div className="rounded-lg bg-slate-800 px-6 py-4 text-slate-300">
-          Loading tournament…
-        </div>
-      </div>
+      <BuxModal
+        title="Loading tournament"
+        icon="loading"
+        position={overlayPos}
+        onClose={onClose}
+        footer={<BuxModalButton onClick={onClose}>Cancel</BuxModalButton>}
+      >
+        <p className="text-slate-300">Fetching lobby details…</p>
+      </BuxModal>
     );
   }
 
   if (error || !tournament) {
     return (
-      <div className={`${overlayPos} inset-0 z-50 flex items-center justify-center bg-black/70 p-4`}>
-        <div className="rounded-lg border border-red-500/30 bg-slate-800 p-6 text-red-200 max-w-md">
-          <p>{error || 'Tournament not found'}</p>
-          <button
-            onClick={onClose}
-            className="mt-4 rounded bg-slate-600 px-4 py-2 text-sm text-white hover:bg-slate-500"
-          >
-            Close
-          </button>
-        </div>
-      </div>
+      <BuxModal
+        title="Tournament not found"
+        icon="error"
+        tone="danger"
+        position={overlayPos}
+        onClose={onClose}
+        footer={<BuxModalButton onClick={onClose}>Close</BuxModalButton>}
+      >
+        <p>{error || "Tournament not found"}</p>
+      </BuxModal>
     );
   }
 
   return (
-    <div
-      className={`${overlayPos} inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4`}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+    <BuxModal
+      title={tournament.name}
+      icon="lobby"
+      position={overlayPos}
+      onClose={onClose}
+      maxWidth="xl"
+      align="left"
+      className="!max-h-[90vh] overflow-hidden flex flex-col"
     >
-      <div
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl border border-slate-700 bg-slate-900 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-slate-700 px-4 py-3 sm:px-6">
-          <h2 className="truncate text-lg font-semibold text-white">
-            {tournament.name}
-          </h2>
-          <button
-            onClick={onClose}
-            className="rounded p-2 text-slate-400 hover:bg-slate-700 hover:text-white"
-            aria-label="Close"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
+      <div className="-mx-1 flex min-h-0 flex-1 flex-col">
         <div className="border-b border-slate-800">
           <nav className="flex -mb-px overflow-x-auto">
             <button
@@ -498,6 +489,6 @@ export function TournamentLobbyModal({
           </div>
         </div>
       </div>
-    </div>
+    </BuxModal>
   );
 }
