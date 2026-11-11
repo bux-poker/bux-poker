@@ -174,7 +174,7 @@ export function PokerTable({
         <div className="bux-hud-strip !gap-1 !rounded-2xl !px-1.5 !py-1.5">
           <button
             type="button"
-            onClick={() => rotateSeats(-1)}
+            onClick={() => rotateSeats(1)}
             className="flex h-8 w-8 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
             title="Rotate seats anti-clockwise"
             aria-label="Rotate seats anti-clockwise"
@@ -186,7 +186,7 @@ export function PokerTable({
           </button>
           <button
             type="button"
-            onClick={() => rotateSeats(1)}
+            onClick={() => rotateSeats(-1)}
             className="flex h-8 w-8 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
             title="Rotate seats clockwise"
             aria-label="Rotate seats clockwise"
