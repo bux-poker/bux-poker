@@ -3,7 +3,7 @@ export const TABLE_REACTION_EMOJIS = [
   { id: "angry", emoji: "😠", label: "Angry", src: "/images/reactions/angry.svg" },
   {
     id: "celebrate",
-    emoji: "🎉",
+    emoji: "🥳",
     label: "Celebrate",
     src: "/images/reactions/celebrate.svg",
   },
@@ -11,6 +11,7 @@ export const TABLE_REACTION_EMOJIS = [
   { id: "shit", emoji: "💩", label: "Shit", src: "/images/reactions/shit.svg" },
   { id: "love", emoji: "❤️", label: "Love", src: "/images/reactions/love.svg" },
   { id: "cool", emoji: "😎", label: "Cool", src: "/images/reactions/cool.svg" },
+  { id: "luck", emoji: "🍀", label: "Luck", src: "/images/reactions/luck.svg" },
 ] as const;
 
 export type TableReactionEmojiId = (typeof TABLE_REACTION_EMOJIS)[number]["id"];

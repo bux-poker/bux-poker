@@ -11,8 +11,8 @@ import {
 } from "../components/poker/table/tableReactions";
 
 const MAX_LIVE = 24;
-/** Must cover throw flight + bounce settle (see bux-emoji-throw). */
-const TTL_MS = 3400;
+/** Must cover throw (~1.55s) and self-bounce (~2.2s). */
+const TTL_MS = 2300;
 
 /**
  * Local + socket-synced table emoji reactions.

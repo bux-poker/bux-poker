@@ -1,12 +1,22 @@
-const ALLOWED = new Set(["sad", "angry", "celebrate", "snore", "shit", "love", "cool"]);
+const ALLOWED = new Set([
+  "sad",
+  "angry",
+  "celebrate",
+  "snore",
+  "shit",
+  "love",
+  "cool",
+  "luck",
+]);
 const EMOJI_BY_ID = {
   sad: "😢",
   angry: "😠",
-  celebrate: "🎉",
+  celebrate: "🥳",
   snore: "😴",
   shit: "💩",
   love: "❤️",
   cool: "😎",
+  luck: "🍀",
 };
 
 const lastByUser = new Map(); // userId|socketId -> ms

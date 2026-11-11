@@ -28,8 +28,8 @@ type Props = {
   cooldownRemainingMs?: number;
 };
 
-const PICKER_W = 176;
-const PICKER_H = 96;
+const PICKER_W = 204;
+const PICKER_H = 118;
 const CARD_SIDE_OFFSET = 78;
 
 function seatCenter(tableEl: HTMLElement, seatEl: HTMLElement): Point {
@@ -219,11 +219,9 @@ export function EmojiReactionLayer({
           role="dialog"
           aria-label="React with emoji"
         >
-          {onCooldown && (
-            <div className="bux-emoji-picker-cooldown" aria-live="polite">
-              Wait {cooldownSec}s
-            </div>
-          )}
+          <div className="bux-emoji-picker-label" aria-live="polite">
+            {onCooldown ? `Wait ${cooldownSec}s` : "Select emoji"}
+          </div>
           <div className={`bux-emoji-picker-grid ${onCooldown ? "is-disabled" : ""}`}>
             {TABLE_REACTION_EMOJIS.map((e) => (
               <button
