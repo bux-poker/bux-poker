@@ -2,9 +2,9 @@
 
 @layer base {
   :root {
-    --bux-ink: #141b24;
-    --bux-ink-elevated: #1c2530;
-    --bux-panel: #243041;
+    --bux-ink: #1e2733;
+    --bux-ink-elevated: #283341;
+    --bux-panel: #334155;
     --bux-panel-border: rgba(196, 165, 116, 0.28);
     --bux-felt: #0a3d2e;
     --bux-felt-deep: #062a20;

@@ -1501,7 +1501,7 @@ export function PokerGameView() {
   return (
     <div
       className="flex h-[100dvh] min-h-screen w-screen flex-col overflow-hidden"
-      style={{ background: "var(--bux-ink, #141b24)" }}
+      style={{ background: "var(--bux-ink, #1e2733)" }}
       onPointerDown={handleSoundUnlock}
     >
       {isPortrait && (
@@ -1652,7 +1652,7 @@ export function PokerGameView() {
           )}
 
           {/* Table area - takes most of the space */}
-          <div className="relative min-h-0 flex-1 overflow-hidden" style={{ background: "var(--bux-ink, #141b24)" }}>
+          <div className="relative min-h-0 flex-1 overflow-hidden" style={{ background: "var(--bux-ink, #1e2733)" }}>
             {(showConsolidationOverlay ||
               (!showConsolidationOverlay &&
                 handResolvedForReseat &&

@@ -102,7 +102,7 @@ export function TableTestPage() {
   return (
     <div
       className="flex h-[100dvh] min-h-screen w-screen flex-col overflow-hidden"
-      style={{ background: "var(--bux-ink, #141b24)" }}
+      style={{ background: "var(--bux-ink, #1e2733)" }}
     >
       {/* Main area: table + controls | chat */}
       <div className="relative z-20 flex min-h-0 flex-1 overflow-hidden">
@@ -122,7 +122,7 @@ export function TableTestPage() {
           />
           <div
             className="relative min-h-0 flex-1 overflow-hidden"
-            style={{ background: "var(--bux-ink, #141b24)" }}
+            style={{ background: "var(--bux-ink, #1e2733)" }}
           >
             {/* Opponents face-down; hero seat cards face-up at 60% community size */}
             <PokerTable
