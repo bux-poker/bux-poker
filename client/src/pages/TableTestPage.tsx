@@ -86,22 +86,22 @@ export function TableTestPage() {
 
   return (
     <div className="flex h-[100dvh] min-h-screen w-screen flex-col overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900">
-      {/* Modal preview picker — always on top for UI review */}
-      <div className="pointer-events-none absolute left-1/2 top-2 z-[140] -translate-x-1/2">
-        <TableTestModalPicker
-          selected={previewModal}
-          onSelect={setPreviewModal}
-          onClear={() => setPreviewModal("none")}
-        />
-      </div>
-      <TableTestModalPreview
-        selected={previewModal}
-        onClear={() => setPreviewModal("none")}
-      />
-
       {/* Main area: table + controls | chat */}
       <div className="relative z-20 flex min-h-0 flex-1 overflow-hidden">
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Table column — modals are contained here so chat stays clear */}
+        <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+          {/* Modal preview picker — centered over table column */}
+          <div className="pointer-events-none absolute left-1/2 top-2 z-[140] -translate-x-1/2">
+            <TableTestModalPicker
+              selected={previewModal}
+              onSelect={setPreviewModal}
+              onClear={() => setPreviewModal("none")}
+            />
+          </div>
+          <TableTestModalPreview
+            selected={previewModal}
+            onClear={() => setPreviewModal("none")}
+          />
           <div className="relative min-h-0 flex-1 overflow-hidden bg-gradient-to-br from-slate-950 to-slate-900">
             {/* Toggle debugAllSeatCardsFaceUp on PokerTable to preview face-up seat card layout */}
             <PokerTable

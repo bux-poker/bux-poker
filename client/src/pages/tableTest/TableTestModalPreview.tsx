@@ -64,7 +64,7 @@ function MockLobbyShell({
   const [tab, setTab] = useState<"players" | "blinds" | "prizes" | "tables">("players");
   return (
     <div
-      className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 p-3 sm:p-4"
+      className="absolute inset-0 z-[130] flex items-center justify-center bg-black/70 p-3 sm:p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
@@ -156,7 +156,7 @@ export function TableTestModalPreview({
 
   if (selected === "elimination") {
     return (
-      <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70">
+      <div className="absolute inset-0 z-[130] flex items-center justify-center bg-black/70 p-4">
         <div className="w-full max-w-sm rounded-lg border border-slate-700 bg-slate-900 p-6 text-center shadow-2xl">
           <h2 className="mb-2 text-xl font-bold text-red-300">You have been eliminated</h2>
           <p className="mb-4 text-slate-200">You finished in position 13.</p>
@@ -183,7 +183,7 @@ export function TableTestModalPreview({
 
   if (selected === "winner") {
     return (
-      <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70">
+      <div className="absolute inset-0 z-[130] flex items-center justify-center bg-black/70 p-4">
         <div className="w-full max-w-sm rounded-lg border border-emerald-500 bg-slate-900 p-6 text-center shadow-2xl">
           <h2 className="mb-2 text-2xl font-bold text-emerald-300">🏆 Tournament Winner!</h2>
           <p className="mb-4 text-slate-200">
@@ -214,7 +214,7 @@ export function TableTestModalPreview({
   if (selected === "break" || selected === "level-up") {
     return (
       <div
-        className="fixed inset-0 z-[130] flex items-center justify-center bg-black/50 px-4 backdrop-blur-[2px]"
+        className="absolute inset-0 z-[130] flex items-center justify-center bg-black/50 px-4 backdrop-blur-[2px]"
         role="dialog"
         aria-modal="true"
       >
@@ -259,7 +259,7 @@ export function TableTestModalPreview({
 
   if (selected === "consolidation") {
     return (
-      <div className="pointer-events-none fixed left-1/2 top-16 z-[130] max-w-lg -translate-x-1/2 px-4">
+      <div className="pointer-events-none absolute left-1/2 top-3 z-[130] max-w-lg -translate-x-1/2 px-4">
         <div className="bux-banner rounded-xl px-5 py-3 text-center">
           <p className="text-sm font-medium text-slate-100">
             Waiting for other tables to finish before reseating…
@@ -277,7 +277,7 @@ export function TableTestModalPreview({
 
   if (selected === "blind-wait") {
     return (
-      <div className="pointer-events-none fixed left-1/2 top-16 z-[130] max-w-lg -translate-x-1/2 px-4">
+      <div className="pointer-events-none absolute left-1/2 top-3 z-[130] max-w-lg -translate-x-1/2 px-4">
         <div className="bux-banner rounded-xl px-5 py-3 text-center">
           <p className="text-sm font-medium text-amber-100">
             Waiting for all tables to finish the current hand…
@@ -297,7 +297,7 @@ export function TableTestModalPreview({
 
   if (selected === "connection-lost") {
     return (
-      <div className="fixed left-0 right-0 top-0 z-[130] flex items-center justify-between gap-4 border-b border-amber-500/40 bg-amber-500/20 px-4 py-2 text-sm text-amber-200">
+      <div className="absolute left-0 right-0 top-0 z-[130] flex items-center justify-between gap-4 border-b border-amber-500/40 bg-amber-500/20 px-4 py-2 text-sm text-amber-200">
         <span>Connection lost. Game may be out of date.</span>
         <button
           type="button"
@@ -315,6 +315,7 @@ export function TableTestModalPreview({
       <PlayerStatsModal
         isOpen
         onClose={onClear}
+        containToParent
         player={{
           id: "preview-player",
           name: "AceHigh",
@@ -332,7 +333,7 @@ export function TableTestModalPreview({
 
   if (selected === "tournament-lobby-loading") {
     return (
-      <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 p-4">
+      <div className="absolute inset-0 z-[130] flex items-center justify-center bg-black/70 p-4">
         <div className="rounded-lg bg-slate-800 px-6 py-4 text-slate-300">
           Loading tournament…
           <div className="mt-3 text-center">
@@ -347,7 +348,7 @@ export function TableTestModalPreview({
 
   if (selected === "tournament-lobby-error") {
     return (
-      <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 p-4">
+      <div className="absolute inset-0 z-[130] flex items-center justify-center bg-black/70 p-4">
         <div className="max-w-md rounded-lg border border-red-500/30 bg-slate-800 p-6 text-red-200">
           <p>Tournament not found</p>
           <button
@@ -365,7 +366,7 @@ export function TableTestModalPreview({
   if (selected === "add-to-home") {
     return (
       <div
-        className="fixed inset-0 z-[130] flex items-center justify-center bg-black/70 p-4"
+        className="absolute inset-0 z-[130] flex items-center justify-center bg-black/70 p-4"
         onClick={onClear}
       >
         <div
@@ -419,7 +420,7 @@ export function TableTestModalPreview({
 
   if (selected === "close-table") {
     return (
-      <div className="fixed bottom-4 left-1/2 z-[130] -translate-x-1/2">
+      <div className="absolute bottom-4 left-1/2 z-[130] -translate-x-1/2">
         <button
           type="button"
           onClick={onClear}
@@ -434,7 +435,7 @@ export function TableTestModalPreview({
   if (selected === "confirm-fold" || selected === "confirm-generic") {
     const fold = selected === "confirm-fold";
     return (
-      <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/60 px-4">
+      <div className="absolute inset-0 z-[130] flex items-center justify-center bg-black/60 px-4">
         <div className="bux-panel w-full max-w-sm rounded-xl px-6 py-5 text-center shadow-2xl">
           <p className="text-lg font-semibold text-slate-100">
             {fold ? "Fold for free?" : "Confirm action"}

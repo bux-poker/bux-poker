@@ -39,12 +39,16 @@ export function TournamentLobbyModal({
   tournamentId,
   onClose,
   gameState,
+  containToParent = false,
 }: {
   tournamentId: string;
   onClose: () => void;
   /** When opened from a game table, pass game state to show current blinds and live chips */
   gameState?: GameStateForLobby | null;
+  /** When true, overlay is absolute (parent must be relative) so chat stays clear. */
+  containToParent?: boolean;
 }) {
+  const overlayPos = containToParent ? "absolute" : "fixed";
   const { user } = useAuth();
   const { tournament, loading, error, refetch } = useTournament(tournamentId);
   const [activeTab, setActiveTab] = useState<Tab>('players');
@@ -205,7 +209,7 @@ export function TournamentLobbyModal({
 
   if (loading && !tournament) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className={`${overlayPos} inset-0 z-50 flex items-center justify-center bg-black/70 p-4`}>
         <div className="rounded-lg bg-slate-800 px-6 py-4 text-slate-300">
           Loading tournament…
         </div>
@@ -215,7 +219,7 @@ export function TournamentLobbyModal({
 
   if (error || !tournament) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className={`${overlayPos} inset-0 z-50 flex items-center justify-center bg-black/70 p-4`}>
         <div className="rounded-lg border border-red-500/30 bg-slate-800 p-6 text-red-200 max-w-md">
           <p>{error || 'Tournament not found'}</p>
           <button
@@ -231,7 +235,7 @@ export function TournamentLobbyModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4"
+      className={`${overlayPos} inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4`}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div

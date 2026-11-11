@@ -1483,80 +1483,103 @@ export function PokerGameView() {
           <button type="button" onClick={() => getSocket().connect()} className="rounded bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-500">Reconnect</button>
         </div>
       )}
-      {/* Elimination modal */}
-      {eliminationInfo && !eliminationModalDismissed && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70">
-          <div className="rounded-lg bg-slate-900 border border-slate-700 shadow-2xl max-w-sm w-full p-6 text-center">
-            <h2 className="text-xl font-bold text-red-300 mb-2">You have been eliminated</h2>
-            <p className="text-slate-200 mb-4">
-              {eliminationInfo.place
-                ? `You finished in position ${eliminationInfo.place}.`
-                : 'You are out of the tournament.'}
-            </p>
-            <div className="flex justify-center gap-3">
-              <button
-                onClick={() => setEliminationModalDismissed(true)}
-                className="rounded bg-slate-700 px-4 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600"
-              >
-                Stay and Spectate
-              </button>
-              <button
-                onClick={handleCloseTable}
-                className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-              >
-                Close Table
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Winner modal */}
-      {winnerModalOpen && !winnerModalDismissed && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70">
-          <div className="rounded-lg bg-slate-900 border border-emerald-500 shadow-2xl max-w-sm w-full p-6 text-center">
-            <h2 className="text-2xl font-bold text-emerald-300 mb-2">🏆 Tournament Winner!</h2>
-            <p className="text-slate-200 mb-4">
-              Congratulations, you finished <span className="font-semibold">1st</span> in this tournament.
-            </p>
-            <div className="flex justify-center gap-3">
-              <button
-                onClick={() => {
-                  setWinnerModalDismissed(true);
-                  setWinnerModalOpen(false);
-                }}
-                className="rounded bg-slate-700 px-4 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600"
-              >
-                Stay at Table
-              </button>
-              <button
-                onClick={handleCloseTable}
-                className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-              >
-                Close Table
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showPersistentExitControls && (
-        <div className="fixed bottom-4 left-1/2 z-[110] -translate-x-1/2">
-          <button
-            type="button"
-            onClick={handleCloseTable}
-            className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-black/40 hover:bg-emerald-500"
-          >
-            Close Table
-          </button>
-        </div>
-      )}
       {/* Main game area - table + controls | chat (no header; info in table corners) */}
       <div className="relative z-20 flex min-h-0 flex-1 items-stretch overflow-hidden">
-        {/* Left side - Table and controls */}
-        <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+        {/* Left side - Table and controls (modals contained here so chat stays clear) */}
+        <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+          {/* Elimination modal — centered on table column */}
+          {eliminationInfo && !eliminationModalDismissed && (
+            <div className="absolute inset-0 z-[120] flex items-center justify-center bg-black/70 p-4">
+              <div className="w-full max-w-sm rounded-lg border border-slate-700 bg-slate-900 p-6 text-center shadow-2xl">
+                <h2 className="mb-2 text-xl font-bold text-red-300">You have been eliminated</h2>
+                <p className="mb-4 text-slate-200">
+                  {eliminationInfo.place
+                    ? `You finished in position ${eliminationInfo.place}.`
+                    : "You are out of the tournament."}
+                </p>
+                <div className="flex justify-center gap-3">
+                  <button
+                    onClick={() => setEliminationModalDismissed(true)}
+                    className="rounded bg-slate-700 px-4 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600"
+                  >
+                    Stay and Spectate
+                  </button>
+                  <button
+                    onClick={handleCloseTable}
+                    className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                  >
+                    Close Table
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Winner modal — centered on table column */}
+          {winnerModalOpen && !winnerModalDismissed && (
+            <div className="absolute inset-0 z-[120] flex items-center justify-center bg-black/70 p-4">
+              <div className="w-full max-w-sm rounded-lg border border-emerald-500 bg-slate-900 p-6 text-center shadow-2xl">
+                <h2 className="mb-2 text-2xl font-bold text-emerald-300">🏆 Tournament Winner!</h2>
+                <p className="mb-4 text-slate-200">
+                  Congratulations, you finished <span className="font-semibold">1st</span> in this
+                  tournament.
+                </p>
+                <div className="flex justify-center gap-3">
+                  <button
+                    onClick={() => {
+                      setWinnerModalDismissed(true);
+                      setWinnerModalOpen(false);
+                    }}
+                    className="rounded bg-slate-700 px-4 py-2 text-sm font-medium text-slate-100 hover:bg-slate-600"
+                  >
+                    Stay at Table
+                  </button>
+                  <button
+                    onClick={handleCloseTable}
+                    className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                  >
+                    Close Table
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showPersistentExitControls && (
+            <div className="absolute bottom-4 left-1/2 z-[110] -translate-x-1/2">
+              <button
+                type="button"
+                onClick={handleCloseTable}
+                className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-black/40 hover:bg-emerald-500"
+              >
+                Close Table
+              </button>
+            </div>
+          )}
+
+          {tournamentLobbyOpen && gameState?.tournamentId && (
+            <TournamentLobbyModal
+              tournamentId={gameState.tournamentId}
+              onClose={() => setTournamentLobbyOpen(false)}
+              containToParent
+              gameState={
+                gameState
+                  ? {
+                      smallBlind: gameState.smallBlind,
+                      bigBlind: gameState.bigBlind,
+                      players: gameState.players?.map((p) => ({
+                        userId: p.userId,
+                        chips: p.chips,
+                        status: p.status,
+                      })),
+                    }
+                  : null
+              }
+            />
+          )}
+
           {/* Table area - takes most of the space */}
-          <div className="relative flex-1 overflow-hidden min-h-0" style={{ background: "var(--bux-ink, #0b0f14)" }}>
+          <div className="relative min-h-0 flex-1 overflow-hidden" style={{ background: "var(--bux-ink, #0b0f14)" }}>
             {(showConsolidationOverlay ||
               (!showConsolidationOverlay &&
                 handResolvedForReseat &&
@@ -1884,25 +1907,6 @@ export function PokerGameView() {
         )}
       </div>
 
-      {tournamentLobbyOpen && gameState?.tournamentId && (
-        <TournamentLobbyModal
-          tournamentId={gameState.tournamentId}
-          onClose={() => setTournamentLobbyOpen(false)}
-          gameState={
-            gameState
-              ? {
-                  smallBlind: gameState.smallBlind,
-                  bigBlind: gameState.bigBlind,
-                  players: gameState.players?.map((p) => ({
-                    userId: p.userId,
-                    chips: p.chips,
-                    status: p.status,
-                  })),
-                }
-              : null
-          }
-        />
-      )}
     </div>
   );
 }

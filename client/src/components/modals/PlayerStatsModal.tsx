@@ -5,15 +5,25 @@ interface PlayerStatsModalProps {
   isOpen: boolean;
   onClose: () => void;
   player: Player | null;
+  /** When true, overlay is absolute (parent must be relative) so chat stays clear. */
+  containToParent?: boolean;
 }
 
-export default function PlayerStatsModal({ isOpen, onClose, player }: PlayerStatsModalProps) {
+export default function PlayerStatsModal({
+  isOpen,
+  onClose,
+  player,
+  containToParent = false,
+}: PlayerStatsModalProps) {
   if (!isOpen || !player) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div
+      className={`${containToParent ? "absolute" : "fixed"} inset-0 z-50 flex items-center justify-center bg-black/50 p-4`}
+      onClick={onClose}
+    >
       <div 
-        className="rounded-lg border border-slate-700 bg-slate-800 p-6 shadow-xl max-w-md w-full mx-4"
+        className="rounded-lg border border-slate-700 bg-slate-800 p-6 shadow-xl max-w-md w-full"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
