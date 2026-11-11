@@ -1877,7 +1877,7 @@ export function PokerGameView() {
                   setChatCollapsed(false);
                   setUnreadChatCount(0);
                 }}
-                className="absolute right-0 top-1/2 z-40 flex h-14 w-10 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 shadow-lg"
+                className="absolute right-0 top-1/2 z-[110] flex h-14 w-10 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 shadow-lg"
                 style={{
                   background: "color-mix(in srgb, var(--bux-panel) 95%, transparent)",
                   borderColor: "var(--bux-panel-border)",
@@ -1896,7 +1896,7 @@ export function PokerGameView() {
             )}
             {!chatCollapsed && (
               <div
-                className="bux-chat-drawer absolute bottom-0 right-0 top-0 z-40 flex w-80 max-w-[85vw] flex-col overflow-hidden border-l shadow-2xl"
+                className="bux-chat-drawer absolute bottom-0 right-0 top-0 z-[110] flex w-80 max-w-[85vw] flex-col overflow-hidden border-l shadow-2xl"
                 style={{
                   background: "color-mix(in srgb, var(--bux-ink-elevated) 97%, transparent)",
                   borderColor: "var(--bux-panel-border)",

@@ -65,7 +65,8 @@ export function TableTestPage() {
     user?.id
   );
   const isMobile = useIsMobile();
-  const [chatCollapsed, setChatCollapsed] = useState(() => typeof window !== "undefined" && (window.innerWidth <= 1024 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || "ontouchstart" in window));
+  // Drawer always starts collapsed so the felt keeps full width; open as overlay.
+  const [chatCollapsed, setChatCollapsed] = useState(true);
   const [showDealerMessages, setShowDealerMessages] = useState(true);
   const [previewModal, setPreviewModal] = useState<TableTestModalId>("none");
   const [communityCardSize, setCommunityCardSize] = useState({ width: 64, height: 90 });
@@ -196,119 +197,71 @@ export function TableTestPage() {
           </div>
         </div>
 
-        {/* Chat: desktop sidebar; mobile overlay so the felt width stays fixed */}
-        {isMobile ? (
-          <>
-            {chatCollapsed && (
-              <button
-                onClick={() => setChatCollapsed(false)}
-                className="absolute right-0 top-1/2 z-40 flex h-14 w-10 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 shadow-lg"
-                style={{
-                  background: "color-mix(in srgb, var(--bux-panel) 95%, transparent)",
-                  borderColor: "var(--bux-panel-border)",
-                }}
-                aria-label="Open chat"
-              >
-                <svg className="h-5 w-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-              </button>
-            )}
-            {!chatCollapsed && (
-              <div
-                className="bux-chat-drawer absolute bottom-0 right-0 top-0 z-40 flex w-80 max-w-[85vw] flex-col overflow-hidden border-l shadow-2xl"
-                style={{
-                  background: "color-mix(in srgb, var(--bux-ink-elevated) 97%, transparent)",
-                  borderColor: "var(--bux-panel-border)",
-                }}
-              >
-                <div
-                  className="flex items-center justify-between border-b px-2 py-1.5"
-                  style={{ borderColor: "var(--bux-panel-border)" }}
-                >
-                  <span className="font-display text-xs font-semibold uppercase tracking-wide text-slate-300">
-                    Table chat
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {user && (
-                      <>
-                        <span className="text-[10px] text-slate-500">Dealer</span>
-                        <button
-                          onClick={() => setShowDealerMessages(!showDealerMessages)}
-                          className={`relative inline-flex items-center rounded-full transition-colors ${
-                            showDealerMessages ? "bg-emerald-600" : "bg-slate-600"
-                          }`}
-                          style={{ height: "20px", width: "36px" }}
-                          aria-label="Toggle dealer messages"
-                        >
-                          <span
-                            className={`inline-block rounded-full bg-white transition-transform ${
-                              showDealerMessages ? "translate-x-4" : "translate-x-0"
-                            }`}
-                            style={{ height: "16px", width: "16px", marginLeft: "2px" }}
-                          />
-                        </button>
-                      </>
-                    )}
-                    <button
-                      onClick={() => setChatCollapsed(true)}
-                      className="rounded p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white"
-                      aria-label="Close chat"
-                    >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                <div className="min-h-0 flex-1">
-                  {user ? (
-                    <Chat
-                      gameId="table-test"
-                      userId={user.id}
-                      userName={user.username || "Player"}
-                      players={chatPlayers}
-                      spectators={[]}
-                      userAvatar={user.avatarUrl}
-                      showPlayerListTab={false}
-                      chatType="game"
-                      isSpectator={false}
-                      PlayerStatsModal={PlayerStatsModal}
-                      showDealerMessages={showDealerMessages}
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center">
-                      <span className="text-sm text-slate-500">Log in to see chat</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </>
-        ) : user ? (
-          <div
-            className="relative flex-shrink-0 border-l border-slate-800"
-            style={{ width: "var(--chat-width, 320px)" }}
+        {/* Chat drawer — overlays table + action corners; never shrinks the felt */}
+        {chatCollapsed && (
+          <button
+            onClick={() => setChatCollapsed(false)}
+            className="absolute right-0 top-1/2 z-[110] flex h-14 w-10 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 shadow-lg"
+            style={{
+              background: "color-mix(in srgb, var(--bux-panel) 95%, transparent)",
+              borderColor: "var(--bux-panel-border)",
+            }}
+            aria-label="Open chat"
           >
-            <div className="flex h-full flex-col">
-              <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800/50 px-2 py-1">
-                <span className="text-xs text-slate-300">Dealer Messages</span>
+            <svg className="h-5 w-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </button>
+        )}
+        {!chatCollapsed && (
+          <div
+            className="bux-chat-drawer absolute bottom-0 right-0 top-0 z-[110] flex w-80 max-w-[85vw] flex-col overflow-hidden border-l shadow-2xl"
+            style={{
+              background: "color-mix(in srgb, var(--bux-ink-elevated) 97%, transparent)",
+              borderColor: "var(--bux-panel-border)",
+            }}
+          >
+            <div
+              className="flex items-center justify-between border-b px-2 py-1.5"
+              style={{ borderColor: "var(--bux-panel-border)" }}
+            >
+              <span className="font-display text-xs font-semibold uppercase tracking-wide text-slate-300">
+                Table chat
+              </span>
+              <div className="flex items-center gap-2">
+                {user && (
+                  <>
+                    <span className="text-[10px] text-slate-500">Dealer</span>
+                    <button
+                      onClick={() => setShowDealerMessages(!showDealerMessages)}
+                      className={`relative inline-flex items-center rounded-full transition-colors ${
+                        showDealerMessages ? "bg-emerald-600" : "bg-slate-600"
+                      }`}
+                      style={{ height: "20px", width: "36px" }}
+                      aria-label="Toggle dealer messages"
+                    >
+                      <span
+                        className={`inline-block rounded-full bg-white transition-transform ${
+                          showDealerMessages ? "translate-x-4" : "translate-x-0"
+                        }`}
+                        style={{ height: "16px", width: "16px", marginLeft: "2px" }}
+                      />
+                    </button>
+                  </>
+                )}
                 <button
-                  onClick={() => setShowDealerMessages(!showDealerMessages)}
-                  className={`relative inline-flex items-center rounded-full transition-colors ${
-                    showDealerMessages ? "bg-blue-600" : "bg-slate-600"
-                  }`}
-                  style={{ height: "20px", width: "36px" }}
+                  onClick={() => setChatCollapsed(true)}
+                  className="rounded p-1.5 text-slate-400 hover:bg-slate-700 hover:text-white"
+                  aria-label="Close chat"
                 >
-                  <span
-                    className={`inline-block rounded-full bg-white transition-transform ${
-                      showDealerMessages ? "translate-x-4" : "translate-x-0"
-                    }`}
-                    style={{ height: "16px", width: "16px", marginLeft: "2px" }}
-                  />
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
               </div>
-              <div className="min-h-0 flex-1">
+            </div>
+            <div className="min-h-0 flex-1">
+              {user ? (
                 <Chat
                   gameId="table-test"
                   userId={user.id}
@@ -322,21 +275,11 @@ export function TableTestPage() {
                   PlayerStatsModal={PlayerStatsModal}
                   showDealerMessages={showDealerMessages}
                 />
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div
-            className="relative flex-shrink-0 border-l border-slate-800"
-            style={{ width: "var(--chat-width, 320px)" }}
-          >
-            <div className="flex h-full flex-col">
-              <div className="flex items-center justify-between border-b border-slate-700 bg-slate-800/50 px-2 py-1">
-                <span className="text-xs text-slate-300">Chat</span>
-              </div>
-              <div className="flex flex-1 items-center justify-center">
-                <span className="text-sm text-slate-500">Log in to see chat</span>
-              </div>
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <span className="text-sm text-slate-500">Log in to see chat</span>
+                </div>
+              )}
             </div>
           </div>
         )}
