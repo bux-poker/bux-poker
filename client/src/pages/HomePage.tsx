@@ -174,9 +174,6 @@ export function HomePage() {
               <Link to="/invite" className="bux-btn-ghost px-6 py-2.5 text-sm sm:text-base">
                 Invite the bot
               </Link>
-              <Link to="/leagues" className="bux-nav-link text-sm sm:text-base">
-                Leagues
-              </Link>
               <AddToHomeScreen />
             </div>
           </div>
