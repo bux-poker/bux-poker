@@ -55,6 +55,10 @@ type AssetMeta = {
   decimals: number | null;
   priceUsd: number | null;
   floorUsd: number | null;
+  floorSol?: number | null;
+  collectionName?: string | null;
+  found?: boolean;
+  error?: string | null;
 };
 
 const MINT_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -237,6 +241,10 @@ function WalletAssetPreview({
           decimals: typeof res.data?.decimals === 'number' ? res.data.decimals : null,
           priceUsd: typeof res.data?.priceUsd === 'number' ? res.data.priceUsd : null,
           floorUsd: typeof res.data?.floorUsd === 'number' ? res.data.floorUsd : null,
+          floorSol: typeof res.data?.floorSol === 'number' ? res.data.floorSol : null,
+          collectionName: res.data?.collectionName ?? null,
+          found: res.data?.found !== false,
+          error: res.data?.error ?? null,
         };
         setMeta(next);
         if (kind === 'SPL' && typeof next.decimals === 'number' && onDecimalsResolved) {
@@ -291,12 +299,34 @@ function WalletAssetPreview({
     );
   }
 
+  if (kind === 'NFT' && meta.found === false) {
+    return (
+      <p className="mt-1 text-xs text-amber-400/90">
+        {meta.error ||
+          'NFT not found on Magic Eden — paste the NFT mint from Magic Eden / Solscan.'}
+      </p>
+    );
+  }
+
   const label =
     kind === 'SOL'
       ? `${item.lamports || '0'} SOL`
       : kind === 'NFT'
         ? meta.name || 'NFT'
         : `${item.amount || '0'} ${meta.symbol || meta.name || 'TOKEN'}`;
+
+  const solSpot =
+    kind === 'SOL' && meta.priceUsd != null
+      ? `SOL ≈ ${formatUsd(meta.priceUsd)}`
+      : null;
+  const nftFloor =
+    kind === 'NFT' && meta.floorSol != null
+      ? `${meta.floorSol.toLocaleString(undefined, { maximumFractionDigits: 4 })} SOL floor${
+          formatUsd(usdEstimate) ? ` · ≈ ${formatUsd(usdEstimate)}` : ''
+        }`
+      : formatUsd(usdEstimate)
+        ? `≈ ${formatUsd(usdEstimate)} floor`
+        : null;
 
   return (
     <div className="mt-2 flex items-center gap-3 rounded-lg border border-emerald-500/25 bg-slate-950/50 px-3 py-2">
@@ -320,13 +350,31 @@ function WalletAssetPreview({
             {typeof meta.decimals === 'number' ? ` · ${meta.decimals} decimals` : ''}
           </p>
         )}
-        {kind === 'NFT' && meta.number && (
-          <p className="text-xs text-slate-400">#{meta.number}</p>
+        {kind === 'NFT' && (meta.collectionName || meta.number) && (
+          <p className="truncate text-xs text-slate-400">
+            {meta.collectionName || meta.symbol}
+            {meta.number ? ` · #${meta.number}` : ''}
+          </p>
         )}
-        {formatUsd(usdEstimate) ? (
+        {kind === 'SOL' ? (
+          formatUsd(usdEstimate) ? (
+            <p className="text-xs font-medium text-amber-300/90">
+              ≈ {formatUsd(usdEstimate)} current
+            </p>
+          ) : solSpot ? (
+            <p className="text-xs text-slate-400">{solSpot}</p>
+          ) : (
+            <p className="text-xs text-slate-500">$ price unavailable</p>
+          )
+        ) : kind === 'NFT' ? (
+          nftFloor ? (
+            <p className="text-xs font-medium text-amber-300/90">ME {nftFloor}</p>
+          ) : (
+            <p className="text-xs text-slate-500">Magic Eden floor unavailable</p>
+          )
+        ) : formatUsd(usdEstimate) ? (
           <p className="text-xs font-medium text-amber-300/90">
-            ≈ {formatUsd(usdEstimate)}
-            {kind === 'NFT' ? ' floor' : ' current'}
+            ≈ {formatUsd(usdEstimate)} current
           </p>
         ) : (
           <p className="text-xs text-slate-500">$ price unavailable</p>

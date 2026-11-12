@@ -17,6 +17,8 @@ type Meta = {
   decimals?: number | null;
   priceUsd?: number | null;
   floorUsd?: number | null;
+  floorSol?: number | null;
+  collectionName?: string | null;
 };
 
 function formatSol(lamports: string | undefined) {
@@ -133,6 +135,9 @@ export function PrizeAssetVisual({
             typeof res.data?.priceUsd === "number" ? res.data.priceUsd : null,
           floorUsd:
             typeof res.data?.floorUsd === "number" ? res.data.floorUsd : null,
+          floorSol:
+            typeof res.data?.floorSol === "number" ? res.data.floorSol : null,
+          collectionName: res.data?.collectionName ?? null,
         });
       } catch {
         if (!cancelled) {
@@ -184,7 +189,7 @@ export function PrizeAssetVisual({
     <div className={layout === "row" ? "min-w-0 text-left" : "text-center"}>
       {kind === "NFT" ? (
         <p className="font-semibold text-emerald-100">
-          {nftBaseName || "NFT"}
+          {nftBaseName || meta?.collectionName || "NFT"}
           {meta?.number ? <span className="text-emerald-300"> #{meta.number}</span> : null}
         </p>
       ) : (
@@ -202,12 +207,21 @@ export function PrizeAssetVisual({
       {kind === "SPL" && meta?.name && meta?.symbol && meta.name !== meta.symbol && (
         <p className="truncate text-xs text-slate-400">{meta.name}</p>
       )}
-      {usdLabel && (
+      {kind === "NFT" && meta?.floorSol != null ? (
+        <p className="mt-0.5 text-sm font-medium text-amber-300/90">
+          ME {meta.floorSol.toLocaleString(undefined, { maximumFractionDigits: 4 })} SOL floor
+          {usdLabel ? ` · ≈ ${usdLabel}` : ""}
+        </p>
+      ) : usdLabel ? (
         <p className="mt-0.5 text-sm font-medium text-amber-300/90">≈ {usdLabel}</p>
-      )}
+      ) : null}
       {item.mint && (
         <a
-          href={`https://solscan.io/token/${item.mint}`}
+          href={
+            kind === "NFT"
+              ? `https://magiceden.io/item-details/${item.mint}`
+              : `https://solscan.io/token/${item.mint}`
+          }
           target="_blank"
           rel="noopener noreferrer"
           className="mt-0.5 block font-mono text-[10px] text-emerald-400/80 hover:underline"
