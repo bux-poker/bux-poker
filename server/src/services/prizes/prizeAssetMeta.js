@@ -38,6 +38,31 @@ async function fetchWithTimeout(url, options = {}, ms = 8000) {
 async function fetchJupiterToken(mint) {
   const cached = cacheGet(jupiterCache, mint);
   if (cached) return cached;
+  // lite-api search is more reliable than tokens.jup.ag for newer mints
+  try {
+    const res = await fetchWithTimeout(
+      `https://lite-api.jup.ag/tokens/v2/search?query=${encodeURIComponent(mint)}`,
+      { headers: { Accept: "application/json" } }
+    );
+    if (res.ok) {
+      const list = await res.json();
+      const hit = Array.isArray(list)
+        ? list.find((t) => String(t?.id || "").toLowerCase() === mint.toLowerCase()) || list[0]
+        : null;
+      if (hit && String(hit.id || "").toLowerCase() === mint.toLowerCase()) {
+        const data = {
+          name: hit.name || null,
+          symbol: hit.symbol || null,
+          image: hit.icon || hit.logoURI || null,
+          decimals: typeof hit.decimals === "number" ? hit.decimals : null,
+        };
+        cacheSet(jupiterCache, mint, data);
+        return data;
+      }
+    }
+  } catch {
+    /* fall through */
+  }
   try {
     const res = await fetchWithTimeout(
       `https://tokens.jup.ag/token/${encodeURIComponent(mint)}`,
@@ -69,29 +94,52 @@ async function fetchMintDecimalsOnChain(mint) {
   }
 }
 
-async function fetchTokenPriceUsd(mint) {
-  const cached = cacheGet(priceCache, mint, PRICE_TTL_MS);
-  if (cached != null) return cached;
-  // DexScreener first — no API key, reliable for SPL.
+/**
+ * DexScreener: price + optional name/symbol/image from the richest pair.
+ */
+async function fetchDexScreenerToken(mint) {
+  const cached = cacheGet(assetCache, `dex:${mint}`);
+  if (cached) return cached;
   try {
     const res = await fetchWithTimeout(
       `https://api.dexscreener.com/latest/dex/tokens/${encodeURIComponent(mint)}`
     );
-    if (res.ok) {
-      const json = await res.json();
-      const pairs = Array.isArray(json?.pairs) ? json.pairs : [];
-      const best = pairs
-        .map((p) => Number(p?.priceUsd))
-        .filter((n) => Number.isFinite(n) && n > 0)
-        .sort((a, b) => b - a)[0];
-      if (best != null) {
-        cacheSet(priceCache, mint, best);
-        return best;
-      }
-    }
+    if (!res.ok) return null;
+    const json = await res.json();
+    const pairs = Array.isArray(json?.pairs) ? json.pairs : [];
+    if (!pairs.length) return null;
+    const ranked = [...pairs].sort(
+      (a, b) => Number(b?.liquidity?.usd || 0) - Number(a?.liquidity?.usd || 0)
+    );
+    const best = ranked[0];
+    const base = best?.baseToken?.address?.toLowerCase() === mint.toLowerCase()
+      ? best.baseToken
+      : best?.quoteToken?.address?.toLowerCase() === mint.toLowerCase()
+        ? best.quoteToken
+        : best?.baseToken;
+    const prices = ranked
+      .map((p) => Number(p?.priceUsd))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    const priceUsd = prices.sort((a, b) => b - a)[0] ?? null;
+    const data = {
+      name: base?.name || null,
+      symbol: base?.symbol || null,
+      image: best?.info?.imageUrl || null,
+      priceUsd,
+    };
+    cacheSet(assetCache, `dex:${mint}`, data);
+    if (priceUsd != null) cacheSet(priceCache, mint, priceUsd);
+    return data;
   } catch {
-    /* fall through */
+    return null;
   }
+}
+
+async function fetchTokenPriceUsd(mint) {
+  const cached = cacheGet(priceCache, mint, PRICE_TTL_MS);
+  if (cached != null) return cached;
+  const dex = await fetchDexScreenerToken(mint);
+  if (dex?.priceUsd != null) return dex.priceUsd;
   try {
     const res = await fetchWithTimeout(
       `https://api.jup.ag/price/v2?ids=${encodeURIComponent(mint)}`,
@@ -227,14 +275,17 @@ export async function resolvePrizeAssetMeta({ kind, mint }) {
   }
 
   if (k === "SPL") {
-    const jup = await fetchJupiterToken(mint);
-    let decimals = jup?.decimals ?? null;
-    if (decimals == null) decimals = await fetchMintDecimalsOnChain(mint);
-    const priceUsd = await fetchTokenPriceUsd(mint);
+    const [jup, dex, onChainDecimals] = await Promise.all([
+      fetchJupiterToken(mint),
+      fetchDexScreenerToken(mint),
+      fetchMintDecimalsOnChain(mint),
+    ]);
+    const decimals = jup?.decimals ?? onChainDecimals ?? null;
+    const priceUsd = dex?.priceUsd ?? (await fetchTokenPriceUsd(mint));
     return {
-      name: jup?.name || "Token",
-      symbol: jup?.symbol || null,
-      image: jup?.image || null,
+      name: jup?.name || dex?.name || "Token",
+      symbol: jup?.symbol || dex?.symbol || null,
+      image: jup?.image || dex?.image || null,
       number: null,
       decimals,
       priceUsd: priceUsd ?? null,
