@@ -7,6 +7,7 @@ import { TournamentTimestamp } from './TournamentTimestamp';
 import { formatLocalDateTime } from '../../utils/formatLocalDateTime';
 import { AddToHomeScreen } from '../AddToHomeScreen';
 import { PrizesTab } from './PrizesTab';
+import { WalletClaimPanel } from './WalletClaimPanel';
 import { TournamentAdminPrizes } from './TournamentAdminPrizes';
 import api from '../../services/api';
 import {
@@ -92,6 +93,7 @@ export function TournamentLobby() {
   const [tables, setTables] = useState<any[]>([]);
   const [myGameId, setMyGameId] = useState<string | null>(null);
   const [addingTestPlayers, setAddingTestPlayers] = useState(false);
+  const claimOpenedRef = useRef(false);
 
   // Clear start-requested flag once tournament is actually running (after refetch)
   useEffect(() => {
@@ -99,6 +101,19 @@ export function TournamentLobby() {
       setStartRequested(false);
     }
   }, [tournament?.status]);
+
+  // Auto-open Prizes tab when the viewer has a claim ready
+  useEffect(() => {
+    const claim = tournament?.myPrizeClaim;
+    if (
+      !claimOpenedRef.current &&
+      tournament?.prizeMode === 'WALLET' &&
+      (claim?.status === 'ELIGIBLE' || claim?.status === 'CLAIMED')
+    ) {
+      claimOpenedRef.current = true;
+      setActiveTab('prizes');
+    }
+  }, [tournament?.prizeMode, tournament?.myPrizeClaim?.status]);
 
   // Parse blind levels from tournament
   useEffect(() => {
@@ -618,6 +633,58 @@ export function TournamentLobby() {
           </div>
         )}
 
+        {/* Prominent claim CTA — winners should not have to dig into the Prizes tab */}
+        {user &&
+          tournament?.prizeMode === 'WALLET' &&
+          tournament.myPrizeClaim &&
+          (tournament.myPrizeClaim.status === 'ELIGIBLE' ||
+            tournament.myPrizeClaim.status === 'CLAIMED') && (
+            <div className="mt-5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium text-emerald-200">
+                    {tournament.myPrizeClaim.status === 'CLAIMED'
+                      ? 'Prize claimed'
+                      : 'You placed in the money — claim your prize'}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-300">
+                    Finish:{' '}
+                    {tournament.myPrizeClaim.finishingPlace === 1
+                      ? '1st'
+                      : tournament.myPrizeClaim.finishingPlace === 2
+                        ? '2nd'
+                        : tournament.myPrizeClaim.finishingPlace === 3
+                          ? '3rd'
+                          : `${tournament.myPrizeClaim.finishingPlace}th`}{' '}
+                    place
+                    {tournament.myPrizeClaim.status === 'ELIGIBLE' &&
+                      tournament.myPrizeClaim.eligibleUntil && (
+                        <>
+                          {' '}
+                          · claim by{' '}
+                          {new Date(tournament.myPrizeClaim.eligibleUntil).toLocaleString()}
+                        </>
+                      )}
+                  </p>
+                </div>
+                {tournament.myPrizeClaim.status === 'ELIGIBLE' && activeTab !== 'prizes' && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('prizes')}
+                    className="bux-btn-accent rounded-lg px-4 py-2 text-sm font-semibold"
+                  >
+                    Claim prize
+                  </button>
+                )}
+              </div>
+              <WalletClaimPanel
+                claimEndpoint={`/api/tournaments/${id!}/claim-prize`}
+                myClaim={tournament.myPrizeClaim}
+                onUpdated={() => refetch({ silent: true })}
+              />
+            </div>
+          )}
+
         {/* Scheduled flow (all users) */}
         {!isCompleted && !isRunning && (
           <p className="mt-3 text-sm text-slate-500">
@@ -807,10 +874,17 @@ export function TournamentLobby() {
               className={`px-6 py-3 text-sm font-medium transition-colors ${
                 activeTab === 'prizes'
                   ? 'border-b-2 border-emerald-500 text-emerald-400'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : tournament?.myPrizeClaim?.status === 'ELIGIBLE'
+                    ? 'text-emerald-300 hover:text-emerald-200'
+                    : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               Prizes
+              {tournament?.myPrizeClaim?.status === 'ELIGIBLE' && (
+                <span className="ml-2 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
+                  Claim
+                </span>
+              )}
             </button>
             {(isRunning || isSeated) && (
               <button

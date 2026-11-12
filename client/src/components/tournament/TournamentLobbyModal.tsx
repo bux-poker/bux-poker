@@ -2,12 +2,13 @@
  * Tournament lobby as a modal (same tabs as main TournamentLobby).
  * Used from the game table to view tournament info without leaving the game.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTournament } from '../../hooks/useTournaments';
 import { useAuth } from '@shared/features/auth/AuthContext';
 import { getSocket } from '../../services/socket';
 import api from '../../services/api';
 import { PrizesTab } from './PrizesTab';
+import { WalletClaimPanel } from './WalletClaimPanel';
 import { BuxModal, BuxModalButton } from '../ui/BuxModal';
 
 type Tab = 'players' | 'blinds' | 'prizes' | 'tables';
