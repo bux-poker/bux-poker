@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../../services/api';
+import { NftImage } from '../tournament/NftImage';
 
 export type PrizeMode = 'MANUAL' | 'WALLET';
 
@@ -328,19 +329,32 @@ function WalletAssetPreview({
         ? `≈ ${formatUsd(usdEstimate)} floor`
         : null;
 
+  const placeholder = (
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-slate-900 text-[9px] font-bold uppercase text-emerald-300/80">
+      {kind === 'SOL' ? 'SOL' : kind === 'NFT' ? 'NFT' : 'TKN'}
+    </div>
+  );
+
   return (
     <div className="mt-2 flex items-center gap-3 rounded-lg border border-emerald-500/25 bg-slate-950/50 px-3 py-2">
-      {meta.image && !imgFailed ? (
-        <img
+      {kind === 'SOL' ? (
+        meta.image && !imgFailed ? (
+          <img
+            src={meta.image}
+            alt={meta.name || 'asset'}
+            className="h-10 w-10 shrink-0 rounded-lg border border-emerald-500/30 object-cover bg-slate-900"
+            onError={() => setImgFailed(true)}
+          />
+        ) : (
+          placeholder
+        )
+      ) : (
+        <NftImage
           src={meta.image}
           alt={meta.name || 'asset'}
           className="h-10 w-10 shrink-0 rounded-lg border border-emerald-500/30 object-cover bg-slate-900"
-          onError={() => setImgFailed(true)}
+          fallback={placeholder}
         />
-      ) : (
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-slate-900 text-[9px] font-bold uppercase text-emerald-300/80">
-          {kind === 'SOL' ? 'SOL' : kind === 'NFT' ? 'NFT' : 'TKN'}
-        </div>
       )}
       <div className="min-w-0">
         <p className="truncate text-sm font-medium text-emerald-100">{label}</p>
@@ -350,11 +364,10 @@ function WalletAssetPreview({
             {typeof meta.decimals === 'number' ? ` · ${meta.decimals} decimals` : ''}
           </p>
         )}
-        {kind === 'NFT' && (meta.collectionName || meta.number) && (
-          <p className="truncate text-xs text-slate-400">
-            {meta.collectionName || meta.symbol}
-            {meta.number ? ` · #${meta.number}` : ''}
-          </p>
+        {kind === 'NFT' &&
+          meta.collectionName &&
+          !(meta.name || '').toLowerCase().startsWith(meta.collectionName.toLowerCase()) && (
+          <p className="truncate text-xs text-slate-400">{meta.collectionName}</p>
         )}
         {kind === 'SOL' ? (
           formatUsd(usdEstimate) ? (

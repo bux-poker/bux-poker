@@ -169,6 +169,22 @@ const ME_HEADERS = {
   "User-Agent": "BUX-Poker/1.0 (+https://bux-poker.xyz)",
 };
 
+/** nftstorage.link often 403s in browsers — prefer a working public gateway. */
+const IPFS_GATEWAY = "https://ipfs.filebase.io/ipfs/";
+
+function normalizeNftImageUrl(url) {
+  if (!url) return null;
+  let u = String(url).trim();
+  if (!u) return null;
+  if (u.startsWith("//")) u = `https:${u}`;
+  if (u.startsWith("ipfs://")) {
+    return `${IPFS_GATEWAY}${u.slice("ipfs://".length).replace(/^ipfs\//, "")}`;
+  }
+  const m = u.match(/\/ipfs\/([^?#]+)/i);
+  if (m) return `${IPFS_GATEWAY}${m[1]}`;
+  return u;
+}
+
 function lamportsOrSolToSol(n) {
   const v = Number(n);
   if (!Number.isFinite(v) || v <= 0) return null;
@@ -201,7 +217,7 @@ async function fetchMagicEdenToken(mint) {
     const data = {
       name: json.name || null,
       symbol: json.collection || json.collectionName || null,
-      image: json.image || json.animationUrl || null,
+      image: normalizeNftImageUrl(json.image || json.animationUrl || null),
       collectionSymbol: json.collection || null,
       collectionName: json.collectionName || null,
       listingSol: listingSol ?? null,
@@ -272,7 +288,7 @@ async function fetchDasAsset(mint) {
     const data = {
       name,
       symbol: meta.symbol || null,
-      image,
+      image: normalizeNftImageUrl(image),
       collection,
     };
     cacheSet(assetCache, `das:${mint}`, data);

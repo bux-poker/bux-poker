@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../../services/api";
+import { NftImage } from "./NftImage";
 
 type PrizeAsset = {
   kind: string;
@@ -170,27 +171,37 @@ export function PrizeAssetVisual({
       : kind === "NFT"
         ? meta?.name || "NFT"
         : meta?.name || meta?.symbol || "Token";
-  const nftBaseName = meta?.name ? meta.name.replace(/\s*#\s*\d+\s*$/, "").trim() : null;
   const usdLabel = formatUsd(estimateUsdValue(item, meta));
 
+  const placeholder = (
+    <Placeholder label={kind === "SOL" ? "SOL" : kind === "NFT" ? "NFT" : "TKN"} />
+  );
   const media =
-    meta?.image && !imgFailed ? (
-      <img
-        src={meta.image}
+    kind === "SOL" ? (
+      meta?.image && !imgFailed ? (
+        <img
+          src={meta.image}
+          alt={displayName}
+          className="h-14 w-14 shrink-0 rounded-xl border border-emerald-500/30 object-cover bg-slate-950"
+          onError={() => setImgFailed(true)}
+        />
+      ) : (
+        placeholder
+      )
+    ) : (
+      <NftImage
+        src={meta?.image}
         alt={displayName}
         className="h-14 w-14 shrink-0 rounded-xl border border-emerald-500/30 object-cover bg-slate-950"
-        onError={() => setImgFailed(true)}
+        fallback={placeholder}
       />
-    ) : (
-      <Placeholder label={kind === "SOL" ? "SOL" : kind === "NFT" ? "NFT" : "TKN"} />
     );
 
   const text = (
     <div className={layout === "row" ? "min-w-0 text-left" : "text-center"}>
       {kind === "NFT" ? (
         <p className="font-semibold text-emerald-100">
-          {nftBaseName || meta?.collectionName || "NFT"}
-          {meta?.number ? <span className="text-emerald-300"> #{meta.number}</span> : null}
+          {meta?.name || meta?.collectionName || "NFT"}
         </p>
       ) : (
         <p className="font-semibold text-emerald-100">
