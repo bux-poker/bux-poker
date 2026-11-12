@@ -1,4 +1,5 @@
 import { WalletClaimPanel } from './WalletClaimPanel';
+import { ManualPrizeVisual, PrizeAssetVisual } from './PrizeAssetVisual';
 
 type PrizeAsset =
   | { kind: 'SOL'; lamports: string }
@@ -53,16 +54,6 @@ function placeLabel(place: number) {
   if (place === 2) return '2nd';
   if (place === 3) return '3rd';
   return `${place}th`;
-}
-
-function formatWalletItem(item: PrizeAsset) {
-  if (item.kind === 'SOL') {
-    const lamports = BigInt(item.lamports || '0');
-    const sol = Number(lamports) / 1e9;
-    return `${sol} SOL`;
-  }
-  if (item.kind === 'NFT') return `NFT (${item.mint.slice(0, 6)}…${item.mint.slice(-4)})`;
-  return `Token ${item.mint.slice(0, 6)}… × ${item.amount}`;
 }
 
 function claimStatusLabel(status: string) {
@@ -129,13 +120,15 @@ export function PrizesTab({
           >
             <p className="text-sm font-medium text-emerald-400">{placeLabel(row.place)} place</p>
             {'description' in row && row.description ? (
-              <p className="mt-1 text-slate-200">{row.description}</p>
+              <div className="mt-3">
+                <ManualPrizeVisual description={row.description} />
+              </div>
             ) : (
-              <ul className="mt-2 space-y-1 text-sm text-slate-300">
+              <div className="mt-3 flex flex-col gap-3">
                 {(row as WalletPrizePlace).items?.map((item, i) => (
-                  <li key={i}>{formatWalletItem(item)}</li>
+                  <PrizeAssetVisual key={i} item={item} layout="row" />
                 ))}
-              </ul>
+              </div>
             )}
           </div>
         ))}

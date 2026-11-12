@@ -58,6 +58,7 @@ export function TournamentLobbyModal({
   const [blindLevels, setBlindLevels] = useState<BlindLevel[]>([]);
   const [tables, setTables] = useState<any[]>([]);
   const [addingTestPlayers, setAddingTestPlayers] = useState(false);
+  const claimOpenedRef = useRef(false);
 
   useEffect(() => {
     if (!tournamentId) return;
@@ -70,6 +71,18 @@ export function TournamentLobbyModal({
       socket.off('tournament_completed', handler);
     };
   }, [tournamentId, refetch]);
+
+  useEffect(() => {
+    const claim = tournament?.myPrizeClaim;
+    if (
+      !claimOpenedRef.current &&
+      tournament?.prizeMode === 'WALLET' &&
+      (claim?.status === 'ELIGIBLE' || claim?.status === 'CLAIMED')
+    ) {
+      claimOpenedRef.current = true;
+      setActiveTab('prizes');
+    }
+  }, [tournament?.prizeMode, tournament?.myPrizeClaim?.status]);
 
   useEffect(() => {
     if (tournament?.blindLevels) {
@@ -250,6 +263,24 @@ export function TournamentLobbyModal({
       bodyClassName="!overflow-hidden"
     >
       <div className="-mx-1 flex min-h-0 flex-1 flex-col">
+        {user &&
+          tournament.prizeMode === 'WALLET' &&
+          tournament.myPrizeClaim &&
+          (tournament.myPrizeClaim.status === 'ELIGIBLE' ||
+            tournament.myPrizeClaim.status === 'CLAIMED') && (
+            <div className="mb-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3">
+              <p className="text-sm font-medium text-emerald-200">
+                {tournament.myPrizeClaim.status === 'CLAIMED'
+                  ? 'Prize claimed'
+                  : 'You placed in the money — claim your prize'}
+              </p>
+              <WalletClaimPanel
+                claimEndpoint={`/api/tournaments/${tournamentId}/claim-prize`}
+                myClaim={tournament.myPrizeClaim}
+                onUpdated={() => refetch({ silent: true })}
+              />
+            </div>
+          )}
         <div className="border-b border-[color:var(--bux-panel-border)]">
           <nav className="flex -mb-px overflow-x-auto">
             <button
@@ -277,10 +308,17 @@ export function TournamentLobbyModal({
               className={`whitespace-nowrap px-4 py-3 text-sm font-medium transition-colors sm:px-6 ${
                 activeTab === 'prizes'
                   ? 'border-b-2 border-emerald-500 text-emerald-400'
-                  : 'text-slate-400 hover:text-slate-200'
+                  : tournament.myPrizeClaim?.status === 'ELIGIBLE'
+                    ? 'text-emerald-300 hover:text-emerald-200'
+                    : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               Prizes
+              {tournament.myPrizeClaim?.status === 'ELIGIBLE' && (
+                <span className="ml-2 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300">
+                  Claim
+                </span>
+              )}
             </button>
             {(isRunning || tables.length > 0) && (
               <button
