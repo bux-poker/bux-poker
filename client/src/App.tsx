@@ -1,10 +1,9 @@
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 import { Route, Routes, Link, Navigate, useLocation } from "react-router-dom";
 import { TournamentList } from "./components/tournament/TournamentList";
 import { TournamentDetail } from "./components/tournament/TournamentDetail";
 import { PokerGameView } from "./features/game/PokerGameView";
 import { LoginButton } from "./components/auth/LoginButton";
-import { CreateTournament } from "./components/admin/CreateTournament";
 import { AdminRoute } from "./components/admin/AdminRoute";
 import { AuthCallback } from "./pages/AuthCallback";
 import { BotInvitePage } from "./pages/BotInvitePage";
@@ -12,9 +11,15 @@ import { TableTestPage } from "./pages/TableTestPage";
 import { useAdmin } from "./hooks/useAdmin";
 import { useAutoJoinActiveTable } from "./hooks/useAutoJoinActiveTable";
 import { LeagueListPage } from "./pages/LeagueListPage";
-import { LeagueDetailPage } from "./pages/LeagueDetailPage";
 import { LoginPage } from "./pages/LoginPage";
 import { HomePage } from "./pages/HomePage";
+
+const CreateTournament = lazy(() =>
+  import("./components/admin/CreateTournament").then((m) => ({ default: m.CreateTournament }))
+);
+const LeagueDetailPage = lazy(() =>
+  import("./pages/LeagueDetailPage").then((m) => ({ default: m.LeagueDetailPage }))
+);
 
 function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -162,28 +167,36 @@ function App() {
               : "mx-auto max-w-7xl flex-1 px-4 sm:px-6 lg:px-8"
         }
       >
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/tournaments" element={<TournamentList />} />
-          <Route path="/tournaments/:id" element={<TournamentDetail />} />
-          <Route path="/game/:id" element={<PokerGameView />} />
-          <Route path="/table-test" element={<TableTestPage />} />
-          <Route
-            path="/admin"
-            element={
-              <AdminRoute>
-                <CreateTournament />
-              </AdminRoute>
-            }
-          />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/auth/callback" element={<AuthCallback />} />
-          <Route path="/invite" element={<BotInvitePage />} />
-          <Route path="/bot-invite" element={<Navigate to="/invite" replace />} />
-          <Route path="/discord-bot" element={<Navigate to="/invite" replace />} />
-          <Route path="/leagues" element={<LeagueListPage />} />
-          <Route path="/leagues/:id" element={<LeagueDetailPage />} />
-        </Routes>
+        <Suspense
+          fallback={
+            <div className="flex min-h-[40vh] items-center justify-center text-slate-400">
+              Loading…
+            </div>
+          }
+        >
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/tournaments" element={<TournamentList />} />
+            <Route path="/tournaments/:id" element={<TournamentDetail />} />
+            <Route path="/game/:id" element={<PokerGameView />} />
+            <Route path="/table-test" element={<TableTestPage />} />
+            <Route
+              path="/admin"
+              element={
+                <AdminRoute>
+                  <CreateTournament />
+                </AdminRoute>
+              }
+            />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/invite" element={<BotInvitePage />} />
+            <Route path="/bot-invite" element={<Navigate to="/invite" replace />} />
+            <Route path="/discord-bot" element={<Navigate to="/invite" replace />} />
+            <Route path="/leagues" element={<LeagueListPage />} />
+            <Route path="/leagues/:id" element={<LeagueDetailPage />} />
+          </Routes>
+        </Suspense>
       </main>
     </div>
   );

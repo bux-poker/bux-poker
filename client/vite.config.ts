@@ -35,11 +35,23 @@ function invitePathPlugin() {
 
 export default defineConfig({
   plugins: [react(), invitePathPlugin()],
+  define: {
+    // Solana web3 expects Node-ish globals when bundled for the browser
+    global: "globalThis",
+  },
   build: {
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, "index.html"),
         invite: path.resolve(__dirname, "invite.html"),
+      },
+    },
+  },
+  optimizeDeps: {
+    include: ["@solana/web3.js", "@solana/spl-token", "buffer"],
+    esbuildOptions: {
+      define: {
+        global: "globalThis",
       },
     },
   },
@@ -51,7 +63,8 @@ export default defineConfig({
       "react-dom": path.resolve(__dirname, "node_modules/react-dom"),
       axios: path.resolve(__dirname, "node_modules/axios"),
       "@emoji-mart/react": path.resolve(__dirname, "node_modules/@emoji-mart/react"),
-      "@emoji-mart/data": path.resolve(__dirname, "node_modules/@emoji-mart/data")
+      "@emoji-mart/data": path.resolve(__dirname, "node_modules/@emoji-mart/data"),
+      buffer: path.resolve(__dirname, "node_modules/buffer"),
     }
   },
   server: {

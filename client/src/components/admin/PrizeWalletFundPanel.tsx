@@ -1,22 +1,5 @@
 import { useMemo, useState } from 'react';
-import {
-  PublicKey,
-  SystemProgram,
-  Transaction,
-} from '@solana/web3.js';
-import {
-  TOKEN_PROGRAM_ID,
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  createAssociatedTokenAccountInstruction,
-  createTransferInstruction,
-} from '@solana/spl-token';
 import api from '../../services/api';
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
-  return btoa(binary);
-}
 
 export interface DepositRequirements {
   prizeWalletAddress: string;
@@ -32,7 +15,7 @@ type SolanaProvider = {
   isPhantom?: boolean;
   publicKey?: { toBytes(): Uint8Array; toString(): string };
   connect: () => Promise<{ publicKey: { toString(): string } }>;
-  signTransaction: (tx: Transaction) => Promise<Transaction>;
+  signTransaction: (tx: unknown) => Promise<{ serialize: () => Uint8Array }>;
 };
 
 function getProvider(): SolanaProvider | null {
@@ -47,6 +30,12 @@ function getProvider(): SolanaProvider | null {
 function authHeaders() {
   const token = localStorage.getItem('sessionToken');
   return token ? { Authorization: `Bearer ${token}` } : undefined;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
+  return btoa(binary);
 }
 
 interface Props {
@@ -97,7 +86,11 @@ export function PrizeWalletFundPanel({ kind, eventId, requirements, onFunded }: 
         throw new Error('Wallet does not support signTransaction');
       }
 
-      const payer = new PublicKey(provider.publicKey.toString());
+      // Load Solana libs only when depositing — keeps them out of the main game bundle.
+      const web3 = await import('@solana/web3.js');
+      const spl = await import('@solana/spl-token');
+
+      const payer = new web3.PublicKey(provider.publicKey.toString());
       const preparePath =
         kind === 'league'
           ? `/api/admin/leagues/${eventId}/prize-funding/prepare`
@@ -110,13 +103,13 @@ export function PrizeWalletFundPanel({ kind, eventId, requirements, onFunded }: 
         { headers: authHeaders() }
       );
 
-      const dest = new PublicKey(plan.prizeWalletAddress);
-      const tx = new Transaction();
+      const dest = new web3.PublicKey(plan.prizeWalletAddress);
+      const tx = new web3.Transaction();
 
       const solLamports = BigInt(plan.solLamports || '0');
       if (solLamports > 0n) {
         tx.add(
-          SystemProgram.transfer({
+          web3.SystemProgram.transfer({
             fromPubkey: payer,
             toPubkey: dest,
             lamports: Number(solLamports),
@@ -125,29 +118,29 @@ export function PrizeWalletFundPanel({ kind, eventId, requirements, onFunded }: 
       }
 
       for (const t of plan.tokenTransfers || []) {
-        const mint = new PublicKey(t.mint);
-        const source = new PublicKey(t.source);
-        const ata = new PublicKey(t.destinationAta);
+        const mint = new web3.PublicKey(t.mint);
+        const source = new web3.PublicKey(t.source);
+        const ata = new web3.PublicKey(t.destinationAta);
         if (t.createDestAta) {
           tx.add(
-            createAssociatedTokenAccountInstruction(
+            spl.createAssociatedTokenAccountInstruction(
               payer,
               ata,
               dest,
               mint,
-              TOKEN_PROGRAM_ID,
-              ASSOCIATED_TOKEN_PROGRAM_ID
+              spl.TOKEN_PROGRAM_ID,
+              spl.ASSOCIATED_TOKEN_PROGRAM_ID
             )
           );
         }
         tx.add(
-          createTransferInstruction(
+          spl.createTransferInstruction(
             source,
             ata,
             payer,
             BigInt(t.amount),
             [],
-            TOKEN_PROGRAM_ID
+            spl.TOKEN_PROGRAM_ID
           )
         );
       }
@@ -185,11 +178,7 @@ export function PrizeWalletFundPanel({ kind, eventId, requirements, onFunded }: 
       setMessage('Prizes deposited — event is funded.');
       onFunded();
     } catch (err: any) {
-      const msg =
-        err.response?.data?.error ||
-        err.message ||
-        'Deposit failed';
-      setError(msg);
+      setError(err.response?.data?.error || err.message || 'Deposit failed');
     } finally {
       setBusy(false);
     }
