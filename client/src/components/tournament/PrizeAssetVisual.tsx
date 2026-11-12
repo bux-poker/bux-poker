@@ -73,7 +73,7 @@ function estimateUsdValue(item: PrizeAsset, meta: Meta | null): number | null {
     const price = meta?.priceUsd;
     if (price == null) return null;
     const decimals =
-      typeof meta?.decimals === "number" ? meta.decimals : item.decimals ?? 0;
+      typeof item.decimals === "number" ? item.decimals : meta?.decimals ?? 0;
     try {
       const human = Number(formatSplAmount(item.amount, decimals));
       if (!Number.isFinite(human)) return null;
@@ -150,9 +150,9 @@ export function PrizeAssetVisual({
     };
   }, [kind, item.mint]);
 
-  // Prefer on-chain/meta decimals — older prizes may have stored decimals: 0 incorrectly.
+  // Use stored decimals when present (incl. 0). Meta decimals fill gaps for older rows.
   const decimals =
-    typeof meta?.decimals === "number" ? meta.decimals : item.decimals ?? 0;
+    typeof item.decimals === "number" ? item.decimals : meta?.decimals ?? 0;
   const humanAmount =
     kind === "SOL"
       ? formatSol(item.lamports)
