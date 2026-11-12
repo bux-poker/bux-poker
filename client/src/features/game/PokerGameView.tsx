@@ -1345,6 +1345,21 @@ export function PokerGameView() {
     getSocket().emit("showdown-choice", { gameId: id, choice, userId: user.id });
   };
 
+  // Must run before any early return (Rules of Hooks).
+  useEffect(() => {
+    if (!gameState || !user?.id || chatCollapsed) return;
+    const me = gameState.players.find(
+      (p) => p.userId === user.id || p.id === user.id
+    );
+    const myTurn =
+      String(gameState.currentTurnUserId ?? "") === String(user.id) && !me?.isAway;
+    if (!myTurn) return;
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    setChatCollapsed(true);
+  }, [gameState, user?.id, chatCollapsed]);
+
   if (!id) {
     return (
       <div className="text-red-400">
@@ -1424,15 +1439,6 @@ export function PokerGameView() {
   const isMyTurn =
     String(gameState.currentTurnUserId ?? "") === String(user?.id ?? "") &&
     !myPlayer?.isAway;
-
-  // Close chat when it becomes your turn so action controls aren't covered.
-  useEffect(() => {
-    if (!isMyTurn || chatCollapsed) return;
-    if (document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur();
-    }
-    setChatCollapsed(true);
-  }, [isMyTurn, chatCollapsed]);
 
   const canPreAction =
     !!user &&
