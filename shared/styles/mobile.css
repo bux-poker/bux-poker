@@ -93,14 +93,7 @@
     }
   }
 
-  /* Portrait orientation adjustments */
-  @media (orientation: portrait) {
-    .game-table {
-      transform: rotate(90deg);
-      width: 100vh;
-      height: 100vw;
-    }
-  }
+  /* Portrait: game UI is gated by RotateToLandscape — do not CSS-rotate the table */
 
   /* Prevent zoom on input focus */
   input, textarea, select {

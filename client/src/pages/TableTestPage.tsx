@@ -6,6 +6,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { PokerTable } from "../components/poker/PokerTable";
+import { RotateToLandscape } from "../components/poker/RotateToLandscape";
 import { PokerCardImage } from "../components/poker/table/PokerCardImage";
 import { BettingControls } from "../components/poker/BettingControls";
 import Chat from "@shared/components/chat/Chat";
@@ -69,7 +70,22 @@ export function TableTestPage() {
   const [chatCollapsed, setChatCollapsed] = useState(true);
   const [showDealerMessages, setShowDealerMessages] = useState(true);
   const [previewModal, setPreviewModal] = useState<TableTestModalId>("none");
+  const [isPortrait, setIsPortrait] = useState(
+    () => typeof window !== "undefined" && window.innerHeight > window.innerWidth
+  );
   const [communityCardSize, setCommunityCardSize] = useState({ width: 64, height: 90 });
+  useEffect(() => {
+    const checkOrientation = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
+    checkOrientation();
+    window.addEventListener("resize", checkOrientation);
+    window.addEventListener("orientationchange", checkOrientation);
+    return () => {
+      window.removeEventListener("resize", checkOrientation);
+      window.removeEventListener("orientationchange", checkOrientation);
+    };
+  }, []);
   useEffect(() => {
     const read = () => {
       const styles = getComputedStyle(document.documentElement);
@@ -98,6 +114,10 @@ export function TableTestPage() {
     seatNumber: p.seatNumber,
     status: p.status,
   }));
+
+  if (isPortrait) {
+    return <RotateToLandscape />;
+  }
 
   return (
     <div

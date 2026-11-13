@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getSocket } from "../../services/socket";
 import { PokerTable } from "../../components/poker/PokerTable";
+import { RotateToLandscape } from "../../components/poker/RotateToLandscape";
 import { PokerCardImage } from "../../components/poker/table/PokerCardImage";
 import type { Card } from "@shared/types/poker";
 import { BettingControls } from "../../components/poker/BettingControls";
@@ -1504,17 +1505,16 @@ export function PokerGameView() {
     navigate('/tournaments');
   };
 
+  if (isPortrait) {
+    return <RotateToLandscape />;
+  }
+
   return (
     <div
       className="flex h-[100dvh] min-h-screen w-screen flex-col overflow-hidden"
       style={{ background: "var(--bux-ink, #1e2733)" }}
       onPointerDown={handleSoundUnlock}
     >
-      {isPortrait && (
-        <div className="bux-banner z-[80] shrink-0 border-b border-bux-brass/30 bg-bux-panel/95 px-4 py-2 text-center text-sm text-bux-brass">
-          Landscape works best — rotate for a fuller table view.
-        </div>
-      )}
       {showFullscreenButton && isMobile && (
         <div className="flex shrink-0 justify-end border-b border-bux-brass/20 bg-bux-panel/80 px-3 py-1.5">
           <button
