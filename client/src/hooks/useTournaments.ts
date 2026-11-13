@@ -64,6 +64,15 @@ export interface Tournament {
     txSignatures?: string[];
     solscanUrls?: string[];
   } | null;
+  /** Per paid-place claim status after tournament ends */
+  prizeClaims?: Array<{
+    finishingPlace: number;
+    status: string;
+    recipientAddress?: string | null;
+    claimedAt?: string | null;
+    username?: string | null;
+    userId?: string;
+  }>;
   registeredCount?: number;
   remainingPlayers?: number;
   createdBy: string | any;
