@@ -1657,8 +1657,11 @@ export function PokerGameView() {
             />
           )}
 
-          {/* Table area - takes most of the space */}
-          <div className="relative min-h-0 flex-1 overflow-hidden" style={{ background: "var(--bux-ink, #1e2733)" }}>
+          {/* Table area - takes most of the space; on mobile overlaps into top of dock */}
+          <div
+            className="bux-table-stage relative min-h-0 flex-1 overflow-hidden"
+            style={{ background: "var(--bux-ink, #1e2733)" }}
+          >
             {(showConsolidationOverlay ||
               (!showConsolidationOverlay &&
                 handResolvedForReseat &&
@@ -1763,12 +1766,36 @@ export function PokerGameView() {
 
           {/* Fixed-height dock: felt area never resizes when controls appear/change. */}
           <div
-            className={`pointer-events-none relative z-[60] flex w-full shrink-0 items-end justify-between gap-3 px-2 pb-2 ${
+            className={`bux-action-dock-row pointer-events-none relative z-[60] flex w-full shrink-0 items-end justify-between gap-3 px-2 pb-2 ${
               isMobile ? "pt-2" : "pt-1"
             }`}
             style={{ minHeight: "var(--action-dock-height, 156px)" }}
           >
-            <div className="pointer-events-auto min-w-0">
+            <div className="pointer-events-auto flex min-w-0 flex-col items-start gap-2">
+              {user && chatCollapsed && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChatCollapsed(false);
+                    setUnreadChatCount(0);
+                  }}
+                  className="bux-edge-fab relative"
+                  aria-label="Open chat"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                    />
+                  </svg>
+                  {unreadChatCount > 0 && (
+                    <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                      {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                    </span>
+                  )}
+                </button>
+              )}
               {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
                 <div
                   className={`bux-action-corner bux-action-corner-hand flex flex-col items-start gap-1 ${myPlayer.status === "FOLDED" ? "opacity-50" : ""}`}
@@ -1885,32 +1912,9 @@ export function PokerGameView() {
           </div>
         </div>
 
-        {/* Chat drawer — keep mounted (draft persists); slide both ways; outside click / your turn closes */}
+        {/* Chat drawer — keep mounted (draft persists); slides in from the left */}
         {user && (
           <>
-            {chatCollapsed && (
-              <button
-                onClick={() => {
-                  setChatCollapsed(false);
-                  setUnreadChatCount(0);
-                }}
-                className="absolute right-0 top-1/2 z-[110] flex h-14 w-10 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 shadow-lg"
-                style={{
-                  background: "color-mix(in srgb, var(--bux-panel) 95%, transparent)",
-                  borderColor: "var(--bux-panel-border)",
-                }}
-                aria-label="Open chat"
-              >
-                <svg className="h-5 w-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
-                {unreadChatCount > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-bold text-white">
-                    {unreadChatCount > 99 ? "99+" : unreadChatCount}
-                  </span>
-                )}
-              </button>
-            )}
             {!chatCollapsed && (
               <button
                 type="button"
@@ -1925,7 +1929,7 @@ export function PokerGameView() {
               />
             )}
             <div
-              className={`bux-chat-drawer absolute bottom-0 right-0 top-0 z-[110] flex w-80 max-w-[85vw] flex-col overflow-hidden border-l shadow-2xl ${
+              className={`bux-chat-drawer absolute bottom-0 left-0 top-0 z-[110] flex w-80 max-w-[85vw] flex-col overflow-hidden border-r shadow-2xl ${
                 chatCollapsed ? "is-closed" : ""
               }`}
               style={{

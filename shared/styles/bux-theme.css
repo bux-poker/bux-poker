@@ -426,7 +426,7 @@
     }
   }
 
-  /* Slide open/close — same 220ms ease both directions; keep mounted so draft persists */
+  /* Slide open/close from the left — same 220ms ease both ways; keep mounted so draft persists */
   .bux-chat-drawer {
     transform: translateX(0);
     transition: transform 0.22s ease-out;
@@ -436,7 +436,7 @@
   }
 
   .bux-chat-drawer.is-closed {
-    transform: translateX(100%);
+    transform: translateX(-100%);
     pointer-events: none;
   }
 
@@ -445,6 +445,56 @@
     inset: 0;
     z-index: 109;
     background: transparent;
+  }
+
+  /* Compact edge fabs (chat / info) — smaller hit box, bolder icon */
+  .bux-edge-fab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: 1px solid var(--bux-panel-border);
+    background: color-mix(in srgb, var(--bux-panel) 95%, transparent);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+    color: #e2e8f0;
+  }
+
+  .bux-edge-fab svg {
+    width: 22px;
+    height: 22px;
+    stroke-width: 2.75;
+  }
+
+  @media (max-width: 900px) {
+    .bux-edge-fab {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+    }
+
+    .bux-edge-fab svg {
+      width: 20px;
+      height: 20px;
+      stroke-width: 3;
+    }
+
+    /* Let the felt grow into the top of the action dock on short/narrow screens */
+    .bux-table-stage {
+      overflow: visible !important;
+      margin-bottom: calc(var(--action-dock-height, 156px) * -0.15);
+      z-index: 1;
+    }
+
+    .bux-table-stage .bux-poker-table-root {
+      overflow: visible !important;
+    }
+
+    .bux-action-dock-row {
+      position: relative;
+      z-index: 60;
+    }
   }
 
   /* Chat panel — same ink/brass language as the table HUD */
@@ -457,7 +507,7 @@
     flex-direction: column;
     overflow: hidden;
     background: color-mix(in srgb, var(--bux-ink-elevated) 97%, transparent);
-    border-left: 1px solid var(--bux-panel-border);
+    border-right: 1px solid var(--bux-panel-border);
   }
 
   .bux-chat-header {

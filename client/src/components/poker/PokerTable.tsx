@@ -131,7 +131,7 @@ export function PokerTable({
   return (
     <div 
       ref={tableRootRef}
-      className="relative flex h-full w-full items-end justify-center overflow-hidden"
+      className="bux-poker-table-root relative flex h-full w-full items-end justify-center overflow-hidden"
       style={{
         background:
           "radial-gradient(ellipse at center, var(--bux-ink-elevated, #283341) 0%, var(--bux-ink, #1e2733) 70%)",
@@ -164,20 +164,18 @@ export function PokerTable({
           </div>
         )}
         {onTournamentLobbyClick != null && (
-          <div className="bux-hud-strip !gap-1 !rounded-2xl !px-1.5 !py-1.5">
-            <button
-              type="button"
-              onClick={onTournamentLobbyClick}
-              className="flex h-8 w-8 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
-              aria-label="Tournament info"
-              title="Tournament info"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" strokeWidth={2} />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16v-4M12 8h.01" />
-              </svg>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onTournamentLobbyClick}
+            className="bux-edge-fab"
+            aria-label="Tournament info"
+            title="Tournament info"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <circle cx="12" cy="12" r="10" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 16v-4M12 8h.01" />
+            </svg>
+          </button>
         )}
       </div>
 

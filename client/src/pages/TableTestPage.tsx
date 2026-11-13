@@ -121,7 +121,7 @@ export function TableTestPage() {
             onClear={() => setPreviewModal("none")}
           />
           <div
-            className="relative min-h-0 flex-1 overflow-hidden"
+            className="bux-table-stage relative min-h-0 flex-1 overflow-hidden"
             style={{ background: "var(--bux-ink, #1e2733)" }}
           >
             {/* Opponents face-down; hero seat cards face-up at 60% community size */}
@@ -153,39 +153,57 @@ export function TableTestPage() {
 
           {/* Fixed-height dock so the felt never resizes when controls change. */}
           <div
-            className={`pointer-events-none relative z-[60] flex w-full shrink-0 items-end justify-between gap-3 px-2 pb-2 ${
+            className={`bux-action-dock-row pointer-events-none relative z-[60] flex w-full shrink-0 items-end justify-between gap-3 px-2 pb-2 ${
               isMobile ? "pt-2" : "pt-1"
             }`}
             style={{ minHeight: "var(--action-dock-height, 156px)" }}
           >
-            {(() => {
-              const myHoleCards = players[0]?.holeCards;
-              if (!myHoleCards || !Array.isArray(myHoleCards) || myHoleCards.length === 0) {
-                return <div className="min-w-0" />;
-              }
-              return (
-                <div className="pointer-events-auto bux-action-corner bux-action-corner-hand flex flex-col items-start gap-1">
-                  <span
-                    className="font-display text-[10px] sm:text-sm font-semibold uppercase tracking-wide whitespace-nowrap leading-tight"
-                    style={{ color: "var(--bux-brass)" }}
-                  >
-                    {getHandDescription(myHoleCards, COMMUNITY_CARDS, "FLOP")}
-                  </span>
-                  <div className="flex items-center" style={{ gap: "var(--community-card-gap, 8px)" }}>
-                    {myHoleCards.map((card: Card, idx: number) => (
-                      <PokerCardImage
-                        key={`${idx}-${communityCardSize.width}x${communityCardSize.height}`}
-                        card={card}
-                        width={communityCardSize.width}
-                        height={communityCardSize.height}
-                        className="shadow-lg"
-                        useTextCard={isMobile}
-                      />
-                    ))}
+            <div className="pointer-events-auto flex min-w-0 flex-col items-start gap-2">
+              {chatCollapsed && (
+                <button
+                  type="button"
+                  onClick={() => setChatCollapsed(false)}
+                  className="bux-edge-fab"
+                  aria-label="Open chat"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                    />
+                  </svg>
+                </button>
+              )}
+              {(() => {
+                const myHoleCards = players[0]?.holeCards;
+                if (!myHoleCards || !Array.isArray(myHoleCards) || myHoleCards.length === 0) {
+                  return null;
+                }
+                return (
+                  <div className="bux-action-corner bux-action-corner-hand flex flex-col items-start gap-1">
+                    <span
+                      className="font-display text-[10px] sm:text-sm font-semibold uppercase tracking-wide whitespace-nowrap leading-tight"
+                      style={{ color: "var(--bux-brass)" }}
+                    >
+                      {getHandDescription(myHoleCards, COMMUNITY_CARDS, "FLOP")}
+                    </span>
+                    <div className="flex items-center" style={{ gap: "var(--community-card-gap, 8px)" }}>
+                      {myHoleCards.map((card: Card, idx: number) => (
+                        <PokerCardImage
+                          key={`${idx}-${communityCardSize.width}x${communityCardSize.height}`}
+                          card={card}
+                          width={communityCardSize.width}
+                          height={communityCardSize.height}
+                          className="shadow-lg"
+                          useTextCard={isMobile}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              );
-            })()}
+                );
+              })()}
+            </div>
             <div className="pointer-events-auto bux-action-corner bux-action-corner-controls flex flex-col items-end justify-center gap-1 sm:gap-2">
               <BettingControls
                 onAction={() => {}}
@@ -204,22 +222,7 @@ export function TableTestPage() {
           </div>
         </div>
 
-        {/* Chat drawer — keep mounted (draft persists); slide both ways; click-outside closes */}
-        {chatCollapsed && (
-          <button
-            onClick={() => setChatCollapsed(false)}
-            className="absolute right-0 top-1/2 z-[110] flex h-14 w-10 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 shadow-lg"
-            style={{
-              background: "color-mix(in srgb, var(--bux-panel) 95%, transparent)",
-              borderColor: "var(--bux-panel-border)",
-            }}
-            aria-label="Open chat"
-          >
-            <svg className="h-5 w-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-          </button>
-        )}
+        {/* Chat drawer — slides in from the left */}
         {!chatCollapsed && (
           <button
             type="button"
@@ -234,7 +237,7 @@ export function TableTestPage() {
           />
         )}
         <div
-          className={`bux-chat-drawer absolute bottom-0 right-0 top-0 z-[110] flex w-80 max-w-[85vw] flex-col overflow-hidden border-l shadow-2xl ${
+          className={`bux-chat-drawer absolute bottom-0 left-0 top-0 z-[110] flex w-80 max-w-[85vw] flex-col overflow-hidden border-r shadow-2xl ${
             chatCollapsed ? "is-closed" : ""
           }`}
           style={{
