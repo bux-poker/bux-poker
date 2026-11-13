@@ -107,7 +107,7 @@ export function TableTestPage() {
       {/* Main area: table + controls | chat */}
       <div className="relative z-20 flex min-h-0 flex-1 overflow-hidden">
         {/* Table column — modals are contained here so chat stays clear */}
-        <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="bux-table-column relative flex min-w-0 flex-1 flex-col overflow-hidden">
           {/* Modal preview picker — centered over table column */}
           <div className="pointer-events-none absolute left-1/2 top-2 z-[140] -translate-x-1/2">
             <TableTestModalPicker
@@ -151,30 +151,31 @@ export function TableTestPage() {
             />
           </div>
 
-          {/* Fixed-height dock so the felt never resizes when controls change. */}
+          {chatCollapsed && (
+            <button
+              type="button"
+              onClick={() => setChatCollapsed(false)}
+              className="bux-edge-fab bux-chat-fab relative"
+              aria-label="Open chat"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                />
+              </svg>
+            </button>
+          )}
+
+          {/* Fixed-height dock: only hand + controls. Felt overlaps into this on short screens. */}
           <div
             className={`bux-action-dock-row pointer-events-none relative z-[60] flex w-full shrink-0 items-end justify-between gap-3 px-2 pb-2 ${
               isMobile ? "pt-2" : "pt-1"
             }`}
-            style={{ minHeight: "var(--action-dock-height, 156px)" }}
+            style={{ height: "var(--action-dock-height, 156px)", minHeight: "var(--action-dock-height, 156px)" }}
           >
-            <div className="pointer-events-auto flex min-w-0 flex-col items-start gap-2">
-              {chatCollapsed && (
-                <button
-                  type="button"
-                  onClick={() => setChatCollapsed(false)}
-                  className="bux-edge-fab"
-                  aria-label="Open chat"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                    />
-                  </svg>
-                </button>
-              )}
+            <div className="pointer-events-auto min-w-0">
               {(() => {
                 const myHoleCards = players[0]?.holeCards;
                 if (!myHoleCards || !Array.isArray(myHoleCards) || myHoleCards.length === 0) {

@@ -467,7 +467,15 @@
     stroke-width: 2.75;
   }
 
-  @media (max-width: 900px) {
+  /* Chat fab floats over the felt, above the hole-card corner — never inside the dock flow */
+  .bux-chat-fab {
+    position: absolute;
+    left: 8px;
+    bottom: calc(var(--action-dock-height, 156px) + 8px);
+    z-index: 70;
+  }
+
+  @media (max-width: 900px), (max-height: 520px) {
     .bux-edge-fab {
       width: 34px;
       height: 34px;
@@ -480,10 +488,17 @@
       stroke-width: 3;
     }
 
-    /* Let the felt grow into the top of the action dock on short/narrow screens */
+    /*
+     * Grow the felt into the top of the dock (15% overlap).
+     * Overflow stays visible so bottom seats aren't clipped.
+     */
+    .bux-table-column {
+      overflow: visible !important;
+    }
+
     .bux-table-stage {
       overflow: visible !important;
-      margin-bottom: calc(var(--action-dock-height, 156px) * -0.15);
+      margin-bottom: calc(var(--action-dock-height, 120px) * -0.15);
       z-index: 1;
     }
 
@@ -494,6 +509,8 @@
     .bux-action-dock-row {
       position: relative;
       z-index: 60;
+      /* keep dock chrome from painting a full-bleed slab over the felt */
+      background: transparent;
     }
   }
 
