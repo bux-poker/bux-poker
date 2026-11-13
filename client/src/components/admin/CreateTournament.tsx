@@ -52,6 +52,8 @@ export function CreateTournament() {
   const [servers, setServers] = useState<DiscordServer[]>([]);
   const [selectedServerIds, setSelectedServerIds] = useState<string[]>([]);
   const [loadingServers, setLoadingServers] = useState(true);
+  const [testingServerId, setTestingServerId] = useState<string | null>(null);
+  const [testNotice, setTestNotice] = useState<string | null>(null);
 
   // Initialize form data from URL params if present (for duplication)
   const getInitialFormData = () => {
@@ -168,6 +170,32 @@ export function CreateTournament() {
         ? prev.filter((id) => id !== serverId)
         : [...prev, serverId]
     );
+  };
+
+  const sendTestNotification = async (server: DiscordServer) => {
+    setTestingServerId(server.serverId);
+    setTestNotice(null);
+    setError(null);
+    try {
+      const token = localStorage.getItem('sessionToken');
+      if (!token) throw new Error('Not authenticated');
+      const { data } = await api.post(
+        `/api/admin/servers/${encodeURIComponent(server.serverId)}/test-notification`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setTestNotice(
+        `Test post sent to ${data.serverName || server.serverName}. Check their Discord announcement channel.`
+      );
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.error ||
+          err?.message ||
+          `Failed to send test to ${server.serverName}`
+      );
+    } finally {
+      setTestingServerId(null);
+    }
   };
 
   if (!user) {
@@ -807,6 +835,7 @@ export function CreateTournament() {
           <h2 className="mb-4 text-lg font-semibold">Discord Servers</h2>
           <p className="mb-4 text-sm text-slate-400">
             Select which Discord servers to post this tournament to. Servers must be set up with /setup command first.
+            Use <span className="text-slate-300">Send test</span> to verify the bot can post before creating.
           </p>
           {loadingServers ? (
             <p className="text-slate-400">Loading servers...</p>
@@ -817,9 +846,9 @@ export function CreateTournament() {
           ) : (
             <div className="space-y-2">
               {servers.map((server) => (
-                <label
+                <div
                   key={server.id}
-                  className={`flex cursor-pointer items-center gap-3 rounded border p-3 transition-colors ${
+                  className={`flex items-center gap-3 rounded border p-3 transition-colors ${
                     !server.setupCompleted
                       ? 'border-[color:var(--bux-panel-border)] bg-[color:var(--bux-panel)] opacity-50'
                       : selectedServerIds.includes(server.serverId)
@@ -827,30 +856,43 @@ export function CreateTournament() {
                       : 'border-[color:var(--bux-panel-border)] bg-[color:var(--bux-panel)] hover:border-slate-600'
                   }`}
                 >
-                  <input
-                    type="checkbox"
-                    checked={selectedServerIds.includes(server.serverId)}
-                    onChange={() => toggleServerSelection(server.serverId)}
-                    disabled={!server.setupCompleted}
-                    className="h-4 w-4 rounded border-slate-600 text-emerald-600 focus:ring-emerald-500"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{server.serverName}</span>
-                      {server.isBotMember === false && (
-                        <span className="text-xs text-amber-400">(Bot not in server)</span>
-                      )}
-                      {server.isBotMember === null && (
-                        <span className="text-xs text-amber-400">(Could not verify bot)</span>
-                      )}
-                      {!server.setupCompleted && (
-                        <span className="text-xs text-amber-400">(Setup incomplete)</span>
-                      )}
+                  <label className="flex flex-1 cursor-pointer items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedServerIds.includes(server.serverId)}
+                      onChange={() => toggleServerSelection(server.serverId)}
+                      disabled={!server.setupCompleted}
+                      className="h-4 w-4 rounded border-slate-600 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{server.serverName}</span>
+                        {server.isBotMember === false && (
+                          <span className="text-xs text-amber-400">(Bot not in server)</span>
+                        )}
+                        {server.isBotMember === null && (
+                          <span className="text-xs text-amber-400">(Could not verify bot)</span>
+                        )}
+                        {!server.setupCompleted && (
+                          <span className="text-xs text-amber-400">(Setup incomplete)</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </label>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!server.setupCompleted || testingServerId === server.serverId}
+                    onClick={() => sendTestNotification(server)}
+                    className="shrink-0 rounded border border-slate-600 px-2.5 py-1 text-xs font-medium text-slate-200 hover:border-emerald-500 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {testingServerId === server.serverId ? 'Sending…' : 'Send test'}
+                  </button>
+                </div>
               ))}
             </div>
+          )}
+          {testNotice && (
+            <p className="mt-3 text-sm text-emerald-300">{testNotice}</p>
           )}
         </div>
 

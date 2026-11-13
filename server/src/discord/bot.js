@@ -1238,3 +1238,91 @@ export async function postTournamentStartingEmbed(tournament) {
 export function getDiscordClient() {
   return discordClient;
 }
+
+/**
+ * Post a one-off test embed to a configured server's announcement channel.
+ * @param {string} serverKey - Discord guild id (serverId) or internal DiscordServer.id
+ */
+export async function postTestNotification(serverKey) {
+  const key = String(serverKey || "").trim();
+  if (!key) {
+    const err = new Error("Server id is required");
+    err.status = 400;
+    throw err;
+  }
+
+  const server = await prisma.discordServer.findFirst({
+    where: {
+      OR: [{ serverId: key }, { id: key }],
+      enabled: true,
+    },
+  });
+
+  if (!server) {
+    const err = new Error("Discord server not found or disabled");
+    err.status = 404;
+    throw err;
+  }
+  if (!server.setupCompleted || !server.announcementChannelId) {
+    const err = new Error(
+      `${server.serverName} is not fully set up (need /setup with an announcement channel)`
+    );
+    err.status = 400;
+    throw err;
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle("BUX Poker — test notification")
+    .setDescription(
+      "This is a test post to confirm the bot can reach this server's announcement channel. Safe to delete."
+    )
+    .setColor(0x22c55e)
+    .setTimestamp(new Date())
+    .setFooter({ text: `Server: ${server.serverName}` });
+
+  let message = null;
+  const canUseGateway = !!discordClient?.isReady?.();
+
+  if (canUseGateway) {
+    let channel = null;
+    let guild = await discordClient.guilds.fetch(server.serverId).catch(() => null);
+    if (guild) {
+      channel = await guild.channels.fetch(server.announcementChannelId).catch(() => null);
+    }
+    if (!channel && server.announcementChannelId) {
+      channel = await discordClient.channels.fetch(server.announcementChannelId).catch(() => null);
+      if (channel?.guild) guild = channel.guild;
+    }
+    if (channel?.isTextBased?.() && guild) {
+      const permissions = channel.permissionsFor(guild.members.me);
+      if (permissions?.has("SendMessages") && permissions?.has("EmbedLinks")) {
+        message = await channel.send({ embeds: [embed] });
+      }
+    }
+  }
+
+  if (!message) {
+    message = await sendMessageViaDiscordRest(server.announcementChannelId, {
+      embeds: [embed.toJSON()],
+    });
+  }
+
+  if (!message?.id) {
+    const err = new Error(
+      `Failed to post to ${server.serverName}. Check the bot is in the server and can Send Messages + Embed Links in the announcement channel.`
+    );
+    err.status = 502;
+    throw err;
+  }
+
+  console.log(
+    `[DISCORD BOT] Test notification posted to ${server.serverName}, message ID: ${message.id}`
+  );
+
+  return {
+    serverId: server.serverId,
+    serverName: server.serverName,
+    channelId: server.announcementChannelId,
+    messageId: message.id,
+  };
+}

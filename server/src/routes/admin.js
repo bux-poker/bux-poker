@@ -12,7 +12,7 @@ import {
 } from "../utils/tournamentAdminAccess.js";
 import { TournamentEngine } from "../services/TournamentEngine.js";
 import { prisma } from "../config/database.js";
-import { postTournamentEmbed } from "../discord/bot.js";
+import { postTournamentEmbed, postTestNotification } from "../discord/bot.js";
 import {
   attachPrizeFundingSummary,
   buildPrizeFieldsFromRequest,
@@ -209,6 +209,19 @@ router.get("/servers", async (req, res, next) => {
 
     res.json(enrichedServers);
   } catch (err) {
+    next(err);
+  }
+});
+
+/** Post a test embed to a server's announcement channel (before creating a tournament). */
+router.post("/servers/:serverId/test-notification", async (req, res, next) => {
+  try {
+    const result = await postTestNotification(req.params.serverId);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ error: err.message });
+    }
     next(err);
   }
 });
