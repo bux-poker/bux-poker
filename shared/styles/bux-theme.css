@@ -447,70 +447,73 @@
     background: transparent;
   }
 
-  /* Compact edge fabs (chat / info) — smaller hit box, bolder icon */
+  /* Edge fabs (chat / info) — compact circle, icon fills most of it (all viewports) */
   .bux-edge-fab {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
+    box-sizing: border-box;
     width: 40px;
     height: 40px;
-    border-radius: 10px;
+    padding: 0;
+    border-radius: 999px;
     border: 1px solid var(--bux-panel-border);
     background: color-mix(in srgb, var(--bux-panel) 95%, transparent);
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
-    color: #e2e8f0;
+    color: #f8fafc;
+    line-height: 0;
   }
 
   .bux-edge-fab svg {
-    width: 22px;
-    height: 22px;
+    width: 26px;
+    height: 26px;
     stroke-width: 2.75;
+    flex-shrink: 0;
   }
 
-  /* Chat fab floats over the felt, above the hole-card corner — never inside the dock flow */
+  /* Float above hole-card corner — must stay position:absolute (do not add Tailwind relative) */
   .bux-chat-fab {
-    position: absolute;
+    position: absolute !important;
     left: 8px;
-    bottom: calc(var(--action-dock-height, 156px) + 8px);
+    bottom: calc(var(--action-dock-height, 156px) + 6px);
     z-index: 70;
   }
 
+  /*
+   * Short / narrow screens: table fills the column; dock overlays the bottom of the felt
+   * so the green rail overlaps the control area (no empty gap).
+   */
   @media (max-width: 900px), (max-height: 520px) {
-    .bux-edge-fab {
-      width: 34px;
-      height: 34px;
-      border-radius: 9px;
-    }
-
-    .bux-edge-fab svg {
-      width: 20px;
-      height: 20px;
-      stroke-width: 3;
-    }
-
-    /*
-     * Grow the felt into the top of the dock (15% overlap).
-     * Overflow stays visible so bottom seats aren't clipped.
-     */
     .bux-table-column {
       overflow: visible !important;
     }
 
     .bux-table-stage {
+      position: absolute !important;
+      inset: 0 !important;
+      margin: 0 !important;
+      flex: none !important;
       overflow: visible !important;
-      margin-bottom: calc(var(--action-dock-height, 120px) * -0.15);
       z-index: 1;
     }
 
     .bux-table-stage .bux-poker-table-root {
       overflow: visible !important;
+      /* Pull the oval down into the dock overlay zone */
+      padding-bottom: 0 !important;
     }
 
     .bux-action-dock-row {
-      position: relative;
+      position: absolute !important;
+      left: 0;
+      right: 0;
+      bottom: 0;
       z-index: 60;
-      /* keep dock chrome from painting a full-bleed slab over the felt */
       background: transparent;
+    }
+
+    .bux-chat-fab {
+      bottom: calc(var(--action-dock-height, 102px) + 6px) !important;
     }
   }
 

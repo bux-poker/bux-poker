@@ -1764,7 +1764,7 @@ export function PokerGameView() {
             />
           </div>
 
-          {/* Chat fab floats above the hole-card corner — not inside the dock (so dock height stays fixed). */}
+          {/* Chat fab: absolutely positioned above hole cards (CSS .bux-chat-fab) — never in dock flow. */}
           {user && chatCollapsed && (
             <button
               type="button"
@@ -1772,15 +1772,11 @@ export function PokerGameView() {
                 setChatCollapsed(false);
                 setUnreadChatCount(0);
               }}
-              className="bux-edge-fab bux-chat-fab relative"
+              className="bux-edge-fab bux-chat-fab"
               aria-label="Open chat"
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
               {unreadChatCount > 0 && (
                 <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
@@ -1790,9 +1786,9 @@ export function PokerGameView() {
             </button>
           )}
 
-          {/* Fixed-height dock: only hand + controls. Felt overlaps into this on short screens. */}
+          {/* Dock: reserved height on desktop; overlays felt bottom on short/narrow screens (CSS). */}
           <div
-            className={`bux-action-dock-row pointer-events-none relative z-[60] flex w-full shrink-0 items-end justify-between gap-3 px-2 pb-2 ${
+            className={`bux-action-dock-row pointer-events-none z-[60] flex w-full shrink-0 items-end justify-between gap-3 px-2 pb-2 ${
               isMobile ? "pt-2" : "pt-1"
             }`}
             style={{ height: "var(--action-dock-height, 156px)", minHeight: "var(--action-dock-height, 156px)" }}

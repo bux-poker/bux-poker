@@ -857,9 +857,9 @@
 @media (max-height: 520px) {
   :root {
     --table-padding: 8px;
-    --table-padding-top: 34px;
-    /* Extra bottom pad so community cards clear the corner hand */
-    --table-padding-bottom: 20px;
+    --table-padding-top: 28px;
+    /* Dock overlays the felt — no extra bottom gap */
+    --table-padding-bottom: 0px;
     --table-rail-width: 5px;
     --table-rail-inset: 2px;
     --action-dock-height: 102px;
@@ -891,8 +891,8 @@
 @media (max-height: 420px) {
   :root {
     --table-padding: 6px;
-    --table-padding-top: 28px;
-    --table-padding-bottom: 16px;
+    --table-padding-top: 24px;
+    --table-padding-bottom: 0px;
     --table-rail-width: 4px;
     --action-dock-height: 92px;
     --hero-card-height: 62px;
