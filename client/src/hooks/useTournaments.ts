@@ -72,6 +72,8 @@ export interface Tournament {
     claimedAt?: string | null;
     username?: string | null;
     userId?: string;
+    txSignatures?: string[];
+    solscanUrls?: string[];
   }>;
   registeredCount?: number;
   remainingPlayers?: number;

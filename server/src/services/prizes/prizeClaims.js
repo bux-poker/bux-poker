@@ -119,14 +119,69 @@ export async function listTournamentPrizeClaims(tournamentId) {
 /** Public lobby summary: claim status per paid place (claimed wallet or pending). */
 export async function getTournamentPrizeClaimSummaries(tournamentId) {
   const claims = await listTournamentPrizeClaims(tournamentId);
-  return claims.map((claim) => ({
-    finishingPlace: claim.finishingPlace,
-    status: claim.status,
-    recipientAddress: claim.recipientAddress || null,
-    claimedAt: claim.claimedAt || null,
-    username: claim.user?.username || null,
-    userId: claim.userId,
-  }));
+  return claims.map((claim) => {
+    let txSignatures = [];
+    try {
+      txSignatures = JSON.parse(claim.txSignaturesJson || "[]");
+    } catch {
+      txSignatures = [];
+    }
+    if (!Array.isArray(txSignatures)) txSignatures = [];
+    return {
+      finishingPlace: claim.finishingPlace,
+      status: claim.status,
+      recipientAddress: claim.recipientAddress || null,
+      claimedAt: claim.claimedAt || null,
+      username: claim.user?.username || null,
+      userId: claim.userId,
+      txSignatures,
+      solscanUrls: txSignatures.map((sig) => `https://solscan.io/tx/${sig}`),
+    };
+  });
+}
+
+/**
+ * Ensure prize claim rows exist for paid finishers on a completed tournament
+ * (safe to re-run; does not overwrite CLAIMED / SWEPT).
+ */
+export async function backfillTournamentPrizeClaims(tournamentId) {
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    select: {
+      id: true,
+      hasPrizes: true,
+      prizePlaces: true,
+      prizeMode: true,
+      status: true,
+    },
+  });
+  if (!tournament?.hasPrizes || !tournament.prizePlaces) {
+    return { created: 0, skipped: true };
+  }
+
+  const players = await prisma.player.findMany({
+    where: {
+      game: { tournamentId },
+      finishingPlace: { gte: 1, lte: tournament.prizePlaces },
+    },
+    select: { userId: true, finishingPlace: true },
+  });
+
+  let createdOrUpdated = 0;
+  for (const p of players) {
+    if (!p.userId || p.finishingPlace == null) continue;
+    const existing = await prisma.prizeClaim.findUnique({
+      where: {
+        tournamentId_userId: { tournamentId, userId: p.userId },
+      },
+    });
+    if (existing && (existing.status === "CLAIMED" || existing.status === "SWEPT")) {
+      continue;
+    }
+    await ensureTournamentPrizeClaim(tournamentId, p.userId, p.finishingPlace);
+    createdOrUpdated += 1;
+  }
+  return { createdOrUpdated, places: tournament.prizePlaces };
 }
 
 export function sortLeagueStandings(rows) {

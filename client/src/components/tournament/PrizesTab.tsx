@@ -36,6 +36,8 @@ export interface PrizeClaimSummaryRow {
   claimedAt?: string | null;
   username?: string | null;
   userId?: string;
+  txSignatures?: string[];
+  solscanUrls?: string[];
 }
 
 interface Props {
@@ -89,6 +91,25 @@ function shortAddress(addr: string) {
   return `${addr.slice(0, 4)}…${addr.slice(-4)}`;
 }
 
+function ClaimedTickIcon() {
+  return (
+    <span
+      className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white shadow-sm"
+      aria-hidden
+    >
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path
+          d="M2.5 6.2L4.8 8.5L9.5 3.5"
+          stroke="#16a34a"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </span>
+  );
+}
+
 function placeClaimBadge(claim: PrizeClaimSummaryRow | undefined, tournamentEnded: boolean) {
   if (!tournamentEnded) return null;
   if (!claim) {
@@ -100,7 +121,8 @@ function placeClaimBadge(claim: PrizeClaimSummaryRow | undefined, tournamentEnde
   }
   if (claim.status === 'CLAIMED') {
     return (
-      <span className="rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-emerald-300">
+      <span className="inline-flex items-center gap-1.5 rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-emerald-300">
+        <ClaimedTickIcon />
         Claimed
       </span>
     );
@@ -193,16 +215,39 @@ export function PrizesTab({
                   ))}
                 </div>
               )}
-              {tournamentEnded && claim?.status === 'CLAIMED' && claim.recipientAddress && (
-                <p className="mt-2 break-all font-mono text-xs text-slate-400">
-                  Wallet:{' '}
-                  <span className="text-slate-200">
-                    {shortAddress(claim.recipientAddress)}
-                  </span>
-                  <span className="ml-2 hidden sm:inline text-slate-500">
-                    ({claim.recipientAddress})
-                  </span>
-                </p>
+              {tournamentEnded && claim?.status === 'CLAIMED' && (
+                <div className="mt-2 space-y-1 text-xs text-slate-400">
+                  {claim.recipientAddress && (
+                    <p className="break-all font-mono">
+                      Wallet:{' '}
+                      <span className="text-slate-200">
+                        {shortAddress(claim.recipientAddress)}
+                      </span>
+                      <span className="ml-2 hidden sm:inline text-slate-500">
+                        ({claim.recipientAddress})
+                      </span>
+                    </p>
+                  )}
+                  {(claim.solscanUrls && claim.solscanUrls.length > 0
+                    ? claim.solscanUrls
+                    : (claim.txSignatures || []).map(
+                        (sig) => `https://solscan.io/tx/${sig}`
+                      )
+                  ).map((url, i, arr) => (
+                    <p key={url}>
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-emerald-400 hover:underline"
+                      >
+                        {arr.length > 1
+                          ? `Claim transaction ${i + 1} on Solscan →`
+                          : 'Claim transaction on Solscan →'}
+                      </a>
+                    </p>
+                  ))}
+                </div>
               )}
               {tournamentEnded &&
                 claim &&

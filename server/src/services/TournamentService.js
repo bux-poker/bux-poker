@@ -4,6 +4,7 @@ import { parsePrizeStructureJson, lamportsToSolString } from "./prizes/prizeStru
 import {
   getViewerPrizeClaim,
   getTournamentPrizeClaimSummaries,
+  backfillTournamentPrizeClaims,
 } from "./prizes/prizeClaims.js";
 import { isPrizeWalletConfigured } from "./prizes/prizeWallet.js";
 import { buildPrizeDepositRequirements } from "./prizes/prizeDeposit.js";
@@ -428,11 +429,19 @@ export class TournamentService {
           result.myPrizeClaim = null;
         }
 
-        // After the event ends (or claims exist), lobby Prizes tab shows claim status per place.
+        // After the event ends, lobby Prizes tab shows claim status per place (+ tx links).
         if (
           tournament.status === "COMPLETED" ||
           tournament.status === "CANCELLED"
         ) {
+          if (tournament.status === "COMPLETED") {
+            await backfillTournamentPrizeClaims(id).catch((err) =>
+              console.warn(
+                "[PRIZES] backfillTournamentPrizeClaims:",
+                err?.message || err
+              )
+            );
+          }
           result.prizeClaims = await getTournamentPrizeClaimSummaries(id);
         } else {
           result.prizeClaims = [];
