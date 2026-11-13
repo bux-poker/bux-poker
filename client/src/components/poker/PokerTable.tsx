@@ -742,6 +742,12 @@ export function PokerTable({
                           marginTop: labelBelow ? 4 : 0,
                           marginBottom: labelBelow ? 0 : 4,
                           zIndex: 50,
+                          // Mobile: pin label to PFP edge on the side opposite the hole cards
+                          ...(isMobile
+                            ? {
+                                alignSelf: cardsOnRight ? "flex-start" : "flex-end",
+                              }
+                            : null),
                         }}
                       >
                         <div className="bux-seat-name">{player.name}</div>

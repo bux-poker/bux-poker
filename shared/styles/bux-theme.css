@@ -514,8 +514,11 @@
       background: transparent;
     }
 
+    /* Clear the hole-card / hand-strength corner below */
     .bux-chat-fab {
-      bottom: calc(var(--action-dock-height, 102px) + 6px) !important;
+      bottom: calc(
+        var(--action-dock-height, 102px) + var(--community-card-height, 62px) + 36px
+      ) !important;
     }
   }
 
