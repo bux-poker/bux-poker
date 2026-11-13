@@ -103,75 +103,63 @@ export function PrizeWalletFundPanel({ kind, eventId, requirements, onFunded }: 
         { headers: authHeaders() }
       );
 
-      const dest = new web3.PublicKey(plan.prizeWalletAddress);
-      const tx = new web3.Transaction();
-
-      const solLamports = BigInt(plan.solLamports || '0');
-      if (solLamports > 0n) {
-        tx.add(
-          web3.SystemProgram.transfer({
-            fromPubkey: payer,
-            toPubkey: dest,
-            lamports: Number(solLamports),
-          })
+      let tx: InstanceType<typeof web3.Transaction>;
+      if (plan.transactionBase64) {
+        // Prefer server-built tx (correct Core/SPL instructions + blockhash).
+        const raw = Uint8Array.from(atob(plan.transactionBase64), (c) =>
+          c.charCodeAt(0)
         );
-      }
-
-      for (const t of plan.tokenTransfers || []) {
-        const mint = new web3.PublicKey(t.mint);
-        const source = new web3.PublicKey(t.source);
-        const ata = new web3.PublicKey(t.destinationAta);
-        const tokenProgramId = t.tokenProgramId
-          ? new web3.PublicKey(t.tokenProgramId)
-          : spl.TOKEN_PROGRAM_ID;
-        if (t.createDestAta) {
+        tx = web3.Transaction.from(raw);
+      } else {
+        // Legacy fallback if an older API is still live.
+        const dest = new web3.PublicKey(plan.prizeWalletAddress);
+        tx = new web3.Transaction();
+        const solLamports = BigInt(plan.solLamports || '0');
+        if (solLamports > 0n) {
           tx.add(
-            spl.createAssociatedTokenAccountInstruction(
-              payer,
+            web3.SystemProgram.transfer({
+              fromPubkey: payer,
+              toPubkey: dest,
+              lamports: Number(solLamports),
+            })
+          );
+        }
+        for (const t of plan.tokenTransfers || []) {
+          const mint = new web3.PublicKey(t.mint);
+          const source = new web3.PublicKey(t.source);
+          const ata = new web3.PublicKey(t.destinationAta);
+          const tokenProgramId = t.tokenProgramId
+            ? new web3.PublicKey(t.tokenProgramId)
+            : spl.TOKEN_PROGRAM_ID;
+          if (t.createDestAta) {
+            tx.add(
+              spl.createAssociatedTokenAccountInstruction(
+                payer,
+                ata,
+                dest,
+                mint,
+                tokenProgramId,
+                spl.ASSOCIATED_TOKEN_PROGRAM_ID
+              )
+            );
+          }
+          tx.add(
+            spl.createTransferInstruction(
+              source,
               ata,
-              dest,
-              mint,
-              tokenProgramId,
-              spl.ASSOCIATED_TOKEN_PROGRAM_ID
+              payer,
+              BigInt(t.amount),
+              [],
+              tokenProgramId
             )
           );
         }
-        tx.add(
-          spl.createTransferInstruction(
-            source,
-            ata,
-            payer,
-            BigInt(t.amount),
-            [],
-            tokenProgramId
-          )
-        );
+        if (tx.instructions.length === 0) {
+          throw new Error('Nothing to deposit');
+        }
+        tx.feePayer = payer;
+        tx.recentBlockhash = plan.blockhash;
       }
-
-      // Metaplex Core NFTs (not SPL token accounts) — instructions built server-side
-      for (const ix of plan.coreTransferInstructions || []) {
-        const data = Uint8Array.from(atob(ix.data), (c) => c.charCodeAt(0));
-        tx.add(
-          new web3.TransactionInstruction({
-            programId: new web3.PublicKey(ix.programId),
-            keys: (ix.keys || []).map(
-              (k: { pubkey: string; isSigner: boolean; isWritable: boolean }) => ({
-                pubkey: new web3.PublicKey(k.pubkey),
-                isSigner: k.isSigner,
-                isWritable: k.isWritable,
-              })
-            ),
-            data,
-          })
-        );
-      }
-
-      if (tx.instructions.length === 0) {
-        throw new Error('Nothing to deposit');
-      }
-
-      tx.feePayer = payer;
-      tx.recentBlockhash = plan.blockhash;
 
       setMessage('Approve the deposit in your wallet…');
       const signed = await provider.signTransaction(tx);

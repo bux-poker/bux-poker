@@ -1,10 +1,16 @@
-import { PublicKey } from "@solana/web3.js";
+import {
+  PublicKey,
+  SystemProgram,
+  Transaction,
+} from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddress,
   getAccount,
+  createAssociatedTokenAccountInstruction,
+  createTransferInstruction,
 } from "@solana/spl-token";
 import { getSolanaConnection } from "./prizeFunding.js";
 import { buildPrizeDepositRequirements } from "./prizeDeposit.js";
@@ -12,7 +18,6 @@ import { getSharedPrizeWalletAddress } from "./prizeWallet.js";
 import {
   fetchCoreAsset,
   buildCoreTransferInstruction,
-  serializeInstruction,
 } from "./mplCore.js";
 
 function httpError(message, status) {
@@ -31,7 +36,7 @@ async function findSourceTokenAccount(connection, owner, mint, need) {
       if (!info || info.mint !== mint.toBase58()) continue;
       const amount = BigInt(info.tokenAmount?.amount || 0);
       if (amount >= need) {
-        return { source: acct.pubkey.toBase58(), tokenProgramId: programId };
+        return { source: acct.pubkey, tokenProgramId: programId };
       }
     }
   }
@@ -39,7 +44,7 @@ async function findSourceTokenAccount(connection, owner, mint, need) {
 }
 
 /**
- * Build deposit plan + fresh blockhash using the API host RPC (avoids browser 403 on public RPC).
+ * Build a ready-to-sign deposit transaction on the API host.
  * Supports classic SPL / Token-2022 tokens and Metaplex Core NFTs.
  */
 export async function preparePrizeDeposit({
@@ -78,8 +83,17 @@ export async function preparePrizeDeposit({
   const { blockhash, lastValidBlockHeight } =
     await connection.getLatestBlockhash("confirmed");
 
-  const tokenTransfers = [];
-  const coreTransferInstructions = [];
+  const tx = new Transaction();
+  const solLamports = BigInt(requirements.solLamports || "0");
+  if (solLamports > 0n) {
+    tx.add(
+      SystemProgram.transfer({
+        fromPubkey: payer,
+        toPubkey: dest,
+        lamports: Number(solLamports),
+      })
+    );
+  }
 
   for (const s of requirements.spl) {
     const mint = new PublicKey(s.mint);
@@ -91,7 +105,7 @@ export async function preparePrizeDeposit({
         400
       );
     }
-    const tokenProgramId = found.tokenProgramId;
+    const { source, tokenProgramId } = found;
     const ata = await getAssociatedTokenAddress(
       mint,
       dest,
@@ -99,20 +113,30 @@ export async function preparePrizeDeposit({
       tokenProgramId,
       ASSOCIATED_TOKEN_PROGRAM_ID
     );
-    let createDestAta = false;
     try {
       await getAccount(connection, ata, "confirmed", tokenProgramId);
     } catch {
-      createDestAta = true;
+      tx.add(
+        createAssociatedTokenAccountInstruction(
+          payer,
+          ata,
+          dest,
+          mint,
+          tokenProgramId,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        )
+      );
     }
-    tokenTransfers.push({
-      mint: s.mint,
-      amount: s.amount,
-      source: found.source,
-      destinationAta: ata.toBase58(),
-      createDestAta,
-      tokenProgramId: tokenProgramId.toBase58(),
-    });
+    tx.add(
+      createTransferInstruction(
+        source,
+        ata,
+        payer,
+        need,
+        [],
+        tokenProgramId
+      )
+    );
   }
 
   for (const n of requirements.nfts) {
@@ -124,14 +148,15 @@ export async function preparePrizeDeposit({
           400
         );
       }
-      const ix = buildCoreTransferInstruction({
-        asset: n.mint,
-        collection: core.collection,
-        payer,
-        authority: payer,
-        newOwner: dest,
-      });
-      coreTransferInstructions.push(serializeInstruction(ix));
+      tx.add(
+        buildCoreTransferInstruction({
+          asset: n.mint,
+          collection: core.collection,
+          payer,
+          authority: payer,
+          newOwner: dest,
+        })
+      );
       continue;
     }
 
@@ -143,7 +168,7 @@ export async function preparePrizeDeposit({
         400
       );
     }
-    const tokenProgramId = found.tokenProgramId;
+    const { source, tokenProgramId } = found;
     const ata = await getAssociatedTokenAddress(
       mint,
       dest,
@@ -151,21 +176,51 @@ export async function preparePrizeDeposit({
       tokenProgramId,
       ASSOCIATED_TOKEN_PROGRAM_ID
     );
-    let createDestAta = false;
     try {
       await getAccount(connection, ata, "confirmed", tokenProgramId);
     } catch {
-      createDestAta = true;
+      tx.add(
+        createAssociatedTokenAccountInstruction(
+          payer,
+          ata,
+          dest,
+          mint,
+          tokenProgramId,
+          ASSOCIATED_TOKEN_PROGRAM_ID
+        )
+      );
     }
-    tokenTransfers.push({
-      mint: n.mint,
-      amount: "1",
-      source: found.source,
-      destinationAta: ata.toBase58(),
-      createDestAta,
-      tokenProgramId: tokenProgramId.toBase58(),
-    });
+    tx.add(
+      createTransferInstruction(source, ata, payer, 1n, [], tokenProgramId)
+    );
   }
+
+  if (tx.instructions.length === 0) {
+    throw httpError("Nothing to deposit", 400);
+  }
+
+  tx.feePayer = payer;
+  tx.recentBlockhash = blockhash;
+
+  // Preflight on the API host so we fail with real logs before wallet prompt when possible.
+  try {
+    const sim = await connection.simulateTransaction(tx);
+    if (sim.value.err) {
+      const logs = (sim.value.logs || []).slice(-12).join(" | ");
+      throw httpError(
+        `Deposit simulation failed: ${JSON.stringify(sim.value.err)}${logs ? ` — ${logs}` : ""}`,
+        400
+      );
+    }
+  } catch (err) {
+    if (err.status) throw err;
+    // Non-fatal if simulate API shape differs; wallet + send-raw still gate.
+    console.warn("[PRIZE DEPOSIT] prepare simulate warning:", err?.message || err);
+  }
+
+  const transactionBase64 = tx
+    .serialize({ requireAllSignatures: false, verifySignatures: false })
+    .toString("base64");
 
   return {
     blockhash,
@@ -174,11 +229,28 @@ export async function preparePrizeDeposit({
     prizeWalletAddress: destStr,
     solLamports: requirements.solLamports,
     solAmount: requirements.solAmount,
-    tokenTransfers,
-    coreTransferInstructions,
+    transactionBase64,
     tokenProgramId: TOKEN_PROGRAM_ID.toBase58(),
     associatedTokenProgramId: ASSOCIATED_TOKEN_PROGRAM_ID.toBase58(),
   };
+}
+
+async function formatSendError(connection, err) {
+  let logs = err?.logs;
+  if ((!logs || !logs.length) && typeof err?.getLogs === "function") {
+    try {
+      logs = await err.getLogs(connection);
+    } catch {
+      /* ignore */
+    }
+  }
+  if ((!logs || !logs.length) && err?.transactionMessage) {
+    return `${err.message} (${err.transactionMessage})`;
+  }
+  const logTail = Array.isArray(logs) && logs.length
+    ? ` — ${logs.slice(-12).join(" | ")}`
+    : "";
+  return `${err?.message || "Transaction failed"}${logTail}`;
 }
 
 export async function sendSignedPrizeDepositTransaction(signedTransactionBase64) {
@@ -194,21 +266,55 @@ export async function sendSignedPrizeDepositTransaction(signedTransactionBase64)
   if (!bytes.length) throw httpError("signedTransaction is empty", 400);
 
   const connection = getSolanaConnection();
-  const signature = await connection.sendRawTransaction(bytes, {
-    skipPreflight: false,
-    preflightCommitment: "confirmed",
-    maxRetries: 3,
-  });
 
-  const latest = await connection.getLatestBlockhash("confirmed");
-  await connection.confirmTransaction(
-    {
-      signature,
-      blockhash: latest.blockhash,
-      lastValidBlockHeight: latest.lastValidBlockHeight,
-    },
-    "confirmed"
-  );
+  // Decode to recover the tx blockhash for confirmation (don't use a fresh one).
+  let txBlockhash = null;
+  let lastValidBlockHeight = null;
+  try {
+    const parsed = Transaction.from(bytes);
+    txBlockhash = parsed.recentBlockhash || null;
+    if (txBlockhash) {
+      const latest = await connection.getLatestBlockhash("confirmed");
+      // Prefer confirming against current chain tip height with the tx's blockhash.
+      lastValidBlockHeight = latest.lastValidBlockHeight;
+    }
+  } catch {
+    /* send anyway */
+  }
+
+  let signature;
+  try {
+    signature = await connection.sendRawTransaction(bytes, {
+      skipPreflight: false,
+      preflightCommitment: "confirmed",
+      maxRetries: 3,
+    });
+  } catch (err) {
+    throw httpError(await formatSendError(connection, err), 400);
+  }
+
+  try {
+    if (txBlockhash && lastValidBlockHeight != null) {
+      await connection.confirmTransaction(
+        {
+          signature,
+          blockhash: txBlockhash,
+          lastValidBlockHeight,
+        },
+        "confirmed"
+      );
+    } else {
+      await connection.confirmTransaction(signature, "confirmed");
+    }
+  } catch (err) {
+    // Tx may still land; surface signature so confirm endpoint can verify.
+    console.warn(
+      "[PRIZE DEPOSIT] confirm wait failed:",
+      err?.message || err,
+      "sig",
+      signature
+    );
+  }
 
   return { signature };
 }
