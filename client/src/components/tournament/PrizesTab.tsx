@@ -29,9 +29,19 @@ export interface MyPrizeClaim {
   solscanUrls?: string[];
 }
 
+export interface PrizeClaimSummaryRow {
+  finishingPlace: number;
+  status: string;
+  recipientAddress?: string | null;
+  claimedAt?: string | null;
+  username?: string | null;
+  userId?: string;
+}
+
 interface Props {
   tournamentId?: string;
   tournament: {
+    status?: string;
     prizePlaces?: number;
     prizeMode?: 'MANUAL' | 'WALLET' | null;
     prizeStructure?: ManualPrizePlace[] | WalletPrizePlace[];
@@ -41,6 +51,7 @@ interface Props {
     requiredFeeSol?: string | null;
     prizeClaimServer?: { serverName: string; inviteLink: string | null } | null;
     myPrizeClaim?: MyPrizeClaim | null;
+    prizeClaims?: PrizeClaimSummaryRow[];
     hasPrizes?: boolean;
   };
   onUpdated?: () => void;
@@ -73,6 +84,41 @@ function claimStatusLabel(status: string) {
   }
 }
 
+function shortAddress(addr: string) {
+  if (addr.length <= 12) return addr;
+  return `${addr.slice(0, 4)}…${addr.slice(-4)}`;
+}
+
+function placeClaimBadge(claim: PrizeClaimSummaryRow | undefined, tournamentEnded: boolean) {
+  if (!tournamentEnded) return null;
+  if (!claim) {
+    return (
+      <span className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-amber-200">
+        Pending
+      </span>
+    );
+  }
+  if (claim.status === 'CLAIMED') {
+    return (
+      <span className="rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-emerald-300">
+        Claimed
+      </span>
+    );
+  }
+  if (claim.status === 'SWEPT' || claim.status === 'EXPIRED') {
+    return (
+      <span className="rounded border border-slate-500/40 bg-slate-500/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-300">
+        {claim.status === 'SWEPT' ? 'Refunded' : 'Expired'}
+      </span>
+    );
+  }
+  return (
+    <span className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-amber-200">
+      Pending
+    </span>
+  );
+}
+
 export function PrizesTab({
   tournamentId,
   tournament,
@@ -90,6 +136,11 @@ export function PrizesTab({
 
   const structure = tournament.prizeStructure || [];
   const myClaim = tournament.myPrizeClaim;
+  const tournamentEnded =
+    tournament.status === 'COMPLETED' || tournament.status === 'CANCELLED';
+  const claimsByPlace = new Map(
+    (tournament.prizeClaims || []).map((c) => [c.finishingPlace, c])
+  );
 
   return (
     <div className="space-y-6">
@@ -113,25 +164,56 @@ export function PrizesTab({
       </div>
 
       <div className="space-y-3">
-        {structure.map((row) => (
-          <div
-            key={row.place}
-            className="bux-surface px-4 py-3"
-          >
-            <p className="text-sm font-medium text-emerald-400">{placeLabel(row.place)} place</p>
-            {'description' in row && row.description ? (
-              <div className="mt-3">
-                <ManualPrizeVisual description={row.description} />
+        {structure.map((row) => {
+          const claim = claimsByPlace.get(row.place);
+          return (
+            <div
+              key={row.place}
+              className="bux-surface px-4 py-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium text-emerald-400">
+                  {placeLabel(row.place)} place
+                  {claim?.username ? (
+                    <span className="ml-2 font-normal text-slate-400">
+                      · {claim.username}
+                    </span>
+                  ) : null}
+                </p>
+                {placeClaimBadge(claim, tournamentEnded)}
               </div>
-            ) : (
-              <div className="mt-3 flex flex-col gap-3">
-                {(row as WalletPrizePlace).items?.map((item, i) => (
-                  <PrizeAssetVisual key={i} item={item} layout="row" />
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+              {'description' in row && row.description ? (
+                <div className="mt-3">
+                  <ManualPrizeVisual description={row.description} />
+                </div>
+              ) : (
+                <div className="mt-3 flex flex-col gap-3">
+                  {(row as WalletPrizePlace).items?.map((item, i) => (
+                    <PrizeAssetVisual key={i} item={item} layout="row" />
+                  ))}
+                </div>
+              )}
+              {tournamentEnded && claim?.status === 'CLAIMED' && claim.recipientAddress && (
+                <p className="mt-2 break-all font-mono text-xs text-slate-400">
+                  Wallet:{' '}
+                  <span className="text-slate-200">
+                    {shortAddress(claim.recipientAddress)}
+                  </span>
+                  <span className="ml-2 hidden sm:inline text-slate-500">
+                    ({claim.recipientAddress})
+                  </span>
+                </p>
+              )}
+              {tournamentEnded &&
+                claim &&
+                (claim.status === 'ELIGIBLE' || claim.status === 'MANUAL_PENDING') && (
+                  <p className="mt-2 text-xs text-amber-200/90">
+                    Prize not claimed yet
+                  </p>
+                )}
+            </div>
+          );
+        })}
       </div>
 
       {!prizesAvailable && (

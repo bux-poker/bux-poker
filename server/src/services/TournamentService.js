@@ -1,7 +1,10 @@
 import { prisma } from "../config/database.js";
 import { attachCanManageToTournaments, canManageTournament } from "../utils/tournamentAdminAccess.js";
 import { parsePrizeStructureJson, lamportsToSolString } from "./prizes/prizeStructure.js";
-import { getViewerPrizeClaim } from "./prizes/prizeClaims.js";
+import {
+  getViewerPrizeClaim,
+  getTournamentPrizeClaimSummaries,
+} from "./prizes/prizeClaims.js";
 import { isPrizeWalletConfigured } from "./prizes/prizeWallet.js";
 import { buildPrizeDepositRequirements } from "./prizes/prizeDeposit.js";
 
@@ -423,6 +426,16 @@ export class TournamentService {
         } else {
           result.canManage = false;
           result.myPrizeClaim = null;
+        }
+
+        // After the event ends (or claims exist), lobby Prizes tab shows claim status per place.
+        if (
+          tournament.status === "COMPLETED" ||
+          tournament.status === "CANCELLED"
+        ) {
+          result.prizeClaims = await getTournamentPrizeClaimSummaries(id);
+        } else {
+          result.prizeClaims = [];
         }
 
         return result;

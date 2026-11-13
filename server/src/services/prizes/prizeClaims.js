@@ -116,6 +116,19 @@ export async function listTournamentPrizeClaims(tournamentId) {
   });
 }
 
+/** Public lobby summary: claim status per paid place (claimed wallet or pending). */
+export async function getTournamentPrizeClaimSummaries(tournamentId) {
+  const claims = await listTournamentPrizeClaims(tournamentId);
+  return claims.map((claim) => ({
+    finishingPlace: claim.finishingPlace,
+    status: claim.status,
+    recipientAddress: claim.recipientAddress || null,
+    claimedAt: claim.claimedAt || null,
+    username: claim.user?.username || null,
+    userId: claim.userId,
+  }));
+}
+
 export function sortLeagueStandings(rows) {
   return [...rows].sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points;
