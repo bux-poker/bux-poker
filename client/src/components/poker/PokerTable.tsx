@@ -73,6 +73,9 @@ export function PokerTable({
     height: typeof window !== "undefined" ? window.innerHeight : 900,
   });
   const isMobile = useIsMobile();
+  // Match short/narrow table layout (phones + landscape + DevTools), not UA alone
+  const compactSeats =
+    isMobile || windowSize.width <= 900 || windowSize.height <= 520;
 
   const handleSeatAvatarClick = useCallback(
     (targetKey: string) => {
@@ -495,9 +498,16 @@ export function PokerTable({
               }}
             >
               <div 
-                className="flex flex-col items-center"
+                className={`flex flex-col ${compactSeats ? "" : "items-center"}`}
                 style={{
-                  flexDirection: visualSeat >= 6 && visualSeat <= 10 ? 'column-reverse' : 'column'
+                  flexDirection: visualSeat >= 6 && visualSeat <= 10 ? 'column-reverse' : 'column',
+                  // Compact: column width = PFP so label pins to that edge (not centered under a wider box)
+                  ...(compactSeats
+                    ? {
+                        width: "var(--player-avatar-size, 64px)",
+                        alignItems: cardsOnRight ? "flex-start" : "flex-end",
+                      }
+                    : null),
                 }}
               >
                   {/* Occupied seats only — empty seats stay quiet */}
@@ -742,12 +752,6 @@ export function PokerTable({
                           marginTop: labelBelow ? 4 : 0,
                           marginBottom: labelBelow ? 0 : 4,
                           zIndex: 50,
-                          // Mobile: pin label to PFP edge on the side opposite the hole cards
-                          ...(isMobile
-                            ? {
-                                alignSelf: cardsOnRight ? "flex-start" : "flex-end",
-                              }
-                            : null),
                         }}
                       >
                         <div className="bux-seat-name">{player.name}</div>
