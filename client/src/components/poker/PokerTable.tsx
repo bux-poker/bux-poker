@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import type { Card } from "@shared/types/poker";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { BetChip } from "./table/BetChip";
 import { formatHandCategory } from "./table/formatHandCategory";
 import { PokerCardImage } from "./table/PokerCardImage";
-import { PLAYER_POSITIONS } from "./table/pokerTableConstants";
+import { HERO_VISUAL_SEAT_INDEX, PLAYER_POSITIONS } from "./table/pokerTableConstants";
 import type { PokerTableProps } from "./table/pokerTableTypes";
 import { usePokerTableActionOverlays } from "./table/usePokerTableActionOverlays";
 import { EmojiReactionLayer } from "./table/EmojiReactionLayer";
@@ -58,16 +58,14 @@ export function PokerTable({
   const [pickerTargetUserId, setPickerTargetUserId] = useState<string | null>(null);
   const tableRootRef = useRef<HTMLDivElement | null>(null);
   const seatRefs = useRef<Map<string, HTMLElement | null>>(new Map());
-  /** Visual seat orbit offset (0–9). Lets players sit where they like without changing server seats. */
-  const [seatRotate, setSeatRotate] = useState(() => {
-    try {
-      const raw = localStorage.getItem("bux-poker-seat-rotate");
-      const n = raw != null ? parseInt(raw, 10) : 0;
-      return Number.isFinite(n) ? ((n % 10) + 10) % 10 : 0;
-    } catch {
-      return 0;
-    }
-  });
+
+  /** Always put the local player at bottom-right (HERO_VISUAL_SEAT_INDEX). */
+  const seatRotate = useMemo(() => {
+    if (!myUserId || !myPlayer?.seatNumber) return 0;
+    const seatIdx = Number(myPlayer.seatNumber) - 1;
+    if (!Number.isFinite(seatIdx) || seatIdx < 0 || seatIdx > 9) return 0;
+    return (HERO_VISUAL_SEAT_INDEX - seatIdx + 10) % 10;
+  }, [myUserId, myPlayer?.seatNumber]);
   
   // Window size state to trigger re-renders when CSS variables change
   const [windowSize, setWindowSize] = useState({
@@ -75,18 +73,6 @@ export function PokerTable({
     height: typeof window !== "undefined" ? window.innerHeight : 900,
   });
   const isMobile = useIsMobile();
-
-  const rotateSeats = useCallback((dir: 1 | -1) => {
-    setSeatRotate((prev) => {
-      const next = ((prev + dir) % 10 + 10) % 10;
-      try {
-        localStorage.setItem("bux-poker-seat-rotate", String(next));
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  }, []);
 
   const handleSeatAvatarClick = useCallback(
     (targetKey: string) => {
@@ -156,7 +142,7 @@ export function PokerTable({
         paddingLeft: "var(--table-padding, 32px)",
       }}
     >
-      {/* Top-left: blinds / next + rotate seats */}
+      {/* Top-left: blinds / next + tournament lobby */}
       <div
         className="absolute left-0 top-0 z-10 flex items-start gap-1.5"
         style={{ marginLeft: "8px", marginTop: "8px" }}
@@ -177,20 +163,8 @@ export function PokerTable({
             )}
           </div>
         )}
-        <div className="bux-hud-strip !gap-1 !rounded-2xl !px-1.5 !py-1.5">
-          <button
-            type="button"
-            onClick={() => rotateSeats(-1)}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
-            title="Rotate seats clockwise"
-            aria-label="Rotate seats clockwise"
-          >
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 1 1-9-9" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 4v8h-8" />
-            </svg>
-          </button>
-          {onTournamentLobbyClick != null && (
+        {onTournamentLobbyClick != null && (
+          <div className="bux-hud-strip !gap-1 !rounded-2xl !px-1.5 !py-1.5">
             <button
               type="button"
               onClick={onTournamentLobbyClick}
@@ -203,8 +177,8 @@ export function PokerTable({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16v-4M12 8h.01" />
               </svg>
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Top-right: players / rank */}

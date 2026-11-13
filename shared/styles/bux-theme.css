@@ -975,31 +975,4 @@
     font-weight: 700;
   }
 
-  .bux-preaction {
-    display: inline-flex;
-    gap: 4px;
-    padding: 3px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--bux-panel) 90%, transparent);
-    border: 1px solid var(--bux-panel-border);
-  }
-
-  .bux-preaction button {
-    border-radius: 999px;
-    padding: 6px 12px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    color: var(--bux-text-muted);
-    transition: background-color 0.12s ease, color 0.12s ease;
-  }
-
-  .bux-preaction button[aria-pressed="true"] {
-    background: color-mix(in srgb, var(--bux-accent) 28%, transparent);
-    color: white;
-  }
-
-  .bux-preaction button:hover {
-    color: white;
-  }
 }

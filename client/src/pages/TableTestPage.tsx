@@ -151,11 +151,12 @@ export function TableTestPage() {
             />
           </div>
 
-          {/* Transparent flow row keeps the felt above the corners without a full-width dock. */}
+          {/* Fixed-height dock so the felt never resizes when controls change. */}
           <div
             className={`pointer-events-none relative z-[60] flex w-full shrink-0 items-end justify-between gap-3 px-2 pb-2 ${
               isMobile ? "pt-2" : "pt-1"
             }`}
+            style={{ minHeight: "var(--action-dock-height, 156px)" }}
           >
             {(() => {
               const myHoleCards = players[0]?.holeCards;

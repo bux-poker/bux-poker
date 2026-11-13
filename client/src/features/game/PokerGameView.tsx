@@ -1761,11 +1761,12 @@ export function PokerGameView() {
             />
           </div>
 
-          {/* Transparent flow row: reserves height so the felt cannot pass the controls; no full-width chrome. */}
+          {/* Fixed-height dock: felt area never resizes when controls appear/change. */}
           <div
             className={`pointer-events-none relative z-[60] flex w-full shrink-0 items-end justify-between gap-3 px-2 pb-2 ${
               isMobile ? "pt-2" : "pt-1"
             }`}
+            style={{ minHeight: "var(--action-dock-height, 156px)" }}
           >
             <div className="pointer-events-auto min-w-0">
               {myPlayer && myPlayer.holeCards && Array.isArray(myPlayer.holeCards) && myPlayer.holeCards.length > 0 && (
@@ -1794,7 +1795,7 @@ export function PokerGameView() {
               )}
             </div>
 
-            <div className="pointer-events-auto min-w-0">
+            <div className="pointer-events-auto flex min-w-0 items-end justify-end">
               {(gameState.showdownNeedsChoice ||
                 (myPlayer?.isAway && !gameState.showdownActive) ||
                 (isMyTurn && !gameState.showdownActive && !myPlayer?.isAway) ||
