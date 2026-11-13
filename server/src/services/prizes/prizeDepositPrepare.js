@@ -236,6 +236,7 @@ export async function preparePrizeDeposit({
 }
 
 async function formatSendError(connection, err) {
+  const msg = String(err?.message || "Transaction failed");
   let logs = err?.logs;
   if ((!logs || !logs.length) && typeof err?.getLogs === "function") {
     try {
@@ -244,13 +245,17 @@ async function formatSendError(connection, err) {
       /* ignore */
     }
   }
-  if ((!logs || !logs.length) && err?.transactionMessage) {
-    return `${err.message} (${err.transactionMessage})`;
+  if (/blockhash/i.test(msg) || /BlockhashNotFound/i.test(msg)) {
+    return "Deposit blockhash expired — click Deposit again and approve within ~60 seconds.";
   }
-  const logTail = Array.isArray(logs) && logs.length
-    ? ` — ${logs.slice(-12).join(" | ")}`
-    : "";
-  return `${err?.message || "Transaction failed"}${logTail}`;
+  const logTail =
+    Array.isArray(logs) && logs.length
+      ? ` — ${logs.slice(-12).join(" | ")}`
+      : "";
+  if (!logTail && /simulation failed/i.test(msg)) {
+    return `${msg} Often caused by a stale blockhash or public RPC rate limits — retry Deposit and approve quickly.`;
+  }
+  return `${msg}${logTail}`;
 }
 
 export async function sendSignedPrizeDepositTransaction(signedTransactionBase64) {
@@ -267,47 +272,66 @@ export async function sendSignedPrizeDepositTransaction(signedTransactionBase64)
 
   const connection = getSolanaConnection();
 
-  // Decode to recover the tx blockhash for confirmation (don't use a fresh one).
   let txBlockhash = null;
-  let lastValidBlockHeight = null;
+  let parsedTx = null;
   try {
-    const parsed = Transaction.from(bytes);
-    txBlockhash = parsed.recentBlockhash || null;
-    if (txBlockhash) {
-      const latest = await connection.getLatestBlockhash("confirmed");
-      // Prefer confirming against current chain tip height with the tx's blockhash.
-      lastValidBlockHeight = latest.lastValidBlockHeight;
-    }
-  } catch {
-    /* send anyway */
+    parsedTx = Transaction.from(bytes);
+    txBlockhash = parsedTx.recentBlockhash || null;
+  } catch (err) {
+    throw httpError(
+      `Could not decode signed transaction: ${err?.message || err}`,
+      400
+    );
   }
 
+  if (txBlockhash) {
+    try {
+      const valid = await connection.isBlockhashValid(txBlockhash, {
+        commitment: "processed",
+      });
+      if (valid?.value === false) {
+        throw httpError(
+          "Deposit blockhash expired — click Deposit again and approve within ~60 seconds.",
+          400
+        );
+      }
+    } catch (err) {
+      if (err.status) throw err;
+      console.warn(
+        "[PRIZE DEPOSIT] isBlockhashValid failed:",
+        err?.message || err
+      );
+    }
+  }
+
+  // Skip RPC preflight: we already simulate during prepare. Public mainnet RPC
+  // often returns empty-log simulation failures (429 / flaky) on sendTransaction.
   let signature;
   try {
     signature = await connection.sendRawTransaction(bytes, {
-      skipPreflight: false,
+      skipPreflight: true,
+      maxRetries: 5,
       preflightCommitment: "confirmed",
-      maxRetries: 3,
     });
   } catch (err) {
+    console.error("[PRIZE DEPOSIT] sendRawTransaction failed:", err?.message || err);
     throw httpError(await formatSendError(connection, err), 400);
   }
 
+  console.log("[PRIZE DEPOSIT] submitted", signature);
+
   try {
-    if (txBlockhash && lastValidBlockHeight != null) {
-      await connection.confirmTransaction(
-        {
-          signature,
-          blockhash: txBlockhash,
-          lastValidBlockHeight,
-        },
-        "confirmed"
-      );
-    } else {
-      await connection.confirmTransaction(signature, "confirmed");
-    }
+    const latest = await connection.getLatestBlockhash("confirmed");
+    await connection.confirmTransaction(
+      {
+        signature,
+        blockhash: txBlockhash || latest.blockhash,
+        lastValidBlockHeight: latest.lastValidBlockHeight,
+      },
+      "confirmed"
+    );
   } catch (err) {
-    // Tx may still land; surface signature so confirm endpoint can verify.
+    // Tx may still land; confirm endpoint verifies vault balances / Core ownership.
     console.warn(
       "[PRIZE DEPOSIT] confirm wait failed:",
       err?.message || err,

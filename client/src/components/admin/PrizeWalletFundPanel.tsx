@@ -161,15 +161,18 @@ export function PrizeWalletFundPanel({ kind, eventId, requirements, onFunded }: 
         tx.recentBlockhash = plan.blockhash;
       }
 
-      setMessage('Approve the deposit in your wallet…');
+      setMessage('Approve in wallet within ~60s (blockhash expires)…');
       const signed = await provider.signTransaction(tx);
-      const signedTransaction = bytesToBase64(signed.serialize());
+      // Serialize immediately after sign — do not await anything else first.
+      const signedTransaction = bytesToBase64(
+        signed.serialize({ requireAllSignatures: true, verifySignatures: false })
+      );
 
       setMessage('Submitting via API…');
       const { data: sent } = await api.post(
         '/api/admin/solana/send-raw',
         { signedTransaction },
-        { headers: authHeaders() }
+        { headers: authHeaders(), timeout: 90000 }
       );
       const signature = sent.signature as string;
       setMessage(`Submitted ${signature.slice(0, 8)}… confirming…`);
