@@ -1,6 +1,7 @@
 import { Connection, PublicKey } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import { parsePrizeStructureJson } from "./prizeStructure.js";
+import { fetchCoreAsset } from "./mplCore.js";
 
 const DEFAULT_RPC = "https://api.mainnet-beta.solana.com";
 
@@ -94,10 +95,15 @@ export async function checkPrizeWalletFunding({
 
   let tokenAccounts = [];
   try {
-    const resp = await connection.getParsedTokenAccountsByOwner(owner, {
-      programId: TOKEN_PROGRAM_ID,
-    });
-    tokenAccounts = resp.value;
+    const [legacy, token2022] = await Promise.all([
+      connection.getParsedTokenAccountsByOwner(owner, {
+        programId: TOKEN_PROGRAM_ID,
+      }),
+      connection.getParsedTokenAccountsByOwner(owner, {
+        programId: TOKEN_2022_PROGRAM_ID,
+      }),
+    ]);
+    tokenAccounts = [...legacy.value, ...token2022.value];
   } catch (err) {
     missing.push(`Could not read token accounts: ${err?.message || err}`);
   }
@@ -112,6 +118,15 @@ export async function checkPrizeWalletFunding({
   }
 
   for (const mint of req.nftMints) {
+    const core = await fetchCoreAsset(connection, mint);
+    if (core) {
+      if (core.owner !== walletAddress) {
+        missing.push(
+          `Core NFT ${mint.slice(0, 8)}… not in wallet (owner ${core.owner.slice(0, 4)}…)`
+        );
+      }
+      continue;
+    }
     if (!hasNft(tokenAccounts, mint)) {
       missing.push(`NFT mint ${mint.slice(0, 8)}… not found in wallet`);
     }

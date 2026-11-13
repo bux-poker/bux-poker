@@ -121,6 +121,9 @@ export function PrizeWalletFundPanel({ kind, eventId, requirements, onFunded }: 
         const mint = new web3.PublicKey(t.mint);
         const source = new web3.PublicKey(t.source);
         const ata = new web3.PublicKey(t.destinationAta);
+        const tokenProgramId = t.tokenProgramId
+          ? new web3.PublicKey(t.tokenProgramId)
+          : spl.TOKEN_PROGRAM_ID;
         if (t.createDestAta) {
           tx.add(
             spl.createAssociatedTokenAccountInstruction(
@@ -128,7 +131,7 @@ export function PrizeWalletFundPanel({ kind, eventId, requirements, onFunded }: 
               ata,
               dest,
               mint,
-              spl.TOKEN_PROGRAM_ID,
+              tokenProgramId,
               spl.ASSOCIATED_TOKEN_PROGRAM_ID
             )
           );
@@ -140,8 +143,26 @@ export function PrizeWalletFundPanel({ kind, eventId, requirements, onFunded }: 
             payer,
             BigInt(t.amount),
             [],
-            spl.TOKEN_PROGRAM_ID
+            tokenProgramId
           )
+        );
+      }
+
+      // Metaplex Core NFTs (not SPL token accounts) — instructions built server-side
+      for (const ix of plan.coreTransferInstructions || []) {
+        const data = Uint8Array.from(atob(ix.data), (c) => c.charCodeAt(0));
+        tx.add(
+          new web3.TransactionInstruction({
+            programId: new web3.PublicKey(ix.programId),
+            keys: (ix.keys || []).map(
+              (k: { pubkey: string; isSigner: boolean; isWritable: boolean }) => ({
+                pubkey: new web3.PublicKey(k.pubkey),
+                isSigner: k.isSigner,
+                isWritable: k.isWritable,
+              })
+            ),
+            data,
+          })
         );
       }
 

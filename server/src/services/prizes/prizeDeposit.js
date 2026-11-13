@@ -6,6 +6,7 @@ import {
 } from "./prizeFunding.js";
 import { lamportsToSolString } from "./prizeStructure.js";
 import { getSharedPrizeWalletAddress } from "./prizeWallet.js";
+import { fetchCoreAsset } from "./mplCore.js";
 
 /**
  * Human-readable + machine deposit instructions for funding THIS event only.
@@ -200,6 +201,15 @@ export async function verifyPrizeDepositTransaction({
   }
 
   for (const { mint } of requirements.nfts) {
+    const core = await fetchCoreAsset(connection, mint);
+    if (core) {
+      if (core.owner !== dest) {
+        missing.push(
+          `Core NFT ${mint.slice(0, 8)}… not in vault (owner ${core.owner.slice(0, 4)}…)`
+        );
+      }
+      continue;
+    }
     const got = tokenGains.get(mint) || 0n;
     if (got < 1n) {
       missing.push(`NFT ${mint.slice(0, 8)}… not received`);

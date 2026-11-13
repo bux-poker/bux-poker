@@ -7,6 +7,7 @@ import {
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
@@ -14,6 +15,10 @@ import {
   getAccount,
 } from "@solana/spl-token";
 import { getSolanaConnection } from "./prizeFunding.js";
+import {
+  fetchCoreAsset,
+  buildCoreTransferInstruction,
+} from "./mplCore.js";
 
 const BASE58_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
@@ -38,10 +43,21 @@ export function solscanTxUrl(signature) {
 }
 
 async function getTokenAccountsForOwner(connection, owner) {
-  const resp = await connection.getParsedTokenAccountsByOwner(owner, {
-    programId: TOKEN_PROGRAM_ID,
-  });
-  return resp.value;
+  const [legacy, token2022] = await Promise.all([
+    connection.getParsedTokenAccountsByOwner(owner, {
+      programId: TOKEN_PROGRAM_ID,
+    }),
+    connection.getParsedTokenAccountsByOwner(owner, {
+      programId: TOKEN_2022_PROGRAM_ID,
+    }),
+  ]);
+  return [
+    ...legacy.value.map((a) => ({ ...a, tokenProgramId: TOKEN_PROGRAM_ID })),
+    ...token2022.value.map((a) => ({
+      ...a,
+      tokenProgramId: TOKEN_2022_PROGRAM_ID,
+    })),
+  ];
 }
 
 function findSourceTokenAccount(tokenAccounts, mint, needAmount) {
@@ -50,22 +66,27 @@ function findSourceTokenAccount(tokenAccounts, mint, needAmount) {
     if (!info || info.mint !== mint) continue;
     const amount = BigInt(info.tokenAmount?.amount || 0);
     if (amount >= needAmount) {
-      return { pubkey: acct.pubkey, amount };
+      return {
+        pubkey: acct.pubkey,
+        amount,
+        tokenProgramId: acct.tokenProgramId || TOKEN_PROGRAM_ID,
+      };
     }
   }
   return null;
 }
 
-async function ensureRecipientAta(connection, payer, mint, owner) {
+async function ensureRecipientAta(connection, payer, mint, owner, tokenProgramId) {
+  const programId = tokenProgramId || TOKEN_PROGRAM_ID;
   const ata = await getAssociatedTokenAddress(
     mint,
     owner,
     false,
-    TOKEN_PROGRAM_ID,
+    programId,
     ASSOCIATED_TOKEN_PROGRAM_ID
   );
   try {
-    await getAccount(connection, ata, undefined, TOKEN_PROGRAM_ID);
+    await getAccount(connection, ata, undefined, programId);
     return { ata, createIx: null };
   } catch {
     const createIx = createAssociatedTokenAccountInstruction(
@@ -73,7 +94,7 @@ async function ensureRecipientAta(connection, payer, mint, owner) {
       ata,
       owner,
       mint,
-      TOKEN_PROGRAM_ID,
+      programId,
       ASSOCIATED_TOKEN_PROGRAM_ID
     );
     return { ata, createIx };
@@ -125,6 +146,28 @@ export async function executePlacePayout({
       continue;
     }
 
+    if (kind === "NFT") {
+      const core = await fetchCoreAsset(connection, item.mint);
+      if (core) {
+        if (core.owner !== keypair.publicKey.toBase58()) {
+          const err = new Error(
+            `Prize wallet is missing Core NFT ${String(item.mint).slice(0, 8)}…`
+          );
+          err.status = 409;
+          throw err;
+        }
+        const ix = buildCoreTransferInstruction({
+          asset: item.mint,
+          collection: core.collection,
+          payer: keypair.publicKey,
+          authority: keypair.publicKey,
+          newOwner: recipientPubkey,
+        });
+        signatures.push(await sendTransaction(connection, keypair, [ix]));
+        continue;
+      }
+    }
+
     if (kind === "SPL" || kind === "NFT") {
       const mint = new PublicKey(item.mint);
       const amount = kind === "NFT" ? 1n : BigInt(item.amount || 0);
@@ -147,7 +190,8 @@ export async function executePlacePayout({
         connection,
         keypair,
         mint,
-        recipientPubkey
+        recipientPubkey,
+        source.tokenProgramId
       );
 
       const instructions = [];
@@ -159,7 +203,7 @@ export async function executePlacePayout({
           keypair.publicKey,
           amount,
           [],
-          TOKEN_PROGRAM_ID
+          source.tokenProgramId
         )
       );
 

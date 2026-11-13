@@ -1,6 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddress,
   getAccount,
@@ -8,6 +9,11 @@ import {
 import { getSolanaConnection } from "./prizeFunding.js";
 import { buildPrizeDepositRequirements } from "./prizeDeposit.js";
 import { getSharedPrizeWalletAddress } from "./prizeWallet.js";
+import {
+  fetchCoreAsset,
+  buildCoreTransferInstruction,
+  serializeInstruction,
+} from "./mplCore.js";
 
 function httpError(message, status) {
   const err = new Error(message);
@@ -16,20 +22,25 @@ function httpError(message, status) {
 }
 
 async function findSourceTokenAccount(connection, owner, mint, need) {
-  const resp = await connection.getParsedTokenAccountsByOwner(owner, {
-    programId: TOKEN_PROGRAM_ID,
-  });
-  for (const acct of resp.value) {
-    const info = acct.account.data.parsed?.info;
-    if (!info || info.mint !== mint.toBase58()) continue;
-    const amount = BigInt(info.tokenAmount?.amount || 0);
-    if (amount >= need) return acct.pubkey.toBase58();
+  for (const programId of [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID]) {
+    const resp = await connection.getParsedTokenAccountsByOwner(owner, {
+      programId,
+    });
+    for (const acct of resp.value) {
+      const info = acct.account.data.parsed?.info;
+      if (!info || info.mint !== mint.toBase58()) continue;
+      const amount = BigInt(info.tokenAmount?.amount || 0);
+      if (amount >= need) {
+        return { source: acct.pubkey.toBase58(), tokenProgramId: programId };
+      }
+    }
   }
   return null;
 }
 
 /**
  * Build deposit plan + fresh blockhash using the API host RPC (avoids browser 403 on public RPC).
+ * Supports classic SPL / Token-2022 tokens and Metaplex Core NFTs.
  */
 export async function preparePrizeDeposit({
   prizeStructureJson,
@@ -68,40 +79,91 @@ export async function preparePrizeDeposit({
     await connection.getLatestBlockhash("confirmed");
 
   const tokenTransfers = [];
-  const transfers = [
-    ...requirements.spl.map((s) => ({ mint: s.mint, amount: s.amount })),
-    ...requirements.nfts.map((n) => ({ mint: n.mint, amount: "1" })),
-  ];
+  const coreTransferInstructions = [];
 
-  for (const t of transfers) {
-    const mint = new PublicKey(t.mint);
-    const need = BigInt(t.amount);
-    const source = await findSourceTokenAccount(connection, payer, mint, need);
-    if (!source) {
+  for (const s of requirements.spl) {
+    const mint = new PublicKey(s.mint);
+    const need = BigInt(s.amount);
+    const found = await findSourceTokenAccount(connection, payer, mint, need);
+    if (!found) {
       throw httpError(
-        `Funding wallet is missing token ${t.mint.slice(0, 8)}… (need ${t.amount})`,
+        `Funding wallet is missing token ${s.mint.slice(0, 8)}… (need ${s.amount})`,
         400
       );
     }
+    const tokenProgramId = found.tokenProgramId;
     const ata = await getAssociatedTokenAddress(
       mint,
       dest,
       false,
-      TOKEN_PROGRAM_ID,
+      tokenProgramId,
       ASSOCIATED_TOKEN_PROGRAM_ID
     );
     let createDestAta = false;
     try {
-      await getAccount(connection, ata, "confirmed", TOKEN_PROGRAM_ID);
+      await getAccount(connection, ata, "confirmed", tokenProgramId);
     } catch {
       createDestAta = true;
     }
     tokenTransfers.push({
-      mint: t.mint,
-      amount: t.amount,
-      source,
+      mint: s.mint,
+      amount: s.amount,
+      source: found.source,
       destinationAta: ata.toBase58(),
       createDestAta,
+      tokenProgramId: tokenProgramId.toBase58(),
+    });
+  }
+
+  for (const n of requirements.nfts) {
+    const core = await fetchCoreAsset(connection, n.mint);
+    if (core) {
+      if (core.owner !== payerStr) {
+        throw httpError(
+          `Funding wallet does not own Core NFT ${n.mint.slice(0, 8)}… (held by ${core.owner.slice(0, 4)}…${core.owner.slice(-4)})`,
+          400
+        );
+      }
+      const ix = buildCoreTransferInstruction({
+        asset: n.mint,
+        collection: core.collection,
+        payer,
+        authority: payer,
+        newOwner: dest,
+      });
+      coreTransferInstructions.push(serializeInstruction(ix));
+      continue;
+    }
+
+    const mint = new PublicKey(n.mint);
+    const found = await findSourceTokenAccount(connection, payer, mint, 1n);
+    if (!found) {
+      throw httpError(
+        `Funding wallet is missing NFT ${n.mint.slice(0, 8)}… (need 1). Checked SPL Token, Token-2022, and Metaplex Core.`,
+        400
+      );
+    }
+    const tokenProgramId = found.tokenProgramId;
+    const ata = await getAssociatedTokenAddress(
+      mint,
+      dest,
+      false,
+      tokenProgramId,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+    let createDestAta = false;
+    try {
+      await getAccount(connection, ata, "confirmed", tokenProgramId);
+    } catch {
+      createDestAta = true;
+    }
+    tokenTransfers.push({
+      mint: n.mint,
+      amount: "1",
+      source: found.source,
+      destinationAta: ata.toBase58(),
+      createDestAta,
+      tokenProgramId: tokenProgramId.toBase58(),
     });
   }
 
@@ -113,6 +175,7 @@ export async function preparePrizeDeposit({
     solLamports: requirements.solLamports,
     solAmount: requirements.solAmount,
     tokenTransfers,
+    coreTransferInstructions,
     tokenProgramId: TOKEN_PROGRAM_ID.toBase58(),
     associatedTokenProgramId: ASSOCIATED_TOKEN_PROGRAM_ID.toBase58(),
   };
