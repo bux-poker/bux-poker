@@ -495,11 +495,13 @@
       flex: none !important;
       overflow: visible !important;
       z-index: 1;
+      /* Leave 85% of the dock clear; felt only overlaps the top 15% of controls */
+      padding-bottom: calc(var(--action-dock-height, 102px) * 0.85) !important;
+      box-sizing: border-box;
     }
 
     .bux-table-stage .bux-poker-table-root {
       overflow: visible !important;
-      /* Pull the oval down into the dock overlay zone */
       padding-bottom: 0 !important;
     }
 
