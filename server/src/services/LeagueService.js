@@ -11,6 +11,7 @@ import {
 } from "./prizes/prizeClaims.js";
 import { isPrizeWalletConfigured } from "./prizes/prizeWallet.js";
 import { buildPrizeDepositRequirements } from "./prizes/prizeDeposit.js";
+import { syncLeagueParticipationBonuses } from "./league/applyLeagueGamePoints.js";
 
 /** League domain service */
 export class LeagueService {
@@ -21,6 +22,19 @@ export class LeagueService {
   }
 
   async getLeagueById(id, viewer = null) {
+    const statusRow = id
+      ? await prisma.league.findUnique({
+          where: { id },
+          select: { status: true },
+        })
+      : null;
+    // Live leagues only — completed standings stay fixed once prizes lock.
+    if (statusRow?.status === "ACTIVE") {
+      await syncLeagueParticipationBonuses(id).catch((err) =>
+        console.error("[LEAGUE] syncLeagueParticipationBonuses:", err?.message || err)
+      );
+    }
+
     const league = await prisma.league.findUnique({
       where: { id },
       include: {

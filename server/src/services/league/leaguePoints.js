@@ -15,3 +15,20 @@ export function getLeaguePointsDistribution(registrationCount) {
   }
   return arr;
 }
+
+/**
+ * Participation bonus from share of scheduled league games played.
+ * Tiered (not cumulative): ≥80% → +10, else ≥50% → +5, else 0.
+ * @param {number} gamesPlayed
+ * @param {number} totalGames
+ * @returns {number}
+ */
+export function getLeagueParticipationBonus(gamesPlayed, totalGames) {
+  const played = Number(gamesPlayed) || 0;
+  const total = Number(totalGames) || 0;
+  if (played <= 0 || total <= 0) return 0;
+  const ratio = played / total;
+  if (ratio >= 0.8) return 10;
+  if (ratio >= 0.5) return 5;
+  return 0;
+}

@@ -175,7 +175,11 @@ export function LeagueDetailPage() {
       </div>
 
       {tab === 'table' && (
-        <div className="overflow-x-auto rounded-lg border border-[color:var(--bux-panel-border)]">
+        <div className="space-y-2">
+          <p className="text-xs text-slate-500">
+            Participation: +5 for ≥50% of games played, +10 for ≥80%.
+          </p>
+          <div className="overflow-x-auto rounded-lg border border-[color:var(--bux-panel-border)]">
           <table className="w-full text-left text-sm text-slate-200">
             <thead className="border-b border-[color:var(--bux-panel-border)] bg-slate-900/80 text-slate-400">
               <tr>
@@ -208,6 +212,7 @@ export function LeagueDetailPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

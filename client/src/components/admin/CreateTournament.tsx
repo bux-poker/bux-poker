@@ -663,6 +663,10 @@ export function CreateTournament() {
                   5/3/1; larger fields scale up.
                 </li>
                 <li>
+                  Participation bonus: <span className="text-slate-200">+5</span> for playing ≥50%
+                  of games, <span className="text-slate-200">+10</span> for ≥80%.
+                </li>
+                <li>
                   Prizes pay from <span className="text-slate-200">final leaderboard</span> after
                   all games — not per leg.
                 </li>

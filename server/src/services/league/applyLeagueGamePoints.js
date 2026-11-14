@@ -1,5 +1,8 @@
 import { prisma } from "../../config/database.js";
-import { getLeaguePointsDistribution } from "./leaguePoints.js";
+import {
+  getLeaguePointsDistribution,
+  getLeagueParticipationBonus,
+} from "./leaguePoints.js";
 import { ensureLeaguePrizeClaims } from "../prizes/prizeClaims.js";
 
 /**
@@ -25,6 +28,9 @@ export async function applyLeagueGamePoints(tournamentId) {
       where: { id: leagueGame.id },
       data: { completedAt: leagueGame.completedAt ?? new Date() },
     });
+    // Still refresh participation bonuses (cancelled legs don't count as played).
+    await syncLeagueParticipationBonuses(leagueGame.leagueId);
+    await maybeMarkLeagueCompleted(leagueGame.leagueId);
     return;
   }
 
@@ -87,7 +93,40 @@ export async function applyLeagueGamePoints(tournamentId) {
     });
   });
 
+  await syncLeagueParticipationBonuses(leagueGame.leagueId);
   await maybeMarkLeagueCompleted(leagueGame.leagueId);
+}
+
+/**
+ * Sync ± participation bonus into standings from gamesPlayed / totalGames.
+ * Idempotent via participationBonusPoints on each standing.
+ */
+export async function syncLeagueParticipationBonuses(leagueId) {
+  const league = await prisma.league.findUnique({
+    where: { id: leagueId },
+    select: { totalGames: true, status: true },
+  });
+  if (!league || league.status === "CANCELLED") return;
+  const totalGames = league.totalGames || 0;
+  if (totalGames <= 0) return;
+
+  const standings = await prisma.leagueStanding.findMany({
+    where: { leagueId },
+  });
+
+  for (const row of standings) {
+    const desired = getLeagueParticipationBonus(row.gamesPlayed, totalGames);
+    const current = row.participationBonusPoints ?? 0;
+    if (desired === current) continue;
+    const delta = desired - current;
+    await prisma.leagueStanding.update({
+      where: { id: row.id },
+      data: {
+        points: row.points + delta,
+        participationBonusPoints: desired,
+      },
+    });
+  }
 }
 
 async function maybeMarkLeagueCompleted(leagueId) {
@@ -107,6 +146,7 @@ async function maybeMarkLeagueCompleted(leagueId) {
       g.tournament.status === "COMPLETED" || g.tournament.status === "CANCELLED"
   );
   if (allDone) {
+    await syncLeagueParticipationBonuses(leagueId);
     await prisma.league.update({
       where: { id: leagueId },
       data: { status: "COMPLETED" },
