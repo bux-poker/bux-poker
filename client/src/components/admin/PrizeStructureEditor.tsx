@@ -46,6 +46,17 @@ interface Props {
   maxPlayers: number;
   value: PrizeFormState;
   onChange: (next: PrizeFormState) => void;
+  /** Affects prize copy (league vs single tournament). */
+  eventKind?: 'tournament' | 'league';
+  /** Selected Discord guilds — used to recommend WALLET for multi-server. */
+  selectedServerCount?: number;
+}
+
+/** Matches server FEE_SOL_BASE + FEE_SOL_PER_PLACE (lamports). */
+function estimateFeeSol(prizePlaces: number): string {
+  const n = Math.max(1, prizePlaces || 1);
+  const lamports = 10_000_000 + n * 5_000_000;
+  return (lamports / 1_000_000_000).toFixed(3).replace(/\.?0+$/, '') || '0';
 }
 
 type AssetMeta = {
@@ -87,7 +98,7 @@ function buildWalletPlaces(count: number, prev: WalletPrizePlace[]): WalletPrize
 export function defaultPrizeFormState(): PrizeFormState {
   return {
     prizePlaces: 3,
-    prizeMode: 'MANUAL',
+    prizeMode: 'WALLET',
     manualPlaces: buildManualPlaces(3, []),
     walletPlaces: buildWalletPlaces(3, []),
     refundWalletAddress: '',
@@ -397,7 +408,14 @@ function WalletAssetPreview({
   );
 }
 
-export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: Props) {
+export function PrizeStructureEditor({
+  servers,
+  maxPlayers,
+  value,
+  onChange,
+  eventKind = 'tournament',
+  selectedServerCount = 0,
+}: Props) {
   const setupServers = useMemo(
     () => servers.filter((s) => s.setupCompleted !== false),
     [servers]
@@ -438,13 +456,28 @@ export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: P
     updateItem(pIdx, iIdx, { ...existing, ...patch });
   };
 
+  const feeSol = estimateFeeSol(value.prizePlaces);
+  const isLeague = eventKind === 'league';
+  const recommendWallet = selectedServerCount > 1;
+
   return (
     <div className="bux-surface p-6">
       <h2 className="mb-1 text-lg font-semibold">Prizes</h2>
       <p className="mb-4 text-sm text-slate-400">
-        Paid places and prizes are locked in at create time. Wallet mode requires full funding before
-        start. Enter token amounts as human quantities (e.g. 75000) — decimals are fetched from the
-        mint automatically.
+        {isLeague ? (
+          <>
+            Paid places are from <span className="text-slate-300">final league standings</span> after
+            all games. Wallet mode is paste-address claim (no wallet connect) — winners claim the
+            full prize pool when the league ends. Enter token amounts as human quantities (e.g.
+            75000); decimals are fetched from the mint automatically.
+          </>
+        ) : (
+          <>
+            Paid places and prizes are locked in at create time. Wallet mode requires full funding
+            before start. Enter token amounts as human quantities (e.g. 75000) — decimals are
+            fetched from the mint automatically.
+          </>
+        )}
       </p>
 
       <div className="mb-4 grid gap-4 md:grid-cols-2">
@@ -468,9 +501,17 @@ export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: P
             }
             className="mt-1 w-full max-w-md bux-field px-3 py-2 text-slate-100 focus:border-emerald-500 focus:outline-none"
           >
+            <option value="WALLET">
+              Wallet — paste address claim (recommended{recommendWallet ? ' for multi-server' : ''})
+            </option>
             <option value="MANUAL">Manual — Discord ticket claim</option>
-            <option value="WALLET">Wallet — on-site Solana claim</option>
           </select>
+          {recommendWallet && value.prizeMode === 'MANUAL' && (
+            <p className="mt-1 text-xs text-amber-300/90">
+              With multiple Discord servers, wallet paste-claim lets winners take the whole pool
+              without opening tickets on each community.
+            </p>
+          )}
         </div>
       </div>
 
@@ -498,23 +539,41 @@ export function PrizeStructureEditor({ servers, maxPlayers, value, onChange }: P
       )}
 
       {value.prizeMode === 'WALLET' && (
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-slate-300">
-            Refund wallet address (unclaimed prizes after 7 days) *
-          </label>
-          <input
-            type="text"
-            value={value.refundWalletAddress}
-            onChange={(e) =>
-              onChange({ ...value, refundWalletAddress: e.target.value })
-            }
-            placeholder="Your Solana address"
-            className="mt-1 w-full bux-field px-3 py-2 font-mono text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
-          />
-          <p className="mt-1 text-xs text-slate-500">
-            After create you will sign a deposit that moves these prizes plus a small SOL fee
-            buffer into the shared prize vault. Unclaimed prizes return here after 7 days.
-          </p>
+        <div className="mb-4 space-y-3">
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-slate-300">
+            <p className="font-medium text-emerald-200">Funding (creator wallet)</p>
+            <p className="mt-1">
+              Your wallet must hold <span className="text-slate-100">all prize assets</span> when you
+              deposit after create. Sponsors/projects can send prizes to you{' '}
+              <span className="text-slate-100">before</span> you create — there is one shared pool,
+              not per-server deposits.
+            </p>
+            <p className="mt-2 text-slate-400">
+              Fee buffer for {value.prizePlaces} paid place
+              {value.prizePlaces === 1 ? '' : 's'}:{' '}
+              <span className="font-mono text-slate-200">{feeSol} SOL</span>
+              {' '}(0.01 + 0.005 × places). Deposit = prize assets + this buffer.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-300">
+              Refund wallet address (unclaimed prizes after 7 days) *
+            </label>
+            <input
+              type="text"
+              value={value.refundWalletAddress}
+              onChange={(e) =>
+                onChange({ ...value, refundWalletAddress: e.target.value })
+              }
+              placeholder="Your Solana address"
+              className="mt-1 w-full bux-field px-3 py-2 font-mono text-sm text-slate-100 focus:border-emerald-500 focus:outline-none"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              After create you will sign a deposit that moves these prizes plus the fee buffer into
+              the shared prize vault. Unclaimed prizes return here after 7 days. Winners paste a
+              Solana address to claim — no wallet connect.
+            </p>
+          </div>
         </div>
       )}
 

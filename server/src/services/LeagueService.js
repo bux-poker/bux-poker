@@ -4,7 +4,11 @@ import {
   parsePrizeStructureJson,
   lamportsToSolString,
 } from "./prizes/prizeStructure.js";
-import { getViewerLeaguePrizeClaim, ensureLeaguePrizeClaims } from "./prizes/prizeClaims.js";
+import {
+  getViewerLeaguePrizeClaim,
+  ensureLeaguePrizeClaims,
+  getLeaguePrizeClaimSummaries,
+} from "./prizes/prizeClaims.js";
 import { isPrizeWalletConfigured } from "./prizes/prizeWallet.js";
 import { buildPrizeDepositRequirements } from "./prizes/prizeDeposit.js";
 
@@ -54,12 +58,10 @@ export class LeagueService {
       (league.prizePlaces ?? 0) > 0 &&
       league.prizeMode
     ) {
-      const claimCount = await prisma.prizeClaim.count({ where: { leagueId: id } });
-      if (claimCount === 0) {
-        await ensureLeaguePrizeClaims(id).catch((err) =>
-          console.error("[PRIZES] backfill ensureLeaguePrizeClaims:", err?.message || err)
-        );
-      }
+      // Safe to re-run: skips CLAIMED/SWEPT; fills any missing paid-place rows.
+      await ensureLeaguePrizeClaims(id).catch((err) =>
+        console.error("[PRIZES] backfill ensureLeaguePrizeClaims:", err?.message || err)
+      );
     }
 
     const standings = [...league.standings].sort((a, b) => {
@@ -115,6 +117,12 @@ export class LeagueService {
     } else {
       result.canManage = false;
       result.myPrizeClaim = null;
+    }
+
+    if (league.status === "COMPLETED" || league.status === "CANCELLED") {
+      result.prizeClaims = await getLeaguePrizeClaimSummaries(id);
+    } else {
+      result.prizeClaims = [];
     }
 
     return result;

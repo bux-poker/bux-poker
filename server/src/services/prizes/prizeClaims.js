@@ -116,28 +116,45 @@ export async function listTournamentPrizeClaims(tournamentId) {
   });
 }
 
+function summarizePrizeClaimRow(claim) {
+  let txSignatures = [];
+  try {
+    txSignatures = JSON.parse(claim.txSignaturesJson || "[]");
+  } catch {
+    txSignatures = [];
+  }
+  if (!Array.isArray(txSignatures)) txSignatures = [];
+  return {
+    finishingPlace: claim.finishingPlace,
+    status: claim.status,
+    recipientAddress: claim.recipientAddress || null,
+    claimedAt: claim.claimedAt || null,
+    username: claim.user?.username || null,
+    userId: claim.userId,
+    txSignatures,
+    solscanUrls: txSignatures.map((sig) => `https://solscan.io/tx/${sig}`),
+  };
+}
+
 /** Public lobby summary: claim status per paid place (claimed wallet or pending). */
 export async function getTournamentPrizeClaimSummaries(tournamentId) {
   const claims = await listTournamentPrizeClaims(tournamentId);
-  return claims.map((claim) => {
-    let txSignatures = [];
-    try {
-      txSignatures = JSON.parse(claim.txSignaturesJson || "[]");
-    } catch {
-      txSignatures = [];
-    }
-    if (!Array.isArray(txSignatures)) txSignatures = [];
-    return {
-      finishingPlace: claim.finishingPlace,
-      status: claim.status,
-      recipientAddress: claim.recipientAddress || null,
-      claimedAt: claim.claimedAt || null,
-      username: claim.user?.username || null,
-      userId: claim.userId,
-      txSignatures,
-      solscanUrls: txSignatures.map((sig) => `https://solscan.io/tx/${sig}`),
-    };
+  return claims.map(summarizePrizeClaimRow);
+}
+
+export async function listLeaguePrizeClaims(leagueId) {
+  return prisma.prizeClaim.findMany({
+    where: { leagueId },
+    include: {
+      user: { select: { id: true, username: true, avatarUrl: true } },
+    },
+    orderBy: { finishingPlace: "asc" },
   });
+}
+
+export async function getLeaguePrizeClaimSummaries(leagueId) {
+  const claims = await listLeaguePrizeClaims(leagueId);
+  return claims.map(summarizePrizeClaimRow);
 }
 
 /**

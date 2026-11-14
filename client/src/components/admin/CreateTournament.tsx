@@ -651,10 +651,26 @@ export function CreateTournament() {
                 </div>
               ))}
             </div>
-            <p className="text-xs text-slate-500">
-              Registration opens <strong className="text-slate-400">1 hour</strong> before each start; closes{' '}
-              <strong className="text-slate-400">2 minutes</strong> before. Legs with fewer than 5 players register are cancelled (Discord notice).
-            </p>
+            <div className="rounded-lg border border-[color:var(--bux-panel-border)] bg-[color:var(--bux-panel)]/60 px-3 py-2 text-xs text-slate-400">
+              <p className="font-medium text-slate-300">How a league works</p>
+              <ul className="mt-1 list-inside list-disc space-y-0.5">
+                <li>
+                  {numLeagueGames} scheduled game{numLeagueGames === 1 ? '' : 's'} — registration
+                  opens 1h before each start, closes 2m before.
+                </li>
+                <li>
+                  Points each leg from finish place (field size at close): 5 regs → 3/1; 6–8 →
+                  5/3/1; larger fields scale up.
+                </li>
+                <li>
+                  Prizes pay from <span className="text-slate-200">final leaderboard</span> after
+                  all games — not per leg.
+                </li>
+                <li>
+                  Legs with fewer than 5 registered players are cancelled (Discord notice).
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
         )}
@@ -722,6 +738,8 @@ export function CreateTournament() {
           maxPlayers={formData.maxPlayers}
           value={prizeForm}
           onChange={setPrizeForm}
+          eventKind={createMode}
+          selectedServerCount={selectedServerIds.length}
         />
 
         {/* Blind Levels */}
@@ -834,8 +852,20 @@ export function CreateTournament() {
         <div className="bux-surface p-6">
           <h2 className="mb-4 text-lg font-semibold">Discord Servers</h2>
           <p className="mb-4 text-sm text-slate-400">
-            Select which Discord servers to post this tournament to. Servers must be set up with /setup command first.
-            Use <span className="text-slate-300">Send test</span> to verify the bot can post before creating.
+            {createMode === 'league' ? (
+              <>
+                Select Discord servers to post each league leg to. Multi-server = Discord reach
+                only — prizes stay one shared pool (creator funds after create; sponsors can send
+                prizes to you before create). Use{' '}
+                <span className="text-slate-300">Send test</span> to verify the bot can post.
+              </>
+            ) : (
+              <>
+                Select which Discord servers to post this tournament to. Servers must be set up
+                with /setup first. Use <span className="text-slate-300">Send test</span> to
+                verify the bot can post before creating.
+              </>
+            )}
           </p>
           {loadingServers ? (
             <p className="text-slate-400">Loading servers...</p>

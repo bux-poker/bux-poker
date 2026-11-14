@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import api from '../services/api';
 import { PrizesTab } from '../components/tournament/PrizesTab';
 import { LeagueAdminPrizes } from '../components/league/LeagueAdminPrizes';
-import type { MyPrizeClaim } from '../components/tournament/PrizesTab';
+import type { MyPrizeClaim, PrizeClaimSummaryRow } from '../components/tournament/PrizesTab';
 
 type Tab = 'table' | 'prizes' | 'next' | 'schedule' | 'completed';
 
@@ -53,6 +53,7 @@ interface LeagueDetail {
   } | null;
   prizeClaimServer?: { serverName: string; inviteLink: string | null } | null;
   myPrizeClaim?: MyPrizeClaim | null;
+  prizeClaims?: PrizeClaimSummaryRow[];
   hasPrizes?: boolean;
   canManage?: boolean;
 }
@@ -213,6 +214,7 @@ export function LeagueDetailPage() {
       {tab === 'prizes' && showPrizesTab && (
         <PrizesTab
           tournament={{
+            status: league.status,
             prizePlaces: league.prizePlaces,
             prizeMode: league.prizeMode,
             prizeStructure: league.prizeStructure as any,
@@ -222,6 +224,7 @@ export function LeagueDetailPage() {
             requiredFeeSol: league.requiredFeeSol,
             prizeClaimServer: league.prizeClaimServer,
             myPrizeClaim: league.myPrizeClaim,
+            prizeClaims: league.prizeClaims,
             hasPrizes: league.hasPrizes,
           }}
           prizesAvailable={league.status === 'COMPLETED'}
