@@ -204,6 +204,42 @@ export async function startHandForGameBody(gameId, io) {
 
   const tournamentEngine = new TexasHoldem({ smallBlind, bigBlind });
 
+  // After process restart, mid-hand FOLDED/ALL_IN rows can linger and block dealing.
+  // Clear them before dealer selection so idle recovery can start a fresh hand.
+  const staleHandStatuses = game.players.filter(
+    (p) =>
+      p.status === "FOLDED" ||
+      (p.status === "ALL_IN" && (p.chips ?? 0) > 0)
+  );
+  if (staleHandStatuses.length > 0) {
+    await prisma.player.updateMany({
+      where: {
+        gameId,
+        status: { in: ["FOLDED", "ALL_IN"] },
+        chips: { gt: 0 },
+      },
+      data: { status: "ACTIVE" },
+    });
+    await prisma.player.updateMany({
+      where: {
+        gameId,
+        status: { not: "ELIMINATED" },
+        chips: { lte: 0 },
+      },
+      data: { status: "ELIMINATED" },
+    });
+    game = await prisma.game.findUnique({
+      where: { id: gameId },
+      include: gameStartInclude,
+    });
+    if (!game || game.status !== "ACTIVE" || game.players.length < 2) {
+      return;
+    }
+    console.log(
+      `[POKER] Cleared stale FOLDED/ALL_IN statuses before dealing on game ${gameId}`
+    );
+  }
+
   let dealerPlayer;
   let dealerSeat;
   const previousState = tableState.get(gameId);

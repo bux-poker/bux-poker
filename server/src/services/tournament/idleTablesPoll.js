@@ -1,6 +1,9 @@
 import { prisma } from "../../config/database.js";
 import { tableState } from "../../modules/poker/tableState.js";
-import { logUnreconciledDbPot } from "./stalePotRecovery.js";
+import {
+  logUnreconciledDbPot,
+  reconcileOrphanDbPotIfNoLiveHand,
+} from "./stalePotRecovery.js";
 import { tryAdvanceBlindsIfDue } from "./blindLevels.js";
 import { isGameConsolidationWaiting } from "./consolidateTables.js";
 import {
@@ -135,20 +138,42 @@ export function startIdleTablesPoll(engine) {
           // checking hand — nuking chips and confusing turn order for real players.
           if ((game.pot ?? 0) > 0 && !hasActiveHand(game.id)) {
             if (!tableState.has(game.id)) {
-              // Another Fly machine may hold in-memory state for this game; do not touch DB pot here.
-              continue;
-            }
-            if (isGameConsolidationWaiting(game.id)) {
+              // Single-machine (ha=false): after restart, leftover DB pot has no owner.
+              // Reconcile to a seat so startHand can deal again. Multi-machine would need
+              // a different ownership check — we only run one poker VM.
+              try {
+                const fixed = await reconcileOrphanDbPotIfNoLiveHand(game.id);
+                if (fixed) {
+                  console.warn(
+                    `[TOURNAMENT] Idle poll: reconciled orphan pot on table ${game.tableNumber} (game ${game.id}) after empty tableState`
+                  );
+                } else {
+                  logUnreconciledDbPot(
+                    game.id,
+                    game.pot,
+                    `(idle poll table ${game.tableNumber}, empty tableState; reconcile no-op)`
+                  );
+                  continue;
+                }
+              } catch (err) {
+                console.error(
+                  `[TOURNAMENT] Orphan pot reconcile failed for table ${game.tableNumber}:`,
+                  err?.message || err
+                );
+                continue;
+              }
+            } else if (isGameConsolidationWaiting(game.id)) {
               console.log(
                 `[TOURNAMENT] Skipping stale-pot recovery for game ${game.id} — consolidation wait active for this table`
               );
               continue;
+            } else {
+              logUnreconciledDbPot(
+                game.id,
+                game.pot,
+                `(idle poll table ${game.tableNumber}, no in-memory hand; not zeroing)`
+              );
             }
-            logUnreconciledDbPot(
-              game.id,
-              game.pot,
-              `(idle poll table ${game.tableNumber}, no in-memory hand; not zeroing)`
-            );
           }
           if (hasActiveHand(game.id)) {
             const turnStarted = getTurnStartedAt(game.id);

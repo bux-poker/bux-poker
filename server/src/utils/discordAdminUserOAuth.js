@@ -50,6 +50,14 @@ async function discordBearerGet(path, accessToken, label) {
     );
     return DISCORD_ADMIN_CHECK_RATE_LIMITED;
   }
+  if (res.status === 429) {
+    // Per-route 429s still thrash the event loop if we keep walking every guild.
+    scheduleDiscordAdminGlobalBackoff();
+    console.warn(
+      `[webAdmin] user OAuth ${label} HTTP 429 — backing off (${text.slice(0, 120).replace(/\s+/g, " ")})`
+    );
+    return DISCORD_ADMIN_CHECK_RATE_LIMITED;
+  }
   if (!res.ok) {
     console.warn(
       `[webAdmin] user OAuth ${label} HTTP ${res.status} — ${text.slice(0, 160).replace(/\s+/g, " ")}`
