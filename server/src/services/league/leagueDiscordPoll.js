@@ -1,7 +1,7 @@
 import { prisma } from "../../config/database.js";
 import {
   postTournamentEmbed,
-  updateTournamentEmbeds,
+  notifyRegistrationOpen,
 } from "../../discord/bot.js";
 
 const POLL_MS = 15000;
@@ -96,8 +96,8 @@ async function runRegistrationOpenDiscordTick() {
       if (missingPosts) {
         await postTournamentEmbed(tournament, serverDiscordIds);
       } else if (hasPosted && tournament.status === "SCHEDULED") {
-        // Early notice already out — refresh so Register appears.
-        await updateTournamentEmbeds(tournament.id);
+        // Early notice already out — enable Register + @everyone ping.
+        await notifyRegistrationOpen(tournament.id);
       }
     } catch (e) {
       console.error(

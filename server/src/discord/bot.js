@@ -123,6 +123,30 @@ async function sendMessageViaDiscordRest(channelId, payload) {
   return restClient.post(Routes.channelMessages(channelId), { body: payload });
 }
 
+/** Ping payload so announcement posts notify the whole server. */
+function everyonePingFields(extraContent = "") {
+  const content = extraContent
+    ? `@everyone ${extraContent}`
+    : "@everyone";
+  return {
+    content,
+    // discord.js
+    allowedMentions: { parse: ["everyone"] },
+    // REST API
+    allowed_mentions: { parse: ["everyone"] },
+  };
+}
+
+function withEveryonePing(payload, extraContent = "") {
+  const ping = everyonePingFields(extraContent);
+  return {
+    ...payload,
+    content: ping.content,
+    allowedMentions: ping.allowedMentions,
+    allowed_mentions: ping.allowed_mentions,
+  };
+}
+
 async function registerSlashCommandsInBackground(token, appId, guildId, commandBodies) {
   const rest = new REST({ version: '10' }).setToken(token);
   console.log('[DISCORD BOT] Registering slash commands (background)...');
@@ -835,10 +859,12 @@ export async function postTournamentEmbed(tournament, serverIds) {
         } else {
           const permissions = channel.permissionsFor(guild.members.me);
           if (permissions.has('SendMessages') && permissions.has('EmbedLinks')) {
-            message = await channel.send({
-              embeds: [embed],
-              components: components,
-            });
+            message = await channel.send(
+              withEveryonePing({
+                embeds: [embed],
+                components: components,
+              })
+            );
           } else {
             console.warn(`[DISCORD BOT] Missing channel perms via gateway for ${server.serverName}; trying REST send`);
           }
@@ -851,10 +877,13 @@ export async function postTournamentEmbed(tournament, serverIds) {
           console.warn(`[DISCORD BOT] No announcementChannelId for ${server.serverName}`);
           continue;
         }
-        message = await sendMessageViaDiscordRest(server.announcementChannelId, {
-          embeds: [embed.toJSON()],
-          components: components.map((c) => c.toJSON()),
-        });
+        message = await sendMessageViaDiscordRest(
+          server.announcementChannelId,
+          withEveryonePing({
+            embeds: [embed.toJSON()],
+            components: components.map((c) => c.toJSON()),
+          })
+        );
       }
 
       console.log(`[DISCORD BOT] Successfully posted embed to ${server.serverName}, message ID: ${message.id}`);
@@ -889,6 +918,64 @@ export async function postTournamentEmbed(tournament, serverIds) {
   console.log(`[DISCORD BOT] Posted embed to ${posts.length} server(s) successfully`);
 
   return posts;
+}
+
+/**
+ * After T-1h: refresh the save-the-date embed (Register enabled) and ping @everyone.
+ * Embed edits alone do not notify; this sends a short follow-up ping.
+ */
+export async function notifyRegistrationOpen(tournamentId) {
+  await updateTournamentEmbeds(tournamentId);
+
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    include: {
+      posts: { include: { server: true } },
+    },
+  });
+  if (!tournament?.posts?.length) return;
+
+  const name = tournament.name || "the tournament";
+  const clientUrl = resolveClientUrl();
+  const lobbyUrl = `${clientUrl}/tournaments/${tournament.id}`;
+  const pingText = `**Registration is now open** for **${name}** — use **Register** on the post above (or open the lobby: ${lobbyUrl}).`;
+
+  for (const post of tournament.posts) {
+    const channelId = post.server?.announcementChannelId;
+    if (!channelId) continue;
+    try {
+      let sent = false;
+      const canUseGateway = !!discordClient?.isReady?.();
+      if (canUseGateway) {
+        const guild = await discordClient.guilds
+          .fetch(post.server.serverId)
+          .catch(() => null);
+        if (guild) {
+          const channel = await guild.channels
+            .fetch(channelId)
+            .catch(() => null);
+          if (channel?.isTextBased?.()) {
+            await channel.send(withEveryonePing({}, pingText));
+            sent = true;
+          }
+        }
+      }
+      if (!sent) {
+        await sendMessageViaDiscordRest(
+          channelId,
+          withEveryonePing({}, pingText)
+        );
+      }
+      console.log(
+        `[DISCORD BOT] Registration-open ping sent to ${post.server.serverName}`
+      );
+    } catch (err) {
+      console.error(
+        `[DISCORD BOT] Registration-open ping failed (${post.server?.serverName}):`,
+        err?.message || err
+      );
+    }
+  }
 }
 
 /**
@@ -1013,7 +1100,7 @@ export async function postLeagueLegCancelledEmbed(tournamentId, registeredCount)
       if (!channel || !channel.isTextBased()) continue;
       const permissions = channel.permissionsFor(guild.members.me);
       if (!permissions.has("SendMessages") || !permissions.has("EmbedLinks")) continue;
-      const message = await channel.send({ embeds: [embed] });
+      const message = await channel.send(withEveryonePing({ embeds: [embed] }));
       posts.push({ serverId: post.server.serverId, messageId: message.id });
     } catch (e) {
       console.error(
@@ -1190,10 +1277,12 @@ export async function postTournamentWinnersEmbed(tournament) {
           continue;
         }
 
-        const message = await channel.send({
-          embeds: [embed],
-          components: leagueComponents.length > 0 ? leagueComponents : undefined,
-        });
+        const message = await channel.send(
+          withEveryonePing({
+            embeds: [embed],
+            components: leagueComponents.length > 0 ? leagueComponents : undefined,
+          })
+        );
 
         console.log(`[DISCORD BOT] Posted winners embed for tournament ${tournament.id} to ${post.server.serverName}, message ID: ${message.id}`);
         posts.push({ serverId: post.server.serverId, messageId: message.id });
@@ -1274,9 +1363,7 @@ export async function postTournamentStartingEmbed(tournament) {
           continue;
         }
 
-        const message = await channel.send({
-          embeds: [embed],
-        });
+        const message = await channel.send(withEveryonePing({ embeds: [embed] }));
 
         console.log(`[DISCORD BOT] Successfully posted starting notification to ${post.server.serverName}, message ID: ${message.id}`);
         posts.push({ serverId: post.server.serverId, messageId: message.id });
@@ -1331,7 +1418,7 @@ export async function postTestNotification(serverKey) {
   const embed = new EmbedBuilder()
     .setTitle("BUX Poker — test notification")
     .setDescription(
-      "This is a test post to confirm the bot can reach this server's announcement channel. Safe to delete."
+      "This is a test post to confirm the bot can reach this server's announcement channel and ping @everyone. Safe to delete."
     )
     .setColor(0x22c55e)
     .setTimestamp(new Date())
@@ -1339,6 +1426,7 @@ export async function postTestNotification(serverKey) {
 
   let message = null;
   const canUseGateway = !!discordClient?.isReady?.();
+  const testPayload = withEveryonePing({ embeds: [embed] });
 
   if (canUseGateway) {
     let channel = null;
@@ -1353,14 +1441,14 @@ export async function postTestNotification(serverKey) {
     if (channel?.isTextBased?.() && guild) {
       const permissions = channel.permissionsFor(guild.members.me);
       if (permissions?.has("SendMessages") && permissions?.has("EmbedLinks")) {
-        message = await channel.send({ embeds: [embed] });
+        message = await channel.send(testPayload);
       }
     }
   }
 
   if (!message) {
     message = await sendMessageViaDiscordRest(server.announcementChannelId, {
-      embeds: [embed.toJSON()],
+      ...withEveryonePing({ embeds: [embed.toJSON()] }),
     });
   }
 
