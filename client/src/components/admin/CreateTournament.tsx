@@ -460,7 +460,7 @@ export function CreateTournament() {
         <p className="bux-section-label mb-2">Admin</p>
         <h1 className="font-display text-2xl font-bold text-white">Create tournament</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Tournament or multi-game league (Discord posts open 1h before each leg)
+          Discord posts a save-the-date on create/fund; Register appears 1 hour before start
         </p>
       </div>
 
@@ -472,8 +472,9 @@ export function CreateTournament() {
               deposit prizes to finish setup.
             </p>
             <p className="mt-1 text-xs text-slate-300">
-              Auto-claim events cannot start until this deposit is confirmed. Discord posts wait until
-              funding succeeds.
+              Auto-claim events cannot start until this deposit is confirmed. The Discord
+              save-the-date (start time, registration time, prizes) posts after funding succeeds;
+              Register appears 1 hour before start.
             </p>
           </div>
           <PrizeWalletFundPanel
@@ -578,8 +579,10 @@ export function CreateTournament() {
               />
               <p className="mt-1.5 text-xs text-slate-500">
                 Use your device&apos;s local time above. Everyone sees the start time converted to their own timezone in the lobby.
-                Registration closes automatically <strong className="text-slate-400">2 minutes before</strong> this time.
-                Players are seated and the table shows a 2-minute countdown until play starts.
+                Discord announces immediately on create/fund with start time, registration time, and prizes.
+                Registration opens in Discord <strong className="text-slate-400">1 hour before</strong> start and
+                closes <strong className="text-slate-400">2 minutes before</strong>. Players are seated with a
+                2-minute countdown until play starts.
               </p>
             </div>
           </div>
@@ -655,8 +658,8 @@ export function CreateTournament() {
               <p className="font-medium text-slate-300">How a league works</p>
               <ul className="mt-1 list-inside list-disc space-y-0.5">
                 <li>
-                  {numLeagueGames} scheduled game{numLeagueGames === 1 ? '' : 's'} — registration
-                  opens 1h before each start, closes 2m before.
+                  {numLeagueGames} scheduled game{numLeagueGames === 1 ? '' : 's'} — Discord
+                  save-the-date on create/fund; Register opens 1h before each start, closes 2m before.
                 </li>
                 <li>
                   Points each leg from finish place (field size at close): 5 regs → 3/1; 6–8 →
@@ -940,16 +943,16 @@ export function CreateTournament() {
         {success && !pendingFund && (
           <div className="rounded-lg border border-emerald-500/50 bg-emerald-500/10 p-4 text-emerald-200">
             {createMode === 'league'
-              ? 'League created successfully. Discord posts go out 1 hour before each game.'
+              ? 'League created successfully. Save-the-date posts go out now (or after funding); Register appears 1 hour before each game.'
               : 'Tournament created successfully!'}
             {createMode === 'tournament' && selectedServerIds.length > 0 && (
               <span className="block mt-2 text-sm">
-                Tournament created and embed post requested for {selectedServerIds.length} Discord server(s).
+                Save-the-date requested for {selectedServerIds.length} Discord server(s). Register appears 1 hour before start.
               </span>
             )}
             {createMode === 'league' && selectedServerIds.length > 0 && (
               <span className="block mt-2 text-sm">
-                {selectedServerIds.length} server(s) configured — embeds will post automatically before each leg.
+                {selectedServerIds.length} server(s) configured — save-the-dates now; Register at T-1h each leg.
               </span>
             )}
           </div>

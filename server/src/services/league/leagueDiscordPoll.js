@@ -1,5 +1,8 @@
 import { prisma } from "../../config/database.js";
-import { postTournamentEmbed } from "../../discord/bot.js";
+import {
+  postTournamentEmbed,
+  updateTournamentEmbeds,
+} from "../../discord/bot.js";
 
 const POLL_MS = 15000;
 
@@ -18,8 +21,10 @@ function isPrismaPressureError(err) {
 }
 
 /**
- * Post registration embeds at registrationOpensAt (league legs: T-1h before start).
- * TournamentPost rows exist with messageId null until this runs.
+ * At registrationOpensAt (T-1h):
+ * - If early notice already posted → update embed to enable Register
+ * - If no message yet → post full embed with Register
+ * Applies to standalone tournaments and league legs.
  */
 export function startLeagueDiscordPoll() {
   if (intervalId) return;
@@ -29,9 +34,9 @@ export function startLeagueDiscordPoll() {
     if (now < leagueDiscordBackoffUntilMs) return;
     leagueDiscordTickInFlight = true;
     try {
-      await runLeagueDiscordTick();
+      await runRegistrationOpenDiscordTick();
     } catch (err) {
-      console.error("[LEAGUE] Discord poll error:", err);
+      console.error("[DISCORD] Registration-open poll error:", err);
       if (isPrismaPressureError(err)) {
         leagueDiscordBackoffUntilMs = Date.now() + 30000;
       }
@@ -39,42 +44,67 @@ export function startLeagueDiscordPoll() {
       leagueDiscordTickInFlight = false;
     }
   }, POLL_MS);
-  console.log(`[LEAGUE] Registration-open poll every ${POLL_MS / 1000}s (post embed at registrationOpensAt)`);
-  runLeagueDiscordTick().catch((err) =>
-    console.error("[LEAGUE] Discord poll initial tick:", err)
+  console.log(
+    `[DISCORD] Registration-open poll every ${POLL_MS / 1000}s (enable Register at registrationOpensAt)`
+  );
+  runRegistrationOpenDiscordTick().catch((err) =>
+    console.error("[DISCORD] Registration-open poll initial tick:", err)
   );
 }
 
-async function runLeagueDiscordTick() {
+async function runRegistrationOpenDiscordTick() {
   const now = Date.now();
 
   const candidates = await prisma.tournament.findMany({
     where: {
-      leagueGames: { some: {} },
       registrationOpensAt: { not: null, lte: new Date(now) },
       status: { in: ["SCHEDULED", "REGISTERING"] },
-      posts: { some: { messageId: null } },
+      OR: [
+        // Need the T-1h transition (enable Register on existing notice)
+        { status: "SCHEDULED" },
+        // Or never got a Discord message at all
+        { posts: { some: { messageId: null } } },
+      ],
     },
     include: {
       posts: { include: { server: true } },
+      leagueGames: {
+        include: {
+          league: {
+            select: {
+              prizeMode: true,
+              prizeFundingStatus: true,
+            },
+          },
+        },
+      },
     },
   });
 
   for (const tournament of candidates) {
-    const opensAt = tournament.registrationOpensAt
-      ? new Date(tournament.registrationOpensAt).getTime()
-      : 0;
-    if (now < opensAt) continue;
+    if (!isDiscordAnnounceAllowed(tournament)) continue;
 
     const serverDiscordIds = (tournament.posts || [])
       .map((p) => p.server?.serverId)
       .filter(Boolean);
     if (serverDiscordIds.length === 0) continue;
 
+    const missingPosts = (tournament.posts || []).some((p) => !p.messageId);
+    const hasPosted = (tournament.posts || []).some((p) => !!p.messageId);
+
     try {
-      await postTournamentEmbed(tournament, serverDiscordIds);
+      if (missingPosts) {
+        await postTournamentEmbed(tournament, serverDiscordIds);
+      } else if (hasPosted && tournament.status === "SCHEDULED") {
+        // Early notice already out — refresh so Register appears.
+        await updateTournamentEmbeds(tournament.id);
+      }
     } catch (e) {
-      console.error(`[LEAGUE] postTournamentEmbed failed ${tournament.id}:`, e?.message || e);
+      console.error(
+        `[DISCORD] registration-open failed ${tournament.id}:`,
+        e?.message || e
+      );
+      continue;
     }
 
     if (tournament.status === "SCHEDULED") {
@@ -84,4 +114,19 @@ async function runLeagueDiscordTick() {
       });
     }
   }
+}
+
+/** Skip WALLET events that are not funded yet (standalone or league). */
+function isDiscordAnnounceAllowed(tournament) {
+  const league = tournament.leagueGames?.[0]?.league;
+  if (league) {
+    if (league.prizeMode === "WALLET" && league.prizeFundingStatus !== "FUNDED") {
+      return false;
+    }
+    return true;
+  }
+  if (tournament.prizeMode === "WALLET" && tournament.prizeFundingStatus !== "FUNDED") {
+    return false;
+  }
+  return true;
 }

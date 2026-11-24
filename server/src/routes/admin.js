@@ -302,11 +302,16 @@ router.post("/tournaments", async (req, res, next) => {
         : blindLevelsJson
       : defaultBlindLevels;
 
+    const startAt = new Date(startTime);
+    const ONE_H = 60 * 60 * 1000;
+    const registrationOpensAt = new Date(startAt.getTime() - ONE_H);
+
     const tournament = await prisma.tournament.create({
       data: {
         name,
         description,
-        startTime: new Date(startTime),
+        startTime: startAt,
+        registrationOpensAt,
         maxPlayers,
         seatsPerTable,
         startingChips,
@@ -325,7 +330,8 @@ router.post("/tournaments", async (req, res, next) => {
       },
     });
 
-    // Create TournamentPost rows for selected servers. MANUAL posts Discord now;
+    // Create TournamentPost rows for selected servers. MANUAL posts Discord now
+    // (announce only — Register appears at registrationOpensAt / T-1h).
     // WALLET waits until prize deposit is confirmed (see prize-funding/confirm).
     const isWalletPrizes = prizeDbFields.prizeMode === "WALLET";
     if (serverIds && serverIds.length > 0) {
@@ -615,6 +621,22 @@ router.post("/leagues", async (req, res, next) => {
           },
         });
       }
+
+      // MANUAL: early notice now (start/reg/prizes). Register appears at T-1h.
+      // WALLET: wait until prize-funding/confirm.
+      if (leaguePrizeDb.prizeMode !== "WALLET" && discordServers.length > 0) {
+        try {
+          await postTournamentEmbed(
+            tournament,
+            discordServers.map((s) => s.serverId)
+          );
+        } catch (error) {
+          console.error(
+            `[ADMIN] Error posting league leg embed for game ${i + 1}:`,
+            error
+          );
+        }
+      }
     }
 
     const full = await prisma.league.findUnique({
@@ -874,20 +896,43 @@ async function confirmPrizeDeposit(prismaModel, id, signatures) {
     data: { prizeFundingStatus: "FUNDED", prizeWalletAddress: shared },
   });
 
-  // WALLET tournaments: post Discord embeds only after funding is confirmed
-  if (prismaModel === "tournament" && wasPending) {
-    const serverIds = (row.posts || [])
-      .map((p) => p.server?.serverId)
-      .filter(Boolean);
-    if (serverIds.length > 0) {
-      try {
-        await postTournamentEmbed(updated, serverIds);
-      } catch (error) {
-        console.error(
-          "[ADMIN] Error posting tournament embed after funding:",
-          error
-        );
+  // WALLET: post Discord notice embeds only after funding is confirmed
+  // (registration button appears later at registrationOpensAt via Discord poll).
+  if (wasPending) {
+    try {
+      if (prismaModel === "tournament") {
+        const serverIds = (row.posts || [])
+          .map((p) => p.server?.serverId)
+          .filter(Boolean);
+        if (serverIds.length > 0) {
+          await postTournamentEmbed(updated, serverIds);
+        }
+      } else if (prismaModel === "league") {
+        const legs = await prisma.leagueGame.findMany({
+          where: { leagueId: id },
+          include: {
+            tournament: {
+              include: {
+                posts: { include: { server: { select: { serverId: true } } } },
+              },
+            },
+          },
+        });
+        for (const leg of legs) {
+          const t = leg.tournament;
+          if (!t || t.status === "CANCELLED" || t.status === "COMPLETED") continue;
+          const serverIds = (t.posts || [])
+            .map((p) => p.server?.serverId)
+            .filter(Boolean);
+          if (serverIds.length === 0) continue;
+          await postTournamentEmbed(t, serverIds);
+        }
       }
+    } catch (error) {
+      console.error(
+        "[ADMIN] Error posting Discord embed(s) after funding:",
+        error
+      );
     }
   }
 

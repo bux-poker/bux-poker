@@ -40,12 +40,14 @@ async function startBackgroundPolls() {
   const [
     { TournamentEngine, startScheduledStartPoll, startIdleTablesPoll, resumeScheduledStartTimersForSeatedTournaments, startTournamentAutomationPoll },
     { startLeagueDiscordPoll },
+    { startTournamentDiscordPoll },
     { resumeBlindLevelTimersForRunningTournaments },
     { getIO },
     { startPrizeExpiryPoll },
   ] = await Promise.all([
     import("./services/TournamentEngine.js"),
     import("./services/league/leagueDiscordPoll.js"),
+    import("./services/tournament/tournamentDiscordPoll.js"),
     import("./services/tournament/blindTimer.js"),
     import("./modules/poker/tableState.js"),
     import("./services/prizes/prizeExpiryPoll.js"),
@@ -63,6 +65,7 @@ async function startBackgroundPolls() {
   );
   startTournamentAutomationPoll(tournamentPollEngine);
   startLeagueDiscordPoll();
+  startTournamentDiscordPoll();
   startPrizeExpiryPoll();
 }
 

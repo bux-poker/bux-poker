@@ -2,6 +2,7 @@ import { Client, Events, GatewayIntentBits, REST, Routes, ActionRowBuilder, Butt
 import dotenv from 'dotenv';
 import { prisma } from '../config/database.js';
 import { resolveClientUrl, siteHostnameFromClientUrl } from '../config/clientUrl.js';
+import { formatPrizeStructureForDisplay } from '../services/prizes/prizeStructure.js';
 
 dotenv.config();
 
@@ -647,26 +648,75 @@ async function buildTournamentEmbed(tournament, discordUserId = null) {
     description = `**${tournament.name}**\n\n${description}`;
   }
 
+  const beforeRegistrationOpen =
+    !!tournament.registrationOpensAt &&
+    Date.now() < new Date(tournament.registrationOpensAt).getTime();
+  if (
+    beforeRegistrationOpen &&
+    (tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING')
+  ) {
+    description +=
+      '\n\n📢 **Save the date** — registration opens **1 hour before** start. The Register button will appear on this post when registration opens.';
+  }
+
   const embedTitle = leagueGame
     ? `🏆 ${leagueGame.league.name} — Game ${leagueGame.gameNumber}/${leagueGame.league.totalGames}`
     : `🃏 ${tournament.name}`;
+
+  // Predetermined prizes (tournament or parent league) — never derive from registrations.
+  const prizeSource = leagueGame?.league?.prizePlaces
+    ? leagueGame.league
+    : tournament;
+  const prizePlaces = Number(prizeSource?.prizePlaces) || 0;
+  const { lines: prizeLines } = formatPrizeStructureForDisplay({
+    prizePlaces,
+    prizeMode: prizeSource?.prizeMode,
+    prizeStructureJson: prizeSource?.prizeStructureJson,
+  });
+
+  const startTs = Math.floor(startTime.getTime() / 1000);
+  const fields = [
+    { name: 'Start Time', value: `<t:${startTs}:F> (<t:${startTs}:R>)`, inline: false },
+  ];
+  if (tournament.registrationOpensAt) {
+    const regTs = Math.floor(new Date(tournament.registrationOpensAt).getTime() / 1000);
+    fields.push({
+      name: 'Registration Opens',
+      value: beforeRegistrationOpen
+        ? `<t:${regTs}:F> (<t:${regTs}:R>)`
+        : '✅ Open now — use **Register** below',
+      inline: false,
+    });
+  }
+  fields.push(
+    { name: 'Players', value: `${registrationCount} / ${tournament.maxPlayers}`, inline: true },
+    { name: 'Starting Chips', value: tournament.startingChips.toLocaleString(), inline: true },
+    {
+      name: 'Places Paid',
+      value: prizePlaces > 0 ? String(prizePlaces) : 'None',
+      inline: true,
+    }
+  );
+  if (prizeLines.length > 0) {
+    let prizeBody = prizeLines.join('\n');
+    if (prizeBody.length > 1000) {
+      prizeBody = `${prizeBody.slice(0, 997)}...`;
+    }
+    fields.push({ name: 'Prizes', value: prizeBody, inline: false });
+  }
 
   const embed = new EmbedBuilder()
     .setTitle(embedTitle)
     .setDescription(description)
     .setThumbnail(logoUrl)
-    .addFields(
-      { name: 'Start Time', value: `<t:${Math.floor(startTime.getTime() / 1000)}:F>`, inline: true },
-      { name: 'Players', value: `${registrationCount} / ${tournament.maxPlayers}`, inline: true },
-      { name: 'Starting Chips', value: tournament.startingChips.toLocaleString(), inline: true },
-      { name: 'Prize Places', value: Math.floor(registrationCount / 4).toString(), inline: true },
-    )
+    .addFields(fields)
     .setColor(tournament.status === 'SEATED' ? 0xFFD700 : (tournament.status === 'RUNNING' || tournament.status === 'ACTIVE' ? 0x00FF00 : 0x00AE86))
     .setTimestamp();
 
-  const registrationOpen =
-    tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING';
-  if (registrationOpen) {
+  const registrationWindowOpen =
+    (tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING') &&
+    !beforeRegistrationOpen;
+  if (registrationWindowOpen) {
     embed.addFields({
       name: '📱 Mobile — fullscreen',
       value:
@@ -676,37 +726,41 @@ async function buildTournamentEmbed(tournament, discordUserId = null) {
   }
 
   const isFull = registrationCount >= tournament.maxPlayers;
-  const beforeRegistrationOpen =
-    !!tournament.registrationOpensAt &&
-    Date.now() < new Date(tournament.registrationOpensAt).getTime();
-  // Can register only if SCHEDULED or REGISTERING and not full and not SEATED
+  // Can register only if SCHEDULED or REGISTERING and not full and registration window is open
   const canRegister =
     (tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING') &&
     !isFull &&
     tournament.status !== 'SEATED' &&
     !beforeRegistrationOpen;
 
-  // Build buttons
+  const viewLobbyButton = new ButtonBuilder()
+    .setLabel('View Tournament Lobby')
+    .setURL(tournamentUrl)
+    .setStyle(ButtonStyle.Link);
+
+  // Before T-1h: announce only (lobby link). At/after registration open: Register + Unregister.
+  if (beforeRegistrationOpen && (tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING')) {
+    return {
+      embed,
+      components: [new ActionRowBuilder().addComponents(viewLobbyButton)],
+      isRegistered,
+      registrationCount,
+    };
+  }
+
   // Note: We don't disable based on isRegistered because Discord embeds are shared
   // The button handler will check registration status and show appropriate messages
   const registerButton = new ButtonBuilder()
     .setCustomId(`register_${tournament.id}`)
     .setLabel(isFull ? 'Full' : 'Register')
     .setStyle(ButtonStyle.Primary)
-    .setDisabled(!canRegister); // Only disable if tournament is full or not accepting registrations
+    .setDisabled(!canRegister);
 
-  // Unregister button: Only disable if tournament has started/completed
-  // Don't check isRegistered - the handler will check individual registration status
   const unregisterButton = new ButtonBuilder()
     .setCustomId(`unregister_${tournament.id}`)
     .setLabel('Unregister')
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(tournament.status === 'RUNNING' || tournament.status === 'ACTIVE' || tournament.status === 'COMPLETED');
-
-  const viewLobbyButton = new ButtonBuilder()
-    .setLabel('View Tournament Lobby')
-    .setURL(tournamentUrl)
-    .setStyle(ButtonStyle.Link);
 
   const row1 = new ActionRowBuilder().addComponents(registerButton, unregisterButton);
   const row2 = new ActionRowBuilder().addComponents(viewLobbyButton);
@@ -841,11 +895,6 @@ export async function postTournamentEmbed(tournament, serverIds) {
  * Update all Discord embeds for a tournament (e.g., when registration closes)
  */
 export async function updateTournamentEmbeds(tournamentId) {
-  if (!discordClient) {
-    console.warn('[DISCORD BOT] Cannot update embeds - bot not initialized');
-    return;
-  }
-
   try {
     // Get tournament with posts
     const tournament = await prisma.tournament.findUnique({
@@ -866,37 +915,39 @@ export async function updateTournamentEmbeds(tournamentId) {
 
     // Build updated embed (without user context)
     const { embed, components } = await buildTournamentEmbed(tournament, null);
+    const payload = {
+      embeds: [embed.toJSON()],
+      components: components.map((row) => row.toJSON()),
+    };
 
-    // Update each embed
+    // Update each embed (gateway preferred, REST fallback)
     for (const post of tournament.posts) {
       if (!post.messageId || !post.server) continue;
 
       try {
-        const guild = await discordClient.guilds.fetch(post.server.serverId).catch(() => null);
-        if (!guild) {
-          console.warn(`[DISCORD BOT] Bot not in server ${post.server.serverName}, skipping embed update`);
-          continue;
+        let updated = false;
+        const canUseGateway = !!discordClient?.isReady?.();
+        if (canUseGateway) {
+          const guild = await discordClient.guilds.fetch(post.server.serverId).catch(() => null);
+          if (guild) {
+            const channel = await guild.channels.fetch(post.server.announcementChannelId).catch(() => null);
+            if (channel?.isTextBased?.()) {
+              const message = await channel.messages.fetch(post.messageId);
+              await message.edit({
+                embeds: [embed],
+                components: components,
+              });
+              updated = true;
+            }
+          }
         }
-        const channel = await guild.channels.fetch(post.server.announcementChannelId);
-
-        if (!channel || !channel.isTextBased()) {
-          console.warn(`[DISCORD BOT] Invalid channel for server ${post.server.serverName}`);
-          continue;
+        if (!updated) {
+          await sendMessageViaDiscordRestEdit(
+            post.server.announcementChannelId,
+            post.messageId,
+            payload
+          );
         }
-
-        // Check bot permissions
-        const permissions = channel.permissionsFor(guild.members.me);
-        if (!permissions.has('SendMessages') || !permissions.has('EmbedLinks')) {
-          console.error(`[DISCORD BOT] Bot lacks permissions in channel ${channel.name} for server ${post.server.serverName}`);
-          continue;
-        }
-
-        // Update the message
-        const message = await channel.messages.fetch(post.messageId);
-        await message.edit({
-          embeds: [embed],
-          components: components,
-        });
 
         console.log(`[DISCORD BOT] Successfully updated embed for tournament ${tournamentId} in server ${post.server.serverName}`);
       } catch (error) {
@@ -906,6 +957,12 @@ export async function updateTournamentEmbeds(tournamentId) {
   } catch (error) {
     console.error(`[DISCORD BOT] Error updating tournament embeds:`, error);
   }
+}
+
+async function sendMessageViaDiscordRestEdit(channelId, messageId, payload) {
+  const restClient = getRestClient();
+  if (!restClient || !channelId || !messageId) return null;
+  return restClient.patch(Routes.channelMessage(channelId, messageId), { body: payload });
 }
 
 /**

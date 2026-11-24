@@ -18,10 +18,8 @@ function isPrismaPressureError(err) {
 }
 
 /**
- * Retry posting the initial "registration" Discord embed for single tournaments.
- * Unlike league legs (posted at T-1h by leagueDiscordPoll), single tournaments are
- * supposed to post immediately on create; however, Discord init/network hiccups
- * can cause the immediate attempt to be skipped. This poll fills that gap.
+ * Retry the *early notice* Discord embed (create/fund) when the first post failed.
+ * Registration buttons are enabled later by the registration-open poll at T-1h.
  */
 export function startTournamentDiscordPoll() {
   if (intervalId) return;
@@ -43,7 +41,7 @@ export function startTournamentDiscordPoll() {
   }, POLL_MS);
 
   console.log(
-    `[TOURNAMENT] Discord registration-post retry poll every ${POLL_MS / 1000}s`
+    `[TOURNAMENT] Discord early-notice retry poll every ${POLL_MS / 1000}s`
   );
   runTournamentDiscordTick().catch((err) =>
     console.error("[TOURNAMENT] Tournament Discord poll initial tick:", err)
@@ -55,13 +53,27 @@ async function runTournamentDiscordTick() {
     where: {
       status: { in: ["SCHEDULED", "REGISTERING"] },
       posts: { some: { messageId: null } },
+      // Only retry early notices; T-1h first-posts are handled by registration-open poll.
+      OR: [
+        { registrationOpensAt: null },
+        { registrationOpensAt: { gt: new Date() } },
+      ],
     },
     include: {
       posts: { include: { server: true } },
+      leagueGames: {
+        include: {
+          league: {
+            select: { prizeMode: true, prizeFundingStatus: true },
+          },
+        },
+      },
     },
   });
 
   for (const tournament of candidates) {
+    if (!isDiscordAnnounceAllowed(tournament)) continue;
+
     const serverDiscordIds = (tournament.posts || [])
       .filter((p) => !p.messageId)
       .map((p) => p.server?.serverId)
@@ -80,3 +92,16 @@ async function runTournamentDiscordTick() {
   }
 }
 
+function isDiscordAnnounceAllowed(tournament) {
+  const league = tournament.leagueGames?.[0]?.league;
+  if (league) {
+    if (league.prizeMode === "WALLET" && league.prizeFundingStatus !== "FUNDED") {
+      return false;
+    }
+    return true;
+  }
+  if (tournament.prizeMode === "WALLET" && tournament.prizeFundingStatus !== "FUNDED") {
+    return false;
+  }
+  return true;
+}

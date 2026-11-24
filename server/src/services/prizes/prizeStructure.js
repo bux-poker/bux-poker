@@ -178,6 +178,92 @@ export function parsePrizeStructureJson(json) {
   }
 }
 
+function shortAddr(addr, head = 4, tail = 4) {
+  const s = String(addr || "");
+  if (s.length <= head + tail + 1) return s;
+  return `${s.slice(0, head)}…${s.slice(-tail)}`;
+}
+
+function formatSplAmount(amountStr, decimals) {
+  try {
+    const raw = BigInt(String(amountStr ?? "0"));
+    const d = Number(decimals) || 0;
+    if (d <= 0) return raw.toString();
+    const base = 10n ** BigInt(d);
+    const whole = raw / base;
+    const frac = raw % base;
+    if (frac === 0n) return whole.toString();
+    return `${whole}.${frac.toString().padStart(d, "0").replace(/0+$/, "")}`;
+  } catch {
+    return String(amountStr ?? "0");
+  }
+}
+
+function formatWalletItem(item) {
+  const kind = String(item?.kind ?? "").toUpperCase();
+  if (kind === "SOL") {
+    return `${lamportsToSolString(item.lamports ?? "0")} SOL`;
+  }
+  if (kind === "SPL") {
+    return `${formatSplAmount(item.amount, item.decimals)} tokens (${shortAddr(item.mint)})`;
+  }
+  if (kind === "NFT") {
+    return `NFT (${shortAddr(item.mint)})`;
+  }
+  return "Prize";
+}
+
+/**
+ * Human-readable prize lines for Discord embeds / admin copy.
+ * Always uses predetermined structure — never field size / registrations.
+ * @returns {{ places: number, lines: string[] }}
+ */
+export function formatPrizeStructureForDisplay({
+  prizePlaces,
+  prizeMode,
+  prizeStructureJson,
+}) {
+  const places = Number(prizePlaces) || 0;
+  const structure = parsePrizeStructureJson(prizeStructureJson);
+  const mode = String(prizeMode || "").toUpperCase();
+  const lines = [];
+
+  for (let i = 1; i <= places; i++) {
+    const row = structure.find((p) => Number(p?.place) === i) || structure[i - 1];
+    let detail = "";
+    if (mode === "MANUAL") {
+      detail = String(row?.description || "").trim() || "TBD";
+    } else if (mode === "WALLET") {
+      const items = Array.isArray(row?.items) ? row.items : [];
+      detail = items.length
+        ? items.map(formatWalletItem).join(" + ")
+        : "TBD";
+    } else if (row?.description) {
+      detail = String(row.description).trim();
+    } else {
+      detail = "TBD";
+    }
+    lines.push(`**${i}${placeSuffix(i)}:** ${detail}`);
+  }
+
+  return { places, lines };
+}
+
+function placeSuffix(n) {
+  const v = n % 100;
+  if (v >= 11 && v <= 13) return "th";
+  switch (n % 10) {
+    case 1:
+      return "st";
+    case 2:
+      return "nd";
+    case 3:
+      return "rd";
+    default:
+      return "th";
+  }
+}
+
 export function getWalletPlaceItems(prizeStructureJson, finishingPlace) {
   const structure = parsePrizeStructureJson(prizeStructureJson);
   const row = structure.find((p) => Number(p.place) === Number(finishingPlace));
