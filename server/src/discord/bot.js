@@ -494,37 +494,53 @@ async function handleRegisterButton(interaction, tournamentId) {
       }
     }
 
-    // Update the embed message with new button states
-    try {
-      const tournament = await prisma.tournament.findUnique({
-        where: { id: tournamentId },
-      });
+    // Update the public embed, then send a private (ephemeral) success confirmation.
+    const freshTournament = await prisma.tournament.findUnique({
+      where: { id: tournamentId },
+    });
+    const successText = `✅ **Registration successful!** You're in for **${freshTournament?.name || "the tournament"}**.`;
 
-      if (tournament && interaction.message && !interaction.replied && !interaction.deferred) {
+    try {
+      if (
+        freshTournament &&
+        interaction.message &&
+        !interaction.replied &&
+        !interaction.deferred
+      ) {
         // Don't pass discordUserId - we want buttons to be enabled for everyone
         // The button handlers will check individual registration status
-        const { embed: updatedEmbed, components: updatedComponents } = await buildTournamentEmbed(
-          tournament,
-          null
-        );
+        const { embed: updatedEmbed, components: updatedComponents } =
+          await buildTournamentEmbed(freshTournament, null);
 
         await interaction.update({
           embeds: [updatedEmbed],
           components: updatedComponents,
         });
-        return; // Successfully updated, don't reply
+        await interaction.followUp({
+          content: successText,
+          ephemeral: true,
+        });
+        return;
       }
     } catch (updateError) {
-      console.error('[DISCORD BOT] Error updating embed:', updateError);
-      // If update fails, we'll fall through to reply
+      console.error('[DISCORD BOT] Error updating embed after register:', updateError);
+      // If update fails, fall through to ephemeral reply
     }
 
-    // Fallback to ephemeral reply if update failed or not possible
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
-        content: '✅ Successfully registered for the tournament!',
+        content: successText,
         ephemeral: true,
       });
+    } else {
+      try {
+        await interaction.followUp({
+          content: successText,
+          ephemeral: true,
+        });
+      } catch (followErr) {
+        console.error('[DISCORD BOT] register success followUp failed:', followErr);
+      }
     }
   } catch (error) {
     console.error('[DISCORD BOT] Error registering user:', error);
