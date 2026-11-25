@@ -96,15 +96,20 @@ function canManageWithServers({
 }) {
   if (isSuperAdmin({ userId, discordId })) return true;
 
+  // Creator always manages — web admins may post to any configured partner
+  // server, so Discord-role overlap alone is not enough (and Discord 429s
+  // must not lock the creator out of their own event).
+  if (createdById && userId && createdById === userId) return true;
+
   if (managed.allowlist || managed.bootstrap) {
-    if (tournamentServers.length === 0) return createdById === userId;
+    if (tournamentServers.length === 0) return false;
     return serversOverlap(tournamentServers, managed.servers);
   }
 
   if (managed.rateLimited) return false;
 
   if (tournamentServers.length === 0) {
-    return createdById === userId;
+    return false;
   }
 
   return serversOverlap(tournamentServers, managed.servers);

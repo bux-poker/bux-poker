@@ -30,7 +30,7 @@ export function requireTournamentAdmin(paramName = "id") {
       if (!ok) {
         return res.status(403).json({
           error:
-            "Access denied. You must be an admin of the Discord server this tournament was created for.",
+            "Access denied. You must be the tournament creator, a platform admin, or an admin of a Discord server this tournament was posted to.",
         });
       }
 
@@ -68,7 +68,7 @@ export function requireLeagueAdmin(paramName = "id") {
       if (!ok) {
         return res.status(403).json({
           error:
-            "Access denied. You must be an admin of the Discord server this league was created for.",
+            "Access denied. You must be the league creator, a platform admin, or an admin of a Discord server this league was posted to.",
         });
       }
 
