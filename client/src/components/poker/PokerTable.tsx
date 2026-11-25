@@ -530,6 +530,9 @@ export function PokerTable({
                               timerRemaining != null && timerRemaining <= 5 ? "urgent" : ""
                             }`}
                             viewBox="0 0 40 40"
+                            width="100%"
+                            height="100%"
+                            preserveAspectRatio="xMidYMid meet"
                             aria-hidden
                           >
                             <circle className="track" cx="20" cy="20" r="18" />

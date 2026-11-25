@@ -969,6 +969,34 @@ export function PokerGameView() {
     };
   }, [scheduleModal, refetchTournament]);
 
+  // Recover break popup if the socket event was missed (e.g. table synced mid-break).
+  useEffect(() => {
+    const breakUntilRaw = (tournament as any)?.tournamentBreakUntilAt;
+    const tid = tournament?.id;
+    if (!breakUntilRaw || !tid) return;
+    const endsAt =
+      typeof breakUntilRaw === "string"
+        ? breakUntilRaw
+        : new Date(breakUntilRaw).toISOString();
+    const endMs = new Date(endsAt).getTime();
+    if (!Number.isFinite(endMs) || endMs <= Date.now()) return;
+    setScheduleModal((prev) => {
+      if (
+        prev?.kind === "BREAK" &&
+        prev.tournamentId === tid &&
+        prev.breakEndsAt === endsAt
+      ) {
+        return prev;
+      }
+      return {
+        kind: "BREAK",
+        tournamentId: tid,
+        breakEndsAt: endsAt,
+        message: "Tournament break",
+      };
+    });
+  }, [tournament?.id, (tournament as any)?.tournamentBreakUntilAt]);
+
   // Detect when the local user is eliminated from the tournament or wins it,
   // and show a simple modal with their final position / winner announcement.
   useEffect(() => {

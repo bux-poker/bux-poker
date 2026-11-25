@@ -923,15 +923,25 @@
   }
 
   .bux-timer-ring {
+    /* Center on the avatar box — SVG must explicitly fill, or mobile leaves it
+       smaller/offset (viewBox intrinsic size instead of the absolute box). */
     position: absolute;
-    inset: -4px;
+    left: 50%;
+    top: 50%;
+    width: calc(100% + 8px);
+    height: calc(100% + 8px);
+    margin: 0;
+    padding: 0;
     pointer-events: none;
-    transform: rotate(-90deg);
+    overflow: visible;
+    transform: translate(-50%, -50%) rotate(-90deg);
+    transform-origin: center;
   }
 
   .bux-timer-ring circle {
     fill: none;
     stroke-width: 3;
+    vector-effect: non-scaling-stroke;
   }
 
   .bux-timer-ring .track {

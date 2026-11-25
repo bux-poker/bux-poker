@@ -334,9 +334,11 @@ async function tryAdvanceBlindsIfDueImpl(tournamentId, io, options = { emitDeale
   const gameLevels = games.map((g) => g.currentBlindLevel ?? 0);
   const canonical = Math.max(0, ...gameLevels);
   const minL = Math.min(...gameLevels);
+  let didDesyncRepair = false;
   if (minL < canonical) {
     await syncGamesToLevelIndex(tournamentId, canonical, io, { emitDealerMessage: false });
     games = await loadActiveGamesWithPlayers(tournamentId);
+    didDesyncRepair = true;
   }
 
   const breakUntil = tournament.tournamentBreakUntilAt
@@ -346,6 +348,21 @@ async function tryAdvanceBlindsIfDueImpl(tournamentId, io, options = { emitDeale
 
   // --- Scheduled break active ---
   if (breakUntil != null && nowMs < breakUntil) {
+    // Tables that just synced can miss the original BREAK emit — re-announce once.
+    if (didDesyncRepair && io) {
+      const endsIso =
+        tournament.tournamentBreakUntilAt instanceof Date
+          ? tournament.tournamentBreakUntilAt.toISOString()
+          : String(tournament.tournamentBreakUntilAt);
+      for (const gg of games) {
+        io.to(`game:${gg.id}`).emit("tournament-schedule-announcement", {
+          tournamentId,
+          type: "BREAK",
+          breakEndsAt: endsIso,
+          message: "Tournament break",
+        });
+      }
+    }
     return { advanced: false, waiting: false, inBreak: true, breakEndsAt: tournament.tournamentBreakUntilAt };
   }
 

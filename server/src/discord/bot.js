@@ -698,7 +698,7 @@ async function buildTournamentEmbed(tournament, discordUserId = null) {
     (tournament.status === 'SCHEDULED' || tournament.status === 'REGISTERING')
   ) {
     description +=
-      '\n\n📢 **Save the date** — registration opens **1 hour before** start. The Register button will appear on this post when registration opens.';
+      '\n\n📢 **Save the date** — registration opens **1 hour before** start. A new Discord post with a **Register** button will go up then.';
   }
 
   const embedTitle = leagueGame
@@ -810,7 +810,17 @@ async function buildTournamentEmbed(tournament, discordUserId = null) {
   return { embed, components: [row1, row2], isRegistered, registrationCount };
 }
 
-export async function postTournamentEmbed(tournament, serverIds) {
+/**
+ * @param {object} tournament
+ * @param {string[]} serverIds
+ * @param {{ forceNew?: boolean, content?: string }} [options]
+ *   forceNew — post a fresh message even if one exists (updates messageId to the new post)
+ *   content — Discord message content alongside the embed (@everyone is always applied)
+ */
+export async function postTournamentEmbed(tournament, serverIds, options = {}) {
+  const forceNew = !!options.forceNew;
+  const contentExtra = typeof options.content === "string" ? options.content : "";
+
   if (!serverIds || serverIds.length === 0) {
     console.log('[DISCORD BOT] No server IDs provided, skipping embed posting');
     return [];
@@ -860,7 +870,11 @@ export async function postTournamentEmbed(tournament, serverIds) {
           },
         },
       });
-      if (existing?.messageId && !isPostingPlaceholder(existing.messageId)) {
+      if (
+        !forceNew &&
+        existing?.messageId &&
+        !isPostingPlaceholder(existing.messageId)
+      ) {
         console.log(
           `[DISCORD BOT] Skip ${server.serverName} — already posted (${existing.messageId})`
         );
@@ -870,16 +884,25 @@ export async function postTournamentEmbed(tournament, serverIds) {
 
       const claimToken = `posting:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
       if (existing) {
-        const claimed = await prisma.tournamentPost.updateMany({
-          where: {
-            id: existing.id,
-            OR: [
-              { messageId: null },
-              { messageId: { startsWith: "posting:" } },
-            ],
-          },
-          data: { messageId: claimToken },
-        });
+        const claimed = forceNew
+          ? await prisma.tournamentPost.updateMany({
+              where: {
+                id: existing.id,
+                // Claim even when a real messageId exists (registration-open follow-up).
+                messageId: existing.messageId,
+              },
+              data: { messageId: claimToken },
+            })
+          : await prisma.tournamentPost.updateMany({
+              where: {
+                id: existing.id,
+                OR: [
+                  { messageId: null },
+                  { messageId: { startsWith: "posting:" } },
+                ],
+              },
+              data: { messageId: claimToken },
+            });
         if (claimed.count === 0) {
           console.log(`[DISCORD BOT] Skip ${server.serverName} — another sender claimed the post`);
           continue;
@@ -902,6 +925,13 @@ export async function postTournamentEmbed(tournament, serverIds) {
 
       let message = null;
       const canUseGateway = !!discordClient?.isReady?.();
+      const sendPayload = withEveryonePing(
+        {
+          embeds: [embed],
+          components: components,
+        },
+        contentExtra
+      );
 
       if (canUseGateway) {
         let channel = null;
@@ -927,12 +957,7 @@ export async function postTournamentEmbed(tournament, serverIds) {
         } else {
           const permissions = channel.permissionsFor(guild.members.me);
           if (permissions.has('SendMessages') && permissions.has('EmbedLinks')) {
-            message = await channel.send(
-              withEveryonePing({
-                embeds: [embed],
-                components: components,
-              })
-            );
+            message = await channel.send(sendPayload);
           } else {
             console.warn(`[DISCORD BOT] Missing channel perms via gateway for ${server.serverName}; trying REST send`);
           }
@@ -948,10 +973,13 @@ export async function postTournamentEmbed(tournament, serverIds) {
         }
         message = await sendMessageViaDiscordRest(
           server.announcementChannelId,
-          withEveryonePing({
-            embeds: [embed.toJSON()],
-            components: components.map((c) => c.toJSON()),
-          })
+          withEveryonePing(
+            {
+              embeds: [embed.toJSON()],
+              components: components.map((c) => c.toJSON()),
+            },
+            contentExtra
+          )
         );
       }
 
@@ -988,12 +1016,11 @@ export async function postTournamentEmbed(tournament, serverIds) {
 }
 
 /**
- * After T-1h: refresh the save-the-date embed (Register enabled) and ping @everyone.
- * Embed edits alone do not notify; this sends a short follow-up ping.
+ * After T-1h: post a NEW embed with the Register button + @everyone.
+ * Leave the original save-the-date post as-is (no Register there).
+ * Registration is Discord-button only — never point people at the site to register.
  */
 export async function notifyRegistrationOpen(tournamentId) {
-  await updateTournamentEmbeds(tournamentId);
-
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
     include: {
@@ -1003,46 +1030,25 @@ export async function notifyRegistrationOpen(tournamentId) {
   if (!tournament?.posts?.length) return;
 
   const name = tournament.name || "the tournament";
-  const clientUrl = resolveClientUrl();
-  const lobbyUrl = `${clientUrl}/tournaments/${tournament.id}`;
-  const pingText = `**Registration is now open** for **${name}** — use **Register** on the post above (or open the lobby: ${lobbyUrl}).`;
+  const serverDiscordIds = tournament.posts
+    .map((p) => p.server?.serverId)
+    .filter(Boolean);
+  if (serverDiscordIds.length === 0) return;
 
-  for (const post of tournament.posts) {
-    const channelId = post.server?.announcementChannelId;
-    if (!channelId) continue;
-    try {
-      let sent = false;
-      const canUseGateway = !!discordClient?.isReady?.();
-      if (canUseGateway) {
-        const guild = await discordClient.guilds
-          .fetch(post.server.serverId)
-          .catch(() => null);
-        if (guild) {
-          const channel = await guild.channels
-            .fetch(channelId)
-            .catch(() => null);
-          if (channel?.isTextBased?.()) {
-            await channel.send(withEveryonePing({}, pingText));
-            sent = true;
-          }
-        }
-      }
-      if (!sent) {
-        await sendMessageViaDiscordRest(
-          channelId,
-          withEveryonePing({}, pingText)
-        );
-      }
-      console.log(
-        `[DISCORD BOT] Registration-open ping sent to ${post.server.serverName}`
-      );
-    } catch (err) {
-      console.error(
-        `[DISCORD BOT] Registration-open ping failed (${post.server?.serverName}):`,
-        err?.message || err
-      );
-    }
-  }
+  // Poll may still have SCHEDULED when this runs — treat as open for embed/buttons.
+  const tournamentForEmbed = {
+    ...tournament,
+    status:
+      tournament.status === "SCHEDULED" ? "REGISTERING" : tournament.status,
+  };
+
+  await postTournamentEmbed(tournamentForEmbed, serverDiscordIds, {
+    forceNew: true,
+    content: `**Registration is now open** for **${name}** — tap **Register** below.`,
+  });
+  console.log(
+    `[DISCORD BOT] Registration-open embed posted for tournament ${tournamentId}`
+  );
 }
 
 /**
