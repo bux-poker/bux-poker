@@ -13,18 +13,34 @@ export interface DepositRequirements {
 
 type SolanaProvider = {
   isPhantom?: boolean;
+  isSolflare?: boolean;
   publicKey?: { toBytes(): Uint8Array; toString(): string };
   connect: () => Promise<{ publicKey: { toString(): string } }>;
   signTransaction: (tx: unknown) => Promise<{ serialize: () => Uint8Array }>;
 };
 
+/**
+ * Prefer Phantom. Do NOT trust `window.solana` first — Solflare (and others)
+ * often overwrite it, which made Connect open Solflare instead of Phantom.
+ */
 function getProvider(): SolanaProvider | null {
   const w = window as unknown as {
     solana?: SolanaProvider;
     phantom?: { solana?: SolanaProvider };
     solflare?: SolanaProvider;
   };
-  return w.solana ?? w.phantom?.solana ?? w.solflare ?? null;
+  const phantom = w.phantom?.solana;
+  if (phantom?.isPhantom) return phantom;
+  if (w.solana?.isPhantom) return w.solana;
+  if (w.solflare) return w.solflare;
+  if (w.solana) return w.solana;
+  return null;
+}
+
+function providerLabel(provider: SolanaProvider): string {
+  if (provider.isPhantom) return 'Phantom';
+  if (provider.isSolflare) return 'Solflare';
+  return 'Wallet';
 }
 
 function authHeaders() {
@@ -71,7 +87,7 @@ export function PrizeWalletFundPanel({ kind, eventId, requirements, onFunded }: 
     }
     const res = await provider.connect();
     const pk = res.publicKey.toString();
-    setWalletLabel(`${pk.slice(0, 4)}…${pk.slice(-4)}`);
+    setWalletLabel(`${providerLabel(provider)} ${pk.slice(0, 4)}…${pk.slice(-4)}`);
     return provider;
   };
 
@@ -200,8 +216,9 @@ export function PrizeWalletFundPanel({ kind, eventId, requirements, onFunded }: 
     <div className="rounded-lg border border-purple-500/40 bg-purple-500/10 p-4">
       <h3 className="text-sm font-semibold text-purple-100">Fund prize wallet</h3>
       <p className="mt-1 text-xs text-slate-400">
-        Sign a transaction from your wallet to deposit this event&apos;s prizes plus a small SOL
-        fee buffer into the shared prize vault. Required before start.
+        Uses <span className="text-slate-200">Phantom</span> when installed (Solflare won&apos;t
+        steal the connect prompt). Sign to deposit prizes plus a small SOL fee buffer into the
+        shared prize vault. Required before start.
       </p>
       <p className="mt-2 break-all font-mono text-[11px] text-slate-300">
         Vault: {requirements.prizeWalletAddress}
