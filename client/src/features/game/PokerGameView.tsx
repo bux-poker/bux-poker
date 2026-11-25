@@ -1522,15 +1522,24 @@ export function PokerGameView() {
     !handBlocksConsolidationWaitOverlay(gameState, handActionPendingRef);
 
   const handleCloseTable = () => {
+    const tid =
+      gameState?.tournamentId ||
+      tournament?.id ||
+      effectiveTournamentId ||
+      null;
+    const dest = tid ? `/tournaments/${tid}` : "/tournaments";
+    // Desktop often opens the table in a popup. Browsers frequently ignore
+    // window.close() — never return early on it or eliminated players get stuck.
     try {
-      if (window.opener) {
+      if (window.opener && !window.opener.closed) {
+        window.opener.location.assign(`${window.location.origin}${dest}`);
+        window.opener.focus();
         window.close();
-        return;
       }
     } catch {
-      // ignore
+      // ignore cross-origin / close restrictions
     }
-    navigate('/tournaments');
+    navigate(dest);
   };
 
   if (isPortrait) {
