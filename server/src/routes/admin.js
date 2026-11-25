@@ -902,6 +902,7 @@ async function confirmPrizeDeposit(prismaModel, id, signatures) {
     try {
       if (prismaModel === "tournament") {
         const serverIds = (row.posts || [])
+          .filter((p) => !p.messageId)
           .map((p) => p.server?.serverId)
           .filter(Boolean);
         if (serverIds.length > 0) {
@@ -913,7 +914,9 @@ async function confirmPrizeDeposit(prismaModel, id, signatures) {
           include: {
             tournament: {
               include: {
-                posts: { include: { server: { select: { serverId: true } } } },
+                posts: {
+                  include: { server: { select: { serverId: true } } },
+                },
               },
             },
           },
@@ -922,6 +925,7 @@ async function confirmPrizeDeposit(prismaModel, id, signatures) {
           const t = leg.tournament;
           if (!t || t.status === "CANCELLED" || t.status === "COMPLETED") continue;
           const serverIds = (t.posts || [])
+            .filter((p) => !p.messageId)
             .map((p) => p.server?.serverId)
             .filter(Boolean);
           if (serverIds.length === 0) continue;

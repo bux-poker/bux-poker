@@ -123,6 +123,24 @@ async function sendMessageViaDiscordRest(channelId, payload) {
   return restClient.post(Routes.channelMessages(channelId), { body: payload });
 }
 
+function isPostingPlaceholder(messageId) {
+  return typeof messageId === "string" && messageId.startsWith("posting:");
+}
+
+async function clearPostingClaim(tournamentId, serverId, claimToken) {
+  try {
+    await prisma.tournamentPost.updateMany({
+      where: { tournamentId, serverId, messageId: claimToken },
+      data: { messageId: null },
+    });
+  } catch (err) {
+    console.warn(
+      `[DISCORD BOT] Failed to clear posting claim for ${tournamentId}/${serverId}:`,
+      err?.message || err
+    );
+  }
+}
+
 /** Ping payload so announcement posts notify the whole server. */
 function everyonePingFields(extraContent = "") {
   const content = extraContent
@@ -832,6 +850,56 @@ export async function postTournamentEmbed(tournament, serverIds) {
   for (const server of servers) {
     try {
       console.log(`[DISCORD BOT] Posting to server: ${server.serverName} (${server.serverId})`);
+
+      // Idempotent claim: fund-confirm + retry poll can race; only one sender wins.
+      const existing = await prisma.tournamentPost.findUnique({
+        where: {
+          tournamentId_serverId: {
+            tournamentId: tournament.id,
+            serverId: server.id,
+          },
+        },
+      });
+      if (existing?.messageId && !isPostingPlaceholder(existing.messageId)) {
+        console.log(
+          `[DISCORD BOT] Skip ${server.serverName} — already posted (${existing.messageId})`
+        );
+        posts.push({ serverId: server.serverId, messageId: existing.messageId });
+        continue;
+      }
+
+      const claimToken = `posting:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+      if (existing) {
+        const claimed = await prisma.tournamentPost.updateMany({
+          where: {
+            id: existing.id,
+            OR: [
+              { messageId: null },
+              { messageId: { startsWith: "posting:" } },
+            ],
+          },
+          data: { messageId: claimToken },
+        });
+        if (claimed.count === 0) {
+          console.log(`[DISCORD BOT] Skip ${server.serverName} — another sender claimed the post`);
+          continue;
+        }
+      } else {
+        try {
+          await prisma.tournamentPost.create({
+            data: {
+              tournamentId: tournament.id,
+              serverId: server.id,
+              messageId: claimToken,
+              postedAt: null,
+            },
+          });
+        } catch {
+          console.log(`[DISCORD BOT] Skip ${server.serverName} — post row created concurrently`);
+          continue;
+        }
+      }
+
       let message = null;
       const canUseGateway = !!discordClient?.isReady?.();
 
@@ -875,6 +943,7 @@ export async function postTournamentEmbed(tournament, serverIds) {
       if (!message) {
         if (!server.announcementChannelId) {
           console.warn(`[DISCORD BOT] No announcementChannelId for ${server.serverName}`);
+          await clearPostingClaim(tournament.id, server.id, claimToken);
           continue;
         }
         message = await sendMessageViaDiscordRest(
@@ -886,23 +955,21 @@ export async function postTournamentEmbed(tournament, serverIds) {
         );
       }
 
+      if (!message?.id) {
+        await clearPostingClaim(tournament.id, server.id, claimToken);
+        console.warn(`[DISCORD BOT] No message id after send for ${server.serverName}`);
+        continue;
+      }
+
       console.log(`[DISCORD BOT] Successfully posted embed to ${server.serverName}, message ID: ${message.id}`);
 
-      // Update tournament post with message ID (post should already exist)
-      await prisma.tournamentPost.upsert({
+      await prisma.tournamentPost.updateMany({
         where: {
-          tournamentId_serverId: {
-            tournamentId: tournament.id,
-            serverId: server.id,
-          },
-        },
-        update: {
-          messageId: message.id,
-          postedAt: new Date(),
-        },
-        create: {
           tournamentId: tournament.id,
           serverId: server.id,
+          messageId: claimToken,
+        },
+        data: {
           messageId: message.id,
           postedAt: new Date(),
         },

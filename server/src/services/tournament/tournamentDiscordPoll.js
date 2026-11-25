@@ -75,7 +75,13 @@ async function runTournamentDiscordTick() {
     if (!isDiscordAnnounceAllowed(tournament)) continue;
 
     const serverDiscordIds = (tournament.posts || [])
-      .filter((p) => !p.messageId)
+      .filter((p) => !p.messageId || String(p.messageId).startsWith("posting:"))
+      // Stale "posting:" claims older than 2m are retried; fresh claims are left alone.
+      .filter((p) => {
+        if (!p.messageId || !String(p.messageId).startsWith("posting:")) return true;
+        const ts = Number(String(p.messageId).split(":")[1]);
+        return Number.isFinite(ts) && Date.now() - ts > 120000;
+      })
       .map((p) => p.server?.serverId)
       .filter(Boolean);
 
